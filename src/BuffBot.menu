@@ -1,0 +1,617 @@
+---------------------
+-- BuffBot UI Menu --
+---------------------
+
+-- ==========================================================
+-- Companion menu for the actionbar button (pushed/popped
+-- alongside WORLD_ACTIONBAR via onOpen/onClose hooks)
+-- ==========================================================
+menu
+{
+	name "BUFFBOT_ACTIONBAR"
+	ignoreesc
+
+	button
+	{
+		action    "BfBot.UI.Toggle()"
+		tooltip lua "buffbot_btnTooltip"
+		bam       "GUIBTACT"
+		sequence  0
+		frame lua "buffbot_btnFrame"
+		scaleToClip
+		area 4 4 48 48
+	}
+}
+
+-- ==========================================================
+-- Main configuration panel
+-- ==========================================================
+menu
+{
+	name    "BUFFBOT_MAIN"
+	onopen  "BfBot.UI._OnOpen()"
+	onclose "BfBot.UI._OnClose()"
+	ignoreesc
+
+	-- Full-screen click-to-close background (dark overlay)
+	text
+	{
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.Close()"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 80
+		on escape
+	}
+
+	-- Panel background (dark rectangle)
+	label
+	{
+		enabled "buffbot_isOpen"
+		area 340 50 540 510
+		rectangle 5
+		rectangle opacity 200
+	}
+
+	-- Title
+	label
+	{
+		enabled "buffbot_isOpen"
+		text lua "buffbot_title"
+		text style "title"
+		text align center center
+		area 340 55 540 30
+	}
+
+	-- ======================================================
+	-- Character tabs (6 slots, visibility gated by party)
+	-- ======================================================
+
+	button
+	{
+		enabled "buffbot_charNames[1] ~= nil"
+		action  "BfBot.UI.SetChar(0)"
+		text lua "buffbot_charNames[1]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsCharSelected(0) and 1 or 0"
+		scaleToClip
+		area 350 90 80 24
+	}
+
+	button
+	{
+		enabled "buffbot_charNames[2] ~= nil"
+		action  "BfBot.UI.SetChar(1)"
+		text lua "buffbot_charNames[2]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsCharSelected(1) and 1 or 0"
+		scaleToClip
+		area 432 90 80 24
+	}
+
+	button
+	{
+		enabled "buffbot_charNames[3] ~= nil"
+		action  "BfBot.UI.SetChar(2)"
+		text lua "buffbot_charNames[3]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsCharSelected(2) and 1 or 0"
+		scaleToClip
+		area 514 90 80 24
+	}
+
+	button
+	{
+		enabled "buffbot_charNames[4] ~= nil"
+		action  "BfBot.UI.SetChar(3)"
+		text lua "buffbot_charNames[4]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsCharSelected(3) and 1 or 0"
+		scaleToClip
+		area 596 90 80 24
+	}
+
+	button
+	{
+		enabled "buffbot_charNames[5] ~= nil"
+		action  "BfBot.UI.SetChar(4)"
+		text lua "buffbot_charNames[5]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsCharSelected(4) and 1 or 0"
+		scaleToClip
+		area 678 90 80 24
+	}
+
+	button
+	{
+		enabled "buffbot_charNames[6] ~= nil"
+		action  "BfBot.UI.SetChar(5)"
+		text lua "buffbot_charNames[6]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsCharSelected(5) and 1 or 0"
+		scaleToClip
+		area 760 90 80 24
+	}
+
+	-- ======================================================
+	-- Preset tabs (up to 5 dynamic) + management buttons
+	-- ======================================================
+
+	button
+	{
+		enabled "buffbot_presetNames[1] ~= nil"
+		action  "BfBot.UI.SetPreset(1)"
+		text lua "buffbot_presetNames[1]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(1) and 1 or 0"
+		scaleToClip
+		area 350 118 78 24
+	}
+
+	button
+	{
+		enabled "buffbot_presetNames[2] ~= nil"
+		action  "BfBot.UI.SetPreset(2)"
+		text lua "buffbot_presetNames[2]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(2) and 1 or 0"
+		scaleToClip
+		area 431 118 78 24
+	}
+
+	button
+	{
+		enabled "buffbot_presetNames[3] ~= nil"
+		action  "BfBot.UI.SetPreset(3)"
+		text lua "buffbot_presetNames[3]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(3) and 1 or 0"
+		scaleToClip
+		area 512 118 78 24
+	}
+
+	button
+	{
+		enabled "buffbot_presetNames[4] ~= nil"
+		action  "BfBot.UI.SetPreset(4)"
+		text lua "buffbot_presetNames[4]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(4) and 1 or 0"
+		scaleToClip
+		area 593 118 78 24
+	}
+
+	button
+	{
+		enabled "buffbot_presetNames[5] ~= nil"
+		action  "BfBot.UI.SetPreset(5)"
+		text lua "buffbot_presetNames[5]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(5) and 1 or 0"
+		scaleToClip
+		area 674 118 78 24
+	}
+
+	-- Rename preset button
+	button
+	{
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.OpenRename()"
+		text    "Rename"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 758 118 56 24
+	}
+
+	-- New preset button
+	button
+	{
+		enabled "BfBot.UI._CanCreatePreset()"
+		action  "BfBot.UI.CreateNewPreset()"
+		text    "New"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 818 118 50 24
+	}
+
+	-- ======================================================
+	-- Spell list (display only — interaction via buttons below)
+	-- Columns MUST come before properties (parser quirk).
+	-- Only label elements inside columns (no buttons).
+	-- ======================================================
+
+	list
+	{
+		-- Column 1: Enable/disable checkbox (text-based)
+		column
+		{
+			width 8
+			label
+			{
+				area 0 0 -1 36
+				text lua "BfBot.UI._CheckboxText(rowNumber)"
+				text style "normal"
+				text align center center
+			}
+		}
+
+		-- Column 2: Spell icon
+		column
+		{
+			width 8
+			label
+			{
+				area 2 2 32 32
+				icon lua "buffbot_spellTable[rowNumber].icon"
+				count lua "buffbot_spellTable[rowNumber].count"
+				greyscale lua "buffbot_spellTable[rowNumber].castable == 0"
+				align center center
+			}
+		}
+
+		-- Column 3: Spell name
+		column
+		{
+			width 40
+			label
+			{
+				area 0 0 -1 36
+				text lua "buffbot_spellTable[rowNumber].name"
+				text style "normal"
+				text align left center
+				text color lua "BfBot.UI._SpellNameColor(rowNumber)"
+			}
+		}
+
+		-- Column 4: Memorized count
+		column
+		{
+			width 12
+			label
+			{
+				area 0 0 -1 36
+				text lua "buffbot_spellTable[rowNumber].countText"
+				text style "normal"
+				text align center center
+			}
+		}
+
+		-- Column 5: Target display
+		column
+		{
+			width 32
+			label
+			{
+				area 0 0 -1 36
+				text lua "buffbot_spellTable[rowNumber].targetText"
+				text style "normal"
+				text align center center
+			}
+		}
+
+		area 350 148 520 280
+		enabled     "buffbot_isOpen"
+		table       "buffbot_spellTable"
+		var         "buffbot_selectedRow"
+		rowheight   36
+		scrollbar   "GUISCRC"
+	}
+
+	-- ======================================================
+	-- Selected spell actions (Toggle + Change Target)
+	-- ======================================================
+
+	-- Toggle enable/disable for selected spell
+	button
+	{
+		enabled "BfBot.UI._HasSelection()"
+		action  "BfBot.UI.ToggleSelected()"
+		text lua "BfBot.UI._ToggleBtnText()"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 350 434 120 28
+	}
+
+	-- Change target for selected spell
+	button
+	{
+		enabled "BfBot.UI._HasSelection()"
+		action  "BfBot.UI.OpenTargetsForSelected()"
+		text lua "BfBot.UI._TargetBtnText()"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 476 434 160 28
+	}
+
+	-- Delete current preset
+	button
+	{
+		enabled "BfBot.UI._CanDeletePreset()"
+		action  "BfBot.UI.DeleteCurrentPreset()"
+		text    "Delete Preset"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 740 434 130 28
+	}
+
+	-- ======================================================
+	-- Action buttons + status
+	-- ======================================================
+
+	-- Cast button
+	button
+	{
+		enabled "buffbot_isOpen"
+		clickable lua "BfBot.UI._CanCast()"
+		action  "BfBot.UI.Cast()"
+		text lua "buffbot_castLabel"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 350 468 180 28
+	}
+
+	-- Stop button (only visible when running)
+	button
+	{
+		enabled "BfBot.UI._IsRunning()"
+		action  "BfBot.UI.Stop()"
+		text    "Stop"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 536 468 80 28
+	}
+
+	-- Close button
+	button
+	{
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.Close()"
+		text    "Close"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 790 468 80 28
+	}
+
+	-- Status line
+	label
+	{
+		enabled "buffbot_isOpen"
+		text lua "buffbot_status"
+		text style "normal"
+		text align left center
+		area 350 500 520 24
+	}
+}
+
+-- ==========================================================
+-- Target picker sub-menu
+-- Single mode: click = set target + close.
+-- Multi mode (count>1): character buttons toggle [X]/[ ], Done closes.
+-- ==========================================================
+menu
+{
+	name    "BUFFBOT_TARGETS"
+	ignoreesc
+
+	-- Dark overlay background (click to close)
+	text
+	{
+		action  "Infinity_PopMenu('BUFFBOT_TARGETS')"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 50
+		on escape
+	}
+
+	-- Panel background
+	label
+	{
+		area 500 175 160 290
+		rectangle 5
+		rectangle opacity 200
+	}
+
+	-- Header label (multi mode: shows spell name + count)
+	label
+	{
+		enabled "buffbot_multiTarget == 1"
+		text lua "buffbot_targetHeader"
+		text style "normal"
+		text align left center
+		text color lua "{200, 200, 100}"
+		area 505 180 150 20
+	}
+
+	-- "Self" button
+	button
+	{
+		action  "BfBot.UI.PickTarget('s')"
+		text    "Self"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 205 140 26
+	}
+
+	-- "Party" button
+	button
+	{
+		action  "BfBot.UI.PickTarget('p')"
+		text    "Party"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 233 140 26
+	}
+
+	-- Player 1
+	button
+	{
+		enabled "buffbot_charNames[1] ~= nil"
+		action  "BfBot.UI.PickTarget('1')"
+		text lua "BfBot.UI._PickerBtnText(1)"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 261 140 26
+	}
+
+	-- Player 2
+	button
+	{
+		enabled "buffbot_charNames[2] ~= nil"
+		action  "BfBot.UI.PickTarget('2')"
+		text lua "BfBot.UI._PickerBtnText(2)"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 289 140 26
+	}
+
+	-- Player 3
+	button
+	{
+		enabled "buffbot_charNames[3] ~= nil"
+		action  "BfBot.UI.PickTarget('3')"
+		text lua "BfBot.UI._PickerBtnText(3)"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 317 140 26
+	}
+
+	-- Player 4
+	button
+	{
+		enabled "buffbot_charNames[4] ~= nil"
+		action  "BfBot.UI.PickTarget('4')"
+		text lua "BfBot.UI._PickerBtnText(4)"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 345 140 26
+	}
+
+	-- Player 5
+	button
+	{
+		enabled "buffbot_charNames[5] ~= nil"
+		action  "BfBot.UI.PickTarget('5')"
+		text lua "BfBot.UI._PickerBtnText(5)"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 373 140 26
+	}
+
+	-- Player 6
+	button
+	{
+		enabled "buffbot_charNames[6] ~= nil"
+		action  "BfBot.UI.PickTarget('6')"
+		text lua "BfBot.UI._PickerBtnText(6)"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 401 140 26
+	}
+
+	-- "Done" button (multi mode only)
+	button
+	{
+		enabled "buffbot_multiTarget == 1"
+		action  "Infinity_PopMenu('BUFFBOT_TARGETS')"
+		text    "Done"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 505 433 140 26
+	}
+}
+
+-- ==========================================================
+-- Preset rename sub-menu
+-- ==========================================================
+menu
+{
+	name    "BUFFBOT_RENAME"
+	ignoreesc
+
+	-- Dark overlay background (click to close)
+	text
+	{
+		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 50
+		on escape
+	}
+
+	-- Small panel background
+	label
+	{
+		area 450 280 260 90
+		rectangle 5
+		rectangle opacity 200
+	}
+
+	-- Label
+	label
+	{
+		text    "Rename Preset:"
+		text style "normal"
+		text align left center
+		area 460 285 240 20
+	}
+
+	-- Edit field
+	edit
+	{
+		var     "buffbot_renameInput"
+		action  "return 1"
+		text style "edit"
+		maxlines 1
+		area 460 308 240 24
+	}
+
+	-- OK button
+	button
+	{
+		action  "BfBot.UI.ConfirmRename(); Infinity_PopMenu('BUFFBOT_RENAME')"
+		text    "OK"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 460 338 80 24
+	}
+
+	-- Cancel button
+	button
+	{
+		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
+		text    "Cancel"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 550 338 80 24
+	}
+}

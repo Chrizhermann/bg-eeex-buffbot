@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Desktop_Commander__list_directory",
+      "WebFetch(domain:github.com)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(gh release list:*)",
+      "Bash(gh release view:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_tabs",
+      "mcp__playwright__browser_evaluate",
+      "WebFetch(domain:forums.beamdog.com)",
+      "WebFetch(domain:eeex-docs.readthedocs.io)",
+      "WebFetch(domain:gibberlings3.github.io)",
+      "WebFetch(domain:baldursgate.fandom.com)"
+    ]
+  }
+}

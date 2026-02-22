@@ -1,0 +1,33 @@
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# WeiDU / Infinity Engine build artifacts
+setup-*.exe
+weidu.exe
+weidu.log
+*.debug
+*.bcs
+
+# Game data (don't commit extracted/override game files)
+override/
+dlc/
+lang/*/dialog.tlk
+chitin.key
+
+# General
+*.bak
+*.tmp
+*.log
+*.orig
