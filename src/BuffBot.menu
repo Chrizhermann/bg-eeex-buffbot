@@ -228,7 +228,7 @@ menu
 	}
 
 	-- ======================================================
-	-- Spell list (display only — interaction via buttons below)
+	-- Spell list (click row to toggle enable/disable)
 	-- Columns MUST come before properties (parser quirk).
 	-- Only label elements inside columns (no buttons).
 	-- ======================================================
@@ -303,6 +303,7 @@ menu
 		}
 
 		area 350 148 520 280
+		action      "if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) end"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
 		var         "buffbot_selectedRow"

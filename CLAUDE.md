@@ -19,7 +19,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
-- **Skip detection**: Two-tier — SPLSTATE fast path (`sprite:getSpellState(id)`), then effect list fallback (`sprite.m_timedEffectList` + `effect.m_sourceRes:get()` matching). Both methods verified in-game.
+- **Skip detection**: SPLSTATE as fast negative (if none of spell's SPLSTATEs active → definitely not buffed, skip effect list walk), then authoritative effect list check (`sprite.m_timedEffectList` + `effect.m_sourceRes:get()` matching) for positive SPLSTATE or spells without SPLSTATEs. Logs `"splstate false positive caught"` when SPLSTATE was active but effect list disagrees.
 - **Queue format**: `{caster=0-5, spell="RESREF", target="self"|"all"|1-6}`
 - **API**: `BfBot.Exec.Start(queue)`, `BfBot.Exec.Stop()`, `BfBot.Exec.GetState()`, `BfBot.Exec.GetLog()`
 - **Log file**: `buffbot_exec.log` in game directory (append mode)
@@ -46,8 +46,8 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Character tabs**: 6 button slots, visibility gated by `buffbot_charNames[N]` (populated from party)
 - **Preset tabs**: 5 button slots (dynamic) + "Rename" + "New" buttons. Visibility gated by `buffbot_presetNames[N]`. Delete button below list (disabled when only 1 preset remains).
 - **Spell list**: `.menu` `list` widget with label-only columns: checkbox text `[X]/[ ]`, spell icon, name (color-coded), memorized count, target text. Data source: `buffbot_spellTable` (Lua global array). Row selection via `var "buffbot_selectedRow"`.
-- **CRITICAL `.menu` limitation**: `button` elements inside `list > column` blocks do NOT respond to clicks. Only `label` elements work. All interaction uses external buttons below the list that act on the selected row.
-- **Interaction model**: Select-then-act. Click row to select it, then use "Enable/Disable" or "Target: ..." buttons below the list. This is required because .menu list columns only support labels, not interactive buttons.
+- **CRITICAL `.menu` limitation**: `button` elements inside `list > column` blocks do NOT respond to clicks. Only `label` elements work. Toggle uses list-level `action` with `cellNumber` guard instead.
+- **Interaction model**: Click checkbox or icon column (cellNumber <= 2) to toggle enable/disable directly. Click name/count/target columns to select the row for target changes via the "Target: ..." button below the list. External "Enable/Disable" button also works as secondary toggle method. **IMPORTANT**: `rowNumber` in list `action` callbacks is stale (last render pass value) — always use `buffbot_selectedRow` (the `var` binding) which is correctly set at click time.
 - **Target picker**: BUFFBOT_TARGETS sub-menu with Self/Party + per-player buttons. **Multi-target mode**: when spell has count > 1, picker switches to checkbox toggle mode ([X]/[ ] per character) with a Done button. `BfBot.UI.PickTarget(value)` handles both single-select (auto-close) and multi-select (toggle) modes.
 - **Cast/Stop**: Cast builds queue from active preset via `BuildQueueFromPreset()` → `Exec.Start()`. Stop calls `Exec.Stop()`.
 - **Auto-refresh**: Sprite listeners (`QuickListsChecked`, `QuickListCountsReset`, `QuickListNotifyRemoved`) invalidate scan cache then refresh. Tab switches use cached data (no invalidation).
@@ -88,8 +88,8 @@ The buff classifier (`BfBot.Class.Classify`) is too generous — these categorie
 
 These false positives don't affect the execution engine (it casts whatever it's given). The config UI's manual override will handle edge cases. Classifier heuristic improvements are a separate task.
 
-### SPLSTATE Skip False Positive (known issue)
-Modded spells can share SPLSTATEs. Example: Death Ward (splstate 8) was skipped via splstate 67 (Berserker Rage's state) because SCS Death Ward's feature blocks also set splstate 67. The effect list fallback doesn't run when SPLSTATE check already skips. Potential fix: only trust SPLSTATE if the spell has a single unique state, otherwise prefer effect list. Deferred to post-MVP.
+### SPLSTATE Skip False Positive (FIXED)
+Modded spells can share SPLSTATEs. Example: Death Ward (splstate 8) was skipped via splstate 67 (Berserker Rage's state) because SCS Death Ward's feature blocks also set splstate 67. **Fix**: SPLSTATE is now used only as a fast negative (if none active → spell definitely absent, skip effect list walk). Positive SPLSTATE results fall through to the authoritative effect list check (`_HasActiveEffect`), which matches on the actual spell resref. Diagnostic `INFO` log entries mark caught false positives (`"splstate false positive caught"`).
 
 ## Tech Stack
 
