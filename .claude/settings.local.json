@@ -16,7 +16,8 @@
       "WebFetch(domain:forums.beamdog.com)",
       "WebFetch(domain:eeex-docs.readthedocs.io)",
       "WebFetch(domain:gibberlings3.github.io)",
-      "WebFetch(domain:baldursgate.fandom.com)"
+      "WebFetch(domain:baldursgate.fandom.com)",
+      "Bash(bash tools/deploy.sh)"
     ]
   }
 }

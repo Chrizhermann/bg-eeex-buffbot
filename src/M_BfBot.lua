@@ -5,6 +5,7 @@ if not EEex_Active then return end
 
 Infinity_DoFile("BfBotCor")  -- Core logic (scanner, classifier, executor, persistence)
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
+BfBot.Innate._EnsureSPLFiles()  -- Write innate SPL files to override (if missing)
 Infinity_DoFile("BfBotUI")  -- UI logic (state, callbacks, .menu integration)
 Infinity_DoFile("BfBotTst")  -- Test suite (remove for release)
 

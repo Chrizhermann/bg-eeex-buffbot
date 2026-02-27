@@ -530,8 +530,9 @@ EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
 ```
 
 Instant-capable actions include: `ApplySpell`, `ReallyForceSpellDead`,
-`DisplayStringHead`, `SetGlobal`, `AddSpecialAbility`, among others.
-Standard `Spell()`, `ForceSpell()` are **NOT** in INSTANT.IDS.
+`DisplayStringHead`, `SetGlobal`, among others.
+**NOT** instant-capable: `Spell()`, `ForceSpell()`, `AddSpecialAbility`,
+`RemoveSpellRES`, `ApplySpellRES` — these require `QueueResponseStringOnAIBase`.
 
 ### EEex Extended Spell Actions **[INF]**
 

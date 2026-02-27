@@ -28,6 +28,23 @@ cp "$SRC_DIR/BfBotUI.lua"   "$GAME_DIR/BfBotUI.lua"
 cp "$SRC_DIR/BfBotTst.lua"  "$GAME_DIR/BfBotTst.lua"
 cp "$SRC_DIR/BuffBot.menu"  "$GAME_DIR/BuffBot.menu"
 
+# Patch dialog.tlk with BuffBot innate ability names (idempotent)
+LANG_DIR="$(dirname "$GAME_DIR")/lang/en_US"
+TOOLS_DIR="$(dirname "$0")"
+if [ -f "$LANG_DIR/dialog.tlk" ]; then
+    if command -v python3 &> /dev/null; then
+        python3 "$TOOLS_DIR/patch_tlk.py" "$LANG_DIR/dialog.tlk" "$GAME_DIR/bfbot_strrefs.txt"
+    elif command -v python &> /dev/null; then
+        python "$TOOLS_DIR/patch_tlk.py" "$LANG_DIR/dialog.tlk" "$GAME_DIR/bfbot_strrefs.txt"
+    else
+        echo "WARNING: Python not found. Innate ability names will be blank."
+        echo "  Install Python 3 and re-run deploy.sh to add names."
+    fi
+else
+    echo "WARNING: dialog.tlk not found at $LANG_DIR/dialog.tlk"
+fi
+
+echo ""
 echo "Done. Files deployed:"
 ls -la "$GAME_DIR"/M_BfBot.lua "$GAME_DIR"/BfBotCor.lua "$GAME_DIR"/BfBotUI.lua "$GAME_DIR"/BfBotTst.lua "$GAME_DIR"/BuffBot.menu
 
@@ -57,3 +74,9 @@ echo ""
 echo "UI panel:"
 echo "  BfBot.UI.Toggle()                        -- open/close config panel"
 echo "  F11 key                                  -- toggle panel (in-game)"
+echo ""
+echo "Innate abilities:"
+echo "  BFBT*.SPL files are auto-generated on first game start"
+echo "  F12 (special abilities) shows per-preset innates for each character"
+echo "  BfBot.Innate.Grant()                     -- re-grant innates to party"
+echo "  BfBot.Innate.RefreshAll()                -- revoke + re-grant all"

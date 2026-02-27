@@ -82,6 +82,10 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
+    -- Innate abilities are granted lazily on first sprite event after save load
+    -- (can't grant here — no party members exist until a save is loaded)
+    BfBot.Innate._granted = false
+
     BfBot.UI._initialized = true
 end
 
@@ -395,6 +399,7 @@ function BfBot.UI.CreateNewPreset()
     local idx = BfBot.Persist.CreatePresetAll()
     if idx then
         BfBot.UI._presetIdx = idx
+        BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
     end
 end
@@ -416,6 +421,7 @@ function BfBot.UI.DeleteCurrentPreset()
                 end
             end
         end
+        BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
     end
 end
@@ -457,6 +463,11 @@ end
 -- ============================================================
 
 function BfBot.UI._OnSpellListChanged(sprite, resref, changeAmount)
+    -- Lazy-grant innates on first sprite event after save load
+    if not BfBot.Innate._granted then
+        BfBot.Innate._granted = true
+        BfBot.Innate.Grant()
+    end
     BfBot.Scan.Invalidate(sprite)
     if buffbot_isOpen then BfBot.UI._Refresh() end
 end
@@ -488,7 +499,7 @@ end
 
 --- Can we start casting? (exec idle + spells exist)
 function BfBot.UI._CanCast()
-    return BfBot.Exec.GetState() == "idle" and #buffbot_spellTable > 0
+    return BfBot.Exec.GetState() ~= "running" and #buffbot_spellTable > 0
 end
 
 --- Is execution currently running?

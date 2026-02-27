@@ -13,7 +13,9 @@ Implementation in progress — all core modules implemented, UI rendering in-gam
 - **Persistence** (`BfBot.Persist`) — per-character config saved in EEex save games via marshal handlers (`EEex_Sprite_AddMarshalHandlers`), global preferences via INI. Auto-populates presets from scanner, builds execution queues from saved presets. Preset create/delete/rename implemented.
 - **Configuration UI** (`BfBot.UI`) — in-game config panel with character tabs, dynamic preset tabs (up to 5), scrollable spell list with checkbox/icon/name/count/target columns, target picker sub-menu, preset create/delete/rename, cast/stop buttons. Actionbar button + F11 hotkey access. Panel renders and opens in-game; interaction testing in progress.
 
-Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (cheat mode, export/import, actionbar button polish). Analysis documents are in `docs/`, mod source in `src/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Innate Abilities** (`BfBot.Innate`) — per-preset F12 innate abilities for each party member. Runtime SPL generation with opcode 402 (Invoke Lua) + opcode 171 (re-grant). TLK patching via `tools/patch_tlk.py` for tooltip names ("BuffBot 1"–"BuffBot 5"). Correct character/preset targeting via CGameEffect field access. Verified working in-game.
+
+Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (cheat mode, export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `src/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -27,7 +29,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Marshal handler name**: `"BuffBot"` — registered via `EEex_Sprite_AddMarshalHandlers` in `BfBot.Persist.Init()` (called at M_ load time)
 - **CRITICAL: No booleans in config** — EEex marshal only supports number/string/table values. Booleans cause `EEex_Error()` and crash saves. All boolean-like fields use `1`/`0`.
 - **Config schema** (v1): `{v=1, ap=1, presets={[1]={name,cat,spells={[resref]={on,tgt,pri}}}, [2]={...}}, opts={skip=1,cheat=0}}` — `tgt` can be a string (`"s"`, `"p"`, `"1"`-`"6"`) or a table of slot strings (`{"1","3","5"}`) for multi-target assignment
-- **Auto-population**: `_CreateDefaultConfig` scans castable spells, sorts by duration, populates preset 1 (long/permanent buffs) and preset 2 (short buffs)
+- **Auto-population**: `_CreateDefaultConfig` scans castable spells, sorts by duration, puts ALL buff spells into BOTH default presets. Preset 1 ("Long Buffs") has long/permanent enabled + rest disabled; Preset 2 ("Short Buffs") has short enabled + rest disabled. Enabled spells get low priorities (cast first), disabled get high. Instant spells included but disabled in both.
 - **Queue building**: `BuildQueueFromPreset(idx)` walks all party members, filters to enabled+castable spells, maps targets (`"s"->"self"`, `"p"->"all"`, `"N"->tonumber(N)`, table→one entry per slot), returns queue for `BfBot.Exec.Start()`
 - **INI preferences**: cross-save global settings in `baldur.ini` section `[BuffBot]` via `Infinity_GetINIValue`/`Infinity_SetINIValue`
 - **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`
@@ -52,6 +54,20 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **No booleans**: All UI code interacting with Persist uses 0/1 integers, never true/false. `ToggleSpell` passes integer `newState` directly.
 - **Shared utility**: `BfBot._GetName(sprite)` — safe character name getter used by both Exec and UI modules
 - **In-game status**: Panel renders correctly, character/preset tabs work, spell list populates. Interaction (toggle, target, preset create/delete) deployed but awaiting final in-game verification.
+
+### Innate Abilities Details (VERIFIED IN-GAME)
+- **Per-preset innates**: Each character gets 1 innate per configured preset in F12/special abilities
+- **30 SPL files**: `BFBT{slot}{preset}.SPL` (6 slots x 5 presets), generated at runtime by `_EnsureSPLFiles()` during M_ load
+- **SPL structure**: 250 bytes — Header (114) + 1 ability (40, self/instant) + 2 features (48 each: opcode 402 + opcode 171)
+- **Opcode 402 (EEex Invoke Lua)**: Calls global `BFBOTGO(param1, param2, special)`. `param1` is CGameEffect userdata — access slot via `param1.m_effectAmount`, preset via `param1.m_dWFlags`. Maps to `BuildQueueForCharacter(slot, preset)` + `Exec.Start(queue)`.
+- **Opcode 171 (Give Innate)**: Re-grants self after cast (standard IE repeatable innate pattern)
+- **Grant/Revoke**: `AddSpecialAbility` / `RemoveSpellRES` via `QueueResponseStringOnAIBase` (NOT instant — these are not in INSTANT.IDS)
+- **Tooltip names**: TLK patched at deploy time by `tools/patch_tlk.py`. Appends "BuffBot 1"–"BuffBot 5" to `dialog.tlk`. Base strref written to `override/bfbot_strrefs.txt`, read by `_BuildSPL` at M_ load for SPL name fields (offsets 0x0008, 0x000C).
+- **Icon**: `SPWI218B` (Stoneskin button BAM) — placeholder, custom BAM post-MVP
+- **Spell level**: Set to preset index (1-5) for separate F12 lines
+- **Party slot encoding**: Slot (0-5) baked into opcode 402 param1, preset (1-5) into param2. Stale if party rearranged — `RefreshAll()` on party change.
+- **Lazy grant**: First sprite event in `BfBot.UI._OnSpellListChanged` triggers `Grant()` once per session
+- **API**: `BfBot.Innate.Grant()`, `.Revoke(slot)`, `.Refresh(slot)`, `.RefreshAll()`, `._EnsureSPLFiles()`, `._BuildSPL(slot, preset)`
 
 ### Future: Config Export/Import (post-MVP)
 Shareable preset templates need file-based storage outside save games:
@@ -88,7 +104,7 @@ Modded spells can share SPLSTATEs. Example: Death Ward (splstate 8) was skipped 
 ### Panel Access (resolved)
 - **Primary**: Dedicated actionbar button via `EEex_Menu_InjectTemplate("WORLD_ACTIONBAR", ...)` — avoids conflicts with BSME
 - **Secondary**: F11 keyboard shortcut (configurable) via `EEex_Key_AddPressedListener`
-- **Future**: Custom innate ability (post-MVP)
+- **Tertiary**: Per-preset innate abilities in F12/special abilities — one per preset per character, triggers buffing directly
 
 ### Config Panel
 - **Per-character tabs** (confirmed) — select a party member, see their available buff spells, configure each one. This is the right model for BG where spell lists have minimal overlap across party members (unlike Pathfinder where casters share many buffs). Hardcore players (SCS/Ascension/Insane) think in per-character detail

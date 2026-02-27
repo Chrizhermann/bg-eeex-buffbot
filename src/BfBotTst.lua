@@ -825,29 +825,46 @@ function BfBot.Test.Persist()
     if config.v == BfBot.Persist._SCHEMA_VERSION then _ok("Created config has correct version")
     else _nok("Created config version: " .. tostring(config.v)) end
 
-    -- Check auto-population
-    local longCount = _tcount(config.presets[1].spells)
-    local shortCount = _tcount(config.presets[2].spells)
-    P("    Preset 1 (Long Buffs): " .. longCount .. " spells")
-    P("    Preset 2 (Short Buffs): " .. shortCount .. " spells")
+    -- Check auto-population (both presets should have ALL buff spells)
+    local p1Count = _tcount(config.presets[1].spells)
+    local p2Count = _tcount(config.presets[2].spells)
+    P("    Preset 1 (Long Buffs): " .. p1Count .. " spells total")
+    P("    Preset 2 (Short Buffs): " .. p2Count .. " spells total")
 
-    if longCount > 0 or shortCount > 0 then
-        _ok("Auto-populated " .. (longCount + shortCount) .. " buff spells")
+    if p1Count > 0 or p2Count > 0 then
+        _ok("Auto-populated " .. p1Count .. " buff spells into both presets")
     else
         _warning("No buff spells auto-populated (character may have no buffs memorized)")
     end
 
-    -- Check priorities are sequential in preset 1
-    if longCount > 0 then
+    if p1Count == p2Count then
+        _ok("Both presets have equal spell count (" .. p1Count .. ")")
+    else
+        _nok("Preset counts differ: P1=" .. p1Count .. " P2=" .. p2Count)
+    end
+
+    -- Check priorities are sequential and enabled spells sort before disabled
+    if p1Count > 0 then
         local maxPri = 0
         local priOk = true
+        local maxEnabledPri, minDisabledPri = 0, 9999
         for _, entry in pairs(config.presets[1].spells) do
             if entry.pri > maxPri then maxPri = entry.pri end
             if type(entry.pri) ~= "number" then priOk = false end
+            if entry.on == 1 and entry.pri > maxEnabledPri then maxEnabledPri = entry.pri end
+            if entry.on == 0 and entry.pri < minDisabledPri then minDisabledPri = entry.pri end
         end
-        if priOk and maxPri <= longCount then _ok("Preset 1 priorities sequential (max=" .. maxPri .. ")")
-        elseif priOk then _warning("Preset 1 max priority " .. maxPri .. " > count " .. longCount)
+        if priOk and maxPri <= p1Count then _ok("Preset 1 priorities sequential (max=" .. maxPri .. ")")
+        elseif priOk then _warning("Preset 1 max priority " .. maxPri .. " > count " .. p1Count)
         else _nok("Preset 1 has non-numeric priorities") end
+
+        if maxEnabledPri > 0 and minDisabledPri < 9999 then
+            if maxEnabledPri < minDisabledPri then
+                _ok("Preset 1: enabled spells have lower pri than disabled")
+            else
+                _nok("Preset 1: enabled pri " .. maxEnabledPri .. " >= disabled pri " .. minDisabledPri)
+            end
+        end
     end
 
     -- Boolean safety on created config
@@ -1145,6 +1162,89 @@ end
 function BfBot.Test.ExecStop()
     BfBot.Exec.Stop()
     BfBot.Test.ExecLog()
+end
+
+-- ============================================================
+-- Innate Ability Diagnostics
+-- ============================================================
+
+--- Diagnostic: check SPL files on disk and known innates per party member.
+function BfBot.Test.Innate()
+    local P = Infinity_DisplayString
+
+    P("")
+    P("[BuffBot] === Innate Ability Diagnostics ===")
+    P("")
+
+    -- Check SPL files on disk
+    local splFound, splMissing = 0, 0
+    for slot = 0, 5 do
+        for preset = 1, 5 do
+            local resref = string.format("BFBT%d%d", slot, preset)
+            local path = "override/" .. resref .. ".SPL"
+            local f = io.open(path, "rb")
+            if f then
+                local size = f:seek("end")
+                f:close()
+                splFound = splFound + 1
+            else
+                splMissing = splMissing + 1
+            end
+        end
+    end
+    P(string.format("[BuffBot] SPL files on disk: %d found, %d missing", splFound, splMissing))
+    P("")
+
+    -- Check known innates per party member
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local name = BfBot._GetName(sprite)
+            local bfbtInnates = {}
+            local otherCount = 0
+
+            -- Iterate known innate spells
+            local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
+            if iter then
+                while iter:hasNext() do
+                    local spell = iter:next()
+                    local resref = spell.m_spellId:get()
+                    if resref and resref:sub(1, 4) == "BFBT" then
+                        table.insert(bfbtInnates, resref)
+                    else
+                        otherCount = otherCount + 1
+                    end
+                end
+            end
+
+            if #bfbtInnates > 0 then
+                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)",
+                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount))
+            else
+                P(string.format("[BuffBot] Slot %d (%s): NO BuffBot innates  (%d other innates)",
+                    slot, name, otherCount))
+            end
+
+            -- Check config
+            local config = BfBot.Persist.GetConfig(sprite)
+            if config then
+                local presetCount = 0
+                for i = 1, 5 do
+                    if config.presets[i] then presetCount = presetCount + 1 end
+                end
+                P(string.format("[BuffBot]   Config: %d presets, expected %d innates",
+                    presetCount, presetCount))
+            else
+                P("[BuffBot]   Config: NONE (no presets configured)")
+            end
+        end
+    end
+
+    P("")
+    P("[BuffBot] Granted flag: " .. tostring(BfBot.Innate._granted))
+    P("[BuffBot] To manually grant: BfBot.Innate.Grant()")
+    P("[BuffBot] To re-generate SPLs: BfBot.Innate._EnsureSPLFiles()")
+    P("")
 end
 
 -- ============================================================
