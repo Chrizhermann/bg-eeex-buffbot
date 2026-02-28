@@ -433,7 +433,9 @@ end
 function BfBot.UI.Cast()
     local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
     if queue then
-        BfBot.Exec.Start(queue)
+        local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+        local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
+        BfBot.Exec.Start(queue, qcMode)
         buffbot_status = BfBot.UI._GetStatusText()
     end
 end
@@ -594,8 +596,52 @@ end
 --- Execution status text for the status label.
 function BfBot.UI._GetStatusText()
     local state = BfBot.Exec.GetState()
-    if state == "running" then return "Casting..."
+    if state == "running" then
+        local qc = BfBot.Exec._qcMode or 0
+        if qc == 2 then return "Casting (Quick: All)..."
+        elseif qc == 1 then return "Casting (Quick: Long)..."
+        else return "Casting..." end
     elseif state == "done" then return "Done"
     elseif state == "stopped" then return "Stopped"
     else return "" end
+end
+
+-- ============================================================
+-- Quick Cast Cycling Button
+-- ============================================================
+
+function BfBot.UI.CycleQuickCast()
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+    local current = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    local next = (current + 1) % 3
+    BfBot.Persist.SetQuickCastAll(BfBot.UI._presetIdx, next)
+end
+
+function BfBot.UI._QuickCastLabel()
+    if not buffbot_isOpen then return "" end
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return "Quick Cast: Off" end
+    local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    if qc == 1 then return "Quick Cast: Long" end
+    if qc == 2 then return "Quick Cast: All" end
+    return "Quick Cast: Off"
+end
+
+function BfBot.UI._QuickCastColor()
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return {200, 200, 200} end
+    local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    if qc == 1 then return {230, 200, 60} end
+    if qc == 2 then return {230, 100, 60} end
+    return {200, 200, 200}
+end
+
+function BfBot.UI._QuickCastTooltip()
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return "Normal casting speed" end
+    local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    if qc == 1 then return "Fast casting for buffs lasting 5+ turns (click to cycle)" end
+    if qc == 2 then return "Fast casting for ALL buffs — cheat (click to cycle)" end
+    return "Normal casting speed (click to cycle)"
 end
