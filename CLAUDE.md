@@ -15,31 +15,34 @@ Implementation in progress — all core modules implemented, UI rendering in-gam
 
 - **Innate Abilities** (`BfBot.Innate`) — per-preset F12 innate abilities for each party member. Runtime SPL generation with opcode 402 (Invoke Lua) + opcode 171 (re-grant). TLK patching via `tools/patch_tlk.py` for tooltip names ("BuffBot 1"–"BuffBot 5"). Correct character/preset targeting via CGameEffect field access. Verified working in-game.
 
-Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (cheat mode, export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `src/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Quick Cast / Cheat Mode** (`BfBot.Exec` + `BfBot.Persist` + `BfBot.UI`) — per-preset 3-state toggle (Off/Long/All). Applies temporary Improved Alacrity + casting speed reduction via runtime-generated BFBTCH.SPL. Two-pass queue splitting for mixed presets (long buffs fast, short buffs normal). Cycling button with color-coded text. Works through both UI Cast button and F12 innate abilities.
+
+Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `src/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
 - **Skip detection**: SPLSTATE as fast negative (if none of spell's SPLSTATEs active → definitely not buffed, skip effect list walk), then authoritative effect list check (`sprite.m_timedEffectList` + `effect.m_sourceRes:get()` matching) for positive SPLSTATE or spells without SPLSTATEs. Logs `"splstate false positive caught"` when SPLSTATE was active but effect list disagrees.
 - **Queue format**: `{caster=0-5, spell="RESREF", target="self"|"all"|1-6}`
-- **API**: `BfBot.Exec.Start(queue)`, `BfBot.Exec.Stop()`, `BfBot.Exec.GetState()`, `BfBot.Exec.GetLog()`
+- **Quick Cast (cheat mode)**: `BfBot.Exec.Start(queue, qcMode)` accepts optional qcMode (0=off, 1=long only, 2=all). Entries tagged with `cheat` flag based on qcMode and spell `durCat`. When qcMode=1, cheat entries sorted first per caster (two-pass split). BFBTCH.SPL (Improved Alacrity + casting speed -10) applied before first cheat entry via `ApplySpellRES`. BFBTCR.SPL (opcode 321 remove by resource) applied at cheat/normal boundary. Cleanup on Stop() removes lingering BFBTCH.
+- **API**: `BfBot.Exec.Start(queue, qcMode)`, `BfBot.Exec.Stop()`, `BfBot.Exec.GetState()`, `BfBot.Exec.GetLog()`
 - **Log file**: `buffbot_exec.log` in game directory (append mode)
 
 ### Persistence Details
 - **Per-character config**: stored in `EEex_GetUDAux(sprite)["BB"]` via marshal handlers. Survives save/load automatically.
 - **Marshal handler name**: `"BuffBot"` — registered via `EEex_Sprite_AddMarshalHandlers` in `BfBot.Persist.Init()` (called at M_ load time)
 - **CRITICAL: No booleans in config** — EEex marshal only supports number/string/table values. Booleans cause `EEex_Error()` and crash saves. All boolean-like fields use `1`/`0`.
-- **Config schema** (v1): `{v=1, ap=1, presets={[1]={name,cat,spells={[resref]={on,tgt,pri}}}, [2]={...}}, opts={skip=1,cheat=0}}` — `tgt` can be a string (`"s"`, `"p"`, `"1"`-`"6"`) or a table of slot strings (`{"1","3","5"}`) for multi-target assignment
+- **Config schema** (v4): `{v=4, ap=1, presets={[1]={name,cat,qc=0,spells={[resref]={on,tgt,pri}}}, [2]={...}}, opts={skip=1}}` — `tgt` can be a string (`"s"`, `"p"`, `"1"`-`"6"`) or a table of slot strings (`{"1","3","5"}`) for multi-target assignment. `qc` is per-preset Quick Cast mode (0=off, 1=long only, 2=all).
 - **Auto-population**: `_CreateDefaultConfig` scans castable spells, sorts by duration, puts ALL buff spells into BOTH default presets. Preset 1 ("Long Buffs") has long/permanent enabled + rest disabled; Preset 2 ("Short Buffs") has short enabled + rest disabled. Enabled spells get low priorities (cast first), disabled get high. Instant spells included but disabled in both.
 - **Queue building**: `BuildQueueFromPreset(idx)` walks all party members, filters to enabled+castable spells, maps targets (`"s"->"self"`, `"p"->"all"`, `"N"->tonumber(N)`, table→one entry per slot), returns queue for `BfBot.Exec.Start()`
 - **INI preferences**: cross-save global settings in `baldur.ini` section `[BuffBot]` via `Infinity_GetINIValue`/`Infinity_SetINIValue`
-- **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`
+- **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`, `GetQuickCast`, `SetQuickCast`, `SetQuickCastAll`
 - **End-to-end verified**: `BuildQueueFromPreset(1)` → 52 entries → `Exec.Start()` → 6 casters casting in parallel. Use `BfBot.Exec.Start(BfBot.Persist.BuildQueueFromPreset(1))` in console (avoid `local` — EEex console scopes each line separately).
 - **Preset management**: `RenamePreset(sprite, idx, name)`, `CreatePreset(sprite, name)` (up to 5, populates with union of all existing spells disabled), `DeletePreset(sprite, idx)` (refuses to delete last preset, returns 1 on success not boolean)
 - **Future Persist APIs (not built yet)**: `CopyPreset`, `RefreshPresets` — nice-to-have for preset management
 - **Save game scope**: BG:EE saves are NOT character-bound or playthrough-bound — just game state snapshots. Config is per-character per-save via UDAux, which covers the core use case.
 
 ### Configuration UI Details
-- **Files**: `src/BfBotUI.lua` (Lua logic, ~510 lines), `src/BuffBot.menu` (.menu DSL definitions, ~600 lines)
+- **Files**: `src/BfBotUI.lua` (Lua logic, ~550 lines), `src/BuffBot.menu` (.menu DSL definitions, ~620 lines)
 - **Init chain**: `M_BfBot.lua` → `Infinity_DoFile("BfBotUI")` → `EEex_Menu_AddAfterMainFileLoadedListener` → `BfBot.UI._OnMenusLoaded()` (loads .menu, injects actionbar button, registers F11 hotkey + sprite listeners)
 - **Panel access**: Actionbar button via `EEex_Menu_InjectTemplate("WORLD_ACTIONBAR", "BUFFBOT_BTN", ...)` + F11 via `EEex_Key_AddPressedListener`
 - **Panel background**: Dark rectangle via `rectangle 5` + `rectangle opacity 200` (NOT BAM — stretched BAMs look terrible)
@@ -49,7 +52,8 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **CRITICAL `.menu` limitation**: `button` elements inside `list > column` blocks do NOT respond to clicks. Only `label` elements work. Toggle uses list-level `action` with `cellNumber` guard instead.
 - **Interaction model**: Click checkbox or icon column (cellNumber <= 2) to toggle enable/disable directly. Click name/count/target columns to select the row for target changes via the "Target: ..." button below the list. External "Enable/Disable" button also works as secondary toggle method. **IMPORTANT**: `rowNumber` in list `action` callbacks is stale (last render pass value) — always use `buffbot_selectedRow` (the `var` binding) which is correctly set at click time.
 - **Target picker**: BUFFBOT_TARGETS sub-menu with Self/Party + per-player buttons. **Multi-target mode**: when spell has count > 1, picker switches to checkbox toggle mode ([X]/[ ] per character) with a Done button. `BfBot.UI.PickTarget(value)` handles both single-select (auto-close) and multi-select (toggle) modes.
-- **Cast/Stop**: Cast builds queue from active preset via `BuildQueueFromPreset()` → `Exec.Start()`. Stop calls `Exec.Stop()`.
+- **Cast/Stop**: Cast builds queue from active preset via `BuildQueueFromPreset()` → `Exec.Start(queue, qcMode)`. Stop calls `Exec.Stop()`. qcMode read from preset's `qc` field via `GetQuickCast()`.
+- **Quick Cast button**: Cycling button between Stop and Close. Click cycles Off→Long→All→Off via `CycleQuickCast()` → `SetQuickCastAll()`. Color-coded text: white (Off), yellow (Long), red/orange (All). Tooltip describes current mode.
 - **Auto-refresh**: Sprite listeners (`QuickListsChecked`, `QuickListCountsReset`, `QuickListNotifyRemoved`) invalidate scan cache then refresh. Tab switches use cached data (no invalidation).
 - **No booleans**: All UI code interacting with Persist uses 0/1 integers, never true/false. `ToggleSpell` passes integer `newState` directly.
 - **Shared utility**: `BfBot._GetName(sprite)` — safe character name getter used by both Exec and UI modules
@@ -57,9 +61,9 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 
 ### Innate Abilities Details (VERIFIED IN-GAME)
 - **Per-preset innates**: Each character gets 1 innate per configured preset in F12/special abilities
-- **30 SPL files**: `BFBT{slot}{preset}.SPL` (6 slots x 5 presets), generated at runtime by `_EnsureSPLFiles()` during M_ load
+- **32 SPL files**: `BFBT{slot}{preset}.SPL` (6 slots x 5 presets) + `BFBTCH.SPL` (cheat buff) + `BFBTCR.SPL` (cheat remover), all generated at runtime by `_EnsureSPLFiles()` during M_ load
 - **SPL structure**: 250 bytes — Header (114) + 1 ability (40, self/instant) + 2 features (48 each: opcode 402 + opcode 171)
-- **Opcode 402 (EEex Invoke Lua)**: Calls global `BFBOTGO(param1, param2, special)`. `param1` is CGameEffect userdata — access slot via `param1.m_effectAmount`, preset via `param1.m_dWFlags`. Maps to `BuildQueueForCharacter(slot, preset)` + `Exec.Start(queue)`.
+- **Opcode 402 (EEex Invoke Lua)**: Calls global `BFBOTGO(param1, param2, special)`. `param1` is CGameEffect userdata — access slot via `param1.m_effectAmount`, preset via `param1.m_dWFlags`. Maps to `BuildQueueForCharacter(slot, preset)` + `Exec.Start(queue, qcMode)`. Reads preset's `qc` field via `GetQuickCast()` and passes through to execution engine.
 - **Opcode 171 (Give Innate)**: Re-grants self after cast (standard IE repeatable innate pattern)
 - **Grant/Revoke**: `AddSpecialAbility` / `RemoveSpellRES` via `QueueResponseStringOnAIBase` (NOT instant — these are not in INSTANT.IDS)
 - **Tooltip names**: TLK patched at deploy time by `tools/patch_tlk.py`. Appends "BuffBot 1"–"BuffBot 5" to `dialog.tlk`. Base strref written to `override/bfbot_strrefs.txt`, read by `_BuildSPL` at M_ load for SPL name fields (offsets 0x0008, 0x000C).
@@ -69,12 +73,25 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Lazy grant**: First sprite event in `BfBot.UI._OnSpellListChanged` triggers `Grant()` once per session
 - **API**: `BfBot.Innate.Grant()`, `.Revoke(slot)`, `.Refresh(slot)`, `.RefreshAll()`, `._EnsureSPLFiles()`, `._BuildSPL(slot, preset)`
 
+### Quick Cast / Cheat Mode Details
+- **Per-preset toggle**: `qc` field on each preset (0=off, 1=long only, 2=all). Set via `SetQuickCast(sprite, idx, val)` or `SetQuickCastAll(idx, val)` for party-wide.
+- **BFBTCH.SPL** (cheat buff): 250 bytes — Header (114) + 1 ability (40, self/instant) + 2 effects (48 each). Effect 1: opcode 188 (Aura Cleansing / Improved Alacrity), 300s duration. Effect 2: opcode 189 (Casting Time Modifier, param1=-10), 300s duration.
+- **BFBTCR.SPL** (cheat remover): 202 bytes — Header (114) + 1 ability (40, self/instant) + 1 effect (48). Effect 1: opcode 321 (Remove Effects by Resource), resource = "BFBTCH".
+- **Two-pass queue splitting** (qcMode=1): Entries tagged with `cheat` flag based on durCat. Cheat entries sorted first per caster. `cheatBoundary` computed per caster. BFBTCH applied before first cheat entry, BFBTCR applied when crossing boundary to normal entries. Robust to skipped entries (boundary/apply conditions use flags, not index matching).
+- **Schema migration v3→v4**: Migrates old global `opts.cheat` (0/1) to per-preset `qc` field (cheat=1 → qc=2 on all presets, cheat=0 → qc=0). Removes `opts.cheat`.
+- **UI cycling button**: `CycleQuickCast()` cycles 0→1→2→0 via `SetQuickCastAll()`. Color-coded: white=Off `{200,200,200}`, yellow=Long `{230,200,60}`, red/orange=All `{230,100,60}`.
+- **Innate passthrough**: `BFBOTGO` handler reads `GetQuickCast(sprite, presetIdx)` and passes to `Exec.Start(queue, qcMode)`.
+- **Design doc**: `docs/plans/2026-02-28-cheat-mode-design.md`
+
 ### Future: Config Export/Import (post-MVP)
 Shareable preset templates need file-based storage outside save games:
 - `BfBot.Persist.ExportPreset(sprite, presetIndex, filename)` — write preset to file
 - `BfBot.Persist.ImportPreset(sprite, presetIndex, filename)` — load preset from file
 - Could support a "template library" of built-in presets (e.g., "Standard Prebuff", "Boss Fight")
 - Defer to post-MVP after config UI is working
+
+### Known Issue: Old Save Configs Missing Spells
+Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **To fix**: redeploy (`bash tools/deploy.sh`) and start a new game, or build a config migration that merges missing buff spells into existing presets (future task: merge missing spells in `GetConfig` or via schema version bump in `_MigrateConfig`).
 
 ### Known Classifier Issues (to address in config UI / classifier tuning)
 The buff classifier (`BfBot.Class.Classify`) is too generous — these categories score as false-positive buffs:
@@ -87,6 +104,9 @@ The buff classifier (`BfBot.Class.Classify`) is too generous — these categorie
 - **Shapeshifts**: Black Bear, Brown Bear, Wolf, Natural Form — debatable
 
 These false positives don't affect the execution engine (it casts whatever it's given). The config UI's manual override will handle edge cases. Classifier heuristic improvements are a separate task.
+
+### isAoE False Positives and Wrong Default Targets (FIXED)
+Three unreliable signals caused many single-target spells (Death Ward, Regeneration, Regenerate Critical Wounds, etc.) to be classified as AoE: `actionCount == 0` (many IE single-target spells have count 0), `fbAoE` from SCS feature blocks (SPLSTATE setters with broad target types), and `actionType == 1` heuristics. Additionally, `GetDefaultTarget` ignored its `isAoE` parameter, defaulting all non-self spells to "party". **Fix**: `IsAoE` now only trusts ability header target types 3 (everyone except caster) and 4 (everyone). `GetDefaultTarget` returns "p" only for AoE spells, "s" for single-target. Schema migration v1→v2 re-evaluates existing config targets.
 
 ### SPLSTATE Skip False Positive (FIXED)
 Modded spells can share SPLSTATEs. Example: Death Ward (splstate 8) was skipped via splstate 67 (Berserker Rage's state) because SCS Death Ward's feature blocks also set splstate 67. **Fix**: SPLSTATE is now used only as a fast negative (if none active → spell definitely absent, skip effect list walk). Positive SPLSTATE results fall through to the authoritative effect list check (`_HasActiveEffect`), which matches on the actual spell resref. Diagnostic `INFO` log entries mark caught false positives (`"splstate false positive caught"`).
@@ -130,7 +150,7 @@ Modded spells can share SPLSTATEs. Example: Death Ward (splstate 8) was skipped 
 
 ### Casting Behavior
 - **Normal mode (default)**: real-time sequential casting. Buffs are queued and cast in order, engine handles pacing (aura cooldown, casting speed, Improved Alacrity, etc.). Player can interrupt. Default order: longest duration first, or custom order set by player
-- **Cheat mode (option)**: instant or near-instant casting, bypassing normal timing. Spell slots still consumed
+- **Quick Cast / cheat mode (implemented)**: per-preset 3-state toggle (Off/Long/All). Applies BFBTCH.SPL (opcode 188 Improved Alacrity + opcode 189 casting speed -10) via `ApplySpellRES`. When qc=1 (Long), only spells with durCat "permanent"/"long" (>=300s) get fast casting; short spells cast normally via two-pass queue splitting. When qc=2 (All), everything casts fast. Spell slots still consumed
 - Can trigger for all party members or a single character
 
 ### Buff Overlap
