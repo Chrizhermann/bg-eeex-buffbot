@@ -639,17 +639,22 @@ function BfBot.Test.RunAll()
     local persistOk = BfBot.Test.Persist()
     P("")
 
+    -- Phase 5: Quick Cast
+    local qcOk = BfBot.Test.QuickCast()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
     P("  Classification: " .. (classOk and "PASS" or "FAIL"))
     P("  Party scan: " .. (scanOk and "PASS" or "FAIL"))
     P("  Persistence: " .. (persistOk and "PASS" or "FAIL"))
+    P("  Quick Cast: " .. (qcOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk
 end
 
 -- ============================================================
@@ -672,7 +677,7 @@ function BfBot.Test.BuildTestQueue()
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if not sprite then goto nextSlot end
 
-        local name = BfBot.Exec._GetName(sprite)
+        local name = BfBot._GetName(sprite)
         BfBot.Scan.Invalidate(sprite)
         local spells, count = BfBot.Scan.GetCastableSpells(sprite)
         if not spells or count == 0 then goto nextSlot end
@@ -798,8 +803,8 @@ function BfBot.Test.Persist()
     if defCfg.opts and defCfg.opts.skip == 1 then _ok("opts.skip = 1")
     else _nok("opts.skip missing or wrong") end
 
-    if defCfg.opts and defCfg.opts.cheat == 0 then _ok("opts.cheat = 0")
-    else _nok("opts.cheat missing or wrong") end
+    if defCfg.presets[1].qc == 0 then _ok("preset 1 qc = 0")
+    else _nok("preset 1 qc missing or wrong") end
 
     -- ---- Test 2: Boolean safety on default config ----
     P("")
@@ -954,13 +959,6 @@ function BfBot.Test.Persist()
     if BfBot.Persist.GetOpt(sprite, "skip") == 1 then _ok("SetOpt skip=1 round-trip")
     else _nok("SetOpt skip=1 failed") end
 
-    -- Boolean conversion
-    BfBot.Persist.SetOpt(sprite, "cheat", true)
-    if BfBot.Persist.GetOpt(sprite, "cheat") == 1 then _ok("SetOpt boolean true -> 1")
-    else _nok("SetOpt boolean conversion failed") end
-
-    BfBot.Persist.SetOpt(sprite, "cheat", 0)
-
     -- ---- Test 7: Validation ----
     P("")
     P("  [7] Config validation")
@@ -983,7 +981,6 @@ function BfBot.Test.Persist()
     -- Corrupt config: booleans in values (should be sanitized)
     local corrupt3 = BfBot.Persist.GetDefaultConfig()
     corrupt3.opts.skip = true  -- boolean! should be sanitized
-    corrupt3.opts.cheat = false
     local repaired3 = BfBot.Persist._ValidateConfig(corrupt3)
     hasBool, boolPath = _hasBooleans(repaired3)
     if not hasBool then _ok("Boolean sanitization works")
@@ -1245,6 +1242,152 @@ function BfBot.Test.Innate()
     P("[BuffBot] To manually grant: BfBot.Innate.Grant()")
     P("[BuffBot] To re-generate SPLs: BfBot.Innate._EnsureSPLFiles()")
     P("")
+end
+
+-- ============================================================
+-- BfBot.Test.QuickCast — Quick Cast feature tests
+-- ============================================================
+
+function BfBot.Test.QuickCast()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Quick Cast Tests")
+    P("========================================")
+    P("")
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _nok("No party member in slot 0")
+        return _summary("Quick Cast")
+    end
+
+    -- ---- Test 1: Schema migration (v3 -> v4) ----
+    P("  [1] Schema migration v3->v4")
+
+    local oldConfig = {
+        v = 3, ap = 1,
+        presets = {
+            [1] = { name = "Long Buffs", cat = "long", spells = {} },
+            [2] = { name = "Short Buffs", cat = "short", spells = {} },
+        },
+        opts = { skip = 1, cheat = 1 },
+    }
+    local migrated = BfBot.Persist._MigrateConfig(oldConfig, 3)
+    if migrated.v == 4 then _ok("Version bumped to 4")
+    else _nok("Version: " .. tostring(migrated.v)) end
+
+    if migrated.presets[1].qc == 2 then _ok("Preset 1 qc=2 (from opts.cheat=1)")
+    else _nok("Preset 1 qc=" .. tostring(migrated.presets[1].qc)) end
+
+    if migrated.presets[2].qc == 2 then _ok("Preset 2 qc=2 (from opts.cheat=1)")
+    else _nok("Preset 2 qc=" .. tostring(migrated.presets[2].qc)) end
+
+    if migrated.opts.cheat == nil then _ok("opts.cheat removed after migration")
+    else _nok("opts.cheat still present: " .. tostring(migrated.opts.cheat)) end
+
+    local oldConfig2 = {
+        v = 3, ap = 1,
+        presets = { [1] = { name = "P1", cat = "long", spells = {} } },
+        opts = { skip = 1, cheat = 0 },
+    }
+    local migrated2 = BfBot.Persist._MigrateConfig(oldConfig2, 3)
+    if migrated2.presets[1].qc == 0 then _ok("cheat=0 -> qc=0")
+    else _nok("cheat=0 migration: qc=" .. tostring(migrated2.presets[1].qc)) end
+
+    -- ---- Test 2: Quick Cast accessors ----
+    P("")
+    P("  [2] Quick Cast accessors")
+
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then
+        _nok("No config for sprite"); return _summary("Quick Cast")
+    end
+
+    BfBot.Persist.SetQuickCast(sprite, 1, 0)
+    if BfBot.Persist.GetQuickCast(sprite, 1) == 0 then _ok("SetQuickCast(0) round-trip")
+    else _nok("SetQuickCast(0) failed") end
+
+    BfBot.Persist.SetQuickCast(sprite, 1, 1)
+    if BfBot.Persist.GetQuickCast(sprite, 1) == 1 then _ok("SetQuickCast(1) round-trip")
+    else _nok("SetQuickCast(1) failed") end
+
+    BfBot.Persist.SetQuickCast(sprite, 1, 2)
+    if BfBot.Persist.GetQuickCast(sprite, 1) == 2 then _ok("SetQuickCast(2) round-trip")
+    else _nok("SetQuickCast(2) failed") end
+
+    BfBot.Persist.SetQuickCast(sprite, 1, 5)
+    if BfBot.Persist.GetQuickCast(sprite, 1) == 2 then _ok("SetQuickCast(5) clamped to 2")
+    else _nok("Clamp failed: " .. tostring(BfBot.Persist.GetQuickCast(sprite, 1))) end
+
+    BfBot.Persist.SetQuickCast(sprite, 1, -1)
+    if BfBot.Persist.GetQuickCast(sprite, 1) == 0 then _ok("SetQuickCast(-1) clamped to 0")
+    else _nok("Clamp failed: " .. tostring(BfBot.Persist.GetQuickCast(sprite, 1))) end
+
+    BfBot.Persist.SetQuickCast(sprite, 1, 0)
+
+    -- ---- Test 3: Default config has qc=0 ----
+    P("")
+    P("  [3] Default config qc field")
+
+    local defCfg = BfBot.Persist.GetDefaultConfig()
+    if defCfg.presets[1].qc == 0 then _ok("Default preset 1 qc=0")
+    else _nok("Default preset 1 qc=" .. tostring(defCfg.presets[1].qc)) end
+
+    if defCfg.presets[2].qc == 0 then _ok("Default preset 2 qc=0")
+    else _nok("Default preset 2 qc=" .. tostring(defCfg.presets[2].qc)) end
+
+    -- ---- Test 4: Validation repairs invalid qc ----
+    P("")
+    P("  [4] Validation repairs qc")
+
+    local badConfig = BfBot.Persist.GetDefaultConfig()
+    badConfig.presets[1].qc = 99
+    badConfig.presets[2].qc = nil
+    local repaired = BfBot.Persist._ValidateConfig(badConfig)
+    if repaired.presets[1].qc == 0 then _ok("qc=99 repaired to 0")
+    else _nok("qc=99 not repaired: " .. tostring(repaired.presets[1].qc)) end
+
+    if repaired.presets[2].qc == 0 then _ok("qc=nil repaired to 0")
+    else _nok("qc=nil not repaired: " .. tostring(repaired.presets[2].qc)) end
+
+    -- ---- Test 5: Boolean safety (qc should never be boolean) ----
+    P("")
+    P("  [5] Boolean safety for qc")
+
+    local boolConfig = BfBot.Persist.GetDefaultConfig()
+    boolConfig.presets[1].qc = true
+    BfBot.Persist._SanitizeValues(boolConfig)
+    if boolConfig.presets[1].qc == 1 then _ok("Boolean qc=true sanitized to 1")
+    else _nok("Boolean qc not sanitized: " .. tostring(boolConfig.presets[1].qc)) end
+
+    -- ---- Test 6: SPL file generation ----
+    P("")
+    P("  [6] Cheat SPL files")
+
+    local cheatData = BfBot.Innate._BuildCheatSPL()
+    if type(cheatData) == "string" and #cheatData == 250 then
+        _ok("BFBTCH.SPL: 250 bytes")
+    else
+        _nok("BFBTCH.SPL: " .. type(cheatData) .. " " .. tostring(cheatData and #cheatData))
+    end
+
+    if cheatData:sub(1, 4) == "SPL " then _ok("BFBTCH signature OK")
+    else _nok("BFBTCH bad signature: " .. cheatData:sub(1, 4)) end
+
+    local removerData = BfBot.Innate._BuildCheatRemoverSPL()
+    if type(removerData) == "string" and #removerData == 202 then
+        _ok("BFBTCR.SPL: 202 bytes")
+    else
+        _nok("BFBTCR.SPL: " .. type(removerData) .. " " .. tostring(removerData and #removerData))
+    end
+
+    if removerData:sub(1, 4) == "SPL " then _ok("BFBTCR signature OK")
+    else _nok("BFBTCR bad signature: " .. removerData:sub(1, 4)) end
+
+    -- ---- Summary ----
+    P("")
+    return _summary("Quick Cast")
 end
 
 -- ============================================================
