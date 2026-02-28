@@ -454,6 +454,7 @@ function BFBOTGO(param1, param2, special)
 
     local queue = BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
     if queue and #queue > 0 then
-        BfBot.Exec.Start(queue)
+        local qcMode = BfBot.Persist.GetQuickCast(sprite, presetIdx)
+        BfBot.Exec.Start(queue, qcMode)
     end
 end
