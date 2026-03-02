@@ -1,0 +1,11 @@
+{
+  "planPath": "docs/plans/2026-03-03-classifier-false-positives-impl.md",
+  "tasks": [
+    {"id": 6, "subject": "Task 1: Modify ScoreOpcodes — self-ref discount + hasSubstantive", "status": "pending"},
+    {"id": 7, "subject": "Task 2: Modify Classify — selfReplace penalty + substance check", "status": "pending", "blockedBy": [6]},
+    {"id": 8, "subject": "Task 3: Add BFBT prefix filter in scanner", "status": "pending"},
+    {"id": 9, "subject": "Task 4: Update tests — VerifyKnownSpells + diagnostics", "status": "pending", "blockedBy": [6, 7, 8]},
+    {"id": 10, "subject": "Task 5: Deploy and verify in-game", "status": "pending", "blockedBy": [6, 7, 8, 9]}
+  ],
+  "lastUpdated": "2026-03-03T04:45:00Z"
+}
