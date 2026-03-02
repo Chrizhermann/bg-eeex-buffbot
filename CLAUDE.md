@@ -195,6 +195,17 @@ Two bugs in `_BuildCheatSPL()` caused Quick Cast to have no effect (or make cast
 - `src/` — mod source files (Lua, .menu, .BAF, .tp2)
 - `tools/` — helper scripts and utilities
 
+## Global Rules (auto-loaded in all sessions)
+
+These files in `~/.claude/rules/` contain verified EEex/IE gotchas and patterns. They apply to any BG:EE mod project and are loaded automatically:
+
+- `~/.claude/rules/eeex-api-quick-ref.md` — EEex Lua API patterns (sprites, spells, effects, persistence, actions, UI)
+- `~/.claude/rules/eeex-gotchas.md` — verified bugs and corrections (data types, API mismatches, opcode params, .menu UI quirks)
+- `~/.claude/rules/menu-parser-rules.md` — .menu file parser rules that cause crashes if violated (7 rules)
+- `~/.claude/rules/github-accounts.md` — GitHub account config
+
+When discovering new gotchas or API corrections through in-game testing, update the relevant rules file so the knowledge persists across all sessions and projects.
+
 ## Key References
 
 - EEex source: https://github.com/Bubb13/EEex
