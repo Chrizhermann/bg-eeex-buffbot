@@ -15,7 +15,7 @@ Implementation in progress — all core modules implemented, UI rendering in-gam
 
 - **Innate Abilities** (`BfBot.Innate`) — per-preset F12 innate abilities for each party member. Runtime SPL generation with opcode 402 (Invoke Lua) + opcode 171 (re-grant). TLK patching via `tools/patch_tlk.py` for tooltip names ("BuffBot 1"–"BuffBot 5"). Correct character/preset targeting via CGameEffect field access. Verified working in-game.
 
-- **Quick Cast / Cheat Mode** (`BfBot.Exec` + `BfBot.Persist` + `BfBot.UI`) — per-preset 3-state toggle (Off/Long/All). Applies temporary Improved Alacrity + casting speed reduction via runtime-generated BFBTCH.SPL. Two-pass queue splitting for mixed presets (long buffs fast, short buffs normal). Cycling button with color-coded text. Works through both UI Cast button and F12 innate abilities.
+- **Quick Cast / Cheat Mode** (`BfBot.Exec` + `BfBot.Persist` + `BfBot.UI`) — per-preset 3-state toggle (Off/Long/All). Applies temporary Improved Alacrity + casting speed reduction via runtime-generated BFBTCH.SPL. Two-pass queue splitting for mixed presets (long buffs fast, short buffs normal). Cycling button with color-coded text (uses `text` element, not `button`). Works through both UI Cast button and F12 innate abilities. Verified working in-game.
 
 Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `src/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
@@ -23,7 +23,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
 - **Skip detection**: SPLSTATE as fast negative (if none of spell's SPLSTATEs active → definitely not buffed, skip effect list walk), then authoritative effect list check (`sprite.m_timedEffectList` + `effect.m_sourceRes:get()` matching) for positive SPLSTATE or spells without SPLSTATEs. Logs `"splstate false positive caught"` when SPLSTATE was active but effect list disagrees.
 - **Queue format**: `{caster=0-5, spell="RESREF", target="self"|"all"|1-6}`
-- **Quick Cast (cheat mode)**: `BfBot.Exec.Start(queue, qcMode)` accepts optional qcMode (0=off, 1=long only, 2=all). Entries tagged with `cheat` flag based on qcMode and spell `durCat`. When qcMode=1, cheat entries sorted first per caster (two-pass split). BFBTCH.SPL (Improved Alacrity + casting speed -10) applied before first cheat entry via `ApplySpellRES`. BFBTCR.SPL (opcode 321 remove by resource) applied at cheat/normal boundary. Cleanup on Stop() removes lingering BFBTCH.
+- **Quick Cast (cheat mode)**: `BfBot.Exec.Start(queue, qcMode)` accepts optional qcMode (0=off, 1=long only, 2=all). Entries tagged with `cheat` flag based on qcMode and spell `durCat`. When qcMode=1, cheat entries sorted first per caster (two-pass split). BFBTCH.SPL (Improved Alacrity + casting speed reduction) applied before first cheat entry via `ReallyForceSpellRES`. BFBTCR.SPL (opcode 321 remove by resource) applied at cheat/normal boundary. Cleanup on Stop() removes lingering BFBTCH.
 - **API**: `BfBot.Exec.Start(queue, qcMode)`, `BfBot.Exec.Stop()`, `BfBot.Exec.GetState()`, `BfBot.Exec.GetLog()`
 - **Log file**: `buffbot_exec.log` in game directory (append mode)
 
@@ -53,7 +53,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Interaction model**: Click checkbox or icon column (cellNumber <= 2) to toggle enable/disable directly. Click name/count/target columns to select the row for target changes via the "Target: ..." button below the list. External "Enable/Disable" button also works as secondary toggle method. **IMPORTANT**: `rowNumber` in list `action` callbacks is stale (last render pass value) — always use `buffbot_selectedRow` (the `var` binding) which is correctly set at click time.
 - **Target picker**: BUFFBOT_TARGETS sub-menu with Self/Party + per-player buttons. **Multi-target mode**: when spell has count > 1, picker switches to checkbox toggle mode ([X]/[ ] per character) with a Done button. `BfBot.UI.PickTarget(value)` handles both single-select (auto-close) and multi-select (toggle) modes.
 - **Cast/Stop**: Cast builds queue from active preset via `BuildQueueFromPreset()` → `Exec.Start(queue, qcMode)`. Stop calls `Exec.Stop()`. qcMode read from preset's `qc` field via `GetQuickCast()`.
-- **Quick Cast button**: Cycling button between Stop and Close. Click cycles Off→Long→All→Off via `CycleQuickCast()` → `SetQuickCastAll()`. Color-coded text: white (Off), yellow (Long), red/orange (All). Tooltip describes current mode.
+- **Quick Cast button**: `text` element (not `button` — BAM backgrounds override `text color lua`). Click cycles Off→Long→All→Off via `CycleQuickCast()` → `SetQuickCastAll()`. Color-coded text: white (Off), yellow (Long), red/orange (All). Uses `rectangle 5` + `rectangle opacity 160` for dark background.
 - **Auto-refresh**: Sprite listeners (`QuickListsChecked`, `QuickListCountsReset`, `QuickListNotifyRemoved`) invalidate scan cache then refresh. Tab switches use cached data (no invalidation).
 - **No booleans**: All UI code interacting with Persist uses 0/1 integers, never true/false. `ToggleSpell` passes integer `newState` directly.
 - **Shared utility**: `BfBot._GetName(sprite)` — safe character name getter used by both Exec and UI modules
@@ -75,7 +75,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 
 ### Quick Cast / Cheat Mode Details
 - **Per-preset toggle**: `qc` field on each preset (0=off, 1=long only, 2=all). Set via `SetQuickCast(sprite, idx, val)` or `SetQuickCastAll(idx, val)` for party-wide.
-- **BFBTCH.SPL** (cheat buff): 250 bytes — Header (114) + 1 ability (40, self/instant) + 2 effects (48 each). Effect 1: opcode 188 (Aura Cleansing / Improved Alacrity), 300s duration. Effect 2: opcode 189 (Casting Time Modifier, param1=-10), 300s duration.
+- **BFBTCH.SPL** (cheat buff): 250 bytes — Header (114) + 1 ability (40, self/instant) + 2 effects (48 each). Effect 1: opcode 188 (Aura Cleansing / Improved Alacrity, param1=0 param2=1), 300s duration. Effect 2: opcode 189 (Casting Time Modifier, param1=10), 300s duration. Params verified against real IA spell SPWI921 and game-wide opcode 189 usage.
 - **BFBTCR.SPL** (cheat remover): 202 bytes — Header (114) + 1 ability (40, self/instant) + 1 effect (48). Effect 1: opcode 321 (Remove Effects by Resource), resource = "BFBTCH".
 - **Two-pass queue splitting** (qcMode=1): Entries tagged with `cheat` flag based on durCat. Cheat entries sorted first per caster. `cheatBoundary` computed per caster. BFBTCH applied before first cheat entry, BFBTCR applied when crossing boundary to normal entries. Robust to skipped entries (boundary/apply conditions use flags, not index matching).
 - **Schema migration v3→v4**: Migrates old global `opts.cheat` (0/1) to per-preset `qc` field (cheat=1 → qc=2 on all presets, cheat=0 → qc=0). Removes `opts.cheat`.
@@ -110,6 +110,12 @@ Three unreliable signals caused many single-target spells (Death Ward, Regenerat
 
 ### SPLSTATE Skip False Positive (FIXED)
 Modded spells can share SPLSTATEs. Example: Death Ward (splstate 8) was skipped via splstate 67 (Berserker Rage's state) because SCS Death Ward's feature blocks also set splstate 67. **Fix**: SPLSTATE is now used only as a fast negative (if none active → spell definitely absent, skip effect list walk). Positive SPLSTATE results fall through to the authoritative effect list check (`_HasActiveEffect`), which matches on the actual spell resref. Diagnostic `INFO` log entries mark caught false positives (`"splstate false positive caught"`).
+
+### Quick Cast BFBTCH Opcode Params Wrong (FIXED)
+Two bugs in `_BuildCheatSPL()` caused Quick Cast to have no effect (or make casting slower): (1) opcode 188 (Improved Alacrity) had param1/param2 swapped — should be param1=0, param2=1 (matching real IA spell SPWI921); (2) opcode 189 (Casting Time Modifier) had param1=-10 (negative = slower) — should be param1=+10 (positive = faster, matching all real game spells using opcode 189). Also changed `ApplySpellRES` → `ReallyForceSpellRES` in BfBotExe.lua for reliable delivery of runtime-generated SPLs.
+
+### Quick Cast Button Text Unreadable (FIXED)
+`text color lua` does NOT work on `button` elements with `bam` backgrounds — the BAM overrides text rendering, so all three Quick Cast states showed the same brownish color. First attempted a label overlay on top of the button — but labels absorb mouse clicks in the IE engine, blocking button interaction. **Fix**: replaced with a `text` element which supports both `action` and `text color lua`, using `rectangle 5` + `rectangle opacity 160` for a dark clickable background.
 
 ## Tech Stack
 

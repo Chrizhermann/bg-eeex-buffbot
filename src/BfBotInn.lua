@@ -207,11 +207,12 @@ function BfBot.Innate._BuildCheatSPL()
         .. _splWord(1)                          -- 0x0026: Projectile = 1 (none)
 
     -- Feature Block 1: Opcode 188 (Aura Cleansing / Improved Alacrity)
+    -- Params match real IA (SPWI921): param1=0, param2=1 (enable mode)
     local feat188 = _splWord(188)               -- 0x0000: Opcode
         .. _splByte(1)                          -- 0x0002: Target = self
         .. _splByte(0)                          -- 0x0003: Power
-        .. _splDword(1)                         -- 0x0004: Param1 = 1 (enable)
-        .. _splDword(0)                         -- 0x0008: Param2
+        .. _splDword(0)                         -- 0x0004: Param1 = 0
+        .. _splDword(1)                         -- 0x0008: Param2 = 1 (enable)
         .. _splByte(0)                          -- 0x000C: Timing = 0 (duration)
         .. _splByte(0)                          -- 0x000D: Dispel/resistance
         .. _splDword(300)                       -- 0x000E: Duration = 300 seconds
@@ -228,7 +229,7 @@ function BfBot.Innate._BuildCheatSPL()
     local feat189 = _splWord(189)               -- 0x0000: Opcode
         .. _splByte(1)                          -- 0x0002: Target = self
         .. _splByte(0)                          -- 0x0003: Power
-        .. _splDword(-10)                       -- 0x0004: Param1 = -10 (reduce by 10)
+        .. _splDword(10)                        -- 0x0004: Param1 = 10 (reduce casting time by 10)
         .. _splDword(0)                         -- 0x0008: Param2
         .. _splByte(0)                          -- 0x000C: Timing = 0 (duration)
         .. _splByte(0)                          -- 0x000D: Dispel/resistance
@@ -331,7 +332,7 @@ end
 --- Write all 30 SPL files to the override folder (always overwrites).
 -- Called once at mod init time (before menus load).
 -- SPL version tag lets us detect when binary format changes.
-BfBot.Innate._SPL_VERSION = 2  -- bump this when _BuildSPL format changes
+BfBot.Innate._SPL_VERSION = 3  -- bump this when _BuildSPL format changes
 
 function BfBot.Innate._EnsureSPLFiles()
     local count = 0

@@ -315,9 +315,10 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
     end
 
     -- Quick Cast: apply cheat buff before first cheat entry that passes pre-flight
+    -- Use ReallyForceSpellRES (not ApplySpellRES which silently fails for override SPLs)
     if caster.cheatBoundary > 0 and not caster.cheatApplied and entry.cheat then
         EEex_Action_QueueResponseStringOnAIBase(
-            'ApplySpellRES("BFBTCH",Myself)', entry.casterSprite)
+            'ReallyForceSpellRES("BFBTCH",Myself)', entry.casterSprite)
         caster.cheatApplied = true
         BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast ON")
     end
@@ -326,7 +327,7 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
     -- Use > instead of == to handle skipped entries at the boundary
     if index > caster.cheatBoundary and caster.cheatApplied then
         EEex_Action_QueueResponseStringOnAIBase(
-            'ApplySpellRES("BFBTCR",Myself)', entry.casterSprite)
+            'ReallyForceSpellRES("BFBTCR",Myself)', entry.casterSprite)
         caster.cheatApplied = false
         BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast OFF")
     end
@@ -360,7 +361,7 @@ function BfBot.Exec._Complete()
         if caster.cheatApplied and caster.sprite then
             pcall(function()
                 EEex_Action_QueueResponseStringOnAIBase(
-                    'ApplySpellRES("BFBTCR",Myself)', caster.sprite)
+                    'ReallyForceSpellRES("BFBTCR",Myself)', caster.sprite)
             end)
             caster.cheatApplied = false
         end
@@ -474,7 +475,7 @@ function BfBot.Exec.Stop()
         if caster.cheatApplied and caster.sprite then
             pcall(function()
                 EEex_Action_QueueResponseStringOnAIBase(
-                    'ApplySpellRES("BFBTCR",Myself)', caster.sprite)
+                    'ReallyForceSpellRES("BFBTCR",Myself)', caster.sprite)
             end)
             caster.cheatApplied = false
         end

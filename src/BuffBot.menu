@@ -380,17 +380,17 @@ menu
 		area 536 468 80 28
 	}
 
-	-- Quick Cast cycling button
-	button
+	-- Quick Cast cycling button (text element: supports both action + text color lua)
+	text
 	{
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.CycleQuickCast()"
 		text lua "BfBot.UI._QuickCastLabel()"
-		text style "button"
+		text style "normal"
 		text color lua "BfBot.UI._QuickCastColor()"
-		tooltip lua "BfBot.UI._QuickCastTooltip()"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text align center center
+		rectangle 5
+		rectangle opacity 160
 		area 622 468 162 28
 	}
 
