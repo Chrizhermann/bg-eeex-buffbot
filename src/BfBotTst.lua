@@ -442,7 +442,10 @@ function BfBot.Test.Classify(resref)
         .. " (friendly=" .. tostring(result.friendlyFlag) .. ")")
     P("  Step 2 (MSECTYPE): " .. tostring(result.msecScore))
     P("  Step 3 (opcodes):  " .. tostring(result.opcodeScore))
-    P("  TOTAL SCORE: " .. tostring(result.score))
+    P("  TOTAL SCORE: " .. tostring(result.score)
+        .. (result.selfReplacePenalty and result.selfReplacePenalty ~= 0
+            and (" (incl selfReplace " .. result.selfReplacePenalty .. ")")
+            or ""))
     P("  --- Result ---")
     P("  isBuff: " .. tostring(result.isBuff))
     P("  isAmbiguous: " .. tostring(result.isAmbiguous))
@@ -454,6 +457,11 @@ function BfBot.Test.Classify(resref)
         P("  SPLSTATEs: " .. table.concat(result.splstates, ", "))
     end
     P("  selfReplace: " .. tostring(result.selfReplace))
+    P("  hasSubstantive: " .. tostring(result.hasSubstantive))
+    P("  noSubstance: " .. tostring(result.noSubstance))
+    if result.selfReplacePenalty and result.selfReplacePenalty ~= 0 then
+        P("  selfReplacePenalty: " .. tostring(result.selfReplacePenalty))
+    end
 
     return result
 end
@@ -507,8 +515,20 @@ function BfBot.Test.DumpFeatureBlocks(resref)
 
         local score = BfBot.Class._OPCODE_SCORES[opcode] or 0
         local scoreStr = ""
-        if score > 0 then scoreStr = " [+" .. score .. "]"
-        elseif score < 0 then scoreStr = " [" .. score .. "]"
+        -- Detect self-referencing 318/324 for annotation
+        local isSelfRef = false
+        if (opcode == 318 or opcode == 324) and resref then
+            local selfUpper = resref:upper()
+            if resVal and resVal:upper() == selfUpper then
+                isSelfRef = true
+            end
+        end
+        if isSelfRef then
+            scoreStr = " [+" .. score .. " SELF-REF->0]"
+        elseif score > 0 then
+            scoreStr = " [+" .. score .. "]"
+        elseif score < 0 then
+            scoreStr = " [" .. score .. "]"
         end
 
         P(string.format("  [%2d] op=%-3d t=%d d=%-5d tgt=%d p1=%-5d p2=%-5d r=%-8s%s",
@@ -540,7 +560,6 @@ function BfBot.Test.VerifyKnownSpells()
         { "SPWI108", true,  "Armor" },
         { "SPPR201", true,  "Aid" },
         { "SPPR207", true,  "Barkskin" },
-        { "SPWI317", nil,   "Remove Magic" }, -- offensive dispel, but scores positive due to protection opcodes
         -- Definite non-buffs
         { "SPWI304", false, "Fireball" },
         { "SPWI211", false, "Stinking Cloud" },
@@ -548,6 +567,25 @@ function BfBot.Test.VerifyKnownSpells()
         { "SPWI509", false, "Animate Dead" },
         { "SPWI503", false, "Cloudkill" },
         { "SPWI116", false, "Chromatic Orb" },
+        -- Former false positives: traps (no substantive opcodes)
+        { "SPCL412", false, "Set Snare" },
+        { "SPCL910", false, "Set Spike Trap" },
+        -- Former false positives: setup spells (no substantive opcodes)
+        { "SPIN141", false, "Contingency" },
+        { "SPIN142", false, "Chain Contingency" },
+        -- Former false positives: pure heals (only op=17 soft)
+        { "SPIN101", false, "Cure Light Wounds" },
+        { "SPPR212", false, "Slow Poison" },
+        -- Former false positives: offensive (324 self-ref discount)
+        { "SPCL311", false, "Charm Animal" },
+        -- Former false positives: stances (318 self-ref -> selfReplace)
+        -- These are mod-specific; will be skipped if SPL not found:
+        { "C0FIG01", false, "Power Attack (stance)" },
+        { "SPCL922", false, "Tracking" },
+        -- Edge cases (no expectation — just log the result)
+        { "SPWI317", nil,   "Remove Magic" },
+        { "SPCL908", nil,   "War Cry" },
+        { "SPWI523", nil,   "Fireburst" },
     }
 
     for _, test in ipairs(expectations) do
@@ -1388,6 +1426,427 @@ function BfBot.Test.QuickCast()
     -- ---- Summary ----
     P("")
     return _summary("Quick Cast")
+end
+
+-- ============================================================
+-- Spell Search — find spells by name substring
+-- Usage: BfBot.Test.FindSpell("project") or BfBot.Test.FindSpell("simul")
+-- ============================================================
+
+function BfBot.Test.FindSpell(query)
+    BfBot._OpenLogAppend("buffbot_probe.log")
+    P("=== Spell Search: '" .. tostring(query) .. "' ===")
+    local q = string.lower(tostring(query))
+    local found = 0
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local name = BfBot._GetName(sprite)
+            local ok, spells = pcall(function() return BfBot.Scan.GetCastableSpells(sprite) end)
+            if ok and spells then
+                for _, sp in ipairs(spells) do
+                    local spName = string.lower(sp.name or "")
+                    local spRes = string.lower(sp.resref or "")
+                    if spName:find(q, 1, true) or spRes:find(q, 1, true) then
+                        found = found + 1
+                        P("  " .. name .. ": " .. (sp.resref or "?") .. " = " .. (sp.name or "?")
+                            .. " (src=" .. tostring(sp.source) .. " lvl=" .. tostring(sp.level) .. ")")
+                    end
+                end
+            else
+                P("  " .. name .. ": scanner error — " .. tostring(spells))
+            end
+        end
+    end
+    if found == 0 then P("  No matches found via scanner.") end
+    P("=== " .. found .. " matches ===")
+    BfBot._CloseLog()
+end
+
+--- Dump ALL spells for a party slot (bypasses scanner, shows everything)
+--- Usage: BfBot.Test.DumpSpells(0) for party slot 0
+function BfBot.Test.DumpSpells(slot)
+    BfBot._OpenLogAppend("buffbot_probe.log")
+    local sprite = EEex_Sprite_GetInPortrait(slot or 0)
+    if not sprite then P("No sprite in slot " .. tostring(slot)); BfBot._CloseLog(); return end
+    P("=== All Spells for slot " .. tostring(slot) .. " (" .. BfBot._GetName(sprite) .. ") ===")
+    local function _dumpBook(btype, lbl)
+        P("  [" .. lbl .. "]")
+        local ok, btns = pcall(function() return sprite:GetQuickButtons(btype, false) end)
+        if not ok then P("    ERROR: " .. tostring(btns)); return end
+        if not btns then P("    nil"); return end
+        -- Try ipairs first (ordered), fall back to manual index
+        local count = 0
+        pcall(function()
+            local i = 0
+            while true do
+                local entry = btns[i]
+                if not entry then break end
+                local resref = "?"
+                pcall(function() resref = entry.m_quickItemResRef:get() end)
+                if resref == "?" then
+                    pcall(function() resref = entry.m_res:get() end)
+                end
+                if resref == "?" then
+                    pcall(function() resref = tostring(entry) end)
+                end
+                P("    [" .. i .. "] " .. resref)
+                count = count + 1
+                i = i + 1
+                if i > 300 then break end
+            end
+        end)
+        P("    total: " .. count)
+    end
+    _dumpBook(2, "Wizard+Priest")
+    _dumpBook(4, "Innate")
+    P("=== Done ===")
+    BfBot._CloseLog()
+end
+
+-- ============================================================
+-- Clone/Summon Probe — diagnostic for non-party sprites
+-- Usage: select a clone/summon in-game, then: BfBot.Test.Probe()
+-- Also scans nearby object IDs to find non-party sprites.
+-- Output: buffbot_probe.log in game directory + in-game display
+-- ============================================================
+
+BfBot.Probe = {}
+
+-- Safe field read: returns string
+local function _probeField(obj, field)
+    local ok, val = pcall(function() return obj[field] end)
+    if not ok then return nil end
+    if val == nil then return nil end
+    if type(val) == "userdata" then
+        local ok2, str = pcall(function() return val:get() end)
+        if ok2 and str then return tostring(str) end
+        return tostring(val)
+    end
+    return tostring(val)
+end
+
+-- Dump everything we can learn about a sprite.
+-- Each section is wrapped in pcall so one crash doesn't kill the rest.
+local function _dumpSprite(sprite, label)
+    P("")
+    P("--- " .. label .. " ---")
+
+    -- Identity
+    local sid = _probeField(sprite, "m_id") or "?"
+    local sname = "?"
+    pcall(function() sname = sprite:getName() end)
+    P("  id=" .. sid .. " name=" .. sname)
+
+    -- Script names (try multiple field names)
+    pcall(function()
+        local scripts = {"m_sName", "m_scriptName", "m_sScriptOverride", "m_sScriptClass",
+            "m_sScriptRace", "m_sScriptGeneral", "m_sScriptDefault", "m_sScriptSpecific",
+            "m_sAreaName", "m_sDialogRes", "m_sDeathVariable"}
+        for _, f in ipairs(scripts) do
+            local v = _probeField(sprite, f)
+            if v and v ~= "" then P("  " .. f .. "=" .. v) end
+        end
+    end)
+
+    -- Base stats
+    pcall(function()
+        local stats = sprite.m_baseStats
+        if stats then
+            local sfields = {"m_generalState", "m_nClass", "m_nRace", "m_nGender",
+                "m_nAlignment", "m_nKit", "m_nSpecific", "m_nEA", "m_nGeneral",
+                "m_nLevel_first", "m_nLevel_second", "m_nLevel_third",
+                "m_nHitPoints", "m_nMaxHitPoints"}
+            for _, f in ipairs(sfields) do
+                local v = _probeField(stats, f)
+                if v then P("  " .. f .. "=" .. v) end
+            end
+        end
+    end)
+
+    -- THE KEY UNKNOWNS: relationship / summoner fields
+    P("  [Relationship fields]")
+    local foundRel = 0
+    local relFields = {
+        "m_summoner", "m_summonerID", "m_nSummonerID",
+        "m_controllerID", "m_masterID", "m_ownerId", "m_ownerID",
+        "m_parentID", "m_creatorID", "m_cloneOf", "m_cloneID",
+        "m_originalID", "m_bSummon", "m_bIsSummon", "m_nSummonType",
+        "m_bIsClone", "m_nImageType", "m_bFamiliar", "m_familiarOwner",
+        "m_allegiance", "m_nAllegiance", "m_controlledBy", "m_controller",
+        "m_bInParty", "m_nInParty", "m_nPortraitSlot", "m_bSelectable",
+        "m_bVisible", "m_pArea", "m_posX", "m_posY",
+    }
+    for _, f in ipairs(relFields) do
+        pcall(function()
+            local v = _probeField(sprite, f)
+            if v then
+                P("  ** " .. f .. "=" .. v .. " **")
+                foundRel = foundRel + 1
+            end
+        end)
+    end
+    if foundRel == 0 then P("  (none found)") end
+
+    -- Party slot check
+    pcall(function()
+        local inSlot = -1
+        local myId = tonumber(sid)
+        if myId then
+            for s = 0, 5 do
+                local ps = EEex_Sprite_GetInPortrait(s)
+                if ps then
+                    local psid = _probeField(ps, "m_id")
+                    if tonumber(psid) == myId then inSlot = s; break end
+                end
+            end
+        end
+        P("  partySlot=" .. (inSlot >= 0 and tostring(inSlot) or "NONE"))
+    end)
+
+    -- Active effects (first 30, highlight interesting opcodes)
+    P("  [Active effects]")
+    local effCount = 0
+    pcall(function()
+        EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(eff)
+            effCount = effCount + 1
+            if effCount <= 30 then
+                local op = _probeField(eff, "m_effectId") or "?"
+                local src = "?"
+                pcall(function() src = eff.m_sourceRes:get() end)
+                local p1 = _probeField(eff, "m_effectAmount") or "?"
+                local p2 = _probeField(eff, "m_dWFlags") or "?"
+                local opN = tonumber(op) or -1
+                local mark = ""
+                if opN == 158 or opN == 260 or opN == 228 or opN == 402 then mark = " <<<" end
+                P("    #" .. effCount .. " op=" .. op .. " src=" .. src
+                    .. " p1=" .. p1 .. " p2=" .. p2 .. mark)
+            end
+        end)
+    end)
+    P("  total effects: " .. effCount)
+
+    -- Spellbook — use BfBot.Scan.GetCastableSpells (safe, already tested)
+    -- instead of raw GetQuickButtons which crashes on pairs()
+    P("  [Spellbook]")
+    pcall(function()
+        local spells, count = BfBot.Scan.GetCastableSpells(sprite)
+        if spells then
+            P("  castable spells: " .. tostring(count))
+            local shown = 0
+            for _, sp in ipairs(spells) do
+                if shown < 10 then
+                    P("    " .. (sp.resref or "?") .. " = " .. (sp.name or "?")
+                        .. " (lvl=" .. tostring(sp.level) .. ")")
+                    shown = shown + 1
+                end
+            end
+            if count > 10 then P("    ... (+" .. (count - 10) .. " more)") end
+        else
+            P("  GetCastableSpells returned nil")
+        end
+    end)
+
+    -- UDAux
+    pcall(function()
+        local aux = EEex_GetUDAux(sprite)
+        P("  UDAux: accessible (type=" .. type(aux) .. ")")
+    end)
+
+    -- Spell states (sample 0-79)
+    pcall(function()
+        local states = {}
+        for i = 0, 79 do
+            local ssOk, active = pcall(function() return sprite:getSpellState(i) end)
+            if ssOk and active then table.insert(states, i) end
+        end
+        if #states > 0 then P("  SPLSTATEs: " .. table.concat(states, ",")) end
+    end)
+
+    -- Test action queuing
+    pcall(function()
+        local aqOk = pcall(function()
+            EEex_Action_QueueResponseStringOnAIBase('DisplayStringHead(Myself,14674)', sprite)
+        end)
+        P("  ActionQueue: " .. (aqOk and "OK" or "FAILED"))
+    end)
+end
+
+-- Find non-party sprites by scanning object IDs near party member IDs
+local function _scanNearbyObjects()
+    P("")
+    P("=== Scanning nearby object IDs ===")
+    local partyIds = {}
+    for slot = 0, 5 do
+        local sp = EEex_Sprite_GetInPortrait(slot)
+        if sp then
+            local id = tonumber(_probeField(sp, "m_id"))
+            if id then table.insert(partyIds, id) end
+        end
+    end
+    if #partyIds == 0 then P("  No party members found"); return end
+
+    local minId, maxId = partyIds[1], partyIds[1]
+    for _, id in ipairs(partyIds) do
+        if id < minId then minId = id end
+        if id > maxId then maxId = id end
+    end
+    P("  Party ID range: " .. minId .. " - " .. maxId)
+
+    -- Build party ID lookup
+    local isParty = {}
+    for _, id in ipairs(partyIds) do isParty[id] = true end
+
+    -- Scan a wider range around party IDs
+    local nonParty = {}
+    for testId = math.max(1, minId - 20), maxId + 50 do
+        if not isParty[testId] then
+            local ok, obj = pcall(function() return EEex_GameObject_Get(testId) end)
+            if ok and obj then
+                local oname = "?"
+                pcall(function() oname = obj:getName() end)
+                if oname and oname ~= "" and oname ~= "?" then
+                    table.insert(nonParty, {id = testId, obj = obj, name = oname})
+                    P("  ** NON-PARTY id=" .. testId .. " name=" .. oname .. " **")
+                end
+            end
+        end
+    end
+    return nonParty
+end
+
+-- Probe area access using m_pArea from a party sprite (confirmed working)
+local function _probeAreaAccess()
+    P("")
+    P("=== Area access probes ===")
+
+    -- Get area via party sprite's m_pArea (confirmed accessible in first probe run)
+    local area = nil
+    pcall(function()
+        local sp = EEex_Sprite_GetInPortrait(0)
+        if sp then area = sp.m_pArea end
+    end)
+
+    -- Also try global functions
+    local globalAttempts = {
+        {"EEex_GetCurrentArea", function() return EEex_GetCurrentArea() end},
+        {"EEex_Area_GetCurrent", function() return EEex_Area_GetCurrent() end},
+        {"EEex_GameState_GetCurrentArea", function() return EEex_GameState_GetCurrentArea() end},
+        {"g_pBaldurChitin", function() return g_pBaldurChitin end},
+        {"EEex_GetChitin", function() return EEex_GetChitin() end},
+    }
+    for _, a in ipairs(globalAttempts) do
+        pcall(function()
+            local val = a[2]()
+            if val ~= nil then
+                P("  ** " .. a[1] .. " = " .. tostring(val) .. " (type=" .. type(val) .. ") **")
+            end
+        end)
+    end
+
+    if not area then
+        P("  Cannot get area object")
+        return
+    end
+    P("  area from m_pArea: " .. tostring(area))
+
+    -- Probe ALL fields on the area object to find sprite lists
+    -- CGameArea fields from IE engine source / EEex bindings
+    local areaFields = {
+        -- Known CPtrList fields from CGameArea
+        "m_lVertSort", "m_lVertSortBack",
+        "m_aGameObjects", "m_gameObjects",
+        "m_lObjects", "m_objectList",
+        "m_lCREList", "m_creatureList",
+        "m_pSpriteList", "m_spriteList",
+        "m_lTemporal", "m_lTemporalBack",
+        -- Array/hash fields
+        "m_aObjects", "m_objectArray",
+        "m_nObjects", "m_objectCount",
+        -- Area properties
+        "m_resref", "m_sName", "m_nWidth", "m_nHeight",
+        -- AI object lists
+        "m_lPartySummons", "m_lSummonList", "m_summonList",
+        "m_lFamiliarList", "m_familiarList",
+        -- Broad search
+        "m_lVertSortFront",
+    }
+    P("  [Area fields]")
+    for _, f in ipairs(areaFields) do
+        pcall(function()
+            local v = area[f]
+            if v ~= nil then
+                P("  ** " .. f .. " = " .. tostring(v) .. " (type=" .. type(v) .. ") **")
+                -- If it looks like a list, try to iterate it
+                if type(v) == "userdata" then
+                    pcall(function()
+                        local cnt = 0
+                        EEex_Utility_IterateCPtrList(v, function(obj)
+                            cnt = cnt + 1
+                            if cnt <= 15 then
+                                local oid = "?"
+                                pcall(function() oid = tostring(obj.m_id) end)
+                                local on = "?"
+                                pcall(function() on = obj:getName() end)
+                                local otype = "?"
+                                pcall(function() otype = tostring(obj.m_objectType) end)
+                                P("      [" .. cnt .. "] id=" .. oid .. " name=" .. on .. " type=" .. otype)
+                            end
+                        end)
+                        if cnt > 0 then P("      Total: " .. cnt)
+                        else P("      (not iterable or empty)") end
+                    end)
+                end
+            end
+        end)
+    end
+end
+
+--- Main probe: dumps party baseline, scans for non-party sprites, probes area access
+function BfBot.Probe.Run()
+    BfBot._OpenLogAppend("buffbot_probe.log")
+    P("=== BuffBot Clone/Summon Probe ===")
+
+    -- 1. Party baseline (slot 0)
+    local baseline = EEex_Sprite_GetInPortrait(0)
+    if baseline then
+        _dumpSprite(baseline, "PARTY SLOT 0 (baseline)")
+    end
+
+    -- 2. Scan for non-party sprites via ID range
+    local nonParty = _scanNearbyObjects()
+
+    -- 3. Dump each non-party sprite found
+    if nonParty and #nonParty > 0 then
+        for _, np in ipairs(nonParty) do
+            _dumpSprite(np.obj, "NON-PARTY: " .. np.name .. " (id=" .. np.id .. ")")
+        end
+    else
+        P("")
+        P("No non-party sprites found in ID scan range.")
+        P("Try: C:CreateCreature(\"YOURRESREF\") or cast a summon spell first.")
+    end
+
+    -- 4. Area access probes
+    _probeAreaAccess()
+
+    P("")
+    P("=== Probe complete — see buffbot_probe.log ===")
+    BfBot._CloseLog()
+end
+
+--- Quick probe: just scan for non-party sprites and dump them
+function BfBot.Probe.Quick()
+    BfBot._OpenLogAppend("buffbot_probe.log")
+    P("=== Quick Probe ===")
+    local nonParty = _scanNearbyObjects()
+    if nonParty and #nonParty > 0 then
+        for _, np in ipairs(nonParty) do
+            _dumpSprite(np.obj, np.name .. " (id=" .. np.id .. ")")
+        end
+    end
+    P("=== Done ===")
+    BfBot._CloseLog()
 end
 
 -- ============================================================
