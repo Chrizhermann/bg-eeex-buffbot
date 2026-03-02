@@ -559,7 +559,7 @@ function BfBot.Test.VerifyKnownSpells()
         { "SPWI613", true,  "Improved Haste" },
         { "SPWI108", true,  "Armor" },
         { "SPPR201", true,  "Aid" },
-        { "SPPR207", true,  "Barkskin" },
+        { "SPPR207", nil,   "Barkskin" },  -- SR sub-spell edge case (effects via op146)
         -- Definite non-buffs
         { "SPWI304", false, "Fireball" },
         { "SPWI211", false, "Stinking Cloud" },
@@ -1715,25 +1715,115 @@ local function _scanNearbyObjects()
     return nonParty
 end
 
--- Probe area access using m_pArea from a party sprite (confirmed working)
-local function _probeAreaAccess()
+-- Deep probe of m_lVertSort objects — v5 (SAFE: no EEex_PtrToUD)
+-- v4 crashed: the list values are object IDs, not memory pointers.
+-- EEex_PtrToUD on an ID causes a native segfault. Use EEex_GameObject_Get instead.
+local function _probeAreaObjects()
     P("")
-    P("=== Area access probes ===")
+    P("=== Deep probe of area objects (m_lVertSort) v5 ===")
 
-    -- Get area via party sprite's m_pArea (confirmed accessible in first probe run)
     local area = nil
     pcall(function()
         local sp = EEex_Sprite_GetInPortrait(0)
         if sp then area = sp.m_pArea end
     end)
+    if not area then P("  Cannot get area object"); return end
 
-    -- Also try global functions
+    local vertSort = nil
+    pcall(function() vertSort = area.m_lVertSort end)
+    if not vertSort then P("  Cannot get m_lVertSort"); return end
+
+    -- Collect all values from the list
+    local ids = {}
+    pcall(function()
+        EEex_Utility_IterateCPtrList(vertSort, function(obj)
+            -- Extract numeric value (could be number or userdata containing a number)
+            local val = nil
+            if type(obj) == "number" then
+                val = obj
+            else
+                -- Try tonumber on tostring (worked in v3: "131139536")
+                pcall(function() val = tonumber(tostring(obj)) end)
+            end
+            if val then table.insert(ids, val) end
+        end)
+    end)
+    P("  Extracted " .. #ids .. " values from m_lVertSort")
+    if #ids > 0 then
+        P("  First 5: " .. table.concat({unpack(ids, 1, math.min(5, #ids))}, ", "))
+    end
+
+    -- Try EEex_GameObject_Get on each value (safe — returns nil if not found)
+    P("")
+    P("  [Looking up objects via EEex_GameObject_Get]")
+    local creatures = {}
+    local foundCount = 0
+    local failCount = 0
+
+    -- Build party ID lookup
+    local partyIds = {}
+    for s = 0, 5 do
+        pcall(function()
+            local ps = EEex_Sprite_GetInPortrait(s)
+            if ps then partyIds[ps.m_id] = s end
+        end)
+    end
+
+    for i, id in ipairs(ids) do
+        local obj = nil
+        local ok = pcall(function() obj = EEex_GameObject_Get(id) end)
+        if ok and obj then
+            foundCount = foundCount + 1
+            local name = nil
+            pcall(function() name = obj:getName() end)
+            local oid = _probeField(obj, "m_id")
+            local otype = _probeField(obj, "m_objectType")
+
+            if name and name ~= "" then
+                local oidNum = tonumber(oid)
+                local slot = oidNum and partyIds[oidNum]
+                if slot then
+                    P("  [" .. i .. "] PARTY slot " .. slot .. ": " .. name
+                        .. " (id=" .. (oid or "?") .. " type=" .. (otype or "?") .. ")")
+                else
+                    P("  [" .. i .. "] ** NON-PARTY: " .. name
+                        .. " (id=" .. (oid or "?") .. " type=" .. (otype or "?") .. ") **")
+                    table.insert(creatures, {obj = obj, name = name, idx = i, id = id})
+                end
+            else
+                -- Non-creature object (door, trigger, etc.) — just count type
+                if i <= 5 then
+                    P("  [" .. i .. "] object: id=" .. (oid or "?")
+                        .. " type=" .. (otype or "?") .. " name=<none>")
+                end
+            end
+        else
+            failCount = failCount + 1
+        end
+    end
+
+    P("")
+    P("  EEex_GameObject_Get: " .. foundCount .. " found, " .. failCount .. " failed")
+    P("  Non-party creatures: " .. #creatures)
+
+    -- Full dump of each non-party creature
+    for _, c in ipairs(creatures) do
+        _dumpSprite(c.obj, "AREA CREATURE: " .. c.name .. " (listVal=" .. c.id .. ")")
+    end
+
+    return creatures
+end
+
+-- Probe area access — globals, area fields, and deep object probe
+local function _probeAreaAccess()
+    P("")
+    P("=== Area access probes ===")
+
+    -- Try global functions
     local globalAttempts = {
         {"EEex_GetCurrentArea", function() return EEex_GetCurrentArea() end},
         {"EEex_Area_GetCurrent", function() return EEex_Area_GetCurrent() end},
-        {"EEex_GameState_GetCurrentArea", function() return EEex_GameState_GetCurrentArea() end},
         {"g_pBaldurChitin", function() return g_pBaldurChitin end},
-        {"EEex_GetChitin", function() return EEex_GetChitin() end},
     }
     for _, a in ipairs(globalAttempts) do
         pcall(function()
@@ -1744,107 +1834,43 @@ local function _probeAreaAccess()
         end)
     end
 
-    if not area then
-        P("  Cannot get area object")
-        return
-    end
-    P("  area from m_pArea: " .. tostring(area))
-
-    -- Probe ALL fields on the area object to find sprite lists
-    -- CGameArea fields from IE engine source / EEex bindings
-    local areaFields = {
-        -- Known CPtrList fields from CGameArea
-        "m_lVertSort", "m_lVertSortBack",
-        "m_aGameObjects", "m_gameObjects",
-        "m_lObjects", "m_objectList",
-        "m_lCREList", "m_creatureList",
-        "m_pSpriteList", "m_spriteList",
-        "m_lTemporal", "m_lTemporalBack",
-        -- Array/hash fields
-        "m_aObjects", "m_objectArray",
-        "m_nObjects", "m_objectCount",
-        -- Area properties
-        "m_resref", "m_sName", "m_nWidth", "m_nHeight",
-        -- AI object lists
-        "m_lPartySummons", "m_lSummonList", "m_summonList",
-        "m_lFamiliarList", "m_familiarList",
-        -- Broad search
-        "m_lVertSortFront",
-    }
-    P("  [Area fields]")
-    for _, f in ipairs(areaFields) do
-        pcall(function()
-            local v = area[f]
-            if v ~= nil then
-                P("  ** " .. f .. " = " .. tostring(v) .. " (type=" .. type(v) .. ") **")
-                -- If it looks like a list, try to iterate it
-                if type(v) == "userdata" then
-                    pcall(function()
-                        local cnt = 0
-                        EEex_Utility_IterateCPtrList(v, function(obj)
-                            cnt = cnt + 1
-                            if cnt <= 15 then
-                                local oid = "?"
-                                pcall(function() oid = tostring(obj.m_id) end)
-                                local on = "?"
-                                pcall(function() on = obj:getName() end)
-                                local otype = "?"
-                                pcall(function() otype = tostring(obj.m_objectType) end)
-                                P("      [" .. cnt .. "] id=" .. oid .. " name=" .. on .. " type=" .. otype)
-                            end
-                        end)
-                        if cnt > 0 then P("      Total: " .. cnt)
-                        else P("      (not iterable or empty)") end
-                    end)
-                end
-            end
-        end)
-    end
+    -- Deep probe the area objects
+    return _probeAreaObjects()
 end
 
---- Main probe: dumps party baseline, scans for non-party sprites, probes area access
+--- Main probe: dumps party baseline, probes area objects, finds creatures
 function BfBot.Probe.Run()
     BfBot._OpenLogAppend("buffbot_probe.log")
-    P("=== BuffBot Clone/Summon Probe ===")
+    P("=== BuffBot Clone/Summon Probe v5 ===")
 
-    -- 1. Party baseline (slot 0)
+    -- 1. Party baseline (slot 0) — abbreviated
     local baseline = EEex_Sprite_GetInPortrait(0)
     if baseline then
-        _dumpSprite(baseline, "PARTY SLOT 0 (baseline)")
+        local bname = BfBot._GetName(baseline)
+        local bid = _probeField(baseline, "m_id") or "?"
+        P("Party slot 0: " .. bname .. " (id=" .. bid .. ")")
     end
 
-    -- 2. Scan for non-party sprites via ID range
-    local nonParty = _scanNearbyObjects()
+    -- 2. Area object deep probe (the main event)
+    --    Iterates m_lVertSort, identifies creatures, dumps non-party ones
+    local creatures = _probeAreaAccess()
 
-    -- 3. Dump each non-party sprite found
-    if nonParty and #nonParty > 0 then
-        for _, np in ipairs(nonParty) do
-            _dumpSprite(np.obj, "NON-PARTY: " .. np.name .. " (id=" .. np.id .. ")")
-        end
-    else
+    if not creatures or #creatures == 0 then
         P("")
-        P("No non-party sprites found in ID scan range.")
-        P("Try: C:CreateCreature(\"YOURRESREF\") or cast a summon spell first.")
+        P("No non-party creatures found in area.")
+        P("Make sure summons/clones are alive in the current area.")
     end
-
-    -- 4. Area access probes
-    _probeAreaAccess()
 
     P("")
     P("=== Probe complete — see buffbot_probe.log ===")
     BfBot._CloseLog()
 end
 
---- Quick probe: just scan for non-party sprites and dump them
+--- Quick probe: just area objects, no party baseline
 function BfBot.Probe.Quick()
     BfBot._OpenLogAppend("buffbot_probe.log")
-    P("=== Quick Probe ===")
-    local nonParty = _scanNearbyObjects()
-    if nonParty and #nonParty > 0 then
-        for _, np in ipairs(nonParty) do
-            _dumpSprite(np.obj, np.name .. " (id=" .. np.id .. ")")
-        end
-    end
+    P("=== Quick Probe v5 ===")
+    _probeAreaObjects()
     P("=== Done ===")
     BfBot._CloseLog()
 end

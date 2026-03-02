@@ -328,6 +328,7 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
     local score = 0
     local splstates = {}
     local selfReplace = false
+    local isToggle = false
     local fbAoE = false
     local hasSubstantive = false
 
@@ -350,7 +351,7 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
                 isSelfRef = true
                 -- opcode 318 self-ref = toggle mechanism (like stances)
                 if opcode == 318 then
-                    selfReplace = true
+                    isToggle = true
                 end
             end
         end
@@ -402,6 +403,7 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
     return score, {
         splstates = splstates,
         selfReplace = selfReplace,
+        isToggle = isToggle,
         fbAoE = fbAoE,
         hasSubstantive = hasSubstantive,
     }
@@ -555,10 +557,12 @@ function BfBot.Class.Classify(resref, header, ability)
     result.opcodeScore, opcodeExtras = BfBot.Class.ScoreOpcodes(header, ability, resref)
     result.splstates = opcodeExtras.splstates
     result.selfReplace = opcodeExtras.selfReplace
+    result.isToggle = opcodeExtras.isToggle
     result.hasSubstantive = opcodeExtras.hasSubstantive
 
-    -- selfReplace penalty: toggle/stance spells are not prebuffs
-    result.selfReplacePenalty = result.selfReplace and -8 or 0
+    -- Toggle penalty: opcode 318 self-ref = stance/toggle, not prebuff
+    -- (opcode 321 self-ref = normal buff refresh, no penalty)
+    result.selfReplacePenalty = result.isToggle and -8 or 0
 
     -- Total score
     result.score = result.targetScore + result.msecScore

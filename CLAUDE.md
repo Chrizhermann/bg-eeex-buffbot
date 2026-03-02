@@ -93,17 +93,15 @@ Shareable preset templates need file-based storage outside save games:
 ### Known Issue: Old Save Configs Missing Spells
 Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **To fix**: redeploy (`bash tools/deploy.sh`) and start a new game, or build a config migration that merges missing buff spells into existing presets (future task: merge missing spells in `GetConfig` or via schema version bump in `_MigrateConfig`).
 
-### Known Classifier Issues (to address in config UI / classifier tuning)
-The buff classifier (`BfBot.Class.Classify`) is too generous — these categories score as false-positive buffs:
-- **Heals/cures**: Cure Light Wounds, Slow Poison, Cure Disease, Neutralize Poison — instant heals, not buffs
-- **Traps**: Set Spike/Exploding/Time Trap, Set Snare — thief HLAs
-- **Offensive**: Charm Animal/Person, War Cry, Fireburst — hostile spells
-- **Summons**: Summon Planetar, Elemental Prince Call
-- **Utility/crafting**: Alchemy (Mage), Scribe Scrolls (Mage), Tracking, Magical Stone
-- **Setup spells**: Contingency, Chain Contingency, Simbul's Spell Trigger/Sequencer/Matrix
-- **Shapeshifts**: Black Bear, Brown Bear, Wolf, Natural Form — debatable
+### Classifier False Positive Reduction (IMPLEMENTED)
+Three generic heuristics added to reduce false positives (no hardcoded resref lists):
+1. **Self-ref opcode discount**: opcodes 318/324 referencing the spell's own resref (SCS anti-stacking infrastructure) score 0 instead of +2. Fixes: Charm Animal, Fireburst, War Cry inflation.
+2. **Substance check**: spells passing the score threshold must have at least one substantive buff opcode (stat boost, protection, immunity, etc.). Opcodes 17 (Healing) and 171 (Give Ability) are "soft" — score normally but don't satisfy substance. Fixes: Set Snare, Contingency, Alchemy, Tracking.
+3. **Toggle penalty**: opcode 318 self-ref (toggle/stance pattern) gets -8 penalty. Opcode 321 self-ref (normal buff refresh/remove-and-reapply) is NOT penalized. Fixes: Power Attack, Tracking stances.
 
-These false positives don't affect the execution engine (it casts whatever it's given). The config UI's manual override will handle edge cases. Classifier heuristic improvements are a separate task.
+**Known remaining edge case**: Spell Revisions Barkskin — SR delivers AC bonus via sub-spell (opcode 146), leaving the main SPL with only infrastructure opcodes. Classified as AMB (ambiguous, leaning buff) instead of definitive BUFF. Manual override via config UI will handle this (GitHub issue #1).
+
+**Scanner filter**: `BFBT` prefix filter in `BfBot.Scan.GetCastableSpells` — skips BuffBot's own generated innate SPLs.
 
 ### isAoE False Positives and Wrong Default Targets (FIXED)
 Three unreliable signals caused many single-target spells (Death Ward, Regeneration, Regenerate Critical Wounds, etc.) to be classified as AoE: `actionCount == 0` (many IE single-target spells have count 0), `fbAoE` from SCS feature blocks (SPLSTATE setters with broad target types), and `actionType == 1` heuristics. Additionally, `GetDefaultTarget` ignored its `isAoE` parameter, defaulting all non-self spells to "party". **Fix**: `IsAoE` now only trusts ability header target types 3 (everyone except caster) and 4 (everyone). `GetDefaultTarget` returns "p" only for AoE spells, "s" for single-target. Schema migration v1→v2 re-evaluates existing config targets.
