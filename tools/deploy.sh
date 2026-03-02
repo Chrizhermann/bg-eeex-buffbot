@@ -8,7 +8,7 @@ GAME_DIR="c:/Games/Baldur's Gate II Enhanced Edition modded/override"
 echo "Deploying BuffBot to game override..."
 
 # Verify source files exist
-for f in M_BfBot.lua BfBotCor.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     if [ ! -f "$SRC_DIR/$f" ]; then
         echo "ERROR: $SRC_DIR/$f not found"
         exit 1
@@ -21,12 +21,30 @@ if [ ! -d "$GAME_DIR" ]; then
     exit 1
 fi
 
+# Remove old monolithic BfBotCor.lua from game override (one-time migration).
+# The old file would re-declare BfBot.Scan = {} etc., stomping populated tables.
+if [ -f "$GAME_DIR/BfBotCor.lua" ] && [ ! -f "$GAME_DIR/BfBotCls.lua" ]; then
+    mv "$GAME_DIR/BfBotCor.lua" "$GAME_DIR/BfBotCor.lua.old"
+    echo "Renamed old monolithic BfBotCor.lua to BfBotCor.lua.old"
+fi
+
 # Copy files
 cp "$SRC_DIR/M_BfBot.lua"   "$GAME_DIR/M_BfBot.lua"
 cp "$SRC_DIR/BfBotCor.lua"  "$GAME_DIR/BfBotCor.lua"
+cp "$SRC_DIR/BfBotCls.lua"  "$GAME_DIR/BfBotCls.lua"
+cp "$SRC_DIR/BfBotScn.lua"  "$GAME_DIR/BfBotScn.lua"
+cp "$SRC_DIR/BfBotExe.lua"  "$GAME_DIR/BfBotExe.lua"
+cp "$SRC_DIR/BfBotPer.lua"  "$GAME_DIR/BfBotPer.lua"
+cp "$SRC_DIR/BfBotInn.lua"  "$GAME_DIR/BfBotInn.lua"
 cp "$SRC_DIR/BfBotUI.lua"   "$GAME_DIR/BfBotUI.lua"
 cp "$SRC_DIR/BfBotTst.lua"  "$GAME_DIR/BfBotTst.lua"
 cp "$SRC_DIR/BuffBot.menu"  "$GAME_DIR/BuffBot.menu"
+
+# Copy diagnostic tools (optional, for development)
+TOOLS_SRC="c:/src/private/bg-eeex-buffbot/tools"
+if [ -f "$TOOLS_SRC/probe_clone.lua" ]; then
+    cp "$TOOLS_SRC/probe_clone.lua" "$GAME_DIR/probe_clone.lua"
+fi
 
 # Patch dialog.tlk with BuffBot innate ability names (idempotent)
 LANG_DIR="$(dirname "$GAME_DIR")/lang/en_US"
@@ -46,7 +64,7 @@ fi
 
 echo ""
 echo "Done. Files deployed:"
-ls -la "$GAME_DIR"/M_BfBot.lua "$GAME_DIR"/BfBotCor.lua "$GAME_DIR"/BfBotUI.lua "$GAME_DIR"/BfBotTst.lua "$GAME_DIR"/BuffBot.menu
+ls -la "$GAME_DIR"/M_BfBot.lua "$GAME_DIR"/BfBot*.lua "$GAME_DIR"/BuffBot.menu
 
 echo ""
 echo "To test in-game:"
@@ -80,3 +98,9 @@ echo "  BFBT*.SPL files are auto-generated on first game start"
 echo "  F12 (special abilities) shows per-preset innates for each character"
 echo "  BfBot.Innate.Grant()                     -- re-grant innates to party"
 echo "  BfBot.Innate.RefreshAll()                -- revoke + re-grant all"
+echo ""
+echo "Clone/summon probe:"
+echo "  Infinity_DoFile('probe_clone')           -- load the probe"
+echo "  BfBot.Probe.Run()                        -- full diagnostic (select clone first)"
+echo "  BfBot.Probe.Quick()                      -- quick probe of selected sprite"
+echo "  Output: buffbot_probe.log in game directory"
