@@ -200,7 +200,6 @@ These files in `~/.claude/rules/` contain verified EEex/IE gotchas and patterns.
 - `~/.claude/rules/eeex-api-quick-ref.md` — EEex Lua API patterns (sprites, spells, effects, persistence, actions, UI)
 - `~/.claude/rules/eeex-gotchas.md` — verified bugs and corrections (data types, API mismatches, opcode params, .menu UI quirks)
 - `~/.claude/rules/menu-parser-rules.md` — .menu file parser rules that cause crashes if violated (7 rules)
-- `~/.claude/rules/github-accounts.md` — GitHub account config
 
 When discovering new gotchas or API corrections through in-game testing, update the relevant rules file so the knowledge persists across all sessions and projects.
 

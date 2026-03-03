@@ -6,9 +6,10 @@ Desktop.ini
 *.swo
 *~
 
-# IDE files
+# IDE / AI assistant local config
 .vscode/
 .idea/
+.claude/
 *.sublime-project
 *.sublime-workspace
 *.code-workspace

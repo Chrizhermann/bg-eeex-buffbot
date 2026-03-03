@@ -127,6 +127,10 @@ bg-eeex-buffbot/
 └── README.md
 ```
 
+## CLAUDE.md
+
+This repo includes a `CLAUDE.md` file — a detailed project context document used by [Claude Code](https://claude.ai/claude-code) for AI-assisted development. It contains architecture notes, API patterns, and domain knowledge specific to this mod. It does not affect the mod itself. If it bothers you, feel free to delete it.
+
 ## Inspiration
 
 Originally inspired by [Bubble Buffs](https://github.com/factubsio/BubbleBuffs) from Pathfinder: Wrath of the Righteous, adapted for the Infinity Engine's spell system and BG's per-character spellbook model.
