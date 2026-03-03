@@ -617,7 +617,7 @@ function BfBot.Persist.CreatePreset(sprite, name)
 end
 
 --- Delete a preset by index. Refuses to delete the last remaining preset.
---- Returns true on success, nil on failure.
+--- Returns 1 on success, nil on failure.
 function BfBot.Persist.DeletePreset(sprite, presetIndex)
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return nil end
@@ -632,8 +632,8 @@ function BfBot.Persist.DeletePreset(sprite, presetIndex)
     if not config.presets[presetIndex] then return nil end
     config.presets[presetIndex] = nil
 
-    -- If active preset was deleted, switch to first available
-    if config.ap == presetIndex then
+    -- Always validate config.ap points to an existing preset
+    if not config.presets[config.ap] then
         for i = 1, 5 do
             if config.presets[i] then
                 config.ap = i

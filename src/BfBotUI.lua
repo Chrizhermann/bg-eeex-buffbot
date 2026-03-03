@@ -14,6 +14,29 @@ BfBot.UI._charSlot = 0        -- selected character slot (0-5)
 BfBot.UI._presetIdx = 1       -- selected preset index (1-5)
 BfBot.UI._initialized = false
 
+--- Ensure _presetIdx points to a valid preset for the given config.
+-- Returns the clamped index (also sets BfBot.UI._presetIdx).
+function BfBot.UI._ClampPresetIdx(config)
+    if config and config.presets and config.presets[BfBot.UI._presetIdx] then
+        return BfBot.UI._presetIdx  -- already valid
+    end
+    -- Fall back to config.ap, then first valid preset
+    if config and config.presets then
+        if config.ap and config.presets[config.ap] then
+            BfBot.UI._presetIdx = config.ap
+            return config.ap
+        end
+        for i = 1, 5 do
+            if config.presets[i] then
+                BfBot.UI._presetIdx = i
+                return i
+            end
+        end
+    end
+    BfBot.UI._presetIdx = 1
+    return 1
+end
+
 -- ============================================================
 -- Global Variables (read by .menu expressions every frame)
 -- ALL values must be numbers/strings/tables — NO BOOLEANS.
@@ -183,9 +206,7 @@ function BfBot.UI._Refresh()
     end
 
     -- 4. Clamp preset index to valid range
-    if not config.presets[BfBot.UI._presetIdx] then
-        BfBot.UI._presetIdx = config.ap or 1
-    end
+    BfBot.UI._ClampPresetIdx(config)
 
     local preset = config.presets[BfBot.UI._presetIdx]
     if not preset then
@@ -408,18 +429,11 @@ end
 function BfBot.UI.DeleteCurrentPreset()
     local result = BfBot.Persist.DeletePresetAll(BfBot.UI._presetIdx)
     if result then
-        -- Switch to first available preset (check current character's config)
+        -- Clamp to first valid preset for the current character
         local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
         if sprite then
             local config = BfBot.Persist.GetConfig(sprite)
-            if config then
-                for i = 1, 5 do
-                    if config.presets[i] then
-                        BfBot.UI._presetIdx = i
-                        break
-                    end
-                end
-            end
+            BfBot.UI._ClampPresetIdx(config)
         end
         BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
@@ -431,13 +445,21 @@ end
 -- ============================================================
 
 function BfBot.UI.Cast()
-    local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
-    if queue then
-        local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-        local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
-        BfBot.Exec.Start(queue, qcMode)
-        buffbot_status = BfBot.UI._GetStatusText()
+    -- Validate preset index before building queue
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if sprite then
+        local config = BfBot.Persist.GetConfig(sprite)
+        BfBot.UI._ClampPresetIdx(config)
     end
+
+    local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
+    if not queue or #queue == 0 then
+        Infinity_DisplayString("BuffBot: No spells to cast in this preset")
+        return
+    end
+    local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
+    BfBot.Exec.Start(queue, qcMode)
+    buffbot_status = BfBot.UI._GetStatusText()
 end
 
 function BfBot.UI.Stop()
