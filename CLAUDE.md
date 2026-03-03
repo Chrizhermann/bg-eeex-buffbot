@@ -6,7 +6,7 @@ BuffBot is a mod for Baldur's Gate: Enhanced Edition (BG:EE) and BG2:EE that pro
 
 ## Current Phase
 
-Implementation in progress — all core modules implemented, UI rendering in-game (testing in progress):
+Alpha — core features working, UI functional, testing in progress:
 
 - **Spell Scanner + Buff Classifier** (`BfBot.Scan` + `BfBot.Class`) — 52 unit tests passing
 - **Execution Engine** (`BfBot.Exec`) — parallel per-caster casting via `EEex_LuaAction` chaining, with pre-flight skip checks (SPLSTATE + effect list fallback, dead caster/target, no slot). Tested with 6 casters casting 105 spells in parallel, skip detection confirmed working across multiple runs.
@@ -17,7 +17,7 @@ Implementation in progress — all core modules implemented, UI rendering in-gam
 
 - **Quick Cast / Cheat Mode** (`BfBot.Exec` + `BfBot.Persist` + `BfBot.UI`) — per-preset 3-state toggle (Off/Long/All). Applies temporary Improved Alacrity + casting speed reduction via runtime-generated BFBTCH.SPL. Two-pass queue splitting for mixed presets (long buffs fast, short buffs normal). Cycling button with color-coded text (uses `text` element, not `button`). Works through both UI Cast button and F12 innate abilities. Verified working in-game.
 
-Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `src/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -42,7 +42,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Save game scope**: BG:EE saves are NOT character-bound or playthrough-bound — just game state snapshots. Config is per-character per-save via UDAux, which covers the core use case.
 
 ### Configuration UI Details
-- **Files**: `src/BfBotUI.lua` (Lua logic, ~550 lines), `src/BuffBot.menu` (.menu DSL definitions, ~620 lines)
+- **Files**: `buffbot/BfBotUI.lua` (Lua logic, ~550 lines), `buffbot/BuffBot.menu` (.menu DSL definitions, ~620 lines)
 - **Init chain**: `M_BfBot.lua` → `Infinity_DoFile("BfBotUI")` → `EEex_Menu_AddAfterMainFileLoadedListener` → `BfBot.UI._OnMenusLoaded()` (loads .menu, injects actionbar button, registers F11 hotkey + sprite listeners)
 - **Panel access**: Actionbar button via `EEex_Menu_InjectTemplate("WORLD_ACTIONBAR", "BUFFBOT_BTN", ...)` + F11 via `EEex_Key_AddPressedListener`
 - **Panel background**: Dark rectangle via `rectangle 5` + `rectangle opacity 200` (NOT BAM — stretched BAMs look terrible)
@@ -190,7 +190,7 @@ Two bugs in `_BuildCheatSPL()` caused Quick Cast to have no effect (or make cast
 ## Repo Layout
 
 - `docs/` — analysis documents, reference material, design notes
-- `src/` — mod source files (Lua, .menu, .BAF, .tp2)
+- `buffbot/` — mod source files (Lua, .menu, .tp2, etc.)
 - `tools/` — helper scripts and utilities
 
 ## Global Rules (auto-loaded in all sessions)
