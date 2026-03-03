@@ -1,11 +1,20 @@
 #!/bin/bash
-# tools/deploy.sh — Copy BuffBot files to game override for testing
-# Usage: bash tools/deploy.sh
+# tools/deploy.sh — Copy BuffBot files to game override for dev testing
+# Usage:
+#   bash tools/deploy.sh /path/to/game      # explicit path
+#   BGEE_DIR=/path/to/game bash tools/deploy.sh  # env var
+#   (or set BGEE_DIR in tools/deploy.conf)
 
-SRC_DIR="c:/src/private/bg-eeex-buffbot/src"
-GAME_DIR="c:/Games/Baldur's Gate II Enhanced Edition modded/override"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/buffbot"
 
-echo "Deploying BuffBot to game override..."
+# Source local config if present (gitignored — contains user's game path)
+[ -f "$SCRIPT_DIR/deploy.conf" ] && source "$SCRIPT_DIR/deploy.conf"
+
+GAME_DIR="${1:-${BGEE_DIR:?Set BGEE_DIR in tools/deploy.conf or pass game dir as argument}}"
+OVERRIDE_DIR="$GAME_DIR/override"
+
+echo "Deploying BuffBot to: $OVERRIDE_DIR"
 
 # Verify source files exist
 for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
@@ -16,44 +25,28 @@ for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPe
 done
 
 # Verify game override directory exists
-if [ ! -d "$GAME_DIR" ]; then
-    echo "ERROR: Game override directory not found: $GAME_DIR"
+if [ ! -d "$OVERRIDE_DIR" ]; then
+    echo "ERROR: Game override directory not found: $OVERRIDE_DIR"
     exit 1
 fi
 
-# Remove old monolithic BfBotCor.lua from game override (one-time migration).
-# The old file would re-declare BfBot.Scan = {} etc., stomping populated tables.
-if [ -f "$GAME_DIR/BfBotCor.lua" ] && [ ! -f "$GAME_DIR/BfBotCls.lua" ]; then
-    mv "$GAME_DIR/BfBotCor.lua" "$GAME_DIR/BfBotCor.lua.old"
-    echo "Renamed old monolithic BfBotCor.lua to BfBotCor.lua.old"
-fi
-
-# Copy files
-cp "$SRC_DIR/M_BfBot.lua"   "$GAME_DIR/M_BfBot.lua"
-cp "$SRC_DIR/BfBotCor.lua"  "$GAME_DIR/BfBotCor.lua"
-cp "$SRC_DIR/BfBotCls.lua"  "$GAME_DIR/BfBotCls.lua"
-cp "$SRC_DIR/BfBotScn.lua"  "$GAME_DIR/BfBotScn.lua"
-cp "$SRC_DIR/BfBotExe.lua"  "$GAME_DIR/BfBotExe.lua"
-cp "$SRC_DIR/BfBotPer.lua"  "$GAME_DIR/BfBotPer.lua"
-cp "$SRC_DIR/BfBotInn.lua"  "$GAME_DIR/BfBotInn.lua"
-cp "$SRC_DIR/BfBotUI.lua"   "$GAME_DIR/BfBotUI.lua"
-cp "$SRC_DIR/BfBotTst.lua"  "$GAME_DIR/BfBotTst.lua"
-cp "$SRC_DIR/BuffBot.menu"  "$GAME_DIR/BuffBot.menu"
+# Copy source files
+for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+    cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
+done
 
 # Copy diagnostic tools (optional, for development)
-TOOLS_SRC="c:/src/private/bg-eeex-buffbot/tools"
-if [ -f "$TOOLS_SRC/probe_clone.lua" ]; then
-    cp "$TOOLS_SRC/probe_clone.lua" "$GAME_DIR/probe_clone.lua"
+if [ -f "$SCRIPT_DIR/probe_clone.lua" ]; then
+    cp "$SCRIPT_DIR/probe_clone.lua" "$OVERRIDE_DIR/probe_clone.lua"
 fi
 
 # Patch dialog.tlk with BuffBot innate ability names (idempotent)
-LANG_DIR="$(dirname "$GAME_DIR")/lang/en_US"
-TOOLS_DIR="$(dirname "$0")"
+LANG_DIR="$GAME_DIR/lang/en_US"
 if [ -f "$LANG_DIR/dialog.tlk" ]; then
     if command -v python3 &> /dev/null; then
-        python3 "$TOOLS_DIR/patch_tlk.py" "$LANG_DIR/dialog.tlk" "$GAME_DIR/bfbot_strrefs.txt"
+        python3 "$SCRIPT_DIR/patch_tlk.py" "$LANG_DIR/dialog.tlk" "$OVERRIDE_DIR/bfbot_strrefs.txt"
     elif command -v python &> /dev/null; then
-        python "$TOOLS_DIR/patch_tlk.py" "$LANG_DIR/dialog.tlk" "$GAME_DIR/bfbot_strrefs.txt"
+        python "$SCRIPT_DIR/patch_tlk.py" "$LANG_DIR/dialog.tlk" "$OVERRIDE_DIR/bfbot_strrefs.txt"
     else
         echo "WARNING: Python not found. Innate ability names will be blank."
         echo "  Install Python 3 and re-run deploy.sh to add names."
@@ -64,7 +57,7 @@ fi
 
 echo ""
 echo "Done. Files deployed:"
-ls -la "$GAME_DIR"/M_BfBot.lua "$GAME_DIR"/BfBot*.lua "$GAME_DIR"/BuffBot.menu
+ls -la "$OVERRIDE_DIR"/M_BfBot.lua "$OVERRIDE_DIR"/BfBot*.lua "$OVERRIDE_DIR"/BuffBot.menu
 
 echo ""
 echo "To test in-game:"
@@ -73,34 +66,5 @@ echo "  2. Load a save game"
 echo "  3. Open EEex Lua console"
 echo "  4. Type: BfBot.Test.RunAll()"
 echo ""
-echo "Individual test functions:"
-echo "  BfBot.Test.CheckFields()                 -- verify field names"
-echo "  BfBot.Test.ScanAll()                     -- scan all party spells"
-echo "  BfBot.Test.Classify('SPWI305')           -- classify one spell"
-echo "  BfBot.Test.VerifyKnownSpells()           -- classification self-test"
-echo "  BfBot.Test.DumpFeatureBlocks('SPWI305')  -- dump feature blocks"
-echo ""
-echo "Persistence:"
-echo "  BfBot.Test.Persist()                     -- config save/load tests"
-echo ""
-echo "Execution engine:"
-echo "  BfBot.Test.Exec()                        -- auto-discover & cast buffs"
-echo "  BfBot.Test.ExecLog()                     -- review execution log"
-echo "  BfBot.Test.ExecStop()                    -- stop mid-execution"
-echo "  BfBot.Exec.Stop()                        -- stop (no log print)"
-echo ""
 echo "UI panel:"
-echo "  BfBot.UI.Toggle()                        -- open/close config panel"
-echo "  F11 key                                  -- toggle panel (in-game)"
-echo ""
-echo "Innate abilities:"
-echo "  BFBT*.SPL files are auto-generated on first game start"
-echo "  F12 (special abilities) shows per-preset innates for each character"
-echo "  BfBot.Innate.Grant()                     -- re-grant innates to party"
-echo "  BfBot.Innate.RefreshAll()                -- revoke + re-grant all"
-echo ""
-echo "Clone/summon probe:"
-echo "  Infinity_DoFile('probe_clone')           -- load the probe"
-echo "  BfBot.Probe.Run()                        -- full diagnostic (select clone first)"
-echo "  BfBot.Probe.Quick()                      -- quick probe of selected sprite"
-echo "  Output: buffbot_probe.log in game directory"
+echo "  BfBot.UI.Toggle()  or  F11 key"

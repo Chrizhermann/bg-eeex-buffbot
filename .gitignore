@@ -31,3 +31,6 @@ chitin.key
 *.tmp
 *.log
 *.orig
+
+# Local dev config (contains user-specific game path)
+tools/deploy.conf
