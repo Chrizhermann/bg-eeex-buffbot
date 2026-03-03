@@ -1,0 +1,40 @@
+BACKUP ~weidu_external/backup/buffbot~
+AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
+VERSION ~v0.1.0-alpha~
+
+BEGIN ~BuffBot: In-Game Buff Automation~
+DESIGNATED 0
+LABEL ~BuffBot-Main~
+
+// ---- Prerequisites ----
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+  ~BuffBot requires BG:EE, BG2:EE, or EET.~
+
+REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~)
+  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex~
+
+// ---- TLK strings for innate ability tooltips ----
+OUTER_SET bfbot_strref_1 = RESOLVE_STR_REF(~BuffBot 1~)
+OUTER_SET bfbot_strref_2 = RESOLVE_STR_REF(~BuffBot 2~)
+OUTER_SET bfbot_strref_3 = RESOLVE_STR_REF(~BuffBot 3~)
+OUTER_SET bfbot_strref_4 = RESOLVE_STR_REF(~BuffBot 4~)
+OUTER_SET bfbot_strref_5 = RESOLVE_STR_REF(~BuffBot 5~)
+
+// ---- Copy mod files to override ----
+COPY ~buffbot/M_BfBot.lua~   ~override~
+COPY ~buffbot/BfBotCor.lua~  ~override~
+COPY ~buffbot/BfBotCls.lua~  ~override~
+COPY ~buffbot/BfBotScn.lua~  ~override~
+COPY ~buffbot/BfBotExe.lua~  ~override~
+COPY ~buffbot/BfBotPer.lua~  ~override~
+COPY ~buffbot/BfBotInn.lua~  ~override~
+COPY ~buffbot/BfBotUI.lua~   ~override~
+COPY ~buffbot/BfBotTst.lua~  ~override~
+COPY ~buffbot/BuffBot.menu~  ~override~
+
+// ---- Write base strref for Lua innate tooltip lookup ----
+<<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt
+%bfbot_strref_1%
+>>>>>>>>
+COPY ~.../buffbot-inlined/bfbot_strrefs.txt~ ~override/bfbot_strrefs.txt~
+  EVALUATE_BUFFER
