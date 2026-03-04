@@ -365,7 +365,7 @@ function BfBot.Persist.SetSpellEnabled(sprite, presetIndex, resref, enabled)
     if not preset.spells[resref] then
         preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
     end
-    preset.spells[resref].on = enabled and 1 or 0
+    preset.spells[resref].on = (enabled == 1) and 1 or 0
 end
 
 --- Set the target for a spell in a preset.

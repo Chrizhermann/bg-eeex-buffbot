@@ -372,7 +372,22 @@ function BfBot.Innate._EnsureSPLFiles()
     return count
 end
 
+--- Check if a character already has a specific innate ability.
+function BfBot.Innate._HasInnate(sprite, resref)
+    local ok, result = pcall(function()
+        local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
+        if not iter then return false end
+        while iter:hasNext() do
+            local spell = iter:next()
+            if spell.m_spellId:get() == resref then return true end
+        end
+        return false
+    end)
+    return ok and result
+end
+
 --- Grant innate abilities to all party members based on their configured presets.
+-- Skips innates the character already has (prevents duplicates across sessions).
 function BfBot.Innate.Grant()
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -382,8 +397,10 @@ function BfBot.Innate.Grant()
                 for idx = 1, 5 do
                     if config.presets[idx] then
                         local resref = string.format("BFBT%d%d", slot, idx)
-                        EEex_Action_QueueResponseStringOnAIBase(
-                            'AddSpecialAbility("' .. resref .. '")', sprite)
+                        if not BfBot.Innate._HasInnate(sprite, resref) then
+                            EEex_Action_QueueResponseStringOnAIBase(
+                                'AddSpecialAbility("' .. resref .. '")', sprite)
+                        end
                     end
                 end
             end
