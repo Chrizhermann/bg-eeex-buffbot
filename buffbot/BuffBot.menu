@@ -339,6 +339,30 @@ menu
 		area 476 434 160 28
 	}
 
+	-- Move selected spell up in cast order
+	button
+	{
+		enabled "BfBot.UI._CanMoveUp()"
+		action  "BfBot.UI.MoveSpellUp()"
+		text    "Up"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 642 434 48 28
+	}
+
+	-- Move selected spell down in cast order
+	button
+	{
+		enabled "BfBot.UI._CanMoveDown()"
+		action  "BfBot.UI.MoveSpellDown()"
+		text    "Down"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 694 434 48 28
+	}
+
 	-- Delete current preset
 	button
 	{

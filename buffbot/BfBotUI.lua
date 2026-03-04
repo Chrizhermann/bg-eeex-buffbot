@@ -536,6 +536,51 @@ function BfBot.UI._HasSelection()
     return buffbot_isOpen and buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable
 end
 
+--- Renumber all spell priorities contiguously (1, 2, 3, ...) based on
+--- current buffbot_spellTable order. Writes back to Persist.
+function BfBot.UI._RenumberPriorities()
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+    for i, entry in ipairs(buffbot_spellTable) do
+        entry.pri = i
+        BfBot.Persist.SetSpellPriority(sprite, BfBot.UI._presetIdx, entry.resref, i)
+    end
+end
+
+--- Can the selected spell be moved up? (selection exists and row > 1)
+function BfBot.UI._CanMoveUp()
+    return buffbot_isOpen and buffbot_selectedRow > 1 and buffbot_selectedRow <= #buffbot_spellTable
+end
+
+--- Can the selected spell be moved down? (selection exists and row < last)
+function BfBot.UI._CanMoveDown()
+    return buffbot_isOpen and buffbot_selectedRow > 0 and buffbot_selectedRow < #buffbot_spellTable
+end
+
+--- Move the selected spell up one position.
+function BfBot.UI.MoveSpellUp()
+    local row = buffbot_selectedRow
+    if row <= 1 or row > #buffbot_spellTable then return end
+    -- Swap in display table
+    buffbot_spellTable[row], buffbot_spellTable[row - 1] = buffbot_spellTable[row - 1], buffbot_spellTable[row]
+    -- Renumber all priorities
+    BfBot.UI._RenumberPriorities()
+    -- Follow the moved spell
+    buffbot_selectedRow = row - 1
+end
+
+--- Move the selected spell down one position.
+function BfBot.UI.MoveSpellDown()
+    local row = buffbot_selectedRow
+    if row < 1 or row >= #buffbot_spellTable then return end
+    -- Swap in display table
+    buffbot_spellTable[row], buffbot_spellTable[row + 1] = buffbot_spellTable[row + 1], buffbot_spellTable[row]
+    -- Renumber all priorities
+    BfBot.UI._RenumberPriorities()
+    -- Follow the moved spell
+    buffbot_selectedRow = row + 1
+end
+
 --- Can we create more presets? (fewer than 5 exist)
 function BfBot.UI._CanCreatePreset()
     return buffbot_isOpen and buffbot_presetCount < 5
