@@ -217,7 +217,21 @@ function BfBot.UI._Refresh()
     -- 5. Get castable spells from scanner (uses CACHE — no invalidation here)
     local castable = BfBot.Scan.GetCastableSpells(sprite)
 
-    -- 6. Build spell table from preset config, cross-ref with scan data
+    -- 6. Merge new buff spells from scanner into preset (disabled, at bottom)
+    local maxPri = 0
+    for _, spellCfg in pairs(preset.spells) do
+        if (spellCfg.pri or 0) > maxPri then maxPri = spellCfg.pri end
+    end
+    for resref, scan in pairs(castable) do
+        if not preset.spells[resref] and scan.class and scan.class.isBuff and scan.count > 0 then
+            maxPri = maxPri + 1
+            local entry = BfBot.Persist._MakeDefaultSpellEntry(scan.class, 0)
+            entry.pri = maxPri
+            preset.spells[resref] = entry
+        end
+    end
+
+    -- 7. Build spell table from preset config, cross-ref with scan data
     local rows = {}
     for resref, spellCfg in pairs(preset.spells) do
         local scan = castable[resref]
