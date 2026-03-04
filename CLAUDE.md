@@ -76,8 +76,8 @@ Next: Post-MVP features — manual spell override UI (GitHub #1), config export/
 - **Icon**: `SPWI218B` (Stoneskin button BAM) — placeholder, custom BAM post-MVP
 - **Spell level**: Set to preset index (1-5) for separate F12 lines
 - **Party slot encoding**: Slot (0-5) baked into opcode 402 param1, preset (1-5) into param2. Stale if party rearranged — `RefreshAll()` on party change.
-- **Lazy grant**: First sprite event in `BfBot.UI._OnSpellListChanged` triggers `Grant()` once per session
-- **API**: `BfBot.Innate.Grant()`, `.Revoke(slot)`, `.Refresh(slot)`, `.RefreshAll()`, `._EnsureSPLFiles()`, `._BuildSPL(slot, preset)`
+- **Grant lifecycle**: Innates persist in save games (engine saves known spells) and opcode 171 re-grants after each use. No lazy grant on session start — innates are only granted when (1) config is first created (`_CreateDefaultConfig`), or (2) presets are created/deleted (`Refresh` flow). `_HasInnate(sprite, resref)` uses `EEex_Sprite_GetKnownInnateSpellsIterator` to check for duplicates.
+- **API**: `BfBot.Innate.Grant()`, `.Revoke(slot)`, `.Refresh(slot)`, `.RefreshAll()`, `._HasInnate(sprite, resref)`, `._EnsureSPLFiles()`, `._BuildSPL(slot, preset)`
 
 ### Quick Cast / Cheat Mode Details
 - **Per-preset toggle**: `qc` field on each preset (0=off, 1=long only, 2=all). Set via `SetQuickCast(sprite, idx, val)` or `SetQuickCastAll(idx, val)` for party-wide.
@@ -95,12 +95,6 @@ Shareable preset templates need file-based storage outside save games:
 - `BfBot.Persist.ImportPreset(sprite, presetIndex, filename)` — load preset from file
 - Could support a "template library" of built-in presets (e.g., "Standard Prebuff", "Boss Fight")
 - Defer to post-MVP after config UI is working
-
-### Known Issue: Innate Grant Spam on Session Start
-`Grant()` calls `AddSpecialAbility` unconditionally on every session start (first sprite event). The SPL's opcode 171 already re-grants after each use, so this creates duplicate innates. **Fix**: use `EEex_Sprite_GetKnownInnateSpellsIterator(sprite)` to check if the BFBT innate already exists before calling `AddSpecialAbility`. The API is already used in BfBotTst.lua (lines 1242-1253).
-
-### Known Issue: Spell Display Confusion After Casting
-After casting a preset, spells with 0 remaining memorization slots show greyed out (via `castable == 0` in `_SpellNameColor`), even though their checkbox is still `[X]` (enabled). This is technically correct (no slots = can't cast) but visually confusing — players may think the spell was disabled. **Fix options**: different colors for "enabled but no slots" vs "disabled by user", or a different checkbox style, or tooltip clarification.
 
 ### Known Issue: Old Save Configs Missing Spells
 Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **To fix**: redeploy (`bash tools/deploy.sh`) and start a new game, or build a config migration that merges missing buff spells into existing presets (future task: merge missing spells in `GetConfig` or via schema version bump in `_MigrateConfig`).
@@ -126,6 +120,12 @@ Two bugs in `_BuildCheatSPL()` caused Quick Cast to have no effect (or make cast
 
 ### Quick Cast Button Text Unreadable (FIXED)
 `text color lua` does NOT work on `button` elements with `bam` backgrounds — the BAM overrides text rendering, so all three Quick Cast states showed the same brownish color. First attempted a label overlay on top of the button — but labels absorb mouse clicks in the IE engine, blocking button interaction. **Fix**: replaced with a `text` element which supports both `action` and `text color lua`, using `rectangle 5` + `rectangle opacity 160` for a dark clickable background.
+
+### Spell Toggle Not Persisting (FIXED)
+`SetSpellEnabled` used `enabled and 1 or 0` which always stored `1` because **Lua treats `0` as truthy**. Disabling a spell appeared to work visually (immediate `entry.on = newState` update) but reverted on next `_Refresh()` when the persist value was read back. **Fix**: `(enabled == 1) and 1 or 0`. **Gotcha added to `~/.claude/rules/eeex-gotchas.md`**: never use `x and 1 or 0` for integer 0/1 → use `(x == 1) and 1 or 0`.
+
+### Innate Grant Spam on Session Start (FIXED)
+`Grant()` fired on every session start via lazy trigger in `_OnSpellListChanged`. Since innates persist in save games (engine saves known spells) and opcode 171 re-grants after each use, this was redundant. Worse, if `EEex_Sprite_GetKnownInnateSpellsIterator` wasn't ready during early load, `_HasInnate` returned false and innates were re-added as duplicates. **Fix**: removed lazy grant entirely. Innates now only granted when config is first created (`_CreateDefaultConfig`) or presets are created/deleted (`Refresh` flow).
 
 ## Tech Stack
 
