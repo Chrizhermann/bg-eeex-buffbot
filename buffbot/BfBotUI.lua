@@ -105,10 +105,6 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
-    -- Innate abilities are granted lazily on first sprite event after save load
-    -- (can't grant here — no party members exist until a save is loaded)
-    BfBot.Innate._granted = false
-
     BfBot.UI._initialized = true
 end
 
@@ -501,11 +497,6 @@ end
 -- ============================================================
 
 function BfBot.UI._OnSpellListChanged(sprite, resref, changeAmount)
-    -- Lazy-grant innates on first sprite event after save load
-    if not BfBot.Innate._granted then
-        BfBot.Innate._granted = true
-        BfBot.Innate.Grant()
-    end
     BfBot.Scan.Invalidate(sprite)
     if buffbot_isOpen then BfBot.UI._Refresh() end
 end

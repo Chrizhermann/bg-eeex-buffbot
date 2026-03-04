@@ -143,6 +143,23 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
     end)
 
+    -- Grant innate abilities for the new config's presets
+    if BfBot.Innate and BfBot.Innate.Grant then
+        local slot = nil
+        for s = 0, 5 do
+            if EEex_Sprite_GetInPortrait(s) == sprite then slot = s; break end
+        end
+        if slot then
+            for idx = 1, 5 do
+                if config.presets[idx] then
+                    local resref = string.format("BFBT%d%d", slot, idx)
+                    EEex_Action_QueueResponseStringOnAIBase(
+                        'AddSpecialAbility("' .. resref .. '")', sprite)
+                end
+            end
+        end
+    end
+
     return config
 end
 
