@@ -17,7 +17,11 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Quick Cast / Cheat Mode** (`BfBot.Exec` + `BfBot.Persist` + `BfBot.UI`) — per-preset 3-state toggle (Off/Long/All). Applies temporary Improved Alacrity + casting speed reduction via runtime-generated BFBTCH.SPL. Two-pass queue splitting for mixed presets (long buffs fast, short buffs normal). Cycling button with color-coded text (uses `text` element, not `button`). Works through both UI Cast button and F12 innate abilities. Verified working in-game.
 
-Next: Complete in-game verification of UI interaction (toggle, target, preset management), then post-MVP features (export/import, actionbar button polish, custom innate icons). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Manual Cast Order** (`BfBot.UI`) — Move Up/Down buttons for reordering spells within presets. Per-character, per-preset. Priority renumbered contiguously (1, 2, 3, ...) after each move. Selection follows the moved spell. Verified working in-game.
+
+- **Auto-Merge New Spells** (`BfBot.UI._Refresh`) — New buff spells gained from leveling up or memorization changes are automatically merged into existing presets (disabled, at bottom of list) when the panel refreshes. No longer requires starting a new game to see new spells.
+
+Next: Post-MVP features — manual spell override UI (GitHub #1), config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6), per-level duration scaling (#7). Also two bugs to fix: innate grant spam (#8 TBD) and spell display confusion after casting (#9 TBD). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -42,7 +46,7 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Save game scope**: BG:EE saves are NOT character-bound or playthrough-bound — just game state snapshots. Config is per-character per-save via UDAux, which covers the core use case.
 
 ### Configuration UI Details
-- **Files**: `buffbot/BfBotUI.lua` (Lua logic, ~550 lines), `buffbot/BuffBot.menu` (.menu DSL definitions, ~620 lines)
+- **Files**: `buffbot/BfBotUI.lua` (Lua logic, ~710 lines), `buffbot/BuffBot.menu` (.menu DSL definitions, ~655 lines)
 - **Init chain**: `M_BfBot.lua` → `Infinity_DoFile("BfBotUI")` → `EEex_Menu_AddAfterMainFileLoadedListener` → `BfBot.UI._OnMenusLoaded()` (loads .menu, injects actionbar button, registers F11 hotkey + sprite listeners)
 - **Panel access**: Actionbar button via `EEex_Menu_InjectTemplate("WORLD_ACTIONBAR", "BUFFBOT_BTN", ...)` + F11 via `EEex_Key_AddPressedListener`
 - **Panel background**: Dark rectangle via `rectangle 5` + `rectangle opacity 200` (NOT BAM — stretched BAMs look terrible)
@@ -54,10 +58,12 @@ Next: Complete in-game verification of UI interaction (toggle, target, preset ma
 - **Target picker**: BUFFBOT_TARGETS sub-menu with Self/Party + per-player buttons. **Multi-target mode**: when spell has count > 1, picker switches to checkbox toggle mode ([X]/[ ] per character) with a Done button. `BfBot.UI.PickTarget(value)` handles both single-select (auto-close) and multi-select (toggle) modes.
 - **Cast/Stop**: Cast builds queue from active preset via `BuildQueueFromPreset()` → `Exec.Start(queue, qcMode)`. Stop calls `Exec.Stop()`. qcMode read from preset's `qc` field via `GetQuickCast()`.
 - **Quick Cast button**: `text` element (not `button` — BAM backgrounds override `text color lua`). Click cycles Off→Long→All→Off via `CycleQuickCast()` → `SetQuickCastAll()`. Color-coded text: white (Off), yellow (Long), red/orange (All). Uses `rectangle 5` + `rectangle opacity 160` for dark background.
+- **Manual cast order**: Move Up/Down buttons (area 642/694, y=434, 48px wide) between Target and Delete Preset buttons. `MoveSpellUp()`/`MoveSpellDown()` swap entries in `buffbot_spellTable`, then `_RenumberPriorities()` writes contiguous `pri` values (1, 2, 3, ...) back via `SetSpellPriority()`. `_CanMoveUp()`/`_CanMoveDown()` gate button enabled state. Selection follows the moved spell.
+- **Auto-merge new spells**: `_Refresh()` step 6 checks scanner results for buff spells not yet in the current preset and auto-adds them (disabled, `pri = maxPri + 1`). Ensures leveling up or memorization changes are reflected without needing a fresh config.
 - **Auto-refresh**: Sprite listeners (`QuickListsChecked`, `QuickListCountsReset`, `QuickListNotifyRemoved`) invalidate scan cache then refresh. Tab switches use cached data (no invalidation).
 - **No booleans**: All UI code interacting with Persist uses 0/1 integers, never true/false. `ToggleSpell` passes integer `newState` directly.
 - **Shared utility**: `BfBot._GetName(sprite)` — safe character name getter used by both Exec and UI modules
-- **In-game status**: Panel renders correctly, character/preset tabs work, spell list populates. Interaction (toggle, target, preset create/delete) deployed but awaiting final in-game verification.
+- **In-game status**: Panel renders correctly, all interaction verified working — character/preset tabs, spell toggle, target picker, preset create/delete/rename, cast/stop, Move Up/Down reordering.
 
 ### Innate Abilities Details (VERIFIED IN-GAME)
 - **Per-preset innates**: Each character gets 1 innate per configured preset in F12/special abilities
@@ -89,6 +95,12 @@ Shareable preset templates need file-based storage outside save games:
 - `BfBot.Persist.ImportPreset(sprite, presetIndex, filename)` — load preset from file
 - Could support a "template library" of built-in presets (e.g., "Standard Prebuff", "Boss Fight")
 - Defer to post-MVP after config UI is working
+
+### Known Issue: Innate Grant Spam on Session Start
+`Grant()` calls `AddSpecialAbility` unconditionally on every session start (first sprite event). The SPL's opcode 171 already re-grants after each use, so this creates duplicate innates. **Fix**: use `EEex_Sprite_GetKnownInnateSpellsIterator(sprite)` to check if the BFBT innate already exists before calling `AddSpecialAbility`. The API is already used in BfBotTst.lua (lines 1242-1253).
+
+### Known Issue: Spell Display Confusion After Casting
+After casting a preset, spells with 0 remaining memorization slots show greyed out (via `castable == 0` in `_SpellNameColor`), even though their checkbox is still `[X]` (enabled). This is technically correct (no slots = can't cast) but visually confusing — players may think the spell was disabled. **Fix options**: different colors for "enabled but no slots" vs "disabled by user", or a different checkbox style, or tooltip clarification.
 
 ### Known Issue: Old Save Configs Missing Spells
 Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **To fix**: redeploy (`bash tools/deploy.sh`) and start a new game, or build a config migration that merges missing buff spells into existing presets (future task: merge missing spells in `GetConfig` or via schema version bump in `_MigrateConfig`).
