@@ -644,6 +644,106 @@ function BfBot.Test.VerifyKnownSpells()
 end
 
 -- ============================================================
+-- BfBot.Test.Override — Manual classification override tests
+-- ============================================================
+
+function BfBot.Test.Override()
+    P("=== Override: Manual spell include/exclude ===")
+    _reset()
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _nok("No sprite in slot 0")
+        return _summary("Override")
+    end
+
+    -- Ensure config exists
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then
+        _nok("No config for slot 0")
+        return _summary("Override")
+    end
+
+    -- Test 1: Include override changes classification
+    local testResref = nil
+    local castable = BfBot.Scan.GetCastableSpells(sprite)
+    for resref, scan in pairs(castable) do
+        if scan.class and not scan.class.isBuff and not scan.class.overridden then
+            testResref = resref
+            break
+        end
+    end
+
+    if testResref then
+        BfBot.Persist.SetOverride(sprite, testResref, 1)
+        BfBot._cache.class[testResref] = nil
+        BfBot.Scan.Invalidate(sprite)
+        local castable2 = BfBot.Scan.GetCastableSpells(sprite)
+        local scan2 = castable2[testResref]
+        if scan2 and scan2.class and scan2.class.isBuff then
+            _ok("Include override: " .. testResref .. " now classified as buff")
+        else
+            _nok("Include override failed for " .. testResref)
+        end
+
+        -- Test 2: Clear override restores auto-classification
+        BfBot.Persist.SetOverride(sprite, testResref, nil)
+        BfBot._cache.class[testResref] = nil
+        BfBot.Scan.Invalidate(sprite)
+        local castable3 = BfBot.Scan.GetCastableSpells(sprite)
+        local scan3 = castable3[testResref]
+        if scan3 and scan3.class and not scan3.class.isBuff then
+            _ok("Clear override restores auto-classification for " .. testResref)
+        else
+            _nok("Clear override did not restore auto-classification for " .. testResref)
+        end
+    else
+        _warning("No non-buff castable spell found for include test")
+    end
+
+    -- Test 3: Exclude override changes classification
+    local buffResref = nil
+    for resref, scan in pairs(castable) do
+        if scan.class and scan.class.isBuff and not scan.class.overridden then
+            buffResref = resref
+            break
+        end
+    end
+
+    if buffResref then
+        BfBot.Persist.SetOverride(sprite, buffResref, -1)
+        BfBot._cache.class[buffResref] = nil
+        BfBot.Scan.Invalidate(sprite)
+        local castable4 = BfBot.Scan.GetCastableSpells(sprite)
+        local scan4 = castable4[buffResref]
+        if scan4 and scan4.class and not scan4.class.isBuff then
+            _ok("Exclude override: " .. buffResref .. " no longer classified as buff")
+        else
+            _nok("Exclude override failed for " .. buffResref)
+        end
+
+        -- Cleanup
+        BfBot.Persist.SetOverride(sprite, buffResref, nil)
+        BfBot._cache.class[buffResref] = nil
+        BfBot.Scan.Invalidate(sprite)
+    else
+        _warning("No buff castable spell found for exclude test")
+    end
+
+    -- Test 4: Override persists in config
+    BfBot.Persist.SetOverride(sprite, "TESTSPELL", 1)
+    local ovr = BfBot.Persist.GetOverrides(sprite)
+    if ovr and ovr["TESTSPELL"] == 1 then
+        _ok("Override stored in config.ovr")
+    else
+        _nok("Override not found in config.ovr")
+    end
+    BfBot.Persist.SetOverride(sprite, "TESTSPELL", nil)
+
+    return _summary("Override")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -681,6 +781,10 @@ function BfBot.Test.RunAll()
     local qcOk = BfBot.Test.QuickCast()
     P("")
 
+    -- Phase 6: Overrides
+    local ovrOk = BfBot.Test.Override()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -688,11 +792,12 @@ function BfBot.Test.RunAll()
     P("  Party scan: " .. (scanOk and "PASS" or "FAIL"))
     P("  Persistence: " .. (persistOk and "PASS" or "FAIL"))
     P("  Quick Cast: " .. (qcOk and "PASS" or "FAIL"))
+    P("  Overrides: " .. (ovrOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk
 end
 
 -- ============================================================
