@@ -21,7 +21,9 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Auto-Merge New Spells** (`BfBot.UI._Refresh`) — New buff spells gained from leveling up or memorization changes are automatically merged into existing presets (disabled, at bottom of list) when the panel refreshes. No longer requires starting a new game to see new spells.
 
-Next: Post-MVP features — manual spell override UI (GitHub #1), config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6), per-level duration scaling (#7). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Manual Spell Override** (`BfBot.UI` + `BfBot.Persist`) — "Add Spell" picker sub-menu for including non-buff spells, "Remove" button for excluding false positives. Classification-level overrides stored per-character in `config.ovr`, synced to classifier on load. Schema v5.
+
+Next: Post-MVP features — config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6), per-level duration scaling (#7). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -35,11 +37,11 @@ Next: Post-MVP features — manual spell override UI (GitHub #1), config export/
 - **Per-character config**: stored in `EEex_GetUDAux(sprite)["BB"]` via marshal handlers. Survives save/load automatically.
 - **Marshal handler name**: `"BuffBot"` — registered via `EEex_Sprite_AddMarshalHandlers` in `BfBot.Persist.Init()` (called at M_ load time)
 - **CRITICAL: No booleans in config** — EEex marshal only supports number/string/table values. Booleans cause `EEex_Error()` and crash saves. All boolean-like fields use `1`/`0`.
-- **Config schema** (v4): `{v=4, ap=1, presets={[1]={name,cat,qc=0,spells={[resref]={on,tgt,pri}}}, [2]={...}}, opts={skip=1}}` — `tgt` can be a string (`"s"`, `"p"`, `"1"`-`"6"`) or a table of slot strings (`{"1","3","5"}`) for multi-target assignment. `qc` is per-preset Quick Cast mode (0=off, 1=long only, 2=all).
+- **Config schema** (v5): `{v=5, ap=1, presets={[1]={name,cat,qc=0,spells={[resref]={on,tgt,pri}}}, [2]={...}}, opts={skip=1}, ovr={[resref]=1|-1}}` — `tgt` can be a string (`"s"`, `"p"`, `"1"`-`"6"`) or a table of slot strings (`{"1","3","5"}`) for multi-target assignment. `qc` is per-preset Quick Cast mode (0=off, 1=long only, 2=all). `ovr` stores classification overrides (1=include, -1=exclude).
 - **Auto-population**: `_CreateDefaultConfig` scans castable spells, sorts by duration, puts ALL buff spells into BOTH default presets. Preset 1 ("Long Buffs") has long/permanent enabled + rest disabled; Preset 2 ("Short Buffs") has short enabled + rest disabled. Enabled spells get low priorities (cast first), disabled get high. Instant spells included but disabled in both.
 - **Queue building**: `BuildQueueFromPreset(idx)` walks all party members, filters to enabled+castable spells, maps targets (`"s"->"self"`, `"p"->"all"`, `"N"->tonumber(N)`, table→one entry per slot), returns queue for `BfBot.Exec.Start()`
 - **INI preferences**: cross-save global settings in `baldur.ini` section `[BuffBot]` via `Infinity_GetINIValue`/`Infinity_SetINIValue`
-- **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`, `GetQuickCast`, `SetQuickCast`, `SetQuickCastAll`
+- **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`, `GetQuickCast`, `SetQuickCast`, `SetQuickCastAll`, `GetOverrides`, `SetOverride`
 - **End-to-end verified**: `BuildQueueFromPreset(1)` → 52 entries → `Exec.Start()` → 6 casters casting in parallel. Use `BfBot.Exec.Start(BfBot.Persist.BuildQueueFromPreset(1))` in console (avoid `local` — EEex console scopes each line separately).
 - **Preset management**: `RenamePreset(sprite, idx, name)`, `CreatePreset(sprite, name)` (up to 5, populates with union of all existing spells disabled), `DeletePreset(sprite, idx)` (refuses to delete last preset, returns 1 on success not boolean)
 - **Future Persist APIs (not built yet)**: `CopyPreset`, `RefreshPresets` — nice-to-have for preset management
@@ -78,6 +80,15 @@ Next: Post-MVP features — manual spell override UI (GitHub #1), config export/
 - **Party slot encoding**: Slot (0-5) baked into opcode 402 param1, preset (1-5) into param2. Stale if party rearranged — `RefreshAll()` on party change.
 - **Grant lifecycle**: Innates persist in save games (engine saves known spells) and opcode 171 re-grants after each use. No lazy grant on session start — innates are only granted when (1) config is first created (`_CreateDefaultConfig`), or (2) presets are created/deleted (`Refresh` flow). `_HasInnate(sprite, resref)` uses `EEex_Sprite_GetKnownInnateSpellsIterator` to check for duplicates.
 - **API**: `BfBot.Innate.Grant()`, `.Revoke(slot)`, `.Refresh(slot)`, `.RefreshAll()`, `._HasInnate(sprite, resref)`, `._EnsureSPLFiles()`, `._BuildSPL(slot, preset)`
+
+### Manual Spell Override Details (GitHub #1)
+- **Storage**: `config.ovr = {[resref] = 1 (include) | -1 (exclude)}` — per-character, persists in saves via schema v5
+- **Include flow**: "Add Spell" → picker shows non-buff castable spells → select → `SetOverride(resref, 1)` → cache invalidation → auto-merge adds to preset on next refresh (disabled, at bottom)
+- **Exclude flow**: "Remove" button → `SetOverride(resref, -1)` → removed from ALL presets → auto-merge skips excluded spells
+- **Visual**: Manually included spells shown with light blue name `{150, 200, 255}`
+- **Sync**: Overrides loaded from config into `BfBot.Class.SetOverride()` during marshal import
+- **UI**: BUFFBOT_SPELLPICKER sub-menu with scrollable list (icon, name, durCat, count), "Add to Buff List" + "Cancel" buttons
+- **API**: `BfBot.Persist.GetOverrides(sprite)`, `BfBot.Persist.SetOverride(sprite, resref, value)`
 
 ### Quick Cast / Cheat Mode Details
 - **Per-preset toggle**: `qc` field on each preset (0=off, 1=long only, 2=all). Set via `SetQuickCast(sprite, idx, val)` or `SetQuickCastAll(idx, val)` for party-wide.
