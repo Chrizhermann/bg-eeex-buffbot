@@ -21,7 +21,7 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Auto-Merge New Spells** (`BfBot.UI._Refresh`) — New buff spells gained from leveling up or memorization changes are automatically merged into existing presets (disabled, at bottom of list) when the panel refreshes. No longer requires starting a new game to see new spells.
 
-Next: Post-MVP features — manual spell override UI (GitHub #1), config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6), per-level duration scaling (#7). Also two bugs to fix: innate grant spam (#8 TBD) and spell display confusion after casting (#9 TBD). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+Next: Post-MVP features — manual spell override UI (GitHub #1), config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6), per-level duration scaling (#7). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -166,7 +166,7 @@ Two bugs in `_BuildCheatSPL()` caused Quick Cast to have no effect (or make cast
 
 ### Casting Behavior
 - **Normal mode (default)**: real-time sequential casting. Buffs are queued and cast in order, engine handles pacing (aura cooldown, casting speed, Improved Alacrity, etc.). Player can interrupt. Default order: longest duration first, or custom order set by player
-- **Quick Cast / cheat mode (implemented)**: per-preset 3-state toggle (Off/Long/All). Applies BFBTCH.SPL (opcode 188 Improved Alacrity + opcode 189 casting speed -10) via `ApplySpellRES`. When qc=1 (Long), only spells with durCat "permanent"/"long" (>=300s) get fast casting; short spells cast normally via two-pass queue splitting. When qc=2 (All), everything casts fast. Spell slots still consumed
+- **Quick Cast / cheat mode (implemented)**: per-preset 3-state toggle (Off/Long/All). Applies BFBTCH.SPL (opcode 188 Improved Alacrity + opcode 189 Casting Time Modifier param1=10) via `ReallyForceSpellRES`. When qc=1 (Long), only spells with durCat "permanent"/"long" (>=300s) get fast casting; short spells cast normally via two-pass queue splitting. When qc=2 (All), everything casts fast. Spell slots still consumed
 - Can trigger for all party members or a single character
 
 ### Buff Overlap
