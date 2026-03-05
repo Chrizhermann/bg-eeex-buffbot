@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 4
+BfBot.Persist._SCHEMA_VERSION = 5
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -48,6 +48,7 @@ function BfBot.Persist.GetDefaultConfig()
             [2] = { name = "Short Buffs", cat = "short", qc = 0, spells = {} },
         },
         opts = { skip = 1 },
+        ovr  = {},
     }
 end
 
@@ -223,6 +224,17 @@ function BfBot.Persist._ValidateConfig(config)
         if type(config.opts.skip) ~= "number" then config.opts.skip = 1 end
     end
 
+    -- Overrides (classification-level)
+    if type(config.ovr) ~= "table" then
+        config.ovr = {}
+    else
+        for resref, val in pairs(config.ovr) do
+            if val ~= 1 and val ~= -1 then
+                config.ovr[resref] = nil
+            end
+        end
+    end
+
     -- Safety: convert any stray booleans
     BfBot.Persist._SanitizeValues(config)
 
@@ -243,6 +255,9 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
         if config.opts then
             config.opts.cheat = nil
         end
+    end
+    if fromVersion < 5 then
+        if not config.ovr then config.ovr = {} end
     end
     config.v = BfBot.Persist._SCHEMA_VERSION
     return config
@@ -308,6 +323,17 @@ function BfBot.Persist._Import(sprite, data)
         end
 
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
+
+        -- Sync persisted overrides to classifier
+        if config.ovr then
+            for resref, val in pairs(config.ovr) do
+                if val == 1 then
+                    BfBot.Class.SetOverride(resref, true)
+                elseif val == -1 then
+                    BfBot.Class.SetOverride(resref, false)
+                end
+            end
+        end
     end)
     if not ok then
         BfBot._Warn("[Persist] Import failed: " .. tostring(err))
@@ -443,6 +469,31 @@ function BfBot.Persist.SetQuickCastAll(presetIndex, value)
         if sprite then
             BfBot.Persist.SetQuickCast(sprite, presetIndex, value)
         end
+    end
+end
+
+-- ---- Override accessors ----
+
+--- Get all classification overrides for a character.
+function BfBot.Persist.GetOverrides(sprite)
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then return {} end
+    return config.ovr or {}
+end
+
+--- Set a classification override (1=include, -1=exclude, nil=clear).
+function BfBot.Persist.SetOverride(sprite, resref, value)
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then return end
+    if not config.ovr then config.ovr = {} end
+    config.ovr[resref] = value
+    -- Sync to classifier in-memory table
+    if value == 1 then
+        BfBot.Class.SetOverride(resref, true)
+    elseif value == -1 then
+        BfBot.Class.SetOverride(resref, false)
+    else
+        BfBot.Class.SetOverride(resref, nil)
     end
 end
 
