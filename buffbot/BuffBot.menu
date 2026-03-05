@@ -302,13 +302,41 @@ menu
 			}
 		}
 
-		area 350 148 520 280
+		area 350 148 520 250
 		action      "if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) end"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
 		var         "buffbot_selectedRow"
 		rowheight   36
 		scrollbar   "GUISCRC"
+	}
+
+	-- ======================================================
+	-- Spell Override buttons (Add non-buff / Remove false positive)
+	-- ======================================================
+
+	-- Add non-buff spell to buff list
+	button
+	{
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.OpenSpellPicker()"
+		text    "Add Spell"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 350 402 120 28
+	}
+
+	-- Remove selected spell from buff list (exclude override)
+	button
+	{
+		enabled "BfBot.UI._HasSelection()"
+		action  "BfBot.UI.ExcludeSelected()"
+		text    "Remove"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 476 402 120 28
 	}
 
 	-- ======================================================
@@ -652,5 +680,123 @@ menu
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 550 338 80 24
+	}
+}
+
+-- ============================================================
+-- Spell Picker (Add non-buff spells to buff list)
+-- ============================================================
+
+menu
+{
+	name    "BUFFBOT_SPELLPICKER"
+	ignoreesc
+
+	-- Dark overlay (click to close)
+	text
+	{
+		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 50
+		on escape
+	}
+
+	-- Panel background
+	label
+	{
+		area 380 100 400 380
+		rectangle 5
+		rectangle opacity 200
+	}
+
+	-- Title
+	label
+	{
+		text    "Add Spell to Buff List"
+		text style "title"
+		text align center center
+		area 380 105 400 25
+	}
+
+	-- Spell list
+	list
+	{
+		column
+		{
+			width 10
+			label
+			{
+				area 2 2 32 32
+				icon lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].icon or ''"
+				align center center
+			}
+		}
+
+		column
+		{
+			width 50
+			label
+			{
+				area 0 0 -1 34
+				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].name or ''"
+				text style "normal"
+				text align left center
+			}
+		}
+
+		column
+		{
+			width 25
+			label
+			{
+				area 0 0 -1 34
+				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].durCat or ''"
+				text style "normal"
+				text align center center
+			}
+		}
+
+		column
+		{
+			width 15
+			label
+			{
+				area 0 0 -1 34
+				text lua "buffbot_pickerSpells[rowNumber] and ('x' .. buffbot_pickerSpells[rowNumber].count) or ''"
+				text style "normal"
+				text align center center
+			}
+		}
+
+		area 390 135 360 290
+		enabled     "true"
+		table       "buffbot_pickerSpells"
+		var         "buffbot_pickerSelected"
+		rowheight   34
+		scrollbar   "GUISCRC"
+	}
+
+	-- Add button
+	button
+	{
+		enabled "BfBot.UI._PickerHasSelection()"
+		action  "BfBot.UI.AddPickedSpell()"
+		text    "Add to Buff List"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 390 430 180 28
+	}
+
+	-- Cancel button
+	button
+	{
+		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
+		text    "Cancel"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 580 430 100 28
 	}
 }
