@@ -72,6 +72,10 @@ buffbot_targetHeader = ""        -- header text for target picker (spell name + 
 -- Rename dialog state
 buffbot_renameInput = ""
 
+-- Spell picker state (for "Add Spell" sub-menu)
+buffbot_pickerSpells = {}
+buffbot_pickerSelected = 0
+
 -- ============================================================
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
@@ -219,7 +223,9 @@ function BfBot.UI._Refresh()
         if (spellCfg.pri or 0) > maxPri then maxPri = spellCfg.pri end
     end
     for resref, scan in pairs(castable) do
-        if not preset.spells[resref] and scan.class and scan.class.isBuff and scan.count > 0 then
+        local ovr = config.ovr and config.ovr[resref]
+        if not preset.spells[resref] and scan.class and scan.class.isBuff
+           and scan.count > 0 and ovr ~= -1 then
             maxPri = maxPri + 1
             local entry = BfBot.Persist._MakeDefaultSpellEntry(scan.class, 0)
             entry.pri = maxPri
@@ -254,6 +260,7 @@ function BfBot.UI._Refresh()
             tgt      = spellCfg.tgt or "p",
             castable = isCastable,
             pri      = spellCfg.pri or 999,
+            ovr      = (config.ovr and config.ovr[resref]) or 0,
         })
     end
 
@@ -586,6 +593,108 @@ function BfBot.UI.MoveSpellDown()
     buffbot_selectedRow = row + 1
 end
 
+-- ============================================================
+-- Spell Override (Add / Remove)
+-- ============================================================
+
+--- Build the picker list: non-buff castable spells not in current preset.
+function BfBot.UI._BuildPickerList()
+    buffbot_pickerSpells = {}
+    buffbot_pickerSelected = 0
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then return end
+    local preset = config.presets[BfBot.UI._presetIdx]
+    if not preset then return end
+
+    local castable = BfBot.Scan.GetCastableSpells(sprite)
+    for resref, scan in pairs(castable) do
+        -- Skip spells already in the preset
+        if preset.spells[resref] then goto nextSpell end
+        -- Skip spells with no classification
+        if not scan.class then goto nextSpell end
+        -- Skip spells already classified as buffs (auto-merge handles those)
+        if scan.class.isBuff then goto nextSpell end
+        -- Skip excluded spells
+        local ovr = config.ovr and config.ovr[resref]
+        if ovr == -1 then goto nextSpell end
+
+        table.insert(buffbot_pickerSpells, {
+            resref = resref,
+            name   = scan.name or resref,
+            icon   = scan.icon or "",
+            durCat = scan.class.durCat or "?",
+            count  = scan.count or 0,
+        })
+        ::nextSpell::
+    end
+    table.sort(buffbot_pickerSpells, function(a, b) return a.name < b.name end)
+end
+
+--- Open the spell picker sub-menu.
+function BfBot.UI.OpenSpellPicker()
+    BfBot.UI._BuildPickerList()
+    if #buffbot_pickerSpells == 0 then
+        Infinity_DisplayString("BuffBot: No additional spells to add")
+        return
+    end
+    Infinity_PushMenu("BUFFBOT_SPELLPICKER")
+end
+
+--- Add the selected spell from the picker (include override).
+function BfBot.UI.AddPickedSpell()
+    local entry = buffbot_pickerSpells[buffbot_pickerSelected]
+    if not entry then return end
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+
+    -- Set include override (classification-level)
+    BfBot.Persist.SetOverride(sprite, entry.resref, 1)
+
+    -- Invalidate caches so re-classification picks up the override
+    BfBot._cache.class[entry.resref] = nil
+    BfBot.Scan.Invalidate(sprite)
+
+    Infinity_PopMenu("BUFFBOT_SPELLPICKER")
+    BfBot.UI._Refresh()  -- auto-merge will pick up the newly-classified buff
+end
+
+--- Exclude the selected spell from the buff list.
+-- Sets exclude override, removes from ALL presets for this character.
+function BfBot.UI.ExcludeSelected()
+    if not BfBot.UI._HasSelection() then return end
+    local entry = buffbot_spellTable[buffbot_selectedRow]
+    if not entry then return end
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+
+    -- Set exclude override
+    BfBot.Persist.SetOverride(sprite, entry.resref, -1)
+
+    -- Remove from ALL presets
+    local config = BfBot.Persist.GetConfig(sprite)
+    if config and config.presets then
+        for _, preset in pairs(config.presets) do
+            if preset.spells then
+                preset.spells[entry.resref] = nil
+            end
+        end
+    end
+
+    -- Invalidate caches
+    BfBot._cache.class[entry.resref] = nil
+    BfBot.Scan.Invalidate(sprite)
+
+    buffbot_selectedRow = 0
+    BfBot.UI._Refresh()
+end
+
+--- Picker display helpers
+function BfBot.UI._PickerHasSelection()
+    return buffbot_pickerSelected > 0 and buffbot_pickerSelected <= #buffbot_pickerSpells
+end
+
 --- Can we create more presets? (fewer than 5 exist)
 function BfBot.UI._CanCreatePreset()
     return buffbot_isOpen and buffbot_presetCount < 5
@@ -614,12 +723,12 @@ function BfBot.UI._TargetBtnText()
     return "Target"
 end
 
---- Spell name color: grey for unavailable, white for normal.
+--- Spell name color: grey for unavailable, light blue for manual include, white for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if entry and entry.castable == 0 then
-        return {128, 128, 128}
-    end
+    if not entry then return {255, 255, 255} end
+    if entry.castable == 0 then return {128, 128, 128} end
+    if entry.ovr == 1 then return {150, 200, 255} end
     return {255, 255, 255}
 end
 
