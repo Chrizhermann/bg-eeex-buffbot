@@ -350,14 +350,11 @@ function BfBot.Test.ScanAll()
                     end
                 end
 
-                local durStr = ""
-                if entry.class then
-                    durStr = entry.class.durCat or ""
-                    if entry.class.duration and entry.class.duration > 0 then
-                        durStr = durStr .. "(" .. entry.class.duration .. "s)"
-                    elseif entry.class.duration == -1 then
-                        durStr = durStr .. "(perm)"
-                    end
+                local durStr = entry.durCat or ""
+                if entry.duration and entry.duration > 0 then
+                    durStr = durStr .. "(" .. entry.duration .. "s)"
+                elseif entry.duration == -1 then
+                    durStr = durStr .. "(perm)"
                 end
 
                 P(string.format("    L%d %s x%d %s %s %s %s%s",
@@ -449,8 +446,11 @@ function BfBot.Test.Classify(resref)
     P("  --- Result ---")
     P("  isBuff: " .. tostring(result.isBuff))
     P("  isAmbiguous: " .. tostring(result.isAmbiguous))
-    P("  duration: " .. tostring(result.duration) .. "s"
-        .. " (" .. tostring(result.durCat) .. ")")
+    -- Duration (computed from ability, not from classification result)
+    local testDur = BfBot.Class.GetDuration(header, ability)
+    local testDurCat = BfBot.Class.GetDurationCategory(testDur)
+    P("  duration: " .. tostring(testDur) .. "s"
+        .. " (" .. tostring(testDurCat) .. ")")
     P("  isAoE: " .. tostring(result.isAoE))
     P("  defaultTarget: " .. tostring(result.defaultTarget))
     if result.splstates and #result.splstates > 0 then
@@ -836,8 +836,8 @@ function BfBot.Test.BuildTestQueue()
                     spell = resref,
                     target = target,
                     name = data.name or resref,
-                    durCat = data.class.durCat or "?",
-                    duration = data.class.duration or 0,
+                    durCat = data.durCat or "?",
+                    duration = data.duration or 0,
                     level = data.level or 0,
                     count = data.count,
                 })
@@ -1319,7 +1319,7 @@ function BfBot.Test.Innate()
     -- Check SPL files on disk
     local splFound, splMissing = 0, 0
     for slot = 0, 5 do
-        for preset = 1, 5 do
+        for preset = 1, BfBot.MAX_PRESETS do
             local resref = string.format("BFBT%d%d", slot, preset)
             local path = "override/" .. resref .. ".SPL"
             local f = io.open(path, "rb")
@@ -1369,7 +1369,7 @@ function BfBot.Test.Innate()
             local config = BfBot.Persist.GetConfig(sprite)
             if config then
                 local presetCount = 0
-                for i = 1, 5 do
+                for i = 1, BfBot.MAX_PRESETS do
                     if config.presets[i] then presetCount = presetCount + 1 end
                 end
                 P(string.format("[BuffBot]   Config: %d presets, expected %d innates",
