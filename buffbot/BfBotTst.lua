@@ -759,7 +759,7 @@ function BfBot.Test.ExportImport()
 
     -- Test 1: Serializer round-trip
     local testTable = {v=5, presets={[1]={name="Test", spells={["ABC"]={on=1,tgt="s",pri=1}}}}}
-    local serialized = BfBot.Persist._Serialize(testTable, 0)
+    local serialized = BfBot.Persist._Serialize(testTable)
     if serialized and #serialized > 10 then
         _ok("Serializer produced output (" .. #serialized .. " chars)")
     else

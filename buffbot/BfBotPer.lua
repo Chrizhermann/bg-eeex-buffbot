@@ -508,7 +508,7 @@ BfBot.Persist._PRESETS_DIR = "override/bfbot_presets"
 -- @param indent  string: current indentation level (default "")
 -- @return string: Lua source code representing the value
 function BfBot.Persist._Serialize(val, indent)
-    indent = indent or ""
+    indent = (indent and type(indent) == "string") and indent or ""
     local vt = type(val)
 
     if vt == "number" then

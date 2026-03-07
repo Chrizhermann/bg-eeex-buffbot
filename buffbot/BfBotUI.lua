@@ -192,9 +192,11 @@ function BfBot.UI._Layout()
     local r6Y = r5Y + 32                -- Action buttons
     local r7Y = r6Y + 32                -- Status
 
-    -- Override buttons: Add Spell + Remove
+    -- Override buttons: Add Spell + Remove (left) + Export + Import (right)
     Infinity_SetArea("bbAdd", cx, r4Y, 120, btnH)
     Infinity_SetArea("bbRmv", cx + 126, r4Y, 120, btnH)
+    Infinity_SetArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
+    Infinity_SetArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
 
     -- Spell action buttons: Toggle, Target, Up, Down, Delete Preset
     Infinity_SetArea("bbTog", cx, r5Y, 120, btnH)
