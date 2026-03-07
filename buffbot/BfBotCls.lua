@@ -443,10 +443,18 @@ function BfBot.Class.GetDuration(header, ability)
         end
     end)
 
+    -- Prefer timed duration over permanent: if real gameplay effects have
+    -- timed durations, those represent the actual buff length. Only return
+    -- "permanent" if ALL gameplay effects are permanent (no timed effects).
+    -- Fixes spells like Vocalize where a minor permanent side effect (Cure
+    -- Intoxication) coexists with the real timed effect (Immunity to Silence).
+    if maxDuration > 0 then
+        return maxDuration, "timed"
+    end
     if hasPermanent then
         return -1, "permanent"
     end
-    return maxDuration, "timed"
+    return 0, "timed"
 end
 
 --- Categorize a duration into "long", "short", "instant", or "permanent".
