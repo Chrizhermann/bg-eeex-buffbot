@@ -76,6 +76,10 @@ buffbot_renameInput = ""
 buffbot_pickerSpells = {}
 buffbot_pickerSelected = 0
 
+-- Import picker state (for "Import Config" sub-menu)
+buffbot_importList = {}
+buffbot_importSelected = 0
+
 -- ============================================================
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
@@ -783,6 +787,71 @@ end
 --- Picker display helpers
 function BfBot.UI._PickerHasSelection()
     return buffbot_pickerSelected > 0 and buffbot_pickerSelected <= #buffbot_pickerSpells
+end
+
+-- ============================================================
+-- Config Export / Import
+-- ============================================================
+
+--- Export current character's config.
+function BfBot.UI.ExportConfig()
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+
+    local ok, result = BfBot.Persist.ExportConfig(sprite)
+    if ok then
+        Infinity_DisplayString("BuffBot: Exported config as '" .. result .. "'")
+    else
+        Infinity_DisplayString("BuffBot: Export failed — " .. tostring(result))
+    end
+end
+
+--- Build the import picker list from available files.
+function BfBot.UI._BuildImportList()
+    buffbot_importList = {}
+    buffbot_importSelected = 0
+    local exports = BfBot.Persist.ListExports()
+    for _, entry in ipairs(exports) do
+        table.insert(buffbot_importList, {
+            name = entry.name,
+            filename = entry.filename,
+        })
+    end
+end
+
+--- Open the import picker sub-menu.
+function BfBot.UI.OpenImportPicker()
+    BfBot.UI._BuildImportList()
+    if #buffbot_importList == 0 then
+        Infinity_DisplayString("BuffBot: No configs found in bfbot_presets/")
+        return
+    end
+    Infinity_PushMenu("BUFFBOT_IMPORT")
+end
+
+--- Import the selected config from the picker.
+function BfBot.UI.ImportSelected()
+    local entry = buffbot_importList[buffbot_importSelected]
+    if not entry then return end
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+
+    local ok, presets, skipped = BfBot.Persist.ImportConfig(sprite, entry.filename)
+    Infinity_PopMenu("BUFFBOT_IMPORT")
+
+    if ok then
+        Infinity_DisplayString("BuffBot: Imported '" .. entry.name .. "' ("
+            .. presets .. " presets, " .. skipped .. " spells skipped)")
+        BfBot.Scan.Invalidate(sprite)
+        BfBot.UI._Refresh()
+    else
+        Infinity_DisplayString("BuffBot: Import failed — " .. tostring(presets))
+    end
+end
+
+--- Import picker has a valid selection.
+function BfBot.UI._ImportHasSelection()
+    return buffbot_importSelected > 0 and buffbot_importSelected <= #buffbot_importList
 end
 
 --- Can we create more presets? (fewer than 5 exist)
