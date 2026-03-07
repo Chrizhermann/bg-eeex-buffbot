@@ -14,6 +14,7 @@ In-game configurable buff automation for Baldur's Gate: Enhanced Edition (BG:EE 
 - **Skip active buffs** — detects already-active buffs via SPLSTATE + effect list and skips them (configurable)
 - **Save game persistence** — config saved per-character in EEex save games via marshal handlers
 - **Manual spell override** — "Add Spell" picker to include non-buff spells, "Remove" to exclude false positives
+- **Config export/import** — export a character's full config to a file, import onto any character across saves or between players
 - **Mod-friendly** — works with SCS, Spell Revisions, kit mods, and other spell-adding mods automatically
 
 ## Requirements
@@ -70,6 +71,7 @@ BfBot.Test.Persist()        -- persistence tests
 BfBot.Test.Exec()           -- execution engine test
 BfBot.Test.QuickCast()      -- quick cast test
 BfBot.Test.Override()       -- manual override test
+BfBot.Test.ExportImport()   -- export/import test
 BfBot.UI.Toggle()           -- open/close config panel
 ```
 

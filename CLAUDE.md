@@ -27,7 +27,9 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Dynamic Panel Sizing** (`BfBot.UI._Layout`) — panel covers ~80% of screen, centered, computed via `Infinity_GetScreenSize()` + `Infinity_SetArea()`. All elements named for dynamic positioning.
 
-Next: Post-MVP features — config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Config Export/Import** (`BfBot.Persist` + `BfBot.UI`) — Export a character's full config (all presets + overrides) to `override/bfbot_presets/<CharName>.lua`. Import from any exported file via picker sub-menu. Spells not in the target character's spellbook silently dropped on import. Uses `io.open`/`io.popen`/`os.execute` for file I/O and directory listing (all verified working in EEex).
+
+Next: Post-MVP features — custom innate icons (#3), actionbar button polish (#4). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Test export/import: `BfBot.Test.ExportImport()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -45,11 +47,12 @@ Next: Post-MVP features — config export/import (#2), custom innate icons (#3),
 - **Auto-population**: `_CreateDefaultConfig` scans castable spells, sorts by duration, puts ALL buff spells into BOTH default presets. Preset 1 ("Long Buffs") has long/permanent enabled + rest disabled; Preset 2 ("Short Buffs") has short enabled + rest disabled. Enabled spells get low priorities (cast first), disabled get high. Instant spells included but disabled in both.
 - **Queue building**: `BuildQueueFromPreset(idx)` walks all party members, filters to enabled+castable spells, maps targets (`"s"->"self"`, `"p"->"all"`, `"N"->tonumber(N)`, table→one entry per slot), returns queue for `BfBot.Exec.Start()`
 - **INI preferences**: cross-save global settings in `baldur.ini` section `[BuffBot]` via `Infinity_GetINIValue`/`Infinity_SetINIValue`
-- **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`, `GetQuickCast`, `SetQuickCast`, `SetQuickCastAll`, `GetOverrides`, `SetOverride`
+- **API**: `GetConfig`, `SetConfig`, `GetPreset`, `GetActivePreset`, `SetActivePreset`, `SetSpellEnabled`, `SetSpellTarget`, `SetSpellPriority`, `GetSpellConfig`, `GetOpt`, `SetOpt`, `BuildQueueFromPreset`, `GetPref`, `SetPref`, `RenamePreset`, `CreatePreset`, `DeletePreset`, `GetQuickCast`, `SetQuickCast`, `SetQuickCastAll`, `GetOverrides`, `SetOverride`, `ExportConfig`, `ListExports`, `ImportConfig`
 - **End-to-end verified**: `BuildQueueFromPreset(1)` → 52 entries → `Exec.Start()` → 6 casters casting in parallel. Use `BfBot.Exec.Start(BfBot.Persist.BuildQueueFromPreset(1))` in console (avoid `local` — EEex console scopes each line separately).
 - **Preset management**: `RenamePreset(sprite, idx, name)`, `CreatePreset(sprite, name)` (up to 5, populates with union of all existing spells disabled), `DeletePreset(sprite, idx)` (refuses to delete last preset, returns 1 on success not boolean)
 - **Future Persist APIs (not built yet)**: `CopyPreset`, `RefreshPresets` — nice-to-have for preset management
 - **Save game scope**: BG:EE saves are NOT character-bound or playthrough-bound — just game state snapshots. Config is per-character per-save via UDAux, which covers the core use case.
+- **Export/Import**: `ExportConfig(sprite)` serializes full config to `override/bfbot_presets/<CharName>.lua`. `ListExports()` uses `io.popen('dir /b ...')` to enumerate available files. `ImportConfig(sprite, filename)` loads via `loadstring`, validates/migrates, filters spells not in target's spellbook, syncs overrides. Directory created by WeiDU installer (`MKDIR`) and lazily via `os.execute("mkdir ...")` on first export.
 
 ### Configuration UI Details
 - **Files**: `buffbot/BfBotUI.lua` (Lua logic, ~710 lines), `buffbot/BuffBot.menu` (.menu DSL definitions, ~655 lines)
@@ -104,15 +107,17 @@ Next: Post-MVP features — config export/import (#2), custom innate icons (#3),
 - **Innate passthrough**: `BFBOTGO` handler reads `GetQuickCast(sprite, presetIdx)` and passes to `Exec.Start(queue, qcMode)`.
 - **Design doc**: `docs/plans/2026-02-28-cheat-mode-design.md`
 
-### Future: Config Export/Import (post-MVP)
-Shareable preset templates need file-based storage outside save games:
-- `BfBot.Persist.ExportPreset(sprite, presetIndex, filename)` — write preset to file
-- `BfBot.Persist.ImportPreset(sprite, presetIndex, filename)` — load preset from file
-- Could support a "template library" of built-in presets (e.g., "Standard Prebuff", "Boss Fight")
-- Defer to post-MVP after config UI is working
+### Config Export/Import Details (GitHub #2)
+- **File format**: Full character config serialized as a Lua file in `override/bfbot_presets/`. Format: `BfBot._import = {v=5, ap=N, presets={...}, opts={...}, ovr={...}}`
+- **Export**: `ExportConfig(sprite)` → sanitizes character name for filename → `_Serialize()` recursive table serializer (handles number/string/table, converts booleans to 1/0, sorts keys) → writes to `override/bfbot_presets/<SafeName>.lua`. Overwrites silently on re-export.
+- **Import**: `ImportConfig(sprite, filename)` → `io.open` + `loadstring` → validates via `_ValidateConfig` + `_MigrateConfig` → filters spells not in target character's spellbook via `GetCastableSpells` → stores to UDAux → syncs overrides to classifier. Returns `true, presetCount, skippedCount` or `false, errorMsg`.
+- **Directory listing**: `ListExports()` uses `io.popen('dir /b "override\\bfbot_presets\\*.lua" 2>nul')` to enumerate available files. Returns `{name, filename}` array. No index file or manifest needed.
+- **Directory creation**: WeiDU `MKDIR` at install time + lazy `os.execute("mkdir ...")` on first export.
+- **UI**: Export/Import buttons on the config panel. Import opens BUFFBOT_IMPORT picker sub-menu (scrollable list of available configs, Import/Cancel buttons). Feedback via `Infinity_DisplayString`.
+- **Design doc**: `docs/plans/2026-03-08-config-export-import-design.md`
 
 ### Known Issue: Old Save Configs Missing Spells
-Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **To fix**: redeploy (`bash tools/deploy.sh`) and start a new game, or build a config migration that merges missing buff spells into existing presets (future task: merge missing spells in `GetConfig` or via schema version bump in `_MigrateConfig`).
+Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **Mitigated**: Auto-merge in `_Refresh()` adds missing buff spells (disabled, at bottom) when the panel opens, producing the same result as a fresh config.
 
 ### Classifier False Positive Reduction (IMPLEMENTED)
 Three generic heuristics added to reduce false positives (no hardcoded resref lists):
@@ -220,15 +225,16 @@ Two bugs in `_BuildCheatSPL()` caused Quick Cast to have no effect (or make cast
 - `buffbot/` — mod source files (Lua, .menu, .tp2, etc.)
 - `tools/` — helper scripts and utilities
 
-## Global Rules (auto-loaded in all sessions)
+## Domain Knowledge (on-demand skills)
 
-These files in `~/.claude/rules/` contain verified EEex/IE gotchas and patterns. They apply to any BG:EE mod project and are loaded automatically:
+EEex/IE domain knowledge lives in `~/.claude/skills/` as on-demand skills (not auto-loaded — invoked when relevant). Reusable across all BG modding projects:
 
-- `~/.claude/rules/eeex-api-quick-ref.md` — EEex Lua API patterns (sprites, spells, effects, persistence, actions, UI)
-- `~/.claude/rules/eeex-gotchas.md` — verified bugs and corrections (data types, API mismatches, opcode params, .menu UI quirks)
-- `~/.claude/rules/menu-parser-rules.md` — .menu file parser rules that cause crashes if violated (7 rules)
+- `eeex-api` — EEex Lua API (sprites, spells, resources, persistence, actions, UI, filesystem, gotchas)
+- `infinity-engine-spells` — SPL files, opcodes, buff classification, duration types, targeting, SPLSTATE
+- `menu-dsl` — .menu DSL format, parser rules, widget patterns, Lua bindings
+- `weidu-modding` — WeiDU .tp2 patterns, M_ loading, EVALUATE_BUFFER
 
-When discovering new gotchas or API corrections through in-game testing, update the relevant rules file so the knowledge persists across all sessions and projects.
+When discovering new gotchas or API corrections through in-game testing, update the relevant skill reference file in `~/.claude/skills/`.
 
 ## Key References
 
