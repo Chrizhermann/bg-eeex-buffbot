@@ -35,3 +35,6 @@ chitin.key
 
 # Local dev config (contains user-specific game path)
 tools/deploy.conf
+
+# Drafts (not for public repo)
+docs/forum-post-*.md
