@@ -7,8 +7,8 @@ In-game configurable buff automation for Baldur's Gate: Enhanced Edition (BG:EE 
 ## Features
 
 - **Dynamic spellbook scanning** — discovers buff spells from all sources (memorized, innate, HLAs, kit abilities) in real time
-- **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, target assignment, priority ordering
-- **Up to 5 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, etc.) with create/rename/delete
+- **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, duration display, target assignment, priority ordering
+- **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, etc.) with create/rename/delete
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for instant casting via Improved Alacrity
 - **F12 innate abilities** — per-preset innate in each character's special abilities, trigger buffing directly from gameplay
 - **Skip active buffs** — detects already-active buffs via SPLSTATE + effect list and skips them (configurable)
@@ -56,7 +56,7 @@ Copy all files from `buffbot/` to your game's `override/` directory. Innate abil
 ### Presets
 
 - Default presets auto-populate from scanned spells: long/permanent buffs enabled in preset 1, short buffs in preset 2
-- Create new presets for specific situations (up to 5 per character)
+- Create new presets for specific situations (up to 8 per character)
 - Each preset is independent — own spell list, targets, quick cast setting
 - Presets are shared across all party members (create/delete/rename applies to all)
 
