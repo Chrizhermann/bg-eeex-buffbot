@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/plans/2026-03-08-config-export-import.md",
+  "tasks": [
+    {"id": 23, "subject": "Task 1: Config serialization functions in BfBotPer.lua", "status": "pending"},
+    {"id": 24, "subject": "Task 2: UI functions for export and import in BfBotUI.lua", "status": "pending", "blockedBy": [23]},
+    {"id": 25, "subject": "Task 3: Menu layout — Export/Import buttons and BUFFBOT_IMPORT", "status": "pending", "blockedBy": [24]},
+    {"id": 26, "subject": "Task 4: WeiDU installer + deploy script — create presets directory", "status": "pending", "blockedBy": [23]},
+    {"id": 27, "subject": "Task 5: Tests for export/import", "status": "pending", "blockedBy": [23]},
+    {"id": 28, "subject": "Task 6: Documentation and deploy", "status": "pending", "blockedBy": [25, 26, 27]}
+  ],
+  "lastUpdated": "2026-03-08T00:00:00Z"
+}
