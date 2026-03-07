@@ -26,7 +26,7 @@ function BfBot.UI._ClampPresetIdx(config)
             BfBot.UI._presetIdx = config.ap
             return config.ap
         end
-        for i = 1, 5 do
+        for i = 1, BfBot.MAX_PRESETS do
             if config.presets[i] then
                 BfBot.UI._presetIdx = i
                 return i
@@ -130,6 +130,88 @@ function BfBot.UI._CloseActionbarBtn()
 end
 
 -- ============================================================
+-- Dynamic Layout (resize panel to ~80% of screen on open)
+-- ============================================================
+
+function BfBot.UI._Layout()
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
+    local pw = math.floor(sw * 0.8)
+    local ph = math.floor(sh * 0.8)
+    local px = math.floor((sw - pw) / 2)
+    local py = math.floor((sh - ph) / 2)
+    local pad = 10
+    local cx = px + pad
+    local cw = pw - 2 * pad
+
+    -- Panel background
+    Infinity_SetArea("bbBg", px, py, pw, ph)
+
+    -- Title
+    Infinity_SetArea("bbTitle", px, py + 5, pw, 30)
+
+    -- Character tabs (6 buttons, evenly spaced)
+    local charY = py + 40
+    local charH = 24
+    local charGap = 4
+    local charW = math.floor((cw - 5 * charGap) / 6)
+    for i = 0, 5 do
+        Infinity_SetArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
+    end
+
+    -- Preset tabs (up to MAX_PRESETS buttons + Rename 56px + New 50px)
+    local preY = py + 68
+    local preH = 24
+    local preGap = 3
+    local renW = 56
+    local newW = 50
+    local maxP = BfBot.MAX_PRESETS
+    local preAvailW = cw - renW - newW - 2 * preGap
+    local preW = math.floor((preAvailW - (maxP - 1) * preGap) / maxP)
+    for i = 1, maxP do
+        Infinity_SetArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
+    end
+    local renX = cx + maxP * (preW + preGap)
+    Infinity_SetArea("bbRen", renX, preY, renW, preH)
+    Infinity_SetArea("bbNew", renX + renW + preGap, preY, newW, preH)
+
+    -- Spell list (fills middle area)
+    local listY = py + 98
+    local footerH = 130
+    local listH = math.max(ph - 98 - footerH, 50)
+    Infinity_SetArea("bbList", cx, listY, cw, listH)
+
+    -- Bottom rows (positioned from panel bottom)
+    local btnH = 28
+    local r4Y = py + ph - footerH + 4   -- Override buttons
+    local r5Y = r4Y + 32                -- Spell action buttons
+    local r6Y = r5Y + 32                -- Action buttons
+    local r7Y = r6Y + 32                -- Status
+
+    -- Override buttons: Add Spell + Remove
+    Infinity_SetArea("bbAdd", cx, r4Y, 120, btnH)
+    Infinity_SetArea("bbRmv", cx + 126, r4Y, 120, btnH)
+
+    -- Spell action buttons: Toggle, Target, Up, Down, Delete Preset
+    Infinity_SetArea("bbTog", cx, r5Y, 120, btnH)
+    Infinity_SetArea("bbTgt", cx + 126, r5Y, 160, btnH)
+    Infinity_SetArea("bbUp", cx + 292, r5Y, 48, btnH)
+    Infinity_SetArea("bbDn", cx + 344, r5Y, 48, btnH)
+    Infinity_SetArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
+
+    -- Action buttons: Cast, Stop — left side; Quick Cast, Close — right side
+    local closeW = 80
+    local qcW = 180
+    Infinity_SetArea("bbCast", cx, r6Y, 180, btnH)
+    Infinity_SetArea("bbStop", cx + 186, r6Y, 80, btnH)
+    Infinity_SetArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
+    Infinity_SetArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
+
+    -- Status line
+    Infinity_SetArea("bbStatus", cx, r7Y, cw, 24)
+end
+
+-- ============================================================
 -- Panel Open/Close
 -- ============================================================
 
@@ -147,6 +229,7 @@ end
 
 function BfBot.UI._OnOpen()
     buffbot_isOpen = true
+    BfBot.UI._Layout()
     -- Default to first party member if current slot is empty
     if not EEex_Sprite_GetInPortrait(BfBot.UI._charSlot) then
         BfBot.UI._charSlot = 0
@@ -241,18 +324,25 @@ function BfBot.UI._Refresh()
         local icon = ""
         local count = 0
         local isCastable = 0
+        local dur = nil
+        local durCat = "instant"
 
         if scan then
             name = scan.name
             icon = scan.icon
             count = scan.count
             isCastable = (count > 0 and not scan.disabled) and 1 or 0
+            dur = scan.duration
+            durCat = scan.durCat
         end
 
         table.insert(rows, {
             resref   = resref,
             name     = name,
             icon     = icon,
+            dur      = dur,
+            durText  = BfBot.UI._FormatDuration(dur),
+            durCat   = durCat,
             count    = count,
             countText = count > 0 and ("x" .. count) or "--",
             on       = spellCfg.on or 0,
@@ -624,7 +714,7 @@ function BfBot.UI._BuildPickerList()
             resref = resref,
             name   = scan.name or resref,
             icon   = scan.icon or "",
-            durCat = scan.class.durCat or "?",
+            durCat = scan.durCat or "?",
             count  = scan.count or 0,
         })
         ::nextSpell::
@@ -697,7 +787,7 @@ end
 
 --- Can we create more presets? (fewer than 5 exist)
 function BfBot.UI._CanCreatePreset()
-    return buffbot_isOpen and buffbot_presetCount < 5
+    return buffbot_isOpen and buffbot_presetCount < BfBot.MAX_PRESETS
 end
 
 --- Can we delete the current preset? (more than 1 exists)
@@ -721,6 +811,26 @@ function BfBot.UI._TargetBtnText()
         if entry then return "Target: " .. (entry.targetText or "Party") end
     end
     return "Target"
+end
+
+--- Format a duration in seconds to a human-readable string.
+--- Returns mixed format: "1h 30m", "5m", "1m 30s", "45s", "Perm", "Inst", "?"
+function BfBot.UI._FormatDuration(seconds)
+    if seconds == nil then return "?" end
+    if seconds == -1 then return "Perm" end
+    if seconds == 0 then return "Inst" end
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = seconds % 60
+    if h > 0 then
+        if m > 0 then return h .. "h " .. m .. "m" end
+        return h .. "h"
+    end
+    if m > 0 then
+        if s > 0 then return m .. "m " .. s .. "s" end
+        return m .. "m"
+    end
+    return s .. "s"
 end
 
 --- Spell name color: grey for unavailable, light blue for manual include, white for normal.
@@ -822,7 +932,7 @@ function BfBot.UI._QuickCastTooltip()
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
     if not sprite then return "Normal casting speed" end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    if qc == 1 then return "Fast casting for buffs lasting 5+ turns (click to cycle)" end
-    if qc == 2 then return "Fast casting for ALL buffs — cheat (click to cycle)" end
-    return "Normal casting speed (click to cycle)"
+    if qc == 1 then return "Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle." end
+    if qc == 2 then return "Fast casting for ALL buffs regardless of duration (cheat). Click to cycle." end
+    return "Normal casting speed — spells respect aura cooldown. Click to cycle."
 end

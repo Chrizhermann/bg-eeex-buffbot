@@ -44,18 +44,20 @@ menu
 		on escape
 	}
 
-	-- Panel background (dark rectangle)
+	-- Panel background
 	label
 	{
+		name    "bbBg"
 		enabled "buffbot_isOpen"
 		area 340 50 540 510
 		rectangle 5
-		rectangle opacity 200
+		rectangle opacity 255
 	}
 
 	-- Title
 	label
 	{
+		name    "bbTitle"
 		enabled "buffbot_isOpen"
 		text lua "buffbot_title"
 		text style "title"
@@ -69,6 +71,7 @@ menu
 
 	button
 	{
+		name    "bbC0"
 		enabled "buffbot_charNames[1] ~= nil"
 		action  "BfBot.UI.SetChar(0)"
 		text lua "buffbot_charNames[1]"
@@ -81,6 +84,7 @@ menu
 
 	button
 	{
+		name    "bbC1"
 		enabled "buffbot_charNames[2] ~= nil"
 		action  "BfBot.UI.SetChar(1)"
 		text lua "buffbot_charNames[2]"
@@ -93,6 +97,7 @@ menu
 
 	button
 	{
+		name    "bbC2"
 		enabled "buffbot_charNames[3] ~= nil"
 		action  "BfBot.UI.SetChar(2)"
 		text lua "buffbot_charNames[3]"
@@ -105,6 +110,7 @@ menu
 
 	button
 	{
+		name    "bbC3"
 		enabled "buffbot_charNames[4] ~= nil"
 		action  "BfBot.UI.SetChar(3)"
 		text lua "buffbot_charNames[4]"
@@ -117,6 +123,7 @@ menu
 
 	button
 	{
+		name    "bbC4"
 		enabled "buffbot_charNames[5] ~= nil"
 		action  "BfBot.UI.SetChar(4)"
 		text lua "buffbot_charNames[5]"
@@ -129,6 +136,7 @@ menu
 
 	button
 	{
+		name    "bbC5"
 		enabled "buffbot_charNames[6] ~= nil"
 		action  "BfBot.UI.SetChar(5)"
 		text lua "buffbot_charNames[6]"
@@ -145,6 +153,7 @@ menu
 
 	button
 	{
+		name    "bbP1"
 		enabled "buffbot_presetNames[1] ~= nil"
 		action  "BfBot.UI.SetPreset(1)"
 		text lua "buffbot_presetNames[1]"
@@ -157,6 +166,7 @@ menu
 
 	button
 	{
+		name    "bbP2"
 		enabled "buffbot_presetNames[2] ~= nil"
 		action  "BfBot.UI.SetPreset(2)"
 		text lua "buffbot_presetNames[2]"
@@ -169,6 +179,7 @@ menu
 
 	button
 	{
+		name    "bbP3"
 		enabled "buffbot_presetNames[3] ~= nil"
 		action  "BfBot.UI.SetPreset(3)"
 		text lua "buffbot_presetNames[3]"
@@ -181,6 +192,7 @@ menu
 
 	button
 	{
+		name    "bbP4"
 		enabled "buffbot_presetNames[4] ~= nil"
 		action  "BfBot.UI.SetPreset(4)"
 		text lua "buffbot_presetNames[4]"
@@ -193,6 +205,7 @@ menu
 
 	button
 	{
+		name    "bbP5"
 		enabled "buffbot_presetNames[5] ~= nil"
 		action  "BfBot.UI.SetPreset(5)"
 		text lua "buffbot_presetNames[5]"
@@ -203,9 +216,49 @@ menu
 		area 674 118 78 24
 	}
 
+	button
+	{
+		name    "bbP6"
+		enabled "buffbot_presetNames[6] ~= nil"
+		action  "BfBot.UI.SetPreset(6)"
+		text lua "buffbot_presetNames[6]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(6) and 1 or 0"
+		scaleToClip
+		area 674 118 78 24
+	}
+
+	button
+	{
+		name    "bbP7"
+		enabled "buffbot_presetNames[7] ~= nil"
+		action  "BfBot.UI.SetPreset(7)"
+		text lua "buffbot_presetNames[7]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(7) and 1 or 0"
+		scaleToClip
+		area 674 118 78 24
+	}
+
+	button
+	{
+		name    "bbP8"
+		enabled "buffbot_presetNames[8] ~= nil"
+		action  "BfBot.UI.SetPreset(8)"
+		text lua "buffbot_presetNames[8]"
+		text style "button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPresetSelected(8) and 1 or 0"
+		scaleToClip
+		area 674 118 78 24
+	}
+
 	-- Rename preset button
 	button
 	{
+		name    "bbRen"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.OpenRename()"
 		text    "Rename"
@@ -218,6 +271,7 @@ menu
 	-- New preset button
 	button
 	{
+		name    "bbNew"
 		enabled "BfBot.UI._CanCreatePreset()"
 		action  "BfBot.UI.CreateNewPreset()"
 		text    "New"
@@ -265,7 +319,7 @@ menu
 		-- Column 3: Spell name
 		column
 		{
-			width 40
+			width 28
 			label
 			{
 				area 0 0 -1 36
@@ -276,7 +330,20 @@ menu
 			}
 		}
 
-		-- Column 4: Memorized count
+		-- Column 4: Duration
+		column
+		{
+			width 12
+			label
+			{
+				area 0 0 -1 36
+				text lua "buffbot_spellTable[rowNumber] and buffbot_spellTable[rowNumber].durText or ''"
+				text style "normal"
+				text align center center
+			}
+		}
+
+		-- Column 5: Memorized count
 		column
 		{
 			width 12
@@ -289,7 +356,7 @@ menu
 			}
 		}
 
-		-- Column 5: Target display
+		-- Column 6: Target display
 		column
 		{
 			width 32
@@ -303,6 +370,7 @@ menu
 		}
 
 		area 350 148 520 250
+		name    "bbList"
 		action      "if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) end"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
@@ -318,6 +386,7 @@ menu
 	-- Add non-buff spell to buff list
 	button
 	{
+		name    "bbAdd"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.OpenSpellPicker()"
 		text    "Add Spell"
@@ -330,6 +399,7 @@ menu
 	-- Remove selected spell from buff list (exclude override)
 	button
 	{
+		name    "bbRmv"
 		enabled "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ExcludeSelected()"
 		text    "Remove"
@@ -346,6 +416,7 @@ menu
 	-- Toggle enable/disable for selected spell
 	button
 	{
+		name    "bbTog"
 		enabled "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ToggleSelected()"
 		text lua "BfBot.UI._ToggleBtnText()"
@@ -358,6 +429,7 @@ menu
 	-- Change target for selected spell
 	button
 	{
+		name    "bbTgt"
 		enabled "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		text lua "BfBot.UI._TargetBtnText()"
@@ -370,6 +442,7 @@ menu
 	-- Move selected spell up in cast order
 	button
 	{
+		name    "bbUp"
 		enabled "BfBot.UI._CanMoveUp()"
 		action  "BfBot.UI.MoveSpellUp()"
 		text    "Up"
@@ -382,6 +455,7 @@ menu
 	-- Move selected spell down in cast order
 	button
 	{
+		name    "bbDn"
 		enabled "BfBot.UI._CanMoveDown()"
 		action  "BfBot.UI.MoveSpellDown()"
 		text    "Down"
@@ -394,6 +468,7 @@ menu
 	-- Delete current preset
 	button
 	{
+		name    "bbDel"
 		enabled "BfBot.UI._CanDeletePreset()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text    "Delete Preset"
@@ -410,6 +485,7 @@ menu
 	-- Cast button
 	button
 	{
+		name    "bbCast"
 		enabled "buffbot_isOpen"
 		clickable lua "BfBot.UI._CanCast()"
 		action  "BfBot.UI.Cast()"
@@ -423,6 +499,7 @@ menu
 	-- Stop button (only visible when running)
 	button
 	{
+		name    "bbStop"
 		enabled "BfBot.UI._IsRunning()"
 		action  "BfBot.UI.Stop()"
 		text    "Stop"
@@ -435,12 +512,14 @@ menu
 	-- Quick Cast cycling button (text element: supports both action + text color lua)
 	text
 	{
+		name    "bbQC"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.CycleQuickCast()"
 		text lua "BfBot.UI._QuickCastLabel()"
 		text style "normal"
 		text color lua "BfBot.UI._QuickCastColor()"
 		text align center center
+		tooltip lua "BfBot.UI._QuickCastTooltip()"
 		rectangle 5
 		rectangle opacity 160
 		area 622 468 162 28
@@ -449,6 +528,7 @@ menu
 	-- Close button
 	button
 	{
+		name    "bbClose"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.Close()"
 		text    "Close"
@@ -461,6 +541,7 @@ menu
 	-- Status line
 	label
 	{
+		name    "bbStatus"
 		enabled "buffbot_isOpen"
 		text lua "buffbot_status"
 		text style "normal"
