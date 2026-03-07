@@ -87,8 +87,8 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
             table.insert(buffs, {
                 resref    = resref,
                 classData = data.class,
-                duration  = data.class.duration or 0,
-                durCat    = data.class.durCat or "short",
+                duration  = data.duration or 0,
+                durCat    = data.durCat or "short",
             })
         end
     end
@@ -151,7 +151,7 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
             if EEex_Sprite_GetInPortrait(s) == sprite then slot = s; break end
         end
         if slot then
-            for idx = 1, 5 do
+            for idx = 1, BfBot.MAX_PRESETS do
                 if config.presets[idx] then
                     local resref = string.format("BFBT%d%d", slot, idx)
                     EEex_Action_QueueResponseStringOnAIBase(
@@ -396,7 +396,7 @@ end
 function BfBot.Persist.SetActivePreset(sprite, presetIndex)
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
-    config.ap = math.max(1, math.min(5, presetIndex))
+    config.ap = math.max(1, math.min(BfBot.MAX_PRESETS, presetIndex))
 end
 
 -- ---- Spell config accessors ----
@@ -587,10 +587,12 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
 
         -- Append to queue (strip pri field — exec engine doesn't use it)
         for _, e in ipairs(entries) do
+            local scanData = castable[e.spell]
             table.insert(queue, {
                 caster = e.caster,
                 spell  = e.spell,
                 target = e.target,
+                durCat = scanData and scanData.durCat or "short",
             })
         end
 
@@ -636,7 +638,7 @@ function BfBot.Persist.CreatePreset(sprite, name)
 
     -- Find next available slot (max 5)
     local idx = nil
-    for i = 1, 5 do
+    for i = 1, BfBot.MAX_PRESETS do
         if not config.presets[i] then
             idx = i
             break
@@ -692,7 +694,7 @@ function BfBot.Persist.DeletePreset(sprite, presetIndex)
 
     -- Count existing presets
     local count = 0
-    for i = 1, 5 do
+    for i = 1, BfBot.MAX_PRESETS do
         if config.presets[i] then count = count + 1 end
     end
     if count <= 1 then return nil end  -- can't delete last preset
@@ -702,7 +704,7 @@ function BfBot.Persist.DeletePreset(sprite, presetIndex)
 
     -- Always validate config.ap points to an existing preset
     if not config.presets[config.ap] then
-        for i = 1, 5 do
+        for i = 1, BfBot.MAX_PRESETS do
             if config.presets[i] then
                 config.ap = i
                 break
@@ -722,7 +724,7 @@ end
 function BfBot.Persist.CreatePresetAll(name)
     -- Find first index free across all party members
     local idx = nil
-    for i = 1, 5 do
+    for i = 1, BfBot.MAX_PRESETS do
         local allFree = true
         for slot = 0, 5 do
             local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -836,10 +838,12 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     -- Strip pri field — exec engine doesn't use it
     local queue = {}
     for _, e in ipairs(entries) do
+        local scanData = castable[e.spell]
         table.insert(queue, {
             caster = e.caster,
             spell  = e.spell,
             target = e.target,
+            durCat = scanData and scanData.durCat or "short",
         })
     end
 
