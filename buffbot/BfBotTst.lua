@@ -1146,16 +1146,16 @@ function BfBot.Test.Persist()
     if not testResref then
         -- Use a synthetic resref
         testResref = "ZZTST01"
-        BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, true)
+        BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, 1)
     end
 
     -- Enable/disable round-trip
-    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, true)
+    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, 1)
     local entry = BfBot.Persist.GetSpellConfig(sprite, 1, testResref)
     if entry and entry.on == 1 then _ok("SetSpellEnabled(true) -> on=1")
     else _nok("SetSpellEnabled(true) failed: on=" .. tostring(entry and entry.on)) end
 
-    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, false)
+    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, 0)
     entry = BfBot.Persist.GetSpellConfig(sprite, 1, testResref)
     if entry and entry.on == 0 then _ok("SetSpellEnabled(false) -> on=0")
     else _nok("SetSpellEnabled(false) failed: on=" .. tostring(entry and entry.on)) end
@@ -1192,7 +1192,7 @@ function BfBot.Test.Persist()
     -- Clamp test
     BfBot.Persist.SetActivePreset(sprite, 99)
     _, idx = BfBot.Persist.GetActivePreset(sprite)
-    if idx == 5 then _ok("SetActivePreset(99) clamped to 5")
+    if idx == BfBot.MAX_PRESETS then _ok("SetActivePreset(99) clamped to " .. BfBot.MAX_PRESETS)
     else _nok("Clamp failed: idx=" .. tostring(idx)) end
 
     BfBot.Persist.SetActivePreset(sprite, 0)
@@ -1247,7 +1247,7 @@ function BfBot.Test.Persist()
     P("  [8] Marshal export/import round-trip")
 
     -- Re-enable the test spell
-    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, true)
+    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, 1)
     BfBot.Persist.SetSpellPriority(sprite, 1, testResref, 7)
 
     do
@@ -1283,7 +1283,7 @@ function BfBot.Test.Persist()
     P("  [9] BuildQueueFromPreset")
 
     -- Ensure we have enabled spells for the queue builder
-    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, true)
+    BfBot.Persist.SetSpellEnabled(sprite, 1, testResref, 1)
 
     local queue, qErr = BfBot.Persist.BuildQueueFromPreset(1)
     if queue then
@@ -1530,7 +1530,7 @@ function BfBot.Test.QuickCast()
         opts = { skip = 1, cheat = 1 },
     }
     local migrated = BfBot.Persist._MigrateConfig(oldConfig, 3)
-    if migrated.v == 4 then _ok("Version bumped to 4")
+    if migrated.v == BfBot.Persist._SCHEMA_VERSION then _ok("Version bumped to " .. BfBot.Persist._SCHEMA_VERSION)
     else _nok("Version: " .. tostring(migrated.v)) end
 
     if migrated.presets[1].qc == 2 then _ok("Preset 1 qc=2 (from opts.cheat=1)")
