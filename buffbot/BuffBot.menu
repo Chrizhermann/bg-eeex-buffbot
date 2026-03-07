@@ -409,6 +409,32 @@ menu
 		area 476 402 120 28
 	}
 
+	-- Export current character's config
+	button
+	{
+		name    "bbExp"
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.ExportConfig()"
+		text    "Export"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 610 402 90 28
+	}
+
+	-- Import config from file
+	button
+	{
+		name    "bbImp"
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.OpenImportPicker()"
+		text    "Import"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 706 402 90 28
+	}
+
 	-- ======================================================
 	-- Selected spell actions (Toggle + Change Target)
 	-- ======================================================
@@ -879,5 +905,88 @@ menu
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 580 430 100 28
+	}
+}
+
+-- ============================================================
+-- Import Config Picker
+-- ============================================================
+
+menu
+{
+	name    "BUFFBOT_IMPORT"
+	ignoreesc
+
+	-- Dark overlay (click to close)
+	text
+	{
+		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 50
+		on escape
+	}
+
+	-- Panel background
+	label
+	{
+		area 420 150 320 300
+		rectangle 5
+		rectangle opacity 200
+	}
+
+	-- Title
+	label
+	{
+		text    "Import Config"
+		text style "title"
+		text align center center
+		area 420 155 320 25
+	}
+
+	-- Config list
+	list
+	{
+		column
+		{
+			width 100
+			label
+			{
+				area 0 0 -1 34
+				text lua "buffbot_importList[rowNumber] and buffbot_importList[rowNumber].name or ''"
+				text style "normal"
+				text align left center
+			}
+		}
+
+		area 430 185 280 200
+		enabled     "true"
+		table       "buffbot_importList"
+		var         "buffbot_importSelected"
+		rowheight   34
+		scrollbar   "GUISCRC"
+	}
+
+	-- Import button
+	button
+	{
+		enabled "BfBot.UI._ImportHasSelection()"
+		action  "BfBot.UI.ImportSelected()"
+		text    "Import"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 430 390 140 28
+	}
+
+	-- Cancel button
+	button
+	{
+		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
+		text    "Cancel"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 580 390 120 28
 	}
 }
