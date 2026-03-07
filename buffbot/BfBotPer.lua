@@ -497,6 +497,269 @@ function BfBot.Persist.SetOverride(sprite, resref, value)
     end
 end
 
+-- ---- Config export/import ----
+
+BfBot.Persist._PRESETS_DIR = "override/bfbot_presets"
+
+--- Recursively serialize a Lua value to a string representation.
+-- Supports number, string, table, nil. Sorts keys: integers first (ascending),
+-- then strings (alphabetical). Short arrays (<=10 items, all simple) inline.
+-- @param val     any value to serialize
+-- @param indent  string: current indentation level (default "")
+-- @return string: Lua source code representing the value
+function BfBot.Persist._Serialize(val, indent)
+    indent = indent or ""
+    local vt = type(val)
+
+    if vt == "number" then
+        -- Use integer format for whole numbers, float otherwise
+        if val == math.floor(val) and val >= -2147483648 and val <= 2147483647 then
+            return string.format("%d", val)
+        else
+            return string.format("%.17g", val)
+        end
+    elseif vt == "string" then
+        return string.format("%q", val)
+    elseif vt == "nil" then
+        return "nil"
+    elseif vt == "boolean" then
+        -- Shouldn't appear in config, but handle gracefully (convert to 1/0)
+        return val and "1" or "0"
+    elseif vt ~= "table" then
+        return "nil" -- unsupported type
+    end
+
+    -- Table serialization
+    -- Separate integer keys from string keys
+    local intKeys = {}
+    local strKeys = {}
+    for k, _ in pairs(val) do
+        if type(k) == "number" and k == math.floor(k) and k >= 1 then
+            table.insert(intKeys, k)
+        elseif type(k) == "string" then
+            table.insert(strKeys, k)
+        end
+    end
+    table.sort(intKeys)
+    table.sort(strKeys)
+
+    -- Check if this is a short simple array (for inline formatting)
+    local isSimpleArray = #strKeys == 0 and #intKeys <= 10
+    if isSimpleArray then
+        -- Verify contiguous keys starting at 1 and all values are simple
+        for i, k in ipairs(intKeys) do
+            if k ~= i then isSimpleArray = false; break end
+            local et = type(val[k])
+            if et ~= "number" and et ~= "string" then
+                isSimpleArray = false; break
+            end
+        end
+    end
+
+    if isSimpleArray and #intKeys > 0 then
+        -- Inline format: {1, 2, "foo"}
+        local parts = {}
+        for _, k in ipairs(intKeys) do
+            table.insert(parts, BfBot.Persist._Serialize(val[k]))
+        end
+        return "{" .. table.concat(parts, ", ") .. "}"
+    end
+
+    -- Multi-line format
+    local nextIndent = indent .. "    "
+    local lines = {}
+    table.insert(lines, "{")
+
+    -- Integer keys first
+    for _, k in ipairs(intKeys) do
+        local serialized = BfBot.Persist._Serialize(val[k], nextIndent)
+        table.insert(lines, nextIndent .. "[" .. k .. "] = " .. serialized .. ",")
+    end
+
+    -- String keys
+    for _, k in ipairs(strKeys) do
+        local serialized = BfBot.Persist._Serialize(val[k], nextIndent)
+        -- Use simple key format for valid identifiers, bracketed otherwise
+        if k:match("^[%a_][%w_]*$") then
+            table.insert(lines, nextIndent .. k .. " = " .. serialized .. ",")
+        else
+            table.insert(lines, nextIndent .. "[" .. string.format("%q", k) .. "] = " .. serialized .. ",")
+        end
+    end
+
+    table.insert(lines, indent .. "}")
+    return table.concat(lines, "\n")
+end
+
+--- Ensure the presets directory exists.
+function BfBot.Persist._EnsurePresetsDir()
+    os.execute('mkdir "' .. BfBot.Persist._PRESETS_DIR .. '" 2>nul')
+end
+
+--- Export a character's full config to a Lua file in the presets directory.
+-- @param sprite  character sprite
+-- @return true, safeName on success; false, errorMsg on failure
+function BfBot.Persist.ExportConfig(sprite)
+    if not sprite then return false, "no sprite" end
+
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then return false, "no config" end
+
+    -- Get character name and sanitize for filename
+    local rawName = BfBot._GetName(sprite)
+    if not rawName or rawName == "?" then rawName = "Unknown" end
+    local safeName = rawName:gsub("[^%w_]", "")
+    if safeName == "" then safeName = "Unknown" end
+
+    -- Prevent path traversal (extra safety — gsub already strips . and /)
+    safeName = safeName:gsub("%.%.", ""):gsub("[/\\]", "")
+
+    BfBot.Persist._EnsurePresetsDir()
+
+    local filepath = BfBot.Persist._PRESETS_DIR .. "/" .. safeName .. ".lua"
+    local f, err = io.open(filepath, "w")
+    if not f then
+        return false, "cannot open file: " .. tostring(err)
+    end
+
+    -- Write header comment
+    f:write("-- BuffBot config export: " .. rawName .. "\n")
+    f:write("-- Exported: " .. os.date("%Y-%m-%d %H:%M:%S") .. "\n")
+    f:write("-- Schema version: " .. tostring(config.v) .. "\n\n")
+
+    -- Serialize config
+    local serialized = BfBot.Persist._Serialize(config)
+    f:write("BfBot._import = " .. serialized .. "\n")
+
+    f:close()
+    return true, safeName
+end
+
+--- List available export files in the presets directory.
+-- @return array of {name=displayName, filename=fullFilename}
+function BfBot.Persist.ListExports()
+    local results = {}
+    local pipe = io.popen('dir /b "override\\bfbot_presets\\*.lua" 2>nul')
+    if not pipe then return results end
+
+    for line in pipe:lines() do
+        if line and line ~= "" then
+            -- Strip .lua extension for display name
+            local display = line:gsub("%.lua$", "")
+            table.insert(results, { name = display, filename = line })
+        end
+    end
+    pipe:close()
+    return results
+end
+
+--- Import a config from a file and apply it to a character.
+-- Filters out spells the character cannot cast. Syncs overrides to classifier.
+-- @param sprite    character sprite
+-- @param filename  filename (just the name, e.g. "Jaheira.lua")
+-- @return true, presetCount, skippedCount on success; false, errorMsg on failure
+function BfBot.Persist.ImportConfig(sprite, filename)
+    if not sprite then return false, "no sprite" end
+    if not filename then return false, "no filename" end
+
+    -- Sanitize filename to prevent path traversal
+    if filename:find("%.%.") or filename:find("[/\\]") then
+        return false, "invalid filename"
+    end
+
+    local filepath = BfBot.Persist._PRESETS_DIR .. "/" .. filename
+    local f, err = io.open(filepath, "r")
+    if not f then
+        return false, "cannot open file: " .. tostring(err)
+    end
+
+    local content = f:read("*a")
+    f:close()
+
+    if not content or content == "" then
+        return false, "empty file"
+    end
+
+    -- Execute the file content to populate BfBot._import
+    BfBot._import = nil
+    local chunk, loadErr = loadstring(content)
+    if not chunk then
+        BfBot._import = nil
+        return false, "parse error: " .. tostring(loadErr)
+    end
+
+    local execOk, execErr = pcall(chunk)
+    if not execOk then
+        BfBot._import = nil
+        return false, "exec error: " .. tostring(execErr)
+    end
+
+    local imported = BfBot._import
+    BfBot._import = nil  -- cleanup global immediately
+
+    if type(imported) ~= "table" then
+        return false, "file did not set BfBot._import to a table"
+    end
+
+    -- Validate and migrate
+    imported = BfBot.Persist._ValidateConfig(imported)
+    if imported.v < BfBot.Persist._SCHEMA_VERSION then
+        imported = BfBot.Persist._MigrateConfig(imported, imported.v)
+    end
+
+    -- Sanitize any stray booleans
+    BfBot.Persist._SanitizeValues(imported)
+
+    -- Get character's castable spells to filter imported config
+    local castable = nil
+    local scanOk, spells = pcall(BfBot.Scan.GetCastableSpells, sprite)
+    if scanOk and spells then
+        castable = spells
+    end
+
+    -- Filter spells in each preset: remove spells this character can't cast
+    local totalSkipped = 0
+    local presetCount = 0
+    for idx, preset in pairs(imported.presets) do
+        if type(preset) == "table" and preset.spells then
+            presetCount = presetCount + 1
+            if castable then
+                local toRemove = {}
+                for resref, _ in pairs(preset.spells) do
+                    if not castable[resref] then
+                        table.insert(toRemove, resref)
+                    end
+                end
+                for _, resref in ipairs(toRemove) do
+                    preset.spells[resref] = nil
+                    totalSkipped = totalSkipped + 1
+                end
+            end
+        end
+    end
+
+    -- Store the imported config
+    pcall(function()
+        EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = imported
+    end)
+
+    -- Sync overrides to classifier
+    if imported.ovr then
+        for resref, val in pairs(imported.ovr) do
+            if val == 1 then
+                BfBot.Class.SetOverride(resref, true)
+            elseif val == -1 then
+                BfBot.Class.SetOverride(resref, false)
+            end
+        end
+    end
+
+    -- Invalidate scan cache so UI picks up changes
+    pcall(BfBot.Scan.Invalidate, sprite)
+
+    return true, presetCount, totalSkipped
+end
+
 -- ---- Queue building ----
 
 --- Resolve a config target (tgt field) into one or more exec queue entries.
