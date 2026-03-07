@@ -145,11 +145,8 @@ bg-eeex-buffbot/
 │   └── patch_tlk.py      # TLK patcher for innate tooltips
 ├── docs/                 # Design docs and analysis
 ├── setup-buffbot.tp2     # WeiDU installer
-├── CLAUDE.md             # AI assistant project context
 └── README.md
 ```
-
-This repo includes a `CLAUDE.md` file — a project context document used by Claude Code for AI-assisted development. It does not affect the mod. Feel free to ignore it.
 
 ## Credits
 
