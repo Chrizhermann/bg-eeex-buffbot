@@ -159,7 +159,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         if qcMode == 2 then
             isCheat = true
         elseif qcMode == 1 then
-            local durCat = classResult and classResult.durCat or "short"
+            local durCat = entry.durCat or "short"
             isCheat = (durCat == "permanent" or durCat == "long")
         end
 
