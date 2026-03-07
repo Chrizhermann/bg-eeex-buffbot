@@ -84,7 +84,7 @@ Please report issues at [GitHub Issues](https://github.com/Chrizhermann/bg-eeex-
 
 - **Preset target inconsistency** — creating a new preset re-classifies spell targets from SPL data, which may differ from user overrides in existing presets
 - **Old save configs** — saves created before v0.1.0 may have incomplete preset configs (each preset only has its category's spells). Start a new game or manually enable missing spells
-- **Spell Revisions Barkskin** — classified as ambiguous (SR delivers AC via sub-spell). Manual enable in config works
+- **Spell Revisions sub-spell pattern** — some SR spells (Barkskin, Dispelling Screen) deliver effects via sub-spells (opcode 146), so the classifier may show them as ambiguous and duration as "Inst". Use "Add Spell" to manually include them
 - **Innate icon** — placeholder (Stoneskin icon). Custom BAM planned
 
 ## Developer Setup
