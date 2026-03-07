@@ -23,9 +23,12 @@ STRINGS = [
     "BuffBot 3",
     "BuffBot 4",
     "BuffBot 5",
+    "BuffBot 6",
+    "BuffBot 7",
+    "BuffBot 8",
 ]
 
-MARKER = "BuffBot 1"  # check last entries for this to detect prior patching
+MARKER = "BuffBot 8"  # check last entries for the LAST string to detect full patching
 
 HEADER_SIZE = 18
 ENTRY_SIZE = 26
@@ -65,12 +68,12 @@ def is_already_patched(data, str_count, str_data_offset):
 
 
 def find_existing_base_strref(data, str_count, str_data_offset):
-    """If already patched, find the strref of the first BuffBot entry."""
-    for i in range(str_count - 10, str_count):
+    """If already patched, find the strref of 'BuffBot 1' (first entry)."""
+    for i in range(str_count - 20, str_count):
         if i < 0:
             continue
         text = read_entry(data, i, str_data_offset)
-        if text == MARKER:
+        if text == "BuffBot 1":
             return i
     return None
 

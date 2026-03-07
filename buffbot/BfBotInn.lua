@@ -36,7 +36,7 @@ local function _splPad(n) return string.rep("\0", n) end
 
 --- Build a minimal SPL binary for a BuffBot innate ability.
 -- @param slot number: party slot (0-5), baked into opcode 402 param1
--- @param preset number: preset index (1-5), baked into opcode 402 param2
+-- @param preset number: preset index (1-8), baked into opcode 402 param2
 -- @return string: raw SPL binary data (250 bytes)
 function BfBot.Innate._BuildSPL(slot, preset)
     local selfRef = string.format("BFBT%d%d", slot, preset)
@@ -329,7 +329,7 @@ function BfBot.Innate._BuildCheatRemoverSPL()
     return header .. ability .. feat321
 end
 
---- Write all 30 SPL files to the override folder (always overwrites).
+--- Write all SPL files to the override folder (always overwrites).
 -- Called once at mod init time (before menus load).
 -- SPL version tag lets us detect when binary format changes.
 BfBot.Innate._SPL_VERSION = 3  -- bump this when _BuildSPL format changes
@@ -337,7 +337,7 @@ BfBot.Innate._SPL_VERSION = 3  -- bump this when _BuildSPL format changes
 function BfBot.Innate._EnsureSPLFiles()
     local count = 0
     for slot = 0, 5 do
-        for preset = 1, 5 do
+        for preset = 1, BfBot.MAX_PRESETS do
             local resref = string.format("BFBT%d%d", slot, preset)
             local path = "override/" .. resref .. ".SPL"
             local data = BfBot.Innate._BuildSPL(slot, preset)
@@ -394,7 +394,7 @@ function BfBot.Innate.Grant()
         if sprite then
             local config = BfBot.Persist.GetConfig(sprite)
             if config then
-                for idx = 1, 5 do
+                for idx = 1, BfBot.MAX_PRESETS do
                     if config.presets[idx] then
                         local resref = string.format("BFBT%d%d", slot, idx)
                         if not BfBot.Innate._HasInnate(sprite, resref) then
@@ -414,7 +414,7 @@ end
 function BfBot.Innate.Revoke(slot)
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
-    for idx = 1, 5 do
+    for idx = 1, BfBot.MAX_PRESETS do
         local resref = string.format("BFBT%d%d", slot, idx)
         EEex_Action_QueueResponseStringOnAIBase(
             'RemoveSpellRES("' .. resref .. '")', sprite)
@@ -428,7 +428,7 @@ function BfBot.Innate.Refresh(slot)
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
-    for idx = 1, 5 do
+    for idx = 1, BfBot.MAX_PRESETS do
         if config.presets[idx] then
             local resref = string.format("BFBT%d%d", slot, idx)
             EEex_Action_QueueResponseStringOnAIBase(

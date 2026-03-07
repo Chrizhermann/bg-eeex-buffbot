@@ -7,6 +7,7 @@
 -- Root namespace
 BfBot = BfBot or {}
 BfBot.VERSION = "0.3.0-dev"
+BfBot.MAX_PRESETS = 8
 
 -- ============================================================
 -- Logging
