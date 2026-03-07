@@ -51,6 +51,14 @@ local function _buildSpellEntry(sprite, resref, count, icon, nameRef, disabled, 
         end
     end
 
+    -- Compute duration from ability (per caster level, not from classification cache)
+    local duration = 0
+    local durCat = "instant"
+    if header and ability then
+        duration = BfBot.Class.GetDuration(header, ability)
+        durCat = BfBot.Class.GetDurationCategory(duration)
+    end
+
     return {
         resref = resref,
         name = name,
@@ -58,6 +66,8 @@ local function _buildSpellEntry(sprite, resref, count, icon, nameRef, disabled, 
         count = count or 0,
         level = header and header.spellLevel or 0,
         spellType = spellType,
+        duration = duration,
+        durCat = durCat,
         disabled = (disabled and disabled ~= 0) or false,
         class = classResult,
     }

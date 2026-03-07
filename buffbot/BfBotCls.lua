@@ -533,9 +533,7 @@ function BfBot.Class.Classify(resref, header, ability)
         result.noSubstance = false
         result.friendlyFlag = false
 
-        -- Still compute duration, AoE, defaultTarget (useful regardless)
-        result.duration, _ = BfBot.Class.GetDuration(header, ability)
-        result.durCat = BfBot.Class.GetDurationCategory(result.duration)
+        -- Duration computed per-sprite in scan entry, not here (classification is resref-level)
         result.isAoE = BfBot.Class.IsAoE(ability, false)
         result.defaultTarget = BfBot.Class.GetDefaultTarget(ability, result.isAoE)
 
@@ -591,9 +589,7 @@ function BfBot.Class.Classify(resref, header, ability)
         result.noSubstance = true
     end
 
-    -- Duration
-    result.duration, _ = BfBot.Class.GetDuration(header, ability)
-    result.durCat = BfBot.Class.GetDurationCategory(result.duration)
+    -- Duration computed per-sprite in scan entry, not here (classification is resref-level)
 
     -- AoE
     result.isAoE = BfBot.Class.IsAoE(ability, opcodeExtras.fbAoE)
