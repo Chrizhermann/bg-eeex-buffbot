@@ -744,6 +744,114 @@ function BfBot.Test.Override()
 end
 
 -- ============================================================
+-- BfBot.Test.ExportImport — Config export/import tests
+-- ============================================================
+
+function BfBot.Test.ExportImport()
+    P("=== ExportImport: Config file export/import ===")
+    _reset()
+
+    local sprite0 = EEex_Sprite_GetInPortrait(0)
+    if not sprite0 then
+        _nok("No sprite in slot 0")
+        return _summary("ExportImport")
+    end
+
+    -- Test 1: Serializer round-trip
+    local testTable = {v=5, presets={[1]={name="Test", spells={["ABC"]={on=1,tgt="s",pri=1}}}}}
+    local serialized = BfBot.Persist._Serialize(testTable, 0)
+    if serialized and #serialized > 10 then
+        _ok("Serializer produced output (" .. #serialized .. " chars)")
+    else
+        _nok("Serializer failed")
+        return _summary("ExportImport")
+    end
+
+    -- Verify it parses back
+    local fn = loadstring("BfBot._import = " .. serialized)
+    if fn then
+        BfBot._import = nil
+        pcall(fn)
+        if BfBot._import and BfBot._import.v == 5 then
+            _ok("Serialized output parses back correctly")
+        else
+            _nok("Parsed data incorrect")
+        end
+        BfBot._import = nil
+    else
+        _nok("Serialized output doesn't parse")
+    end
+
+    -- Test 2: Export writes a file
+    local exportOk, exportName = BfBot.Persist.ExportConfig(sprite0)
+    if exportOk then
+        _ok("ExportConfig succeeded: " .. tostring(exportName))
+    else
+        _nok("ExportConfig failed: " .. tostring(exportName))
+        return _summary("ExportImport")
+    end
+
+    -- Test 3: ListExports finds the file
+    local exports = BfBot.Persist.ListExports()
+    local found = false
+    for _, e in ipairs(exports) do
+        if e.name == exportName then found = true; break end
+    end
+    if found then
+        _ok("ListExports found '" .. exportName .. "'")
+    else
+        _nok("ListExports didn't find '" .. exportName .. "' (found " .. #exports .. " files)")
+    end
+
+    -- Test 4: Import onto another character (or same if only 1 party member)
+    local targetSlot = 0
+    for s = 1, 5 do
+        if EEex_Sprite_GetInPortrait(s) then targetSlot = s; break end
+    end
+    local targetSprite = EEex_Sprite_GetInPortrait(targetSlot)
+    if targetSprite then
+        local importOk, presetCount, skipped = BfBot.Persist.ImportConfig(
+            targetSprite, exportName .. ".lua")
+        if importOk then
+            _ok("ImportConfig succeeded: " .. presetCount .. " presets, " .. skipped .. " spells skipped")
+
+            -- Verify config was applied
+            local config = BfBot.Persist.GetConfig(targetSprite)
+            if config and config.presets then
+                local pCount = 0
+                for _ in pairs(config.presets) do pCount = pCount + 1 end
+                if pCount == presetCount then
+                    _ok("Imported config has correct preset count")
+                else
+                    _nok("Preset count mismatch: got " .. pCount .. " expected " .. presetCount)
+                end
+            else
+                _nok("Config nil after import")
+            end
+        else
+            _nok("ImportConfig failed: " .. tostring(presetCount))
+        end
+    else
+        _warning("No second party member for cross-character import test")
+    end
+
+    -- Test 5: Import non-existent file
+    local badOk, badErr = BfBot.Persist.ImportConfig(sprite0, "NONEXISTENT_FILE.lua")
+    if not badOk then
+        _ok("ImportConfig correctly rejects missing file")
+    else
+        _nok("ImportConfig should have failed for missing file")
+    end
+
+    -- Cleanup: remove test export file
+    pcall(function()
+        os.remove(BfBot.Persist._PRESETS_DIR .. "/" .. exportName .. ".lua")
+    end)
+
+    return _summary("ExportImport")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -785,6 +893,10 @@ function BfBot.Test.RunAll()
     local ovrOk = BfBot.Test.Override()
     P("")
 
+    -- Phase 7: Export/Import
+    local exportOk = BfBot.Test.ExportImport()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -793,11 +905,12 @@ function BfBot.Test.RunAll()
     P("  Persistence: " .. (persistOk and "PASS" or "FAIL"))
     P("  Quick Cast: " .. (qcOk and "PASS" or "FAIL"))
     P("  Overrides: " .. (ovrOk and "PASS" or "FAIL"))
+    P("  Export/Import: " .. (exportOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk
 end
 
 -- ============================================================
