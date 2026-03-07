@@ -32,6 +32,9 @@ COPY ~buffbot/BfBotUI.lua~   ~override~
 COPY ~buffbot/BfBotTst.lua~  ~override~
 COPY ~buffbot/BuffBot.menu~  ~override~
 
+// ---- Create presets directory for config export/import ----
+MKDIR ~override/bfbot_presets~
+
 // ---- Write base strref for Lua innate tooltip lookup ----
 <<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt
 %bfbot_strref_1%

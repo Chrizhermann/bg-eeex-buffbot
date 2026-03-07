@@ -35,6 +35,9 @@ for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPe
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 
+# Create presets directory for config export/import
+mkdir -p "$OVERRIDE_DIR/bfbot_presets"
+
 # Copy diagnostic tools (optional, for development)
 if [ -f "$SCRIPT_DIR/probe_clone.lua" ]; then
     cp "$SCRIPT_DIR/probe_clone.lua" "$OVERRIDE_DIR/probe_clone.lua"
