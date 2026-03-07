@@ -11,7 +11,7 @@ Alpha — core features working, UI functional, testing in progress:
 - **Spell Scanner + Buff Classifier** (`BfBot.Scan` + `BfBot.Class`) — 52 unit tests passing
 - **Execution Engine** (`BfBot.Exec`) — parallel per-caster casting via `EEex_LuaAction` chaining, with pre-flight skip checks (SPLSTATE + effect list fallback, dead caster/target, no slot). Tested with 6 casters casting 105 spells in parallel, skip detection confirmed working across multiple runs.
 - **Persistence** (`BfBot.Persist`) — per-character config saved in EEex save games via marshal handlers (`EEex_Sprite_AddMarshalHandlers`), global preferences via INI. Auto-populates presets from scanner, builds execution queues from saved presets. Preset create/delete/rename implemented.
-- **Configuration UI** (`BfBot.UI`) — in-game config panel with character tabs, dynamic preset tabs (up to 5), scrollable spell list with checkbox/icon/name/count/target columns, target picker sub-menu, preset create/delete/rename, cast/stop buttons. Actionbar button + F11 hotkey access. Panel renders and opens in-game; interaction testing in progress.
+- **Configuration UI** (`BfBot.UI`) — in-game config panel (~80% screen, dynamically sized) with character tabs, dynamic preset tabs (up to 8), scrollable spell list with checkbox/icon/name/duration/count/target columns, target picker sub-menu, preset create/delete/rename, cast/stop buttons. Actionbar button + F11 hotkey access. Panel renders and opens in-game; interaction testing in progress.
 
 - **Innate Abilities** (`BfBot.Innate`) — per-preset F12 innate abilities for each party member. Runtime SPL generation with opcode 402 (Invoke Lua) + opcode 171 (re-grant). TLK patching via `tools/patch_tlk.py` for tooltip names ("BuffBot 1"–"BuffBot 5"). Correct character/preset targeting via CGameEffect field access. Verified working in-game.
 
@@ -23,7 +23,11 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Manual Spell Override** (`BfBot.UI` + `BfBot.Persist`) — "Add Spell" picker sub-menu for including non-buff spells, "Remove" button for excluding false positives. Classification-level overrides stored per-character in `config.ovr`, synced to classifier on load. Schema v5.
 
-Next: Post-MVP features — config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6), per-level duration scaling (#7). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Duration Column** (`BfBot.UI` + `BfBot.Scan` + `BfBot.Class`) — spell list shows per-caster-level buff duration in mixed format (e.g. `1h 30m`, `5m`, `Perm`, `Inst`). Duration computed per-sprite in scan entry (not shared classification cache). `GetDuration()` prefers timed effects over permanent — fixes spells with permanent infrastructure opcodes (326 Apply Effects, 48 Cure Intoxication) coexisting with real timed buffs.
+
+- **Dynamic Panel Sizing** (`BfBot.UI._Layout`) — panel covers ~80% of screen, centered, computed via `Infinity_GetScreenSize()` + `Infinity_SetArea()`. All elements named for dynamic positioning.
+
+Next: Post-MVP features — config export/import (#2), custom innate icons (#3), actionbar button polish (#4), old save migration (#6). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
