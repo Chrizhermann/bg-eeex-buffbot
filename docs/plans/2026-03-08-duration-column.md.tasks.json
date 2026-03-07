@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/plans/2026-03-08-duration-column.md",
+  "tasks": [
+    {"id": 11, "subject": "Task 1: Move duration from classification to scan entry", "status": "pending"},
+    {"id": 12, "subject": "Task 2: Update Persist consumers", "status": "pending", "blockedBy": [11]},
+    {"id": 13, "subject": "Task 3: Update Exec consumer", "status": "pending", "blockedBy": [12]},
+    {"id": 14, "subject": "Task 4: Add duration column to UI", "status": "pending", "blockedBy": [11]},
+    {"id": 15, "subject": "Task 5: Update test output", "status": "pending", "blockedBy": [11]},
+    {"id": 16, "subject": "Task 6: Deploy and live test", "status": "pending", "blockedBy": [13, 14, 15]}
+  ],
+  "lastUpdated": "2026-03-08T00:00:00Z"
+}
