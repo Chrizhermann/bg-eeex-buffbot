@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.0-alpha (2026-03-08)
+
+### Features
+- Custom leather+brass panel border using EEex's 9-slice rendering system
+- Parchment texture background for main panel and all popup sub-menus (target picker, rename, spell picker, import)
+- Text colors updated for parchment readability
+
+### Installer
+- WeiDU installer now copies visual assets (MOS, PVRZ) alongside Lua/menu files
+
 ## v1.0.0-alpha (2026-03-08)
 
 Initial public alpha release.

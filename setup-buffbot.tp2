@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.0.0-alpha~
+VERSION ~v1.1.0-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0
@@ -31,6 +31,14 @@ COPY ~buffbot/BfBotInn.lua~  ~override~
 COPY ~buffbot/BfBotUI.lua~   ~override~
 COPY ~buffbot/BfBotTst.lua~  ~override~
 COPY ~buffbot/BuffBot.menu~  ~override~
+
+// ---- Copy visual assets (parchment background, border texture) ----
+COPY ~buffbot/BFBOTBG.MOS~  ~override~
+COPY ~buffbot/MOS9900.PVRZ~ ~override~
+COPY ~buffbot/MOS9901.PVRZ~ ~override~
+COPY ~buffbot/MOS9902.PVRZ~ ~override~
+COPY ~buffbot/MOS9903.PVRZ~ ~override~
+COPY ~buffbot/BFBOTFR.PVRZ~ ~override~
 
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~
