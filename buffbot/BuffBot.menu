@@ -44,14 +44,22 @@ menu
 		on escape
 	}
 
-	-- Panel background
+	-- Panel border (custom 9-slice leather+brass frame via EEex render hook)
+	-- MUST come before bbBg so border renders behind parchment
+	label
+	{
+		name    "bbBgFrame"
+		enabled "buffbot_isOpen"
+		area 340 50 540 510
+	}
+
+	-- Panel background (parchment texture, renders on top of border)
 	label
 	{
 		name    "bbBg"
 		enabled "buffbot_isOpen"
 		area 340 50 540 510
-		rectangle 5
-		rectangle opacity 255
+		mosaic "BFBOTBG"
 	}
 
 	-- Title
@@ -61,6 +69,7 @@ menu
 		enabled "buffbot_isOpen"
 		text lua "buffbot_title"
 		text style "title"
+		text color lua "{50, 30, 10}"
 		text align center center
 		area 340 55 540 30
 	}
@@ -297,7 +306,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "BfBot.UI._CheckboxText(rowNumber)"
-				text style "normal"
+				text style "normal_parchment"
 				text align center center
 			}
 		}
@@ -324,7 +333,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber].name"
-				text style "normal"
+				text style "normal_parchment"
 				text align left center
 				text color lua "BfBot.UI._SpellNameColor(rowNumber)"
 			}
@@ -338,7 +347,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber] and buffbot_spellTable[rowNumber].durText or ''"
-				text style "normal"
+				text style "normal_parchment"
 				text align center center
 			}
 		}
@@ -351,7 +360,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber].countText"
-				text style "normal"
+				text style "normal_parchment"
 				text align center center
 			}
 		}
@@ -364,7 +373,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber].targetText"
-				text style "normal"
+				text style "normal_parchment"
 				text align center center
 			}
 		}
@@ -570,7 +579,7 @@ menu
 		name    "bbStatus"
 		enabled "buffbot_isOpen"
 		text lua "buffbot_status"
-		text style "normal"
+		text style "normal_parchment"
 		text align left center
 		area 350 500 520 24
 	}

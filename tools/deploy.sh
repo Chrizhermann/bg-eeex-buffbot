@@ -35,6 +35,16 @@ for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPe
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 
+# Copy asset files (MOS backgrounds, etc.)
+for f in "$SRC_DIR"/*.MOS; do
+    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
+done
+
+# Copy PVRZ textures (9-slice borders, etc.)
+for f in "$SRC_DIR"/*.PVRZ; do
+    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
+done
+
 # Create presets directory for config export/import
 mkdir -p "$OVERRIDE_DIR/bfbot_presets"
 

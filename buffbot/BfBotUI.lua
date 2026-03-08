@@ -88,6 +88,36 @@ function BfBot.UI._OnMenusLoaded()
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
 
+    -- Register 9-slice border texture for custom panel frame
+    -- Wrapped in pcall — stores status for later console inspection
+    BfBot.UI._borderStatus = "not attempted"
+    local regOk, regErr = pcall(function()
+        EEex.RegisterSlicedRect("BuffBot_Border", {
+            ["topLeft"]     = {   0,   0, 128, 128 },
+            ["top"]         = { 128,   0, 256, 128 },
+            ["topRight"]    = { 384,   0, 128, 128 },
+            ["right"]       = { 384, 128, 128, 256 },
+            ["bottomRight"] = { 384, 384, 128, 128 },
+            ["bottom"]      = { 128, 384, 256, 128 },
+            ["bottomLeft"]  = {   0, 384, 128, 128 },
+            ["left"]        = {   0, 128, 128, 256 },
+            ["center"]      = { 128, 128, 256, 256 },
+            ["dimensions"]  = { 512, 512 },
+            ["resref"]      = "BFBOTFR",
+            ["flags"]       = 0,
+        })
+    end)
+    BfBot.UI._borderStatus = regOk and "registered" or ("FAILED: " .. tostring(regErr))
+
+    -- Render hook: draw 9-slice border instead of engine rectangle
+    if regOk then
+        EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame", function(item)
+            pcall(function()
+                EEex.DrawSlicedRect("BuffBot_Border", { item:getArea() })
+            end)
+        end)
+    end
+
     -- Hook WORLD_ACTIONBAR open/close to push/pop companion button menu
     -- (same pattern as B3EffMen.lua — avoids fighting for space inside the actionbar)
     local actionbarMenu = EEex_Menu_Find("WORLD_ACTIONBAR")
@@ -148,8 +178,10 @@ function BfBot.UI._Layout()
     local cx = px + pad
     local cw = pw - 2 * pad
 
-    -- Panel background
+    -- Panel background (parchment inside, border frame extends 24px beyond)
     Infinity_SetArea("bbBg", px, py, pw, ph)
+    local bpad = 24  -- border overhang in pixels
+    Infinity_SetArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
 
     -- Title
     Infinity_SetArea("bbTitle", px, py + 5, pw, 30)
@@ -904,13 +936,13 @@ function BfBot.UI._FormatDuration(seconds)
     return s .. "s"
 end
 
---- Spell name color: grey for unavailable, light blue for manual include, white for normal.
+--- Spell name color: grey for unavailable, dark blue for manual include, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return {255, 255, 255} end
-    if entry.castable == 0 then return {128, 128, 128} end
-    if entry.ovr == 1 then return {150, 200, 255} end
-    return {255, 255, 255}
+    if not entry then return {50, 30, 10} end
+    if entry.castable == 0 then return {140, 130, 120} end
+    if entry.ovr == 1 then return {40, 80, 160} end
+    return {50, 30, 10}
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
@@ -992,11 +1024,11 @@ end
 
 function BfBot.UI._QuickCastColor()
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return {200, 200, 200} end
+    if not sprite then return {80, 60, 40} end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    if qc == 1 then return {230, 200, 60} end
-    if qc == 2 then return {230, 100, 60} end
-    return {200, 200, 200}
+    if qc == 1 then return {160, 120, 20} end
+    if qc == 2 then return {180, 60, 30} end
+    return {80, 60, 40}
 end
 
 function BfBot.UI._QuickCastTooltip()

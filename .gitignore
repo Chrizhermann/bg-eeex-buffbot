@@ -27,6 +27,10 @@ dlc/
 lang/*/dialog.tlk
 chitin.key
 
+# Python
+__pycache__/
+*.pyc
+
 # General
 *.bak
 *.tmp
