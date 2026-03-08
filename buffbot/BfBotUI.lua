@@ -109,13 +109,18 @@ function BfBot.UI._OnMenusLoaded()
     end)
     BfBot.UI._borderStatus = regOk and "registered" or ("FAILED: " .. tostring(regErr))
 
-    -- Render hook: draw 9-slice border instead of engine rectangle
+    -- Render hooks: draw 9-slice border on main panel + all sub-menus
     if regOk then
-        EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame", function(item)
+        local borderHook = function(item)
             pcall(function()
                 EEex.DrawSlicedRect("BuffBot_Border", { item:getArea() })
             end)
-        end)
+        end
+        EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame",  borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbTgtFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbRenFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbPickFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbImpFrame", borderHook)
     end
 
     -- Hook WORLD_ACTIONBAR open/close to push/pop companion button menu
