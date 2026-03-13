@@ -70,7 +70,7 @@ function BfBot.Innate._BuildSPL(slot, preset)
         .. _splPad(12)                          -- 0x0028: unused block
         .. _splDword(preset)                      -- 0x0034: Spell level = preset (separate F12 lines)
         .. _splWord(0)                          -- 0x0038: Stack amount
-        .. _splResref("SPWI218B")               -- 0x003A: Spellbook icon (Stoneskin button BAM)
+        .. _splResref("BFBOTIB")                -- 0x003A: Spellbook icon (BuffBot innate BAM)
         .. _splWord(0)                          -- 0x0042: Lore to ID
         .. _splResref("")                       -- 0x0044: Ground icon
         .. _splDword(0)                         -- 0x004C: Weight
@@ -88,7 +88,7 @@ function BfBot.Innate._BuildSPL(slot, preset)
     local ability = _splByte(1)                 -- 0x0000: Spell form = standard
         .. _splByte(0x04)                       -- 0x0001: Flags = friendly
         .. _splWord(4)                          -- 0x0002: Location = Innate
-        .. _splResref("SPWI218B")               -- 0x0004: Memorised icon (Stoneskin button BAM)
+        .. _splResref("BFBOTIB")                -- 0x0004: Memorised icon (BuffBot innate BAM)
         .. _splByte(5)                          -- 0x000C: Target = self
         .. _splByte(0)                          -- 0x000D: Target count
         .. _splWord(0)                          -- 0x000E: Range
@@ -332,7 +332,7 @@ end
 --- Write all SPL files to the override folder (always overwrites).
 -- Called once at mod init time (before menus load).
 -- SPL version tag lets us detect when binary format changes.
-BfBot.Innate._SPL_VERSION = 3  -- bump this when _BuildSPL format changes
+BfBot.Innate._SPL_VERSION = 4  -- bump this when _BuildSPL format changes
 
 function BfBot.Innate._EnsureSPLFiles()
     local count = 0

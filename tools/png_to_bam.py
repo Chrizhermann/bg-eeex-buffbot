@@ -1,35 +1,28 @@
 #!/usr/bin/env python3
-"""Convert one or more PNG images to a BAM V1 file.
-
-Supports multi-frame BAMs with a single cycle. Handles palette quantization
-(256 colors, index 0 = transparent green), optional resize, and produces
-uncompressed (raw) frame data.
+"""Convert a PNG image to BAM V1 format for BG:EE spell icons.
 
 Usage:
-    python tools/png_to_bam.py -o output.BAM [--size WxH] input1.png [input2.png ...]
+    python tools/png_to_bam.py INPUT.png OUTPUT.BAM [--size 32]
 
-Examples:
-    # Actionbar button: 2 frames (normal + pressed), 40x40
-    python tools/png_to_bam.py -o buffbot/BFBOTAB.BAM --size 40x40 normal.png pressed.png
+Reads a PNG image (any size, RGBA), resizes to the target size (default 32x32),
+quantizes to a 256-color palette with index 0 = transparent (green 0,255,0),
+and writes an uncompressed BAM V1 file with a single frame and single cycle.
 
-    # Single-frame icon at original size
-    python tools/png_to_bam.py -o icon.BAM sprite.png
-
-BAM V1 format (IESDP):
-    Signature:     "BAM V1  " (8 bytes)
-    Header:        frame_count(H), cycle_count(B), trans_idx(B),
-                   frame_entries_off(I), palette_off(I), lookup_off(I)
-    Frame entries:  width(H), height(H), center_x(h), center_y(h), data_off(I)
-                   (bit 31 of data_off SET = uncompressed/raw)
-    Cycle entries: frame_count(H), first_frame_idx(H)  [immediately after frame entries]
-    Palette:       256 x 4 bytes BGRA
-    Lookup table:  frame indices (H each)
-    Frame data:    raw palette indices (width * height bytes per frame)
+BAM V1 format (from IESDP / bam_to_png.py):
+  - Signature: "BAM V1  " (8 bytes)
+  - Header: frame_count(word), cycle_count(byte), transparent_idx(byte),
+            frame_entries_off(dword), palette_off(dword), lookup_off(dword)
+  - Frame entry: width(word), height(word), center_x(short), center_y(short),
+                 data_offset(dword, bit 31 = NOT compressed)
+  - Cycle entry: frame_count(word), frame_index(word)
+  - Lookup table: frame indices (word per entry)
+  - Palette: 256 entries x 4 bytes BGRA (index 0 = transparent color)
+  - Frame data: raw palette indices (uncompressed)
 """
 
-import argparse
 import struct
 import sys
+import argparse
 from pathlib import Path
 
 try:
@@ -39,206 +32,234 @@ except ImportError:
     sys.exit(1)
 
 
-def quantize_images(images, transparent_color=(0, 255, 0)):
-    """Quantize multiple PIL Images to a shared 256-color palette.
+def png_to_bam_v1(input_path, output_path, size=32, alpha_threshold=128):
+    """Convert a PNG to a BAM V1 file.
 
-    Index 0 is reserved for the transparent color.
-    Returns (palette_bgra_list[256], list_of_index_arrays).
+    Args:
+        input_path: Path to source PNG (any size, RGBA preferred).
+        output_path: Path for output BAM file.
+        size: Target icon size in pixels (width = height).
+        alpha_threshold: Pixels with alpha < this become transparent.
+
+    Returns:
+        True on success.
     """
-    # Combine all images into one for unified quantization
-    total_width = sum(img.width for img in images)
-    max_height = max(img.height for img in images)
-    combined = Image.new("RGB", (total_width, max_height), transparent_color)
-    x_offset = 0
-    for img in images:
-        combined.paste(img, (x_offset, 0))
-        x_offset += img.width
+    # Load and resize
+    img = Image.open(input_path).convert("RGBA")
+    print(f"  Source: {img.size[0]}x{img.size[1]} RGBA")
 
-    # Quantize to 255 colors (reserve slot 0 for transparent)
-    quantized = combined.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
-    raw_palette = quantized.getpalette()  # flat list [R, G, B, R, G, B, ...]
+    if img.size != (size, size):
+        img = img.resize((size, size), Image.LANCZOS)
+        print(f"  Resized to {size}x{size} (Lanczos)")
 
-    # Build BGRA palette: slot 0 = transparent green, slots 1..255 = quantized colors
-    palette_bgra = [(0, 255, 0, 0)]  # index 0: transparent (BGRA)
-    num_quantized = len(raw_palette) // 3
-    for i in range(min(num_quantized, 255)):
-        r = raw_palette[i * 3]
-        g = raw_palette[i * 3 + 1]
-        b = raw_palette[i * 3 + 2]
-        palette_bgra.append((b, g, r, 0))  # BGRA, alpha byte unused (always 0)
-    # Pad to 256 entries
-    while len(palette_bgra) < 256:
-        palette_bgra.append((0, 0, 0, 0))
+    width, height = img.size
+    pixels_rgba = list(img.getdata())  # list of (R, G, B, A) tuples
 
-    # Map each original image's pixels to quantized indices (shifted by +1)
-    index_arrays = []
-    x_offset = 0
-    for img in images:
-        indices = []
-        for y in range(img.height):
-            for x in range(img.width):
-                # Get the quantized pixel from the combined image
-                qi = quantized.getpixel((x_offset + x, y))
-                # Shift by 1 because index 0 is reserved for transparent
-                indices.append(qi + 1)
-        index_arrays.append(indices)
-        x_offset += img.width
+    # Separate opaque and transparent pixels
+    opaque_pixels = []
+    alpha_mask = []  # True = transparent
+    for r, g, b, a in pixels_rgba:
+        if a < alpha_threshold:
+            alpha_mask.append(True)
+        else:
+            alpha_mask.append(False)
+            opaque_pixels.append((r, g, b))
 
-    return palette_bgra, index_arrays
+    # Quantize opaque pixels to 255 colors (index 0 reserved for transparent)
+    if opaque_pixels:
+        # Create a temporary image from opaque pixels for quantization
+        temp = Image.new("RGB", (len(opaque_pixels), 1))
+        temp.putdata(opaque_pixels)
+        # Quantize to 255 colors (leaving room for transparent at index 0)
+        quantized = temp.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
+        quant_palette = quantized.getpalette()  # flat [R,G,B,R,G,B,...] list
+        quant_indices = list(quantized.getdata())  # palette indices
 
+        # Build our 256-entry palette: index 0 = transparent, 1-255 = quantized colors
+        palette_rgb = [(0, 255, 0)]  # index 0: green = transparent marker
+        num_colors = len(quant_palette) // 3
+        for i in range(min(num_colors, 255)):
+            r = quant_palette[i * 3]
+            g = quant_palette[i * 3 + 1]
+            b = quant_palette[i * 3 + 2]
+            palette_rgb.append((r, g, b))
+        # Pad to 256 entries
+        while len(palette_rgb) < 256:
+            palette_rgb.append((0, 0, 0))
+    else:
+        # All transparent
+        palette_rgb = [(0, 255, 0)] + [(0, 0, 0)] * 255
+        quant_indices = []
 
-def build_bam_v1(frames_info, palette_bgra, index_arrays):
-    """Build a BAM V1 binary blob.
+    # Map each pixel to a palette index
+    frame_indices = []
+    opaque_idx = 0
+    for is_trans in alpha_mask:
+        if is_trans:
+            frame_indices.append(0)  # transparent
+        else:
+            # Quantized index is 0-based into the 255-color sub-palette,
+            # but our palette has transparent at 0, so shift by +1
+            qi = quant_indices[opaque_idx]
+            frame_indices.append(qi + 1)
+            opaque_idx += 1
 
-    frames_info: list of (width, height) tuples
-    palette_bgra: list of 256 (B, G, R, A) tuples
-    index_arrays: list of flat lists of palette indices (one per frame)
+    # Build the BAM V1 binary
+    TRANS_IDX = 0
 
-    Returns bytes.
-    """
-    frame_count = len(frames_info)
-    cycle_count = 1  # single cycle containing all frames
-    trans_idx = 0    # palette index 0 = transparent
+    # Layout:
+    #   [0x00] Header (24 bytes)
+    #   [0x18] Frame entry (12 bytes)
+    #   [0x24] Cycle entry (4 bytes)
+    #   [0x28] Lookup table entry (2 bytes)
+    #   [0x2A] Palette (256 * 4 = 1024 bytes)
+    #   [0x42A] Frame data (width * height bytes)
 
-    # Layout computation (IESDP order: frames → cycles → palette → lookup → data)
-    # Header: 8 (sig) + 16 (fields) = 24 bytes
     header_size = 24
-    # Frame entries: 12 bytes each (immediately after header)
+    frame_entry_size = 12
+    cycle_entry_size = 4
+    lookup_entry_size = 2
+
     frame_entries_off = header_size
-    frame_entries_size = frame_count * 12
-    # Cycle entries: 4 bytes each (immediately after frame entries — IESDP requirement)
-    cycle_off = frame_entries_off + frame_entries_size
-    cycle_size = cycle_count * 4
-    # Palette: 256 * 4 = 1024 bytes
-    palette_off = cycle_off + cycle_size
-    palette_size = 256 * 4
-    # Lookup table: frame_count * 2 bytes
-    lookup_off = palette_off + palette_size
-    lookup_size = frame_count * 2
-    # Frame data starts after lookup table
-    frame_data_start = lookup_off + lookup_size
+    cycle_entries_off = frame_entries_off + frame_entry_size
+    lookup_off = cycle_entries_off + cycle_entry_size
+    palette_off = lookup_off + lookup_entry_size
+    frame_data_off = palette_off + 256 * 4
 
-    # Calculate frame data offsets
-    frame_data_offsets = []
-    offset = frame_data_start
-    for i, (w, h) in enumerate(frames_info):
-        # Bit 31 set = uncompressed (raw)
-        frame_data_offsets.append(offset | 0x80000000)
-        offset += w * h
+    # Mark as uncompressed: set bit 31 of data offset
+    frame_data_off_flagged = frame_data_off | 0x80000000
 
-    total_size = offset
+    out = bytearray()
 
-    # Build the binary
-    buf = bytearray(total_size)
+    # Header (24 bytes)
+    out += b"BAM V1  "                              # signature + version
+    out += struct.pack("<H", 1)                      # frame count
+    out += struct.pack("<B", 1)                      # cycle count
+    out += struct.pack("<B", TRANS_IDX)              # transparent color index
+    out += struct.pack("<I", frame_entries_off)       # frame entries offset
+    out += struct.pack("<I", palette_off)             # palette offset
+    out += struct.pack("<I", lookup_off)              # lookup table offset
 
-    # Signature
-    buf[0:8] = b'BAM V1  '
+    # Frame entry (12 bytes)
+    out += struct.pack("<H", width)                  # width
+    out += struct.pack("<H", height)                 # height
+    out += struct.pack("<h", 0)                      # center X
+    out += struct.pack("<h", 0)                      # center Y
+    out += struct.pack("<I", frame_data_off_flagged)  # data offset (bit 31 = uncompressed)
 
-    # Header fields
-    struct.pack_into('<H', buf, 8, frame_count)
-    struct.pack_into('<B', buf, 10, cycle_count)
-    struct.pack_into('<B', buf, 11, trans_idx)
-    struct.pack_into('<I', buf, 12, frame_entries_off)
-    struct.pack_into('<I', buf, 16, palette_off)
-    struct.pack_into('<I', buf, 20, lookup_off)
+    # Cycle entry (4 bytes)
+    out += struct.pack("<H", 1)                      # frame count in cycle
+    out += struct.pack("<H", 0)                      # index into lookup table
 
-    # Frame entries
-    for i, (w, h) in enumerate(frames_info):
-        off = frame_entries_off + i * 12
-        struct.pack_into('<H', buf, off, w)       # width
-        struct.pack_into('<H', buf, off + 2, h)   # height
-        struct.pack_into('<h', buf, off + 4, 0)   # center x
-        struct.pack_into('<h', buf, off + 6, 0)   # center y
-        struct.pack_into('<I', buf, off + 8, frame_data_offsets[i])
+    # Lookup table (2 bytes)
+    out += struct.pack("<H", 0)                      # frame index 0
 
-    # Palette
-    for i, (b, g, r, a) in enumerate(palette_bgra):
-        off = palette_off + i * 4
-        buf[off] = b
-        buf[off + 1] = g
-        buf[off + 2] = r
-        buf[off + 3] = a
+    # Palette (256 entries, 4 bytes each: BGRA)
+    for r, g, b in palette_rgb:
+        out += struct.pack("BBBB", b, g, r, 0)      # BGRA, alpha=0 in palette
 
-    # Cycle entries: 1 cycle with all frames
-    struct.pack_into('<H', buf, cycle_off, frame_count)  # frame count in cycle
-    struct.pack_into('<H', buf, cycle_off + 2, 0)        # first lookup index
+    # Frame data (raw palette indices, uncompressed)
+    out += bytes(frame_indices)
 
-    # Lookup table
-    for i in range(frame_count):
-        struct.pack_into('<H', buf, lookup_off + i * 2, i)
+    # Write
+    with open(output_path, "wb") as f:
+        f.write(out)
 
-    # Frame data (raw palette indices)
-    data_offset = frame_data_start
-    for i, indices in enumerate(index_arrays):
-        for idx_val in indices:
-            buf[data_offset] = idx_val
-            data_offset += 1
+    total_size = len(out)
+    opaque_count = sum(1 for t in alpha_mask if not t)
+    trans_count = sum(1 for t in alpha_mask if t)
+    print(f"  Output: {output_path}")
+    print(f"  BAM V1: {width}x{height}, {total_size} bytes")
+    print(f"  Pixels: {opaque_count} opaque, {trans_count} transparent")
+    print(f"  Palette: {min(len(set(quant_indices)) + 1, 256) if quant_indices else 1} colors (including transparent)")
 
-    return bytes(buf)
+    return True
+
+
+def verify_bam(bam_path):
+    """Read back a BAM V1 file and verify its structure.
+
+    Returns True if the file is valid BAM V1 with expected structure.
+    """
+    with open(bam_path, "rb") as f:
+        data = f.read()
+
+    sig = data[:8]
+    if sig != b"BAM V1  ":
+        print(f"  VERIFY FAIL: bad signature {sig!r}")
+        return False
+
+    frame_count = struct.unpack_from("<H", data, 8)[0]
+    cycle_count = struct.unpack_from("<B", data, 10)[0]
+    trans_idx = struct.unpack_from("<B", data, 11)[0]
+    frame_entries_off = struct.unpack_from("<I", data, 12)[0]
+    palette_off = struct.unpack_from("<I", data, 16)[0]
+    lookup_off = struct.unpack_from("<I", data, 20)[0]
+
+    print(f"  Verify: sig=OK, frames={frame_count}, cycles={cycle_count}, "
+          f"trans_idx={trans_idx}")
+
+    if frame_count < 1:
+        print("  VERIFY FAIL: no frames")
+        return False
+
+    # Read frame 0
+    off = frame_entries_off
+    w = struct.unpack_from("<H", data, off)[0]
+    h = struct.unpack_from("<H", data, off + 2)[0]
+    cx = struct.unpack_from("<h", data, off + 4)[0]
+    cy = struct.unpack_from("<h", data, off + 6)[0]
+    frame_data_off = struct.unpack_from("<I", data, off + 8)[0]
+
+    is_uncompressed = bool(frame_data_off & 0x80000000)
+    frame_data_off_clean = frame_data_off & 0x7FFFFFFF
+
+    print(f"  Verify: frame 0 = {w}x{h}, center=({cx},{cy}), "
+          f"compressed={'no' if is_uncompressed else 'yes'}")
+
+    # Check we have enough data for the frame
+    expected_end = frame_data_off_clean + w * h
+    if expected_end > len(data):
+        print(f"  VERIFY FAIL: frame data extends beyond file "
+              f"({expected_end} > {len(data)})")
+        return False
+
+    # Read palette entry 0 (should be transparent color)
+    b0, g0, r0, a0 = struct.unpack_from("BBBB", data, palette_off)
+    print(f"  Verify: palette[0] = ({r0},{g0},{b0}) (transparent marker)")
+
+    # Count transparent pixels in frame
+    frame_bytes = data[frame_data_off_clean:frame_data_off_clean + w * h]
+    trans_count = sum(1 for b in frame_bytes if b == trans_idx)
+    print(f"  Verify: {trans_count}/{w*h} pixels are transparent "
+          f"({100*trans_count//(w*h)}%)")
+
+    print("  Verify: OK")
+    return True
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert PNG images to BAM V1 (multi-frame, single cycle)"
+        description="Convert PNG to BAM V1 for BG:EE spell icons"
     )
-    parser.add_argument(
-        "inputs", nargs="+", help="Input PNG files (one per frame, in order)"
-    )
-    parser.add_argument(
-        "-o", "--output", required=True, help="Output BAM file path"
-    )
-    parser.add_argument(
-        "--size", default=None,
-        help="Resize to WxH (e.g. 40x40). Uses Lanczos resampling."
-    )
+    parser.add_argument("input", help="Input PNG file path")
+    parser.add_argument("output", help="Output BAM file path")
+    parser.add_argument("--size", type=int, default=32,
+                        help="Target icon size in pixels (default 32)")
+    parser.add_argument("--alpha-threshold", type=int, default=128,
+                        help="Alpha threshold for transparency (default 128)")
+    parser.add_argument("--no-verify", action="store_true",
+                        help="Skip verification of output BAM")
     args = parser.parse_args()
 
-    # Parse size
-    target_size = None
-    if args.size:
-        try:
-            w, h = args.size.split("x")
-            target_size = (int(w), int(h))
-        except ValueError:
-            print(f"ERROR: Invalid size format '{args.size}'. Use WxH (e.g. 40x40)")
-            sys.exit(1)
+    print(f"Converting {args.input} -> {args.output}")
+    ok = png_to_bam_v1(args.input, args.output,
+                        size=args.size,
+                        alpha_threshold=args.alpha_threshold)
 
-    # Load and resize images
-    images = []
-    for path in args.inputs:
-        p = Path(path)
-        if not p.exists():
-            print(f"ERROR: File not found: {path}")
-            sys.exit(1)
-        img = Image.open(p).convert("RGB")
-        if target_size:
-            img = img.resize(target_size, Image.LANCZOS)
-        images.append(img)
-        print(f"  Frame {len(images) - 1}: {p.name} -> {img.width}x{img.height}")
-
-    # Verify all frames are the same size
-    widths = set(img.width for img in images)
-    heights = set(img.height for img in images)
-    if len(widths) > 1 or len(heights) > 1:
-        print("ERROR: All frames must be the same size after resize.")
-        sys.exit(1)
-
-    # Quantize to shared palette
-    print("Quantizing to 256 colors...")
-    palette_bgra, index_arrays = quantize_images(images)
-
-    # Build BAM
-    frames_info = [(img.width, img.height) for img in images]
-    bam_data = build_bam_v1(frames_info, palette_bgra, index_arrays)
-
-    # Write output
-    out_path = Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bam_data)
-
-    print(f"\nWrote {out_path} ({len(bam_data)} bytes)")
-    print(f"  Frames: {len(images)}, Size: {images[0].width}x{images[0].height}")
-    print(f"  Cycle: 1 (frames 0..{len(images) - 1})")
+    if ok and not args.no_verify:
+        print()
+        verify_bam(args.output)
 
 
 if __name__ == "__main__":

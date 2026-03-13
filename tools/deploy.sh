@@ -45,7 +45,9 @@ for f in "$SRC_DIR"/*.PVRZ; do
     [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
 done
 
-# Copy BAM files (actionbar icon, etc.)
+
+# Copy BAM files (spell icons, actionbar icon, etc.)
+# Copy BAM files (spell icons, etc.)
 for f in "$SRC_DIR"/*.BAM; do
     [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
 done
