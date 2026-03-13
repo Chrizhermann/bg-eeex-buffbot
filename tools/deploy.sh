@@ -45,6 +45,11 @@ for f in "$SRC_DIR"/*.PVRZ; do
     [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
 done
 
+# Copy BAM files (actionbar icon, etc.)
+for f in "$SRC_DIR"/*.BAM; do
+    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
+done
+
 # Create presets directory for config export/import
 mkdir -p "$OVERRIDE_DIR/bfbot_presets"
 

@@ -15,7 +15,7 @@ menu
 	{
 		action    "BfBot.UI.Toggle()"
 		tooltip lua "buffbot_btnTooltip"
-		bam       "GUIBTACT"
+		bam       "BFBOTAB"
 		sequence  0
 		frame lua "buffbot_btnFrame"
 		scaleToClip
