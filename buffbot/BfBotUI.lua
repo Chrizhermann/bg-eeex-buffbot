@@ -148,6 +148,10 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
+    -- Load debug mode preference from INI
+    local debugPref = Infinity_GetINIValue("BuffBot", "Debug", 0)
+    BfBot._debugMode = (debugPref == 1) and 1 or 0
+
     BfBot.UI._initialized = true
 end
 
@@ -604,7 +608,7 @@ function BfBot.UI.Cast()
 
     local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        Infinity_DisplayString("BuffBot: No spells to cast in this preset")
+        BfBot._Display("BuffBot: No spells to cast in this preset")
         return
     end
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
@@ -769,7 +773,7 @@ end
 function BfBot.UI.OpenSpellPicker()
     BfBot.UI._BuildPickerList()
     if #buffbot_pickerSpells == 0 then
-        Infinity_DisplayString("BuffBot: No additional spells to add")
+        BfBot._Display("BuffBot: No additional spells to add")
         return
     end
     Infinity_PushMenu("BUFFBOT_SPELLPICKER")
@@ -839,9 +843,9 @@ function BfBot.UI.ExportConfig()
 
     local ok, result = BfBot.Persist.ExportConfig(sprite)
     if ok then
-        Infinity_DisplayString("BuffBot: Exported config as '" .. result .. "'")
+        BfBot._Display("BuffBot: Exported config as '" .. result .. "'")
     else
-        Infinity_DisplayString("BuffBot: Export failed — " .. tostring(result))
+        BfBot._Display("BuffBot: Export failed — " .. tostring(result))
     end
 end
 
@@ -862,7 +866,7 @@ end
 function BfBot.UI.OpenImportPicker()
     BfBot.UI._BuildImportList()
     if #buffbot_importList == 0 then
-        Infinity_DisplayString("BuffBot: No configs found in bfbot_presets/")
+        BfBot._Display("BuffBot: No configs found in bfbot_presets/")
         return
     end
     Infinity_PushMenu("BUFFBOT_IMPORT")
@@ -879,12 +883,12 @@ function BfBot.UI.ImportSelected()
     Infinity_PopMenu("BUFFBOT_IMPORT")
 
     if ok then
-        Infinity_DisplayString("BuffBot: Imported '" .. entry.name .. "' ("
+        BfBot._Display("BuffBot: Imported '" .. entry.name .. "' ("
             .. presets .. " presets, " .. skipped .. " spells skipped)")
         BfBot.Scan.Invalidate(sprite)
         BfBot.UI._Refresh()
     else
-        Infinity_DisplayString("BuffBot: Import failed — " .. tostring(presets))
+        BfBot._Display("BuffBot: Import failed — " .. tostring(presets))
     end
 end
 
@@ -1043,4 +1047,14 @@ function BfBot.UI._QuickCastTooltip()
     if qc == 1 then return "Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle." end
     if qc == 2 then return "Fast casting for ALL buffs regardless of duration (cheat). Click to cycle." end
     return "Normal casting speed — spells respect aura cooldown. Click to cycle."
+end
+
+-- ============================================================
+-- Debug Mode Toggle
+-- ============================================================
+
+function BfBot.UI.ToggleDebug()
+    BfBot._debugMode = (BfBot._debugMode == 1) and 0 or 1
+    Infinity_SetINIValue("BuffBot", "Debug", BfBot._debugMode)
+    BfBot._Display("BuffBot: Debug mode " .. (BfBot._debugMode == 1 and "ON" or "OFF"))
 end
