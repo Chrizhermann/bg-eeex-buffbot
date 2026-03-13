@@ -61,8 +61,9 @@ buffbot_presetCount = 0          -- number of active presets
 buffbot_spellTable = {}
 buffbot_selectedRow = 0
 
--- Cast button label
-buffbot_castLabel = "Cast"
+-- Cast button labels
+buffbot_castLabel = "Cast All"
+buffbot_castCharLabel = "Cast Character"
 
 -- Target picker state
 buffbot_targetRow = 0            -- which spell row opened the picker
@@ -246,11 +247,15 @@ function BfBot.UI._Layout()
     Infinity_SetArea("bbDn", cx + 344, r5Y, 48, btnH)
     Infinity_SetArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
 
-    -- Action buttons: Cast, Stop — left side; Quick Cast, Close — right side
+    -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
     local closeW = 80
     local qcW = 180
-    Infinity_SetArea("bbCast", cx, r6Y, 180, btnH)
-    Infinity_SetArea("bbStop", cx + 186, r6Y, 80, btnH)
+    local castAllW = 100
+    local castCharW = 140
+    local stopW = 60
+    Infinity_SetArea("bbCast", cx, r6Y, castAllW, btnH)
+    Infinity_SetArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
+    Infinity_SetArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
     Infinity_SetArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
     Infinity_SetArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
 
@@ -317,7 +322,8 @@ function BfBot.UI._Refresh()
         buffbot_presetNames = {}
         buffbot_presetCount = 0
         buffbot_title = "BuffBot"
-        buffbot_castLabel = "Cast"
+        buffbot_castLabel = "Cast All"
+        buffbot_castCharLabel = "Cast Character"
         buffbot_status = ""
         return
     end
@@ -405,9 +411,10 @@ function BfBot.UI._Refresh()
     table.sort(rows, function(a, b) return a.pri < b.pri end)
     buffbot_spellTable = rows
 
-    -- 7. Update title, cast label, status
+    -- 7. Update title, cast labels, status
     buffbot_title = "BuffBot - " .. (preset.name or "Preset")
-    buffbot_castLabel = "Cast " .. (preset.name or "Preset")
+    buffbot_castLabel = "Cast All"
+    buffbot_castCharLabel = BfBot.UI._CastCharLabel()
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
@@ -614,6 +621,28 @@ function BfBot.UI.Cast()
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
     BfBot.Exec.Start(queue, qcMode)
     buffbot_status = BfBot.UI._GetStatusText()
+end
+
+function BfBot.UI.CastCharacter()
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+    local config = BfBot.Persist.GetConfig(sprite)
+    BfBot.UI._ClampPresetIdx(config)
+
+    local queue = BfBot.Persist.BuildQueueForCharacter(BfBot.UI._charSlot, BfBot.UI._presetIdx)
+    if not queue or #queue == 0 then
+        Infinity_DisplayString("BuffBot: No spells to cast for this character")
+        return
+    end
+    local qcMode = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    BfBot.Exec.Start(queue, qcMode)
+    buffbot_status = BfBot.UI._GetStatusText()
+end
+
+function BfBot.UI._CastCharLabel()
+    local name = buffbot_charNames[BfBot.UI._charSlot + 1]
+    if name then return "Cast " .. name end
+    return "Cast Character"
 end
 
 function BfBot.UI.Stop()
