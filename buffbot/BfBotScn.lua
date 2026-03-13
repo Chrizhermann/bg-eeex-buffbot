@@ -94,7 +94,9 @@ function BfBot.Scan.GetCastableSpells(sprite)
     local seen = {}
 
     -- Helper: process a button list from GetQuickButtons
-    local function processButtonList(buttonList)
+    -- metadataOnly: if true, only add entries for spells not already seen
+    --               (used for disabled/exhausted spells to capture name+icon)
+    local function processButtonList(buttonList, metadataOnly)
         if not buttonList then return end
 
         -- Wrap iteration in pcall so list is ALWAYS freed even on error
@@ -108,6 +110,45 @@ function BfBot.Scan.GetCastableSpells(sprite)
 
                 -- Skip BuffBot's own generated innates
                 if resref:sub(1, 4) == "BFBT" then return end
+
+                if metadataOnly then
+                    -- Metadata pass: only add spells we haven't seen yet
+                    if seen[resref] then return end
+                    seen[resref] = true
+
+                    local bdIcon = ""
+                    pcall(function() bdIcon = bd.m_icon:get() end)
+
+                    local bdName = 0
+                    pcall(function() bdName = bd.m_name end)
+
+                    -- Load SPL header
+                    local header = EEex_Resource_Demand(resref, "SPL")
+                    if not header then return end
+
+                    local casterLevel = 1
+                    local clOk, cl = pcall(function()
+                        return sprite:getCasterLevelForSpell(resref, true)
+                    end)
+                    if clOk and cl and cl > 0 then
+                        casterLevel = cl
+                    end
+
+                    local ability = header:getAbilityForLevel(casterLevel)
+                    if not ability then
+                        ability = header:getAbility(0)
+                    end
+                    if not ability then return end
+
+                    -- Build entry with count=0 and disabled=true (exhausted spell)
+                    local entry = _buildSpellEntry(
+                        sprite, resref, 0, bdIcon, bdName, 1,
+                        header, ability
+                    )
+                    spells[resref] = entry
+                    count = count + 1
+                    return
+                end
 
                 -- Skip duplicates (same spell from different button entries)
                 if seen[resref] then
@@ -200,6 +241,23 @@ function BfBot.Scan.GetCastableSpells(sprite)
         processButtonList(innateList)
     else
         BfBot._Warn("GetQuickButtons(4) failed: " .. tostring(innateList))
+    end
+
+    -- Secondary pass: scan with disabled=true to capture metadata (name, icon,
+    -- classification) for exhausted spells (memorized but 0 slots remaining).
+    -- Only adds entries for spells NOT already found in the castable passes above.
+    local disSpellOk, disSpellList = pcall(function()
+        return sprite:GetQuickButtons(2, true)
+    end)
+    if disSpellOk and disSpellList then
+        processButtonList(disSpellList, true)
+    end
+
+    local disInnateOk, disInnateList = pcall(function()
+        return sprite:GetQuickButtons(4, true)
+    end)
+    if disInnateOk and disInnateList then
+        processButtonList(disInnateList, true)
     end
 
     -- Cache results
