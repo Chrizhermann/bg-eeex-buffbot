@@ -32,7 +32,8 @@ COPY ~buffbot/BfBotUI.lua~   ~override~
 COPY ~buffbot/BfBotTst.lua~  ~override~
 COPY ~buffbot/BuffBot.menu~  ~override~
 
-// ---- Copy visual assets (parchment background, border texture) ----
+// ---- Copy visual assets (parchment background, border texture, icons) ----
+COPY ~buffbot/BFBOTIB.BAM~  ~override~
 COPY ~buffbot/BFBOTBG.MOS~  ~override~
 COPY ~buffbot/MOS9900.PVRZ~ ~override~
 COPY ~buffbot/MOS9901.PVRZ~ ~override~
