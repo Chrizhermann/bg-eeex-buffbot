@@ -21,8 +21,8 @@ BAM V1 format (IESDP):
                    frame_entries_off(I), palette_off(I), lookup_off(I)
     Frame entries:  width(H), height(H), center_x(h), center_y(h), data_off(I)
                    (bit 31 of data_off SET = uncompressed/raw)
+    Cycle entries: frame_count(H), first_frame_idx(H)  [immediately after frame entries]
     Palette:       256 x 4 bytes BGRA
-    Cycle entries: frame_count(H), first_frame_idx(H)
     Lookup table:  frame indices (H each)
     Frame data:    raw palette indices (width * height bytes per frame)
 """
@@ -100,20 +100,20 @@ def build_bam_v1(frames_info, palette_bgra, index_arrays):
     cycle_count = 1  # single cycle containing all frames
     trans_idx = 0    # palette index 0 = transparent
 
-    # Layout computation
+    # Layout computation (IESDP order: frames → cycles → palette → lookup → data)
     # Header: 8 (sig) + 16 (fields) = 24 bytes
     header_size = 24
-    # Frame entries: 12 bytes each
+    # Frame entries: 12 bytes each (immediately after header)
     frame_entries_off = header_size
     frame_entries_size = frame_count * 12
-    # Palette: 256 * 4 = 1024 bytes
-    palette_off = frame_entries_off + frame_entries_size
-    palette_size = 256 * 4
-    # Cycle entries: 4 bytes each (frame_count(H) + first_frame_idx(H))
-    cycle_off = palette_off + palette_size
+    # Cycle entries: 4 bytes each (immediately after frame entries — IESDP requirement)
+    cycle_off = frame_entries_off + frame_entries_size
     cycle_size = cycle_count * 4
+    # Palette: 256 * 4 = 1024 bytes
+    palette_off = cycle_off + cycle_size
+    palette_size = 256 * 4
     # Lookup table: frame_count * 2 bytes
-    lookup_off = cycle_off + cycle_size
+    lookup_off = palette_off + palette_size
     lookup_size = frame_count * 2
     # Frame data starts after lookup table
     frame_data_start = lookup_off + lookup_size
