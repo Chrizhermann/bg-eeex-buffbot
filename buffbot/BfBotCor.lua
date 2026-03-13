@@ -14,6 +14,7 @@ BfBot.MAX_PRESETS = 8
 -- ============================================================
 
 BfBot._logLevel = 2 -- 0=off, 1=errors, 2=warnings, 3=verbose
+BfBot._debugMode = 0 -- 0=quiet (log file only), 1=verbose (log + in-game display)
 
 -- Log file path (game directory)
 BfBot._logFile = "buffbot_test.log"
@@ -48,8 +49,20 @@ function BfBot._OpenLogAppend(filename)
     return h ~= nil
 end
 
--- Output function: writes to log file AND shows in-game
+-- Output function: writes to log file, shows in-game ONLY if debug mode is on
 function BfBot._Print(msg)
+    local s = tostring(msg)
+    if BfBot._debugMode == 1 then
+        Infinity_DisplayString(s)
+    end
+    if BfBot._logHandle then
+        BfBot._logHandle:write(s .. "\n")
+        BfBot._logHandle:flush()
+    end
+end
+
+--- Always display in-game, regardless of debug mode. For user-facing feedback.
+function BfBot._Display(msg)
     local s = tostring(msg)
     Infinity_DisplayString(s)
     if BfBot._logHandle then
@@ -60,7 +73,7 @@ end
 
 function BfBot._Error(msg)
     if BfBot._logLevel >= 1 then
-        BfBot._Print("[BuffBot ERROR] " .. tostring(msg))
+        BfBot._Display("[BuffBot ERROR] " .. tostring(msg))
     end
 end
 
