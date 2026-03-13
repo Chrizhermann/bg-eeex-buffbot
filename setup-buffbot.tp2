@@ -39,6 +39,7 @@ COPY ~buffbot/MOS9901.PVRZ~ ~override~
 COPY ~buffbot/MOS9902.PVRZ~ ~override~
 COPY ~buffbot/MOS9903.PVRZ~ ~override~
 COPY ~buffbot/BFBOTFR.PVRZ~ ~override~
+COPY ~buffbot/BFBOTAB.BAM~  ~override~
 
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~
