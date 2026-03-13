@@ -517,7 +517,7 @@ menu
 	-- Action buttons + status
 	-- ======================================================
 
-	-- Cast button
+	-- Cast All button
 	button
 	{
 		name    "bbCast"
@@ -528,7 +528,21 @@ menu
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 350 468 180 28
+		area 350 468 100 28
+	}
+
+	-- Cast Character button
+	button
+	{
+		name    "bbCastChar"
+		enabled "buffbot_isOpen"
+		clickable lua "BfBot.UI._CanCast()"
+		action  "BfBot.UI.CastCharacter()"
+		text lua "buffbot_castCharLabel"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 454 468 140 28
 	}
 
 	-- Stop button (only visible when running)
