@@ -483,6 +483,13 @@ function BfBot.Class.IsAoE(ability, fbAoE)
     return false
 end
 
+--- Determine if a spell is self-only (cannot target others).
+--- Target type 5 = caster, 7 = caster (instant/default).
+function BfBot.Class.IsSelfOnly(ability)
+    local targetType = ability.actionType
+    return (targetType == 5 or targetType == 7)
+end
+
 --- Determine the smart default target for a spell.
 function BfBot.Class.GetDefaultTarget(ability, isAoE)
     local targetType = ability.actionType
@@ -543,6 +550,7 @@ function BfBot.Class.Classify(resref, header, ability)
 
         -- Duration computed per-sprite in scan entry, not here (classification is resref-level)
         result.isAoE = BfBot.Class.IsAoE(ability, false)
+        result.isSelfOnly = BfBot.Class.IsSelfOnly(ability)
         result.defaultTarget = BfBot.Class.GetDefaultTarget(ability, result.isAoE)
 
         BfBot._cache.class[resref] = result
@@ -601,6 +609,9 @@ function BfBot.Class.Classify(resref, header, ability)
 
     -- AoE
     result.isAoE = BfBot.Class.IsAoE(ability, opcodeExtras.fbAoE)
+
+    -- Self-only
+    result.isSelfOnly = BfBot.Class.IsSelfOnly(ability)
 
     -- Default target
     result.defaultTarget = BfBot.Class.GetDefaultTarget(ability, result.isAoE)
