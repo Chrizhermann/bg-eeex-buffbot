@@ -304,6 +304,59 @@ function BfBot.Scan.InvalidateAll()
     BfBot._cache.scan = {}
 end
 
+--- Load display metadata (name, icon, duration) for a spell by resref.
+-- Used as fallback when the spell isn't in GetQuickButtons results (exhausted slots).
+function BfBot.Scan.GetSpellMetadata(resref, sprite)
+    local ok, header = pcall(EEex_Resource_Demand, resref, "SPL")
+    if not ok or not header then return nil end
+
+    -- Name: try unidentified name (0x08) first — Spell Revisions puts the real name
+    -- there and sets identified name (0x0C) to dummy strref 9999999.
+    local name = resref
+    local function tryStrref(strref)
+        if not strref or strref == 0xFFFFFFFF or strref == -1 or strref == 0 or strref == 9999999 then
+            return nil
+        end
+        local ok, fetched = pcall(Infinity_FetchString, strref)
+        if ok and fetched and fetched ~= "" then return fetched end
+        return nil
+    end
+    name = tryStrref(header.genericName) or tryStrref(header.identifiedName) or resref
+
+    -- Get ability for caster level
+    local casterLevel = 1
+    if sprite then
+        local clOk, cl = pcall(function()
+            return sprite:getCasterLevelForSpell(resref, true)
+        end)
+        if clOk and cl and cl > 0 then casterLevel = cl end
+    end
+    local ability = header:getAbilityForLevel(casterLevel)
+    if not ability then ability = header:getAbility(0) end
+
+    -- Icon from ability
+    local icon = ""
+    if ability then
+        local iconOk, abilIcon = pcall(function() return ability.quickSlotIcon:get() end)
+        if iconOk and abilIcon and abilIcon ~= "" then icon = abilIcon end
+    end
+
+    -- Duration
+    local duration = 0
+    local durCat = "instant"
+    if ability then
+        duration = BfBot.Class.GetDuration(header, ability)
+        durCat = BfBot.Class.GetDurationCategory(duration)
+    end
+
+    return {
+        name = name,
+        icon = icon,
+        duration = duration,
+        durCat = durCat,
+    }
+end
+
 --- Load and classify a single spell by resref.
 function BfBot.Scan.GetSpellInfo(resref, sprite)
     -- Check classification cache

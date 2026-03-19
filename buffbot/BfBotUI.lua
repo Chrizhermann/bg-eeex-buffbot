@@ -387,6 +387,15 @@ function BfBot.UI._Refresh()
             isCastable = (count > 0 and not scan.disabled) and 1 or 0
             dur = scan.duration
             durCat = scan.durCat
+        else
+            -- Spell not in scanner results (exhausted/unmemorized) — load SPL for metadata
+            local meta = BfBot.Scan.GetSpellMetadata(resref, sprite)
+            if meta then
+                name = meta.name
+                icon = meta.icon
+                dur = meta.duration
+                durCat = meta.durCat
+            end
         end
 
         table.insert(rows, {

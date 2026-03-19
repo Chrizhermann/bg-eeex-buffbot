@@ -449,30 +449,71 @@ end
 -- Called by the engine when a BFBT*.SPL innate is activated.
 -- ============================================================
 
+--- Log a message to the innate log file (append mode).
+local function _InnateLog(msg)
+    local logf = io.open("buffbot_innate.log", "a")
+    if logf then
+        logf:write(string.format("[%s] %s\n", os.date("%Y-%m-%d %H:%M:%S"), msg))
+        logf:close()
+    end
+end
+
 --- Opcode 402 Invoke Lua handler — triggers a specific preset for a specific character.
 -- param1 is a CGameEffect userdata: m_effectAmount = party slot, m_dWFlags = preset index.
+-- Wrapped in pcall so Lua errors produce diagnostics instead of engine "panic".
 function BFBOTGO(param1, param2, special)
     local slot = param1 and param1.m_effectAmount or 0
     local presetIdx = param1 and param1.m_dWFlags or 1
 
-    local logf = io.open("buffbot_innate.log", "a")
-    if logf then
-        logf:write(string.format("[%s] BFBOTGO: slot=%d preset=%d\n",
-            os.date("%Y-%m-%d %H:%M:%S"), slot, presetIdx))
-        logf:close()
-    end
+    _InnateLog(string.format("BFBOTGO: slot=%d preset=%d", slot, presetIdx))
 
-    local sprite = EEex_Sprite_GetInPortrait(slot)
-    if not sprite then return end
+    local ok, err = pcall(function()
+        -- Validate slot range
+        if slot < 0 or slot > 5 then
+            error("invalid slot " .. slot)
+        end
+        if presetIdx < 1 or presetIdx > BfBot.MAX_PRESETS then
+            error("invalid preset " .. presetIdx)
+        end
 
-    if BfBot.Exec.GetState() == "running" then
-        sprite:displayTextRef(14007)
-        return
-    end
+        -- Get the sprite at this slot
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if not sprite then
+            -- Party was likely rearranged since innates were granted.
+            -- Trigger refresh so next attempt works, and tell the player.
+            _InnateLog("ERROR: no sprite in slot " .. slot .. " — party may have changed")
+            BfBot._Display("BuffBot: Party changed — refreshing innates, try again")
+            pcall(BfBot.Innate.RefreshAll)
+            return
+        end
 
-    local queue = BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
-    if queue and #queue > 0 then
+        -- Already running?
+        if BfBot.Exec.GetState() == "running" then
+            _InnateLog("INFO: already running, showing busy message")
+            sprite:displayTextRef(14007)
+            return
+        end
+
+        -- Build the queue
+        local queue, queueErr = BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
+        if not queue or #queue == 0 then
+            local reason = queueErr or "empty queue"
+            _InnateLog("INFO: no spells to cast — " .. reason)
+            BfBot._Display("BuffBot: No spells to cast (" .. reason .. ")")
+            return
+        end
+
+        -- Execute
         local qcMode = BfBot.Persist.GetQuickCast(sprite, presetIdx)
+        _InnateLog(string.format("Starting: %d entries, qcMode=%d", #queue, qcMode or 0))
         BfBot.Exec.Start(queue, qcMode)
+    end)
+
+    if not ok then
+        _InnateLog("ERROR: " .. tostring(err))
+        -- Try to show the error in-game (BfBot._Display may itself fail if modules aren't loaded)
+        pcall(function()
+            BfBot._Display("BuffBot innate error: " .. tostring(err))
+        end)
     end
 end
