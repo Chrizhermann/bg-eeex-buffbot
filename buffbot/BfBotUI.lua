@@ -361,7 +361,7 @@ function BfBot.UI._Refresh()
     for resref, scan in pairs(castable) do
         local ovr = config.ovr and config.ovr[resref]
         if not preset.spells[resref] and scan.class and scan.class.isBuff
-           and scan.count > 0 and ovr ~= -1 then
+           and ovr ~= -1 then
             maxPri = maxPri + 1
             local entry = BfBot.Persist._MakeDefaultSpellEntry(scan.class, 0)
             entry.pri = maxPri

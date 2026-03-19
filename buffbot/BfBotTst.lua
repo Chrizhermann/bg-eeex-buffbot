@@ -38,6 +38,10 @@ local function _warning(msg)
     P("  WARN: " .. msg)
 end
 
+local function _check(cond, msg)
+    if cond then _ok(msg) else _nok(msg) end
+end
+
 local function _summary(section)
     P(string.format("  --- %s: %d pass, %d fail, %d warn ---",
         section, _pass, _fail, _warn))
@@ -852,6 +856,90 @@ function BfBot.Test.ExportImport()
 end
 
 -- ============================================================
+-- BfBot.Test.ScannerRefactor — Iterator-based scanner tests
+-- ============================================================
+
+--- Test: Scanner refactor — iterator-based catalog, isAoE/isSelfOnly flags.
+function BfBot.Test.ScannerRefactor()
+    P("=== Scanner: Iterator-based catalog ===")
+    _reset()
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _nok("No sprite in slot 0")
+        return _summary("ScannerRefactor")
+    end
+
+    -- Test 1: Scan returns spells
+    BfBot.Scan.Invalidate(sprite)
+    local spells, count = BfBot.Scan.GetCastableSpells(sprite)
+    _check(count > 0, "Scan returned " .. count .. " known spells")
+
+    -- Test 2: Entries have isAoE and isSelfOnly fields (0/1 integers)
+    local hasFlags = true
+    for resref, entry in pairs(spells) do
+        if type(entry.isAoE) ~= "number" or type(entry.isSelfOnly) ~= "number" then
+            hasFlags = false
+            _nok("Missing isAoE/isSelfOnly on " .. resref
+                 .. " (isAoE=" .. type(entry.isAoE)
+                 .. " isSelfOnly=" .. type(entry.isSelfOnly) .. ")")
+            break
+        end
+    end
+    if hasFlags then _ok("All entries have isAoE/isSelfOnly (integer)") end
+
+    -- Test 3: Self-only spells have isSelfOnly=1 and isAoE=0
+    local foundSelf = false
+    for resref, entry in pairs(spells) do
+        if entry.isSelfOnly == 1 then
+            foundSelf = true
+            _check(entry.isAoE == 0,
+                   "Self-only spell " .. entry.name .. " has isAoE=0")
+            break
+        end
+    end
+    if not foundSelf then _warning("No self-only spell found for validation") end
+
+    -- Test 4: Exhausted spells (count=0) still have name and icon
+    local foundExhausted = false
+    for resref, entry in pairs(spells) do
+        if entry.count == 0 and entry.class and entry.class.isBuff then
+            foundExhausted = true
+            _check(entry.name ~= resref,
+                   "Exhausted " .. resref .. " has name: " .. entry.name)
+            _check(entry.icon ~= "",
+                   "Exhausted " .. resref .. " has icon: " .. entry.icon)
+            break
+        end
+    end
+    if not foundExhausted then
+        _warning("No exhausted buff spell found (all have slots? cast some first)")
+    end
+
+    -- Test 5: Classification result has isSelfOnly field
+    for resref, entry in pairs(spells) do
+        if entry.class then
+            _check(entry.class.isSelfOnly ~= nil,
+                   "Classification has isSelfOnly for " .. resref)
+            break
+        end
+    end
+
+    -- Test 6: No 'disabled' field on entries (removed in refactor)
+    local hasDisabled = false
+    for resref, entry in pairs(spells) do
+        if entry.disabled ~= nil then
+            hasDisabled = true
+            _nok("Entry " .. resref .. " still has 'disabled' field")
+            break
+        end
+    end
+    if not hasDisabled then _ok("No entries have 'disabled' field (removed)") end
+
+    return _summary("ScannerRefactor")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -897,6 +985,10 @@ function BfBot.Test.RunAll()
     local exportOk = BfBot.Test.ExportImport()
     P("")
 
+    -- Phase 8: Scanner Refactor
+    local scanRefOk = BfBot.Test.ScannerRefactor()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -906,11 +998,12 @@ function BfBot.Test.RunAll()
     P("  Quick Cast: " .. (qcOk and "PASS" or "FAIL"))
     P("  Overrides: " .. (ovrOk and "PASS" or "FAIL"))
     P("  Export/Import: " .. (exportOk and "PASS" or "FAIL"))
+    P("  Scanner Refactor: " .. (scanRefOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk
 end
 
 -- ============================================================
@@ -942,7 +1035,7 @@ function BfBot.Test.BuildTestQueue()
         local casterBuffs = {}
 
         for resref, data in pairs(spells) do
-            if data.class and data.class.isBuff and data.count > 0 and not data.disabled then
+            if data.class and data.class.isBuff and data.count > 0 then
                 local target = (data.class.defaultTarget == "s") and "self" or "all"
                 table.insert(casterBuffs, {
                     caster = slot,

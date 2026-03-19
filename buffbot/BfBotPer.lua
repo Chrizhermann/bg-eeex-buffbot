@@ -835,7 +835,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
         for resref, spellCfg in pairs(preset.spells) do
             if spellCfg.on == 1 then
                 local scanData = castable[resref]
-                if scanData and scanData.count > 0 and not scanData.disabled then
+                if scanData and scanData.count > 0 then
                     local resolved = BfBot.Persist._ResolveConfigTarget(
                         spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                     for _, e in ipairs(resolved) do
@@ -1085,7 +1085,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
-            if scanData and scanData.count > 0 and not scanData.disabled then
+            if scanData and scanData.count > 0 then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do
