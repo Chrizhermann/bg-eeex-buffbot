@@ -384,17 +384,42 @@ function BfBot.UI._Refresh()
             name = scan.name
             icon = scan.icon
             count = scan.count
-            isCastable = (count > 0 and not scan.disabled) and 1 or 0
+            isCastable = (count > 0) and 1 or 0
             dur = scan.duration
             durCat = scan.durCat
         else
-            -- Spell not in scanner results (exhausted/unmemorized) — load SPL for metadata
-            local meta = BfBot.Scan.GetSpellMetadata(resref, sprite)
-            if meta then
-                name = meta.name
-                icon = meta.icon
-                dur = meta.duration
-                durCat = meta.durCat
+            -- Spell not in scanner results (removed from spellbook, dual-class lockout, etc.)
+            -- Load SPL directly for display metadata
+            local hdrOk, header = pcall(EEex_Resource_Demand, resref, "SPL")
+            if hdrOk and header then
+                local function tryStrref(strref)
+                    if not strref or strref == 0xFFFFFFFF or strref == -1
+                       or strref == 0 or strref == 9999999 then
+                        return nil
+                    end
+                    local sOk, fetched = pcall(Infinity_FetchString, strref)
+                    if sOk and fetched and fetched ~= "" then return fetched end
+                    return nil
+                end
+                name = tryStrref(header.genericName)
+                       or tryStrref(header.identifiedName)
+                       or resref
+
+                local casterLevel = 1
+                local clOk, cl = pcall(function()
+                    return sprite:getCasterLevelForSpell(resref, true)
+                end)
+                if clOk and cl and cl > 0 then casterLevel = cl end
+                local ability = header:getAbilityForLevel(casterLevel)
+                if not ability then ability = header:getAbility(0) end
+                if ability then
+                    local iconOk, abilIcon = pcall(function()
+                        return ability.quickSlotIcon:get()
+                    end)
+                    if iconOk and abilIcon and abilIcon ~= "" then icon = abilIcon end
+                    dur = BfBot.Class.GetDuration(header, ability)
+                    durCat = BfBot.Class.GetDurationCategory(dur)
+                end
             end
         end
 

@@ -1,37 +1,38 @@
 -- ============================================================
 -- BfBotScn.lua — Spell Scanner (BfBot.Scan)
--- Scans party members' spellbooks for castable spells,
+-- Scans party members' spellbooks for known spells,
 -- classifies them, and caches results per-sprite.
+-- Primary source: EEex known spells iterators (full catalog).
+-- Slot counts: GetQuickButtons overlay.
 -- ============================================================
 
 BfBot.Scan = {}
 
---- Internal: Build a SpellEntry from button data and SPL header.
-local function _buildSpellEntry(sprite, resref, count, icon, nameRef, disabled, header, ability)
-    local name = ""
-    if nameRef and nameRef ~= 0 and nameRef ~= -1 then
-        name = Infinity_FetchString(nameRef)
+--- Safe strref lookup — skips invalid/dummy strrefs (0, -1, 0xFFFFFFFF, SR's 9999999).
+local function _tryStrref(strref)
+    if not strref or strref == 0xFFFFFFFF or strref == -1
+       or strref == 0 or strref == 9999999 then
+        return nil
     end
-    if (not name or name == "") and header then
-        local ok, fetchedName = pcall(function()
-            return Infinity_FetchString(header.genericName)
-        end)
-        if ok and fetchedName and fetchedName ~= "" then
-            name = fetchedName
-        end
-    end
-    if not name or name == "" then
-        name = resref
-    end
+    local ok, fetched = pcall(Infinity_FetchString, strref)
+    if ok and fetched and fetched ~= "" then return fetched end
+    return nil
+end
 
-    -- Get spell type from header
-    local spellType = 0
-    if header then
-        spellType = header.itemType or 0
-    end
+--- Internal: Build a catalog entry from known spells iterator data + SPL header.
+local function _buildCatalogEntry(sprite, resref, header, ability)
+    -- Name: try genericName (unidentified, 0x08) first — Spell Revisions
+    -- puts the real name there and sets identifiedName (0x0C) to dummy 9999999.
+    local name = _tryStrref(header.genericName)
+                 or _tryStrref(header.identifiedName)
+                 or resref
 
-    -- Get icon from ability if not from button data
-    if (not icon or icon == "") and ability then
+    -- Spell type from header
+    local spellType = header.itemType or 0
+
+    -- Icon from ability
+    local icon = ""
+    if ability then
         local ok, abilIcon = pcall(function()
             return ability.quickSlotIcon:get()
         end)
@@ -51,7 +52,7 @@ local function _buildSpellEntry(sprite, resref, count, icon, nameRef, disabled, 
         end
     end
 
-    -- Compute duration from ability (per caster level, not from classification cache)
+    -- Duration (per caster level)
     local duration = 0
     local durCat = "instant"
     if header and ability then
@@ -59,22 +60,68 @@ local function _buildSpellEntry(sprite, resref, count, icon, nameRef, disabled, 
         durCat = BfBot.Class.GetDurationCategory(duration)
     end
 
+    -- Targeting flags (0/1 integers — no booleans in scan entries)
+    local isAoE = (classResult and classResult.isAoE) and 1 or 0
+    local isSelfOnly = (classResult and classResult.isSelfOnly) and 1 or 0
+
     return {
         resref = resref,
         name = name,
-        icon = icon or "",
-        count = count or 0,
-        level = header and header.spellLevel or 0,
+        icon = icon,
+        count = 0,          -- filled in by count overlay
+        level = header.spellLevel or 0,
         spellType = spellType,
         duration = duration,
         durCat = durCat,
-        disabled = (disabled and disabled ~= 0) or false,
+        isAoE = isAoE,
+        isSelfOnly = isSelfOnly,
         class = classResult,
     }
 end
 
---- Scan all castable spells for a party member.
+--- Internal: Build {[resref] = count} from GetQuickButtons.
+--- type 2 = wizard+priest, type 4 = innate.
+local function _buildCountMap(sprite)
+    local counts = {}
+
+    local function processButtons(btnType)
+        local ok, buttonList = pcall(function()
+            return sprite:GetQuickButtons(btnType, false)
+        end)
+        if not ok or not buttonList then return end
+
+        local iterOk, iterErr = pcall(function()
+            EEex_Utility_IterateCPtrList(buttonList, function(bd)
+                local resOk, resref = pcall(function()
+                    return bd.m_abilityId.m_res:get()
+                end)
+                if not resOk or not resref or resref == "" then return end
+
+                local bdCount = 0
+                pcall(function() bdCount = bd.m_count end)
+                if bdCount <= 0 then bdCount = 1 end
+
+                counts[resref] = (counts[resref] or 0) + bdCount
+            end)
+        end)
+
+        -- Always free the list, even if iteration errored
+        pcall(EEex_Utility_FreeCPtrList, buttonList)
+
+        if not iterOk then
+            BfBot._Warn("Count map iteration failed: " .. tostring(iterErr))
+        end
+    end
+
+    processButtons(2)  -- wizard + priest
+    processButtons(4)  -- innate
+
+    return counts
+end
+
+--- Scan all known spells for a party member.
 --- Returns a table keyed by resref and total spell count.
+--- Uses known spells iterators as primary catalog, GetQuickButtons for counts.
 function BfBot.Scan.GetCastableSpells(sprite)
     if not sprite then return {}, 0 end
 
@@ -93,171 +140,72 @@ function BfBot.Scan.GetCastableSpells(sprite)
     local count = 0
     local seen = {}
 
-    -- Helper: process a button list from GetQuickButtons
-    -- metadataOnly: if true, only add entries for spells not already seen
-    --               (used for disabled/exhausted spells to capture name+icon)
-    local function processButtonList(buttonList, metadataOnly)
-        if not buttonList then return end
+    -- Phase 1: Build catalog from known spells iterators
+    local iterators = {
+        { fn = "EEex_Sprite_GetKnownMageSpellsWithAbilityIterator",   name = "mage" },
+        { fn = "EEex_Sprite_GetKnownPriestSpellsWithAbilityIterator", name = "priest" },
+        { fn = "EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator", name = "innate" },
+    }
 
-        -- Wrap iteration in pcall so list is ALWAYS freed even on error
+    for _, iter in ipairs(iterators) do
+        local iterFn = _G[iter.fn]
+        if not iterFn then
+            BfBot._Warn("Iterator not available: " .. iter.fn)
+            goto nextIter
+        end
+
         local iterOk, iterErr = pcall(function()
-            EEex_Utility_IterateCPtrList(buttonList, function(bd)
-                -- Extract resref
-                local resOk, resref = pcall(function()
-                    return bd.m_abilityId.m_res:get()
-                end)
-                if not resOk or not resref or resref == "" then return end
+            for lvl, idx, resref, ability in iterFn(sprite) do
+                if resref and resref ~= "" and not seen[resref] then
+                    -- Skip BuffBot's own generated innates
+                    if resref:sub(1, 4) ~= "BFBT" then
+                        seen[resref] = true
 
-                -- Skip BuffBot's own generated innates
-                if resref:sub(1, 4) == "BFBT" then return end
+                        -- Load SPL header for classification + metadata
+                        local hdrOk, header = pcall(EEex_Resource_Demand, resref, "SPL")
+                        if hdrOk and header then
+                            -- Use caster-level-appropriate ability if available
+                            local casterLevel = 1
+                            local clOk, cl = pcall(function()
+                                return sprite:getCasterLevelForSpell(resref, true)
+                            end)
+                            if clOk and cl and cl > 0 then
+                                casterLevel = cl
+                            end
 
-                if metadataOnly then
-                    -- Metadata pass: only add spells we haven't seen yet
-                    if seen[resref] then return end
-                    seen[resref] = true
+                            local levelAbility = header:getAbilityForLevel(casterLevel)
+                            -- Fall back to iterator-provided ability, then ability index 0
+                            local useAbility = levelAbility or ability
+                            if not useAbility then
+                                useAbility = header:getAbility(0)
+                            end
 
-                    local bdIcon = ""
-                    pcall(function() bdIcon = bd.m_icon:get() end)
-
-                    local bdName = 0
-                    pcall(function() bdName = bd.m_name end)
-
-                    -- Load SPL header
-                    local header = EEex_Resource_Demand(resref, "SPL")
-                    if not header then return end
-
-                    local casterLevel = 1
-                    local clOk, cl = pcall(function()
-                        return sprite:getCasterLevelForSpell(resref, true)
-                    end)
-                    if clOk and cl and cl > 0 then
-                        casterLevel = cl
-                    end
-
-                    local ability = header:getAbilityForLevel(casterLevel)
-                    if not ability then
-                        ability = header:getAbility(0)
-                    end
-                    if not ability then return end
-
-                    -- Build entry with count=0 and disabled=true (exhausted spell)
-                    local entry = _buildSpellEntry(
-                        sprite, resref, 0, bdIcon, bdName, 1,
-                        header, ability
-                    )
-                    spells[resref] = entry
-                    count = count + 1
-                    return
-                end
-
-                -- Skip duplicates (same spell from different button entries)
-                if seen[resref] then
-                    -- Accumulate count for duplicate entries
-                    if spells[resref] then
-                        local bdCount = 0
-                        pcall(function() bdCount = bd.m_count end)
-                        if bdCount > 0 then
-                            spells[resref].count = spells[resref].count + bdCount
-                        else
-                            spells[resref].count = spells[resref].count + 1
+                            if useAbility then
+                                local entry = _buildCatalogEntry(sprite, resref, header, useAbility)
+                                spells[resref] = entry
+                                count = count + 1
+                            end
                         end
                     end
-                    return
                 end
-                seen[resref] = true
-
-                -- Extract button data fields
-                local bdCount = 0
-                pcall(function() bdCount = bd.m_count end)
-                if bdCount <= 0 then bdCount = 1 end -- at least 1 if it's in the list
-
-                local bdIcon = ""
-                pcall(function() bdIcon = bd.m_icon:get() end)
-
-                local bdName = 0
-                pcall(function() bdName = bd.m_name end)
-
-                local bdDisabled = 0
-                pcall(function() bdDisabled = bd.m_bDisabled end)
-
-                -- Load SPL header
-                local header = EEex_Resource_Demand(resref, "SPL")
-                if not header then
-                    BfBot._Warn("Cannot load SPL for " .. resref)
-                    return
-                end
-
-                -- Get caster level and ability
-                local casterLevel = 1
-                local clOk, cl = pcall(function()
-                    return sprite:getCasterLevelForSpell(resref, true)
-                end)
-                if clOk and cl and cl > 0 then
-                    casterLevel = cl
-                end
-
-                local ability = header:getAbilityForLevel(casterLevel)
-                if not ability then
-                    ability = header:getAbility(0)
-                end
-                if not ability then
-                    BfBot._Warn("No ability for " .. resref .. " at level " .. casterLevel)
-                    return
-                end
-
-                -- Build entry
-                local entry = _buildSpellEntry(
-                    sprite, resref, bdCount, bdIcon, bdName, bdDisabled,
-                    header, ability
-                )
-                spells[resref] = entry
-                count = count + 1
-            end)
+            end
         end)
 
-        -- Always free the list, even if iteration errored
-        pcall(EEex_Utility_FreeCPtrList, buttonList)
-
         if not iterOk then
-            BfBot._Warn("Button list iteration failed: " .. tostring(iterErr))
+            BfBot._Warn(iter.name .. " iterator failed: " .. tostring(iterErr))
         end
+
+        ::nextIter::
     end
 
-    -- Get memorized wizard + priest spells (type 2)
-    local spellOk, spellList = pcall(function()
-        return sprite:GetQuickButtons(2, false)
-    end)
-    if spellOk and spellList then
-        processButtonList(spellList)
-    else
-        BfBot._Warn("GetQuickButtons(2) failed: " .. tostring(spellList))
-    end
-
-    -- Get innate abilities (type 4)
-    local innateOk, innateList = pcall(function()
-        return sprite:GetQuickButtons(4, false)
-    end)
-    if innateOk and innateList then
-        processButtonList(innateList)
-    else
-        BfBot._Warn("GetQuickButtons(4) failed: " .. tostring(innateList))
-    end
-
-    -- Secondary pass: scan with disabled=true to capture metadata (name, icon,
-    -- classification) for exhausted spells (memorized but 0 slots remaining).
-    -- Only adds entries for spells NOT already found in the castable passes above.
-    local disSpellOk, disSpellList = pcall(function()
-        return sprite:GetQuickButtons(2, true)
-    end)
-    if disSpellOk and disSpellList then
-        processButtonList(disSpellList, true)
-    end
-
-    local disInnateOk, disInnateList = pcall(function()
-        return sprite:GetQuickButtons(4, true)
-    end)
-    if disInnateOk and disInnateList then
-        processButtonList(disInnateList, true)
+    -- Phase 2: Overlay slot counts from GetQuickButtons
+    local countMap = _buildCountMap(sprite)
+    for resref, slotCount in pairs(countMap) do
+        if spells[resref] then
+            spells[resref].count = slotCount
+        end
+        -- Spells in countMap but NOT in known iterators are engine-internal
+        -- or temporary — silently ignored (not part of the character's spellbook).
     end
 
     -- Cache results
@@ -302,92 +250,4 @@ end
 --- Invalidate all scan caches.
 function BfBot.Scan.InvalidateAll()
     BfBot._cache.scan = {}
-end
-
---- Load display metadata (name, icon, duration) for a spell by resref.
--- Used as fallback when the spell isn't in GetQuickButtons results (exhausted slots).
-function BfBot.Scan.GetSpellMetadata(resref, sprite)
-    local ok, header = pcall(EEex_Resource_Demand, resref, "SPL")
-    if not ok or not header then return nil end
-
-    -- Name: try unidentified name (0x08) first — Spell Revisions puts the real name
-    -- there and sets identified name (0x0C) to dummy strref 9999999.
-    local name = resref
-    local function tryStrref(strref)
-        if not strref or strref == 0xFFFFFFFF or strref == -1 or strref == 0 or strref == 9999999 then
-            return nil
-        end
-        local ok, fetched = pcall(Infinity_FetchString, strref)
-        if ok and fetched and fetched ~= "" then return fetched end
-        return nil
-    end
-    name = tryStrref(header.genericName) or tryStrref(header.identifiedName) or resref
-
-    -- Get ability for caster level
-    local casterLevel = 1
-    if sprite then
-        local clOk, cl = pcall(function()
-            return sprite:getCasterLevelForSpell(resref, true)
-        end)
-        if clOk and cl and cl > 0 then casterLevel = cl end
-    end
-    local ability = header:getAbilityForLevel(casterLevel)
-    if not ability then ability = header:getAbility(0) end
-
-    -- Icon from ability
-    local icon = ""
-    if ability then
-        local iconOk, abilIcon = pcall(function() return ability.quickSlotIcon:get() end)
-        if iconOk and abilIcon and abilIcon ~= "" then icon = abilIcon end
-    end
-
-    -- Duration
-    local duration = 0
-    local durCat = "instant"
-    if ability then
-        duration = BfBot.Class.GetDuration(header, ability)
-        durCat = BfBot.Class.GetDurationCategory(duration)
-    end
-
-    return {
-        name = name,
-        icon = icon,
-        duration = duration,
-        durCat = durCat,
-    }
-end
-
---- Load and classify a single spell by resref.
-function BfBot.Scan.GetSpellInfo(resref, sprite)
-    -- Check classification cache
-    local cached = BfBot._cache.class[resref]
-
-    local header = EEex_Resource_Demand(resref, "SPL")
-    if not header then return nil end
-
-    local casterLevel = 10 -- default
-    if sprite then
-        local ok, cl = pcall(function()
-            return sprite:getCasterLevelForSpell(resref, true)
-        end)
-        if ok and cl and cl > 0 then
-            casterLevel = cl
-        end
-    end
-
-    local ability = header:getAbilityForLevel(casterLevel)
-    if not ability then
-        ability = header:getAbility(0)
-    end
-    if not ability then return nil end
-
-    local classResult = BfBot.Class.Classify(resref, header, ability)
-
-    return {
-        resref = resref,
-        name = Infinity_FetchString(header.genericName) or resref,
-        level = header.spellLevel or 0,
-        spellType = header.itemType or 0,
-        class = classResult,
-    }
 end
