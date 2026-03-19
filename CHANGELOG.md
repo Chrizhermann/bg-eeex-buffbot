@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.0-alpha (2026-03-19)
+
+### Features
+- Scanner refactor: known spells iterators as primary catalog source instead of GetQuickButtons (#17)
+  - All known spells now visible (including exhausted/unmemorized) — no more disappearing spells
+  - Spell Revisions strref 9999999 handled correctly (names display properly)
+  - Scan entries include `isAoE` and `isSelfOnly` targeting flags (preparation for #18)
+  - Simplified architecture: 394 → 254 lines, removed 3 dead code paths
+
+### Bug Fixes
+- F12 innate abilities no longer display "panic" on Lua errors — BFBOTGO wrapped in pcall (#9)
+  - Self-healing: stale party slot detection triggers automatic RefreshAll
+  - Errors logged to `buffbot_innate.log` for debugging
+- Exhausted spells (0 remaining slots) now show name and icon in spell list (#8)
+
 ## v1.1.0-alpha (2026-03-08)
 
 ### Features
