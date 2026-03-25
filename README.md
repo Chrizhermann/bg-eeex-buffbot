@@ -89,7 +89,7 @@ This is an alpha release. Everything works, but some things are unfinished:
 BuffBot includes a built-in test suite. In the EEex Lua console:
 
 ```
-BfBot.Test.RunAll()         -- full test suite (129 tests)
+BfBot.Test.RunAll()         -- full test suite (180+ tests)
 BfBot.Test.ExportImport()   -- export/import tests
 BfBot.UI.Toggle()           -- open/close config panel
 ```
@@ -132,13 +132,14 @@ Requires Python 3 for TLK patching (innate ability tooltip names).
 bg-eeex-buffbot/
 ├── buffbot/              # Mod source files (copied to override/)
 │   ├── M_BfBot.lua       # Bootstrap (auto-loaded by EEex)
+│   ├── BfBotCor.lua      # Core namespace, logging, field resolution, caches
 │   ├── BfBotCls.lua      # Buff classifier (opcode scoring)
-│   ├── BfBotScn.lua      # Spellbook scanner
+│   ├── BfBotScn.lua      # Spellbook scanner (known spells iterators)
 │   ├── BfBotExe.lua      # Execution engine (parallel per-caster)
 │   ├── BfBotPer.lua      # Persistence (marshal handlers, presets, export/import)
 │   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
 │   ├── BfBotUI.lua       # Config panel logic
-│   ├── BfBotTst.lua      # Test suite (129 tests)
+│   ├── BfBotTst.lua      # Test suite (180+ tests)
 │   └── BuffBot.menu      # UI definitions (.menu DSL)
 ├── tools/                # Dev utilities
 │   ├── deploy.sh         # Copy files to game override
