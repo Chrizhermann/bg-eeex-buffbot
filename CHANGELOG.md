@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.1-alpha (2026-03-27)
+
+### Bug Fixes
+- **CRITICAL**: Fix innate ability accumulation that corrupted save files and crashed on rest
+  - `RemoveSpellRES` silently fails when queued (not in INSTANT.IDS) — innates were never removed
+  - Each preset refresh added new innates without removing old ones, causing 3x+ accumulation
+  - Bloated spell lists corrupted CRE data, causing NULL pointer crash during rest
+  - Fix: new `BFBTRM.SPL` with opcode 172 (Remove Innate) applied via `ReallyForceSpellRES`
+  - Existing accumulated innates cleaned up automatically (5-pass revoke on next refresh)
+
 ## v1.2.0-alpha (2026-03-19)
 
 ### Features

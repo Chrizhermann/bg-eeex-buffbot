@@ -332,7 +332,7 @@ end
 --- Write all SPL files to the override folder (always overwrites).
 -- Called once at mod init time (before menus load).
 -- SPL version tag lets us detect when binary format changes.
-BfBot.Innate._SPL_VERSION = 4  -- bump this when _BuildSPL format changes
+BfBot.Innate._SPL_VERSION = 5  -- bump this when _BuildSPL format changes (v5: added BFBTRM.SPL)
 
 function BfBot.Innate._EnsureSPLFiles()
     local count = 0
@@ -366,6 +366,16 @@ function BfBot.Innate._EnsureSPLFiles()
     if rf then
         rf:write(removerData)
         rf:close()
+        count = count + 1
+    end
+
+    -- Write innate remover SPL (opcode 172 for all BFBT resrefs)
+    local innRemoverPath = "override/BFBTRM.SPL"
+    local innRemoverData = BfBot.Innate._BuildRemoverSPL()
+    local irf = io.open(innRemoverPath, "wb")
+    if irf then
+        irf:write(innRemoverData)
+        irf:close()
         count = count + 1
     end
 
@@ -408,16 +418,114 @@ function BfBot.Innate.Grant()
     end
 end
 
+--- Build a remover SPL (BFBTRM.SPL) that removes ALL possible BuffBot innates
+-- via opcode 172 (Remove Innate). One effect per BFBT{slot}{preset} resref.
+-- Applied via ReallyForceSpellRES — reliable, unlike RemoveSpellRES which
+-- silently fails when queued (not in INSTANT.IDS) and caused innate accumulation
+-- that corrupted save files and crashed on rest.
+-- @return string: raw SPL binary data
+function BfBot.Innate._BuildRemoverSPL()
+    local HEADER_SIZE = 0x72   -- 114 bytes
+    local EXT_SIZE    = 0x28   -- 40 bytes
+    local extOffset   = HEADER_SIZE
+    local featOffset  = HEADER_SIZE + EXT_SIZE
+
+    -- Build opcode 172 effects for all possible BFBT innate resrefs
+    local effects = {}
+    for slot = 0, 5 do
+        for preset = 1, BfBot.MAX_PRESETS do
+            local resref = string.format("BFBT%d%d", slot, preset)
+            table.insert(effects,
+                _splWord(172)              -- 0x0000: Opcode = Remove Innate
+                .. _splByte(1)             -- 0x0002: Target = self
+                .. _splByte(0)             -- 0x0003: Power
+                .. _splDword(0)            -- 0x0004: Param1
+                .. _splDword(0)            -- 0x0008: Param2
+                .. _splByte(1)             -- 0x000C: Timing = 1 (instant/permanent)
+                .. _splByte(0)             -- 0x000D: Dispel/resistance
+                .. _splDword(0)            -- 0x000E: Duration
+                .. _splByte(100)           -- 0x0012: Probability1
+                .. _splByte(0)             -- 0x0013: Probability2
+                .. _splResref(resref)      -- 0x0014: Resource = innate to remove
+                .. _splDword(0)            -- 0x001C: Dice thrown
+                .. _splDword(0)            -- 0x0020: Dice sides
+                .. _splDword(0)            -- 0x0024: Save type
+                .. _splDword(0)            -- 0x0028: Save bonus
+                .. _splDword(0)            -- 0x002C: Stacking ID
+            )
+        end
+    end
+
+    local numEffects = #effects
+
+    -- SPL Header (114 bytes)
+    local header = "SPL "                       -- 0x0000: Signature
+        .. "V1  "                               -- 0x0004: Version
+        .. _splDword(0xFFFFFFFF)                -- 0x0008: Unidentified name strref (none)
+        .. _splDword(0xFFFFFFFF)                -- 0x000C: Identified name strref (none)
+        .. _splResref("")                       -- 0x0010: Completion sound
+        .. _splDword(0)                         -- 0x0018: Flags
+        .. _splWord(4)                          -- 0x001C: Spell type = 4 (Innate)
+        .. _splDword(0)                         -- 0x001E: Exclusion flags
+        .. _splWord(0)                          -- 0x0022: Casting graphics
+        .. _splByte(0)                          -- 0x0024: unused
+        .. _splByte(0)                          -- 0x0025: Primary type
+        .. _splByte(0)                          -- 0x0026: unused
+        .. _splByte(0)                          -- 0x0027: Secondary type
+        .. _splPad(12)                          -- 0x0028: unused block
+        .. _splDword(1)                         -- 0x0034: Spell level = 1
+        .. _splWord(0)                          -- 0x0038: Stack amount
+        .. _splResref("")                       -- 0x003A: Spellbook icon (none — invisible)
+        .. _splWord(0)                          -- 0x0042: Lore to ID
+        .. _splResref("")                       -- 0x0044: Ground icon
+        .. _splDword(0)                         -- 0x004C: Weight
+        .. _splDword(0xFFFFFFFF)                -- 0x0050: Description unidentified
+        .. _splDword(0xFFFFFFFF)                -- 0x0054: Description identified
+        .. _splResref("")                       -- 0x0058: Description icon
+        .. _splDword(0)                         -- 0x0060: Enchantment
+        .. _splDword(extOffset)                 -- 0x0064: Extended header offset
+        .. _splWord(1)                          -- 0x0068: Extended header count
+        .. _splDword(featOffset)                -- 0x006A: Feature block table offset
+        .. _splWord(0)                          -- 0x006E: Casting feature block offset
+        .. _splWord(0)                          -- 0x0070: Casting feature block count
+
+    -- Extended Header / Ability (40 bytes)
+    local ability = _splByte(1)                 -- 0x0000: Spell form = standard
+        .. _splByte(0x04)                       -- 0x0001: Flags = friendly
+        .. _splWord(4)                          -- 0x0002: Location = Innate
+        .. _splResref("")                       -- 0x0004: Memorised icon (none — invisible)
+        .. _splByte(5)                          -- 0x000C: Target = self
+        .. _splByte(0)                          -- 0x000D: Target count
+        .. _splWord(0)                          -- 0x000E: Range
+        .. _splWord(1)                          -- 0x0010: Level required = 1
+        .. _splWord(0)                          -- 0x0012: Casting time = instant
+        .. _splWord(1)                          -- 0x0014: Times per day = 1
+        .. _splWord(0)                          -- 0x0016: Dice sides
+        .. _splWord(0)                          -- 0x0018: Dice thrown
+        .. _splWord(0)                          -- 0x001A: Enchanted
+        .. _splWord(0)                          -- 0x001C: Damage type
+        .. _splWord(numEffects)                 -- 0x001E: Feature block count
+        .. _splWord(0)                          -- 0x0020: Feature block offset (index)
+        .. _splWord(0)                          -- 0x0022: Charges
+        .. _splWord(0)                          -- 0x0024: Charge depletion
+        .. _splWord(1)                          -- 0x0026: Projectile = 1 (none)
+
+    return header .. ability .. table.concat(effects)
+end
+
 --- Remove all BuffBot innates from a specific character.
--- NOTE: RemoveSpellRES may not be in INSTANT.IDS. Using queued execution as fallback.
--- If innates accumulate in testing, consider opcode 172 (Remove Innate) via effect.
+-- Uses BFBTRM.SPL (opcode 172) via ReallyForceSpellRES for reliable removal.
+-- Multiple passes to clean up accumulated innates from saves affected by the
+-- old RemoveSpellRES bug (which silently failed, causing unbounded accumulation).
 function BfBot.Innate.Revoke(slot)
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
-    for idx = 1, BfBot.MAX_PRESETS do
-        local resref = string.format("BFBT%d%d", slot, idx)
+    -- Each pass removes one copy of each BFBT innate via opcode 172.
+    -- 5 passes handles up to 5x accumulation from the old bug.
+    -- Extra passes are cheap no-ops when nothing remains to remove.
+    for i = 1, 5 do
         EEex_Action_QueueResponseStringOnAIBase(
-            'RemoveSpellRES("' .. resref .. '")', sprite)
+            'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
     end
 end
 
