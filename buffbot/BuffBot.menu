@@ -600,16 +600,14 @@ menu
 }
 
 -- ==========================================================
--- Target picker sub-menu
--- Single mode: click = set target + close.
--- Multi mode (count>1): character buttons toggle [X]/[ ], Done closes.
+-- Target picker sub-menu — ordered priority list
 -- ==========================================================
 menu
 {
 	name    "BUFFBOT_TARGETS"
 	ignoreesc
 
-	-- Dark overlay background (click to close)
+	-- Dark overlay background (click to close = cancel)
 	text
 	{
 		action  "Infinity_PopMenu('BUFFBOT_TARGETS')"
@@ -619,135 +617,200 @@ menu
 		on escape
 	}
 
-	-- Border frame (renders behind parchment)
+	-- Border frame
 	label
 	{
 		name    "bbTgtFrame"
-		area 476 151 208 338
+		area 450 120 260 450
 	}
 
 	-- Panel background (parchment)
 	label
 	{
-		area 500 175 160 290
+		area 474 144 212 402
 		mosaic "BFBOTBG"
 	}
 
-	-- Header label (multi mode: shows spell name + count)
+	-- Header: spell name
 	label
 	{
-		enabled "buffbot_multiTarget == 1"
 		text lua "buffbot_targetHeader"
 		text style "normal_parchment"
 		text align left center
 		text color lua "{120, 90, 20}"
-		area 505 180 150 20
+		area 479 149 202 20
+	}
+
+	-- Lock state text (Self-only / Party-wide)
+	label
+	{
+		enabled "buffbot_targetLocked == 1"
+		text lua "buffbot_targetLockText"
+		text style "normal_parchment"
+		text align center center
+		text color lua "{150, 120, 80}"
+		area 479 174 202 20
 	}
 
 	-- "Self" button
 	button
 	{
-		action  "BfBot.UI.PickTarget('s')"
+		enabled "buffbot_targetLocked == 0"
+		action  "BfBot.UI.PickerSelf()"
 		text    "Self"
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 205 140 26
+		area 479 199 95 26
 	}
 
-	-- "Party" button
+	-- "All Party" button
 	button
 	{
-		action  "BfBot.UI.PickTarget('p')"
-		text    "Party"
+		enabled "buffbot_targetLocked == 0"
+		action  "BfBot.UI.PickerAllParty()"
+		text    "All Party"
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 233 140 26
+		area 581 199 95 26
 	}
 
 	-- Player 1
 	button
 	{
-		enabled "buffbot_charNames[1] ~= nil"
-		action  "BfBot.UI.PickTarget('1')"
+		enabled "buffbot_targetLocked == 0 and buffbot_charNames[1] ~= nil"
+		action  "BfBot.UI.PickerToggle(1) BfBot.UI.PickerSelect(1)"
 		text lua "BfBot.UI._PickerBtnText(1)"
 		text style "button"
+		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 261 140 26
+		area 479 231 197 26
 	}
 
 	-- Player 2
 	button
 	{
-		enabled "buffbot_charNames[2] ~= nil"
-		action  "BfBot.UI.PickTarget('2')"
+		enabled "buffbot_targetLocked == 0 and buffbot_charNames[2] ~= nil"
+		action  "BfBot.UI.PickerToggle(2) BfBot.UI.PickerSelect(2)"
 		text lua "BfBot.UI._PickerBtnText(2)"
 		text style "button"
+		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 289 140 26
+		area 479 259 197 26
 	}
 
 	-- Player 3
 	button
 	{
-		enabled "buffbot_charNames[3] ~= nil"
-		action  "BfBot.UI.PickTarget('3')"
+		enabled "buffbot_targetLocked == 0 and buffbot_charNames[3] ~= nil"
+		action  "BfBot.UI.PickerToggle(3) BfBot.UI.PickerSelect(3)"
 		text lua "BfBot.UI._PickerBtnText(3)"
 		text style "button"
+		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 317 140 26
+		area 479 287 197 26
 	}
 
 	-- Player 4
 	button
 	{
-		enabled "buffbot_charNames[4] ~= nil"
-		action  "BfBot.UI.PickTarget('4')"
+		enabled "buffbot_targetLocked == 0 and buffbot_charNames[4] ~= nil"
+		action  "BfBot.UI.PickerToggle(4) BfBot.UI.PickerSelect(4)"
 		text lua "BfBot.UI._PickerBtnText(4)"
 		text style "button"
+		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 345 140 26
+		area 479 315 197 26
 	}
 
 	-- Player 5
 	button
 	{
-		enabled "buffbot_charNames[5] ~= nil"
-		action  "BfBot.UI.PickTarget('5')"
+		enabled "buffbot_targetLocked == 0 and buffbot_charNames[5] ~= nil"
+		action  "BfBot.UI.PickerToggle(5) BfBot.UI.PickerSelect(5)"
 		text lua "BfBot.UI._PickerBtnText(5)"
 		text style "button"
+		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 373 140 26
+		area 479 343 197 26
 	}
 
 	-- Player 6
 	button
 	{
-		enabled "buffbot_charNames[6] ~= nil"
-		action  "BfBot.UI.PickTarget('6')"
+		enabled "buffbot_targetLocked == 0 and buffbot_charNames[6] ~= nil"
+		action  "BfBot.UI.PickerToggle(6) BfBot.UI.PickerSelect(6)"
 		text lua "BfBot.UI._PickerBtnText(6)"
+		text style "button"
+		text align left center
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 479 371 197 26
+	}
+
+	-- Move Up button
+	button
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerSelected > 1"
+		action  "BfBot.UI.PickerMoveUp()"
+		text    "Up"
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 401 140 26
+		area 479 403 95 26
 	}
 
-	-- "Done" button (multi mode only)
+	-- Move Down button
 	button
 	{
-		enabled "buffbot_multiTarget == 1"
-		action  "Infinity_PopMenu('BUFFBOT_TARGETS')"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerSelected > 0 and buffbot_pickerSelected < #buffbot_pickerTargets"
+		text    "Down"
+		action  "BfBot.UI.PickerMoveDown()"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 581 403 95 26
+	}
+
+	-- Clear button (hidden when locked)
+	button
+	{
+		enabled "buffbot_targetLocked == 0"
+		action  "BfBot.UI.PickerClear()"
+		text    "Clear"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 479 435 95 26
+	}
+
+	-- Done button (always visible)
+	button
+	{
+		action  "BfBot.UI.PickerDone()"
 		text    "Done"
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 505 433 140 26
+		area 581 435 95 26
+	}
+
+	-- Unlock Targeting button (visible only when locked)
+	button
+	{
+		enabled "buffbot_targetLocked == 1"
+		action  "BfBot.UI.PickerUnlock()"
+		text    "Unlock Targeting"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 479 467 197 26
 	}
 }
 

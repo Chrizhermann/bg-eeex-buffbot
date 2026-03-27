@@ -67,8 +67,11 @@ buffbot_castCharLabel = "Cast Character"
 
 -- Target picker state
 buffbot_targetRow = 0            -- which spell row opened the picker
-buffbot_multiTarget = 0          -- 1 if current spell is multi-target mode
-buffbot_targetHeader = ""        -- header text for target picker (spell name + count)
+buffbot_targetHeader = ""        -- header text for target picker (spell name)
+buffbot_targetLocked = 0         -- 1 if spell is self-only/AoE and not unlocked
+buffbot_targetLockText = ""      -- "(Self-only)" or "(Party-wide)" for locked spells
+buffbot_pickerTargets = {}       -- working copy of ordered target list (name strings)
+buffbot_pickerSelected = 0       -- selected row in picker (for Up/Down reordering)
 
 -- Rename dialog state
 buffbot_renameInput = ""
@@ -530,20 +533,43 @@ function BfBot.UI.ToggleSelected()
 end
 
 -- ============================================================
--- Target Picking (single-select + multi-select toggle mode)
+-- Target Picking (ordered priority list)
 -- ============================================================
 
+--- Open the target picker for a spell row.
 function BfBot.UI.OpenTargets(row)
     buffbot_targetRow = row
     local entry = buffbot_spellTable[row]
-    -- Multi-target mode: single-target spell with count > 1
-    if entry and entry.count > 1 then
-        buffbot_multiTarget = 1
-        buffbot_targetHeader = (entry.name or entry.resref) .. " (x" .. entry.count .. ")"
-    else
-        buffbot_multiTarget = 0
-        buffbot_targetHeader = ""
+    if not entry then return end
+
+    buffbot_targetHeader = entry.name or entry.resref
+    buffbot_pickerSelected = 0
+
+    -- Determine lock state
+    local isLocked = 0
+    local lockText = ""
+    if entry.tgtUnlock ~= 1 then
+        if entry.isSelfOnly == 1 then
+            isLocked = 1
+            lockText = "(Self-only)"
+        elseif entry.isAoE == 1 then
+            isLocked = 1
+            lockText = "(Party-wide)"
+        end
     end
+    buffbot_targetLocked = isLocked
+    buffbot_targetLockText = lockText
+
+    -- Build working copy of current targets
+    buffbot_pickerTargets = {}
+    local tgt = entry.tgt
+    if type(tgt) == "table" then
+        for _, name in ipairs(tgt) do
+            table.insert(buffbot_pickerTargets, name)
+        end
+    end
+    -- "s" and "p" don't populate the picker list (they use the quick buttons)
+
     Infinity_PushMenu("BUFFBOT_TARGETS")
 end
 
@@ -554,83 +580,161 @@ function BfBot.UI.OpenTargetsForSelected()
     end
 end
 
---- Pick a target — called from BUFFBOT_TARGETS buttons.
--- In single mode: sets target directly and closes picker.
--- In multi mode: "s"/"p" set directly and close; character slots toggle.
-function BfBot.UI.PickTarget(value)
+--- Get the priority number for a character name in the picker, or 0 if not selected.
+function BfBot.UI._PickerPriority(name)
+    for i, entry in ipairs(buffbot_pickerTargets) do
+        if entry == name then return i end
+    end
+    return 0
+end
+
+--- Button text for character slot in target picker.
+-- Shows "[N] Name" if selected, "[ ] Name" if not.
+function BfBot.UI._PickerBtnText(slot)
+    local name = buffbot_charNames[slot] or ("Player " .. slot)
+    local pri = BfBot.UI._PickerPriority(name)
+    if pri > 0 then
+        return "[" .. pri .. "] " .. name
+    end
+    return "[ ] " .. name
+end
+
+--- Toggle a character in the ordered target list.
+-- If not selected: append as next priority.
+-- If selected: remove and shift remaining numbers down.
+function BfBot.UI.PickerToggle(slot)
+    if buffbot_targetLocked == 1 then return end
+    local name = buffbot_charNames[slot]
+    if not name then return end
+
+    local pri = BfBot.UI._PickerPriority(name)
+    if pri > 0 then
+        -- Remove
+        table.remove(buffbot_pickerTargets, pri)
+        -- Adjust selected row if needed
+        if buffbot_pickerSelected >= pri then
+            buffbot_pickerSelected = math.max(0, buffbot_pickerSelected - 1)
+        end
+    else
+        -- Append
+        table.insert(buffbot_pickerTargets, name)
+    end
+end
+
+--- Quick-set: Self target. Sets tgt="s" and closes.
+function BfBot.UI.PickerSelf()
+    if buffbot_targetLocked == 1 then return end
     local row = buffbot_targetRow
     local entry = buffbot_spellTable[row]
     if not entry then return end
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
     if not sprite then return end
 
-    if buffbot_multiTarget == 0 or value == "s" or value == "p" then
-        -- Single mode, or Self/Party shortcut: set directly and close
-        BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, value)
-        entry.tgt = value
-        entry.targetText = BfBot.UI._TargetToText(value)
+    BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, "s")
+    entry.tgt = "s"
+    entry.targetText = BfBot.UI._TargetToText("s")
+    Infinity_PopMenu("BUFFBOT_TARGETS")
+end
+
+--- Quick-set: All Party. Populates all current party members in portrait order.
+function BfBot.UI.PickerAllParty()
+    if buffbot_targetLocked == 1 then return end
+    buffbot_pickerTargets = {}
+    for slot = 1, 6 do
+        local name = buffbot_charNames[slot]
+        if name then
+            table.insert(buffbot_pickerTargets, name)
+        end
+    end
+end
+
+--- Move selected target up in priority.
+function BfBot.UI.PickerMoveUp()
+    local sel = buffbot_pickerSelected
+    if sel <= 1 or sel > #buffbot_pickerTargets then return end
+    buffbot_pickerTargets[sel], buffbot_pickerTargets[sel - 1] =
+        buffbot_pickerTargets[sel - 1], buffbot_pickerTargets[sel]
+    buffbot_pickerSelected = sel - 1
+end
+
+--- Move selected target down in priority.
+function BfBot.UI.PickerMoveDown()
+    local sel = buffbot_pickerSelected
+    if sel < 1 or sel >= #buffbot_pickerTargets then return end
+    buffbot_pickerTargets[sel], buffbot_pickerTargets[sel + 1] =
+        buffbot_pickerTargets[sel + 1], buffbot_pickerTargets[sel]
+    buffbot_pickerSelected = sel + 1
+end
+
+--- Select a target row in the picker (for Up/Down).
+-- Click a numbered entry to select it for reordering.
+function BfBot.UI.PickerSelect(slot)
+    local name = buffbot_charNames[slot]
+    if not name then return end
+    local pri = BfBot.UI._PickerPriority(name)
+    if pri > 0 then
+        buffbot_pickerSelected = pri
+    end
+end
+
+--- Clear targets: reset to smart default.
+function BfBot.UI.PickerClear()
+    if buffbot_targetLocked == 1 then return end
+    buffbot_pickerTargets = {}
+    buffbot_pickerSelected = 0
+end
+
+--- Confirm and close the picker. Saves the working copy to persist.
+function BfBot.UI.PickerDone()
+    local row = buffbot_targetRow
+    local entry = buffbot_spellTable[row]
+    if not entry then
         Infinity_PopMenu("BUFFBOT_TARGETS")
-    else
-        -- Multi mode: toggle this slot in the target list
-        local tgt = entry.tgt
-        -- Normalize to table if currently a string
-        if type(tgt) ~= "table" then
-            if tgt and tgt ~= "s" and tgt ~= "p" then
-                tgt = {tgt}
-            else
-                tgt = {}
-            end
-        end
-
-        -- Toggle: remove if present, add if absent
-        local found = false
-        local newTgt = {}
-        for _, slot in ipairs(tgt) do
-            if slot == value then
-                found = true
-            else
-                table.insert(newTgt, slot)
-            end
-        end
-        if not found then
-            table.insert(newTgt, value)
-        end
-
-        -- Save (use table even if only 1 entry — consistent for multi-copy spells)
-        BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, newTgt)
-        entry.tgt = newTgt
-        entry.targetText = BfBot.UI._TargetToText(newTgt)
+        return
     end
-end
-
---- Check if a party slot is in the current multi-target list.
-function BfBot.UI._IsTargetChecked(slot)
-    local entry = buffbot_spellTable[buffbot_targetRow]
-    if not entry then return false end
-    local tgt = entry.tgt
-    local slotStr = tostring(slot)
-    if type(tgt) == "table" then
-        for _, v in ipairs(tgt) do
-            if v == slotStr then return true end
-        end
-        return false
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
     end
-    return tgt == slotStr
-end
 
---- Button text for character slot in target picker.
--- In multi mode: shows "[X] Name" or "[ ] Name".
--- In single mode: shows just "Name".
-function BfBot.UI._PickerBtnText(slot)
-    local name = buffbot_charNames[slot] or ("Player " .. slot)
-    if buffbot_multiTarget == 1 then
-        if BfBot.UI._IsTargetChecked(slot) then
-            return "[X] " .. name
+    -- Determine final tgt value
+    local tgt
+    if #buffbot_pickerTargets == 0 then
+        -- Empty list → use smart default
+        if entry.isSelfOnly == 1 then
+            tgt = "s"
+        elseif entry.isAoE == 1 then
+            tgt = "p"
         else
-            return "[ ] " .. name
+            tgt = "s"  -- single-target default: self
+        end
+    else
+        -- Copy the ordered list
+        tgt = {}
+        for _, name in ipairs(buffbot_pickerTargets) do
+            table.insert(tgt, name)
         end
     end
-    return name
+
+    BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, tgt)
+    entry.tgt = tgt
+    entry.targetText = BfBot.UI._TargetToText(tgt)
+    Infinity_PopMenu("BUFFBOT_TARGETS")
+end
+
+--- Unlock targeting for a locked spell.
+function BfBot.UI.PickerUnlock()
+    local row = buffbot_targetRow
+    local entry = buffbot_spellTable[row]
+    if not entry then return end
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+
+    BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, entry.resref, 1)
+    entry.tgtUnlock = 1
+    buffbot_targetLocked = 0
+    buffbot_targetLockText = ""
 end
 
 -- ============================================================
