@@ -762,8 +762,24 @@ end
 
 -- ---- Queue building ----
 
+--- Resolve a character name to a party slot (0-5).
+-- Iterates party, compares _GetName(sprite) to name.
+-- @param name string: character name to find
+-- @return number|nil: slot (0-5) or nil if not in party
+function BfBot.Persist._ResolveNameToSlot(name)
+    if not name or name == "" then return nil end
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite and BfBot._GetName(sprite) == name then
+            return slot
+        end
+    end
+    return nil
+end
+
 --- Resolve a config target (tgt field) into one or more exec queue entries.
--- @param tgt string|table: "s", "p", "1"-"6", or table of slot strings
+-- Accepts both legacy slot strings ("1"-"6") and name strings ("Branwen").
+-- @param tgt string|table: "s", "p", slot string, name string, or table of slot/name strings
 -- @param slot number: caster party slot (0-5)
 -- @param resref string: spell resref
 -- @param pri number: priority value
@@ -771,20 +787,32 @@ end
 function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
     local results = {}
     if type(tgt) == "table" then
-        -- Multi-target: one queue entry per target in the list
-        for _, slotStr in ipairs(tgt) do
-            local num = tonumber(slotStr)
+        -- Ordered target list: one queue entry per target
+        for _, entry in ipairs(tgt) do
+            local num = tonumber(entry)
             if num and num >= 1 and num <= 6 then
+                -- Legacy slot string
                 table.insert(results, {
                     caster = slot,
                     spell  = resref,
                     target = num,
                     pri    = pri,
                 })
+            else
+                -- Name-based: resolve to slot
+                local resolved = BfBot.Persist._ResolveNameToSlot(entry)
+                if resolved then
+                    table.insert(results, {
+                        caster = slot,
+                        spell  = resref,
+                        target = resolved + 1,  -- slot 0-5 → Player 1-6
+                        pri    = pri,
+                    })
+                end
+                -- Unresolved names silently skipped
             end
         end
     else
-        -- Single target: map config format to exec engine format
         local target
         if tgt == "s" then
             target = "self"
@@ -793,9 +821,16 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
         else
             local num = tonumber(tgt)
             if num and num >= 1 and num <= 6 then
+                -- Legacy slot string
                 target = num
             else
-                target = "all"  -- fallback for unknown
+                -- Name-based: resolve to slot
+                local resolved = BfBot.Persist._ResolveNameToSlot(tgt)
+                if resolved then
+                    target = resolved + 1
+                else
+                    target = "all"  -- fallback for unresolved
+                end
             end
         end
         table.insert(results, {
