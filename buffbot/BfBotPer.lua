@@ -418,6 +418,22 @@ function BfBot.Persist.SetSpellTarget(sprite, presetIndex, resref, target)
     preset.spells[resref].tgt = target
 end
 
+--- Set the tgtUnlock override for a spell in a preset.
+-- When set to 1, the target picker is enabled even for self-only/AoE spells.
+function BfBot.Persist.SetTgtUnlock(sprite, presetIndex, resref, value)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset or not preset.spells[resref] then return end
+    preset.spells[resref].tgtUnlock = (value == 1) and 1 or 0
+end
+
+--- Get the tgtUnlock override for a spell in a preset.
+-- @return number: 1 if unlocked, 0 or nil if locked (default)
+function BfBot.Persist.GetTgtUnlock(sprite, presetIndex, resref)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset or not preset.spells or not preset.spells[resref] then return 0 end
+    return preset.spells[resref].tgtUnlock or 0
+end
+
 --- Set the priority for a spell in a preset.
 function BfBot.Persist.SetSpellPriority(sprite, presetIndex, resref, priority)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
