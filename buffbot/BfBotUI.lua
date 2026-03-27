@@ -71,7 +71,7 @@ buffbot_targetHeader = ""        -- header text for target picker (spell name)
 buffbot_targetLocked = 0         -- 1 if spell is self-only/AoE and not unlocked
 buffbot_targetLockText = ""      -- "(Self-only)" or "(Party-wide)" for locked spells
 buffbot_pickerTargets = {}       -- working copy of ordered target list (name strings)
-buffbot_pickerSelected = 0       -- selected row in picker (for Up/Down reordering)
+buffbot_tgtPickerSel = 0         -- selected row in target picker (for Up/Down reordering)
 
 -- Rename dialog state
 buffbot_renameInput = ""
@@ -543,7 +543,7 @@ function BfBot.UI.OpenTargets(row)
     if not entry then return end
 
     buffbot_targetHeader = entry.name or entry.resref
-    buffbot_pickerSelected = 0
+    buffbot_tgtPickerSel = 0
 
     -- Determine lock state
     local isLocked = 0
@@ -567,6 +567,9 @@ function BfBot.UI.OpenTargets(row)
         for _, name in ipairs(tgt) do
             table.insert(buffbot_pickerTargets, name)
         end
+    elseif type(tgt) == "string" and tgt ~= "s" and tgt ~= "p" then
+        -- Single name string (from lazy slot→name conversion) — wrap into list
+        table.insert(buffbot_pickerTargets, tgt)
     end
     -- "s" and "p" don't populate the picker list (they use the quick buttons)
 
@@ -612,8 +615,8 @@ function BfBot.UI.PickerToggle(slot)
         -- Remove
         table.remove(buffbot_pickerTargets, pri)
         -- Adjust selected row if needed
-        if buffbot_pickerSelected >= pri then
-            buffbot_pickerSelected = math.max(0, buffbot_pickerSelected - 1)
+        if buffbot_tgtPickerSel >= pri then
+            buffbot_tgtPickerSel = math.max(0, buffbot_tgtPickerSel - 1)
         end
     else
         -- Append
@@ -650,20 +653,20 @@ end
 
 --- Move selected target up in priority.
 function BfBot.UI.PickerMoveUp()
-    local sel = buffbot_pickerSelected
+    local sel = buffbot_tgtPickerSel
     if sel <= 1 or sel > #buffbot_pickerTargets then return end
     buffbot_pickerTargets[sel], buffbot_pickerTargets[sel - 1] =
         buffbot_pickerTargets[sel - 1], buffbot_pickerTargets[sel]
-    buffbot_pickerSelected = sel - 1
+    buffbot_tgtPickerSel = sel - 1
 end
 
 --- Move selected target down in priority.
 function BfBot.UI.PickerMoveDown()
-    local sel = buffbot_pickerSelected
+    local sel = buffbot_tgtPickerSel
     if sel < 1 or sel >= #buffbot_pickerTargets then return end
     buffbot_pickerTargets[sel], buffbot_pickerTargets[sel + 1] =
         buffbot_pickerTargets[sel + 1], buffbot_pickerTargets[sel]
-    buffbot_pickerSelected = sel + 1
+    buffbot_tgtPickerSel = sel + 1
 end
 
 --- Select a target row in the picker (for Up/Down).
@@ -673,7 +676,7 @@ function BfBot.UI.PickerSelect(slot)
     if not name then return end
     local pri = BfBot.UI._PickerPriority(name)
     if pri > 0 then
-        buffbot_pickerSelected = pri
+        buffbot_tgtPickerSel = pri
     end
 end
 
@@ -681,7 +684,7 @@ end
 function BfBot.UI.PickerClear()
     if buffbot_targetLocked == 1 then return end
     buffbot_pickerTargets = {}
-    buffbot_pickerSelected = 0
+    buffbot_tgtPickerSel = 0
 end
 
 --- Confirm and close the picker. Saves the working copy to persist.

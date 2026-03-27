@@ -757,7 +757,7 @@ menu
 	-- Move Up button
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerSelected > 1"
+		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 1"
 		action  "BfBot.UI.PickerMoveUp()"
 		text    "Up"
 		text style "button"
@@ -769,7 +769,7 @@ menu
 	-- Move Down button
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerSelected > 0 and buffbot_pickerSelected < #buffbot_pickerTargets"
+		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerTargets"
 		text    "Down"
 		action  "BfBot.UI.PickerMoveDown()"
 		text style "button"
