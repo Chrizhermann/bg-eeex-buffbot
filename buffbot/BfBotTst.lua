@@ -940,6 +940,168 @@ function BfBot.Test.ScannerRefactor()
 end
 
 -- ============================================================
+-- BfBot.Test.TargetPicker — Target picker redesign tests
+-- ============================================================
+
+--- Test: Target picker redesign — name resolution, dual-format, lock gating.
+function BfBot.Test.TargetPicker()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Target Picker Redesign Tests")
+    P("========================================")
+    P("")
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _nok("No party member in slot 0")
+        return _summary("TargetPicker")
+    end
+    local charName = BfBot._GetName(sprite)
+    _ok("Slot 0: " .. charName)
+
+    -- Test 1: _ResolveNameToSlot finds slot 0 by name
+    P("")
+    P("  [1] _ResolveNameToSlot")
+    local resolved = BfBot.Persist._ResolveNameToSlot(charName)
+    _check(resolved == 0,
+        "Resolve '" .. charName .. "' → slot " .. tostring(resolved) .. " (expected 0)")
+
+    -- Test 1b: absent name returns nil
+    local absent = BfBot.Persist._ResolveNameToSlot("ZZZZZ_NOBODY")
+    _check(absent == nil,
+        "Resolve absent name → nil (got " .. tostring(absent) .. ")")
+
+    -- Test 1c: nil/empty returns nil
+    _check(BfBot.Persist._ResolveNameToSlot(nil) == nil, "nil → nil")
+    _check(BfBot.Persist._ResolveNameToSlot("") == nil, "empty → nil")
+
+    -- Test 2: _ResolveConfigTarget dual-format
+    P("")
+    P("  [2] _ResolveConfigTarget dual-format")
+
+    -- 2a: "s" → self
+    local r = BfBot.Persist._ResolveConfigTarget("s", 0, "TEST", 1)
+    _check(#r == 1 and r[1].target == "self",
+        "tgt='s' → target='self'")
+
+    -- 2b: "p" → all
+    r = BfBot.Persist._ResolveConfigTarget("p", 0, "TEST", 1)
+    _check(#r == 1 and r[1].target == "all",
+        "tgt='p' → target='all'")
+
+    -- 2c: legacy slot string "1" → target=1
+    r = BfBot.Persist._ResolveConfigTarget("1", 0, "TEST", 1)
+    _check(#r == 1 and r[1].target == 1,
+        "tgt='1' (legacy) → target=1")
+
+    -- 2d: name string → resolved slot + 1
+    r = BfBot.Persist._ResolveConfigTarget(charName, 0, "TEST", 1)
+    _check(#r == 1 and r[1].target == 1,
+        "tgt='" .. charName .. "' → target=1")
+
+    -- 2e: table of names preserves order
+    local name2 = nil
+    local name2Slot = nil
+    for slot = 1, 5 do
+        local sp = EEex_Sprite_GetInPortrait(slot)
+        if sp then
+            name2 = BfBot._GetName(sp)
+            name2Slot = slot
+            break
+        end
+    end
+    if name2 then
+        r = BfBot.Persist._ResolveConfigTarget({name2, charName}, 0, "TEST", 1)
+        _check(#r == 2, "Table of 2 names → 2 entries (got " .. #r .. ")")
+        if #r == 2 then
+            _check(r[1].target == name2Slot + 1,
+                "First entry is '" .. name2 .. "' (target=" .. tostring(r[1].target) .. ")")
+            _check(r[2].target == 1,
+                "Second entry is '" .. charName .. "' (target=" .. tostring(r[2].target) .. ")")
+        end
+    else
+        _warning("Only 1 party member — skipping ordered table test")
+    end
+
+    -- 2f: unresolved name in table → skipped
+    r = BfBot.Persist._ResolveConfigTarget({"NOBODY", charName}, 0, "TEST", 1)
+    _check(#r == 1,
+        "Unresolved name skipped: " .. #r .. " entries (expected 1)")
+
+    -- 2g: legacy slot table {"1"} still works
+    r = BfBot.Persist._ResolveConfigTarget({"1"}, 0, "TEST", 1)
+    _check(#r == 1 and r[1].target == 1,
+        "Legacy table {'1'} → target=1")
+
+    -- Test 3: tgtUnlock accessor
+    P("")
+    P("  [3] tgtUnlock accessor")
+    local config = BfBot.Persist.GetConfig(sprite)
+    if config and config.presets and config.presets[1] then
+        -- Find any spell in preset 1
+        local testResref = nil
+        for resref, _ in pairs(config.presets[1].spells) do
+            testResref = resref
+            break
+        end
+        if testResref then
+            -- Default should be 0
+            local val = BfBot.Persist.GetTgtUnlock(sprite, 1, testResref)
+            _check(val == 0, "Default tgtUnlock = 0 (got " .. tostring(val) .. ")")
+
+            -- Set to 1
+            BfBot.Persist.SetTgtUnlock(sprite, 1, testResref, 1)
+            val = BfBot.Persist.GetTgtUnlock(sprite, 1, testResref)
+            _check(val == 1, "After SetTgtUnlock(1) → 1 (got " .. tostring(val) .. ")")
+
+            -- Set back to 0
+            BfBot.Persist.SetTgtUnlock(sprite, 1, testResref, 0)
+            val = BfBot.Persist.GetTgtUnlock(sprite, 1, testResref)
+            _check(val == 0, "After SetTgtUnlock(0) → 0 (got " .. tostring(val) .. ")")
+        else
+            _warning("No spells in preset 1 — skip tgtUnlock test")
+        end
+    else
+        _warning("No config/preset 1 — skip tgtUnlock test")
+    end
+
+    -- Test 4: _TargetToText with name-based targets
+    P("")
+    P("  [4] _TargetToText name format")
+    _check(BfBot.UI._TargetToText("s") == "Self", "'s' → Self")
+    _check(BfBot.UI._TargetToText("p") == "Party", "'p' → Party")
+    _check(BfBot.UI._TargetToText({}) == "None", "{} → None")
+    _check(BfBot.UI._TargetToText({"Branwen"}) == "Branwen",
+        "{'Branwen'} → Branwen")
+    _check(BfBot.UI._TargetToText({"Branwen", "Ajantis"}) == "Branwen +1",
+        "{'Branwen','Ajantis'} → Branwen +1")
+    _check(BfBot.UI._TargetToText({"Branwen", "Ajantis", "Neera"}) == "Branwen +2",
+        "3 names → Branwen +2")
+    -- Legacy slot string still resolves
+    local slot1Name = buffbot_charNames[1] or "Player 1"
+    _check(BfBot.UI._TargetToText("1") == slot1Name,
+        "'1' → '" .. slot1Name .. "'")
+
+    -- Test 5: Boolean safety — tgtUnlock must be number not boolean
+    P("")
+    P("  [5] Boolean safety")
+    if config and config.presets then
+        local hasBool = false
+        for _, preset in pairs(config.presets) do
+            for _, spell in pairs(preset.spells or {}) do
+                if type(spell.tgtUnlock) == "boolean" then
+                    hasBool = true
+                end
+            end
+        end
+        _check(not hasBool, "No boolean tgtUnlock values in config")
+    end
+
+    return _summary("TargetPicker")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -989,6 +1151,10 @@ function BfBot.Test.RunAll()
     local scanRefOk = BfBot.Test.ScannerRefactor()
     P("")
 
+    -- Phase 9: Target Picker
+    local tgtOk = BfBot.Test.TargetPicker()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -999,11 +1165,12 @@ function BfBot.Test.RunAll()
     P("  Overrides: " .. (ovrOk and "PASS" or "FAIL"))
     P("  Export/Import: " .. (exportOk and "PASS" or "FAIL"))
     P("  Scanner Refactor: " .. (scanRefOk and "PASS" or "FAIL"))
+    P("  Target Picker: " .. (tgtOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk
 end
 
 -- ============================================================
