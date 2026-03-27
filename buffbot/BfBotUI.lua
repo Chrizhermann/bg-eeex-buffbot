@@ -369,6 +369,44 @@ function BfBot.UI._Refresh()
         end
     end
 
+    -- 6b. Lazy slot→name conversion: convert legacy slot strings to character names.
+    -- Old saves store tgt as "1"-"6" or {"3","1","5"}. Convert to name-based
+    -- format now that party is guaranteed loaded.
+    for resref, spellCfg in pairs(preset.spells) do
+        local tgt = spellCfg.tgt
+        if type(tgt) == "table" then
+            local converted = false
+            local newTgt = {}
+            for _, entry in ipairs(tgt) do
+                local num = tonumber(entry)
+                if num and num >= 1 and num <= 6 then
+                    -- Legacy slot string → resolve to name
+                    local slotSprite = EEex_Sprite_GetInPortrait(num - 1)
+                    if slotSprite then
+                        table.insert(newTgt, BfBot._GetName(slotSprite))
+                        converted = true
+                    end
+                    -- Empty slot → drop (character left party)
+                else
+                    -- Already a name string, keep as-is
+                    table.insert(newTgt, entry)
+                end
+            end
+            if converted then
+                spellCfg.tgt = newTgt
+            end
+        elseif type(tgt) == "string" and tgt ~= "s" and tgt ~= "p" then
+            local num = tonumber(tgt)
+            if num and num >= 1 and num <= 6 then
+                -- Single legacy slot string → convert to name
+                local slotSprite = EEex_Sprite_GetInPortrait(num - 1)
+                if slotSprite then
+                    spellCfg.tgt = BfBot._GetName(slotSprite)
+                end
+            end
+        end
+    end
+
     -- 7. Build spell table from preset config, cross-ref with scan data
     local rows = {}
     for resref, spellCfg in pairs(preset.spells) do
@@ -438,6 +476,9 @@ function BfBot.UI._Refresh()
             castable = isCastable,
             pri      = spellCfg.pri or 999,
             ovr      = (config.ovr and config.ovr[resref]) or 0,
+            isAoE    = scan and scan.isAoE or 0,
+            isSelfOnly = scan and scan.isSelfOnly or 0,
+            tgtUnlock = spellCfg.tgtUnlock or 0,
         })
     end
 
