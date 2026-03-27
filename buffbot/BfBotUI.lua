@@ -1066,38 +1066,33 @@ function BfBot.UI._CheckboxText(row)
 end
 
 --- Convert target config value to display text.
--- tgt can be: "s", "p", "1"-"6" (string), or {"1","3","5"} (table of slots).
+-- tgt can be: "s", "p", a name string, or a table of name strings.
+-- Also handles legacy slot strings ("1"-"6") for backwards compatibility.
 function BfBot.UI._TargetToText(tgt)
     if tgt == "s" then return "Self"
     elseif tgt == "p" then return "Party"
     elseif type(tgt) == "table" then
         if #tgt == 0 then return "None" end
+        -- First entry is always the display name (highest priority target)
+        local firstName = tgt[1]
+        -- Legacy slot string? Resolve to name for display
+        local num = tonumber(firstName)
+        if num and num >= 1 and num <= 6 then
+            firstName = buffbot_charNames[num] or ("Player " .. num)
+        end
         if #tgt == 1 then
-            local num = tonumber(tgt[1])
-            if num and num >= 1 and num <= 6 then
-                return buffbot_charNames[num] or ("Player " .. num)
-            end
+            return firstName
         end
-        -- Multiple targets — try comma-joined names, fall back to count
-        local names = {}
-        for _, slot in ipairs(tgt) do
-            local num = tonumber(slot)
-            if num and num >= 1 and num <= 6 then
-                table.insert(names, buffbot_charNames[num] or ("P" .. num))
-            end
-        end
-        local joined = table.concat(names, ", ")
-        if #joined > 20 then
-            return #tgt .. " targets"
-        end
-        return joined
+        return firstName .. " +" .. (#tgt - 1)
     else
+        -- Single string: name or legacy slot
         local num = tonumber(tgt)
         if num and num >= 1 and num <= 6 then
             return buffbot_charNames[num] or ("Player " .. num)
         end
+        -- Name string — return as-is
+        return tgt
     end
-    return "Party"
 end
 
 --- Execution status text for the status label.
