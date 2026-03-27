@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.2-alpha (2026-03-27)
+
+### Features
+- Target picker redesign: ordered priority list with fallback chain (#18)
+  - Click party members to assign cast priority (1st, 2nd, 3rd...) — skip detection falls through to next target
+  - "All Party" populates all members in portrait order for reordering
+  - Move Up/Down buttons for priority reordering within the picker
+  - Self-only and AoE spells locked to appropriate target by default, with "Unlock Targeting" override for modded spells
+  - Name-based target storage — targets survive party rearrangement (old slot-based saves converted automatically)
+  - `tgtUnlock` per-spell field for overriding targeting type lock
+
 ## v1.2.1-alpha (2026-03-27)
 
 ### Bug Fixes
