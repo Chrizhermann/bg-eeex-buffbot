@@ -692,6 +692,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
 		action  "BfBot.UI.PickerSelect(1)"
 		text lua "BfBot.UI._PickerNameText(1)"
+		text style "normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(1)"
 		rectangle 5
@@ -715,6 +716,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
 		action  "BfBot.UI.PickerSelect(2)"
 		text lua "BfBot.UI._PickerNameText(2)"
+		text style "normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(2)"
 		rectangle 5
@@ -738,6 +740,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
 		action  "BfBot.UI.PickerSelect(3)"
 		text lua "BfBot.UI._PickerNameText(3)"
+		text style "normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(3)"
 		rectangle 5
@@ -761,6 +764,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
 		action  "BfBot.UI.PickerSelect(4)"
 		text lua "BfBot.UI._PickerNameText(4)"
+		text style "normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(4)"
 		rectangle 5
@@ -784,6 +788,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
 		action  "BfBot.UI.PickerSelect(5)"
 		text lua "BfBot.UI._PickerNameText(5)"
+		text style "normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(5)"
 		rectangle 5
@@ -807,6 +812,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
 		action  "BfBot.UI.PickerSelect(6)"
 		text lua "BfBot.UI._PickerNameText(6)"
+		text style "normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(6)"
 		rectangle 5
