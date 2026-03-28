@@ -612,9 +612,13 @@ function BfBot.UI._PickerCheckText(row)
 end
 
 --- Button text for a picker row. Name label (right side).
+-- Prepends "> " for the selected-for-reordering row.
 function BfBot.UI._PickerNameText(row)
     local name = buffbot_pickerOrder[row]
     if not name then return "" end
+    if row == buffbot_tgtPickerSel then
+        return "> " .. name
+    end
     return name
 end
 
