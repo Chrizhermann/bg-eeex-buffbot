@@ -63,8 +63,11 @@ function BfBot.Exec._ResolveTargets(target, casterSprite, casterSlot, isAoE)
         local slot = target - 1
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if sprite and BfBot.Exec._IsAlive(sprite) then
+            -- PlayerN uses join order (m_characters), not portrait order.
+            -- Map via EEex_Sprite_GetCharacterIndex to get the correct PlayerN.
+            local charIdx = EEex_Sprite_GetCharacterIndex(sprite)
             table.insert(results, {
-                targetObj = "Player" .. target,
+                targetObj = "Player" .. (charIdx + 1),
                 targetSlot = slot,
                 targetSprite = sprite,
                 targetName = BfBot._GetName(sprite),
@@ -82,8 +85,9 @@ function BfBot.Exec._ResolveTargets(target, casterSprite, casterSlot, isAoE)
             for i = 0, 5 do
                 local sprite = EEex_Sprite_GetInPortrait(i)
                 if sprite and BfBot.Exec._IsAlive(sprite) then
+                    local charIdx = EEex_Sprite_GetCharacterIndex(sprite)
                     table.insert(results, {
-                        targetObj = "Player" .. (i + 1),
+                        targetObj = "Player" .. (charIdx + 1),
                         targetSlot = i,
                         targetSprite = sprite,
                         targetName = BfBot._GetName(sprite),
