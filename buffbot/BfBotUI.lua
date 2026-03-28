@@ -593,10 +593,14 @@ end
 
 --- Button text for character slot in target picker.
 -- Shows "[N] Name" if selected, "[ ] Name" if not.
+-- Highlights the currently selected-for-reordering entry with "> " prefix.
 function BfBot.UI._PickerBtnText(slot)
     local name = buffbot_charNames[slot] or ("Player " .. slot)
     local pri = BfBot.UI._PickerPriority(name)
     if pri > 0 then
+        if pri == buffbot_tgtPickerSel then
+            return "> [" .. pri .. "] " .. name
+        end
         return "[" .. pri .. "] " .. name
     end
     return "[ ] " .. name
