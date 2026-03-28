@@ -803,8 +803,12 @@ end
 function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
     local results = {}
     if type(tgt) == "table" then
-        -- Ordered target list: one queue entry per target
+        -- Ordered target list: one queue entry per target.
+        -- Fractional sub-priority preserves target order within the spell
+        -- after BuildQueueFromPreset sorts by pri (Lua sort is unstable).
+        local subPri = 0
         for _, entry in ipairs(tgt) do
+            subPri = subPri + 1
             local num = tonumber(entry)
             if num and num >= 1 and num <= 6 then
                 -- Legacy slot string
@@ -812,7 +816,7 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
                     caster = slot,
                     spell  = resref,
                     target = num,
-                    pri    = pri,
+                    pri    = pri + subPri / 1000,
                 })
             else
                 -- Name-based: resolve to slot
@@ -822,7 +826,7 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
                         caster = slot,
                         spell  = resref,
                         target = resolved + 1,  -- slot 0-5 → Player 1-6
-                        pri    = pri,
+                        pri    = pri + subPri / 1000,
                     })
                 end
                 -- Unresolved names silently skipped
