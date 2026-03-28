@@ -676,82 +676,148 @@ menu
 		area 581 199 95 26
 	}
 
-	-- Player 1
+	-- Row 1: checkbox (toggle) + name (select)
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_charNames[1] ~= nil"
-		action  "BfBot.UI.PickerToggle(1) BfBot.UI.PickerSelect(1)"
-		text lua "BfBot.UI._PickerBtnText(1)"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
+		action  "BfBot.UI.PickerToggle(1)"
+		text lua "BfBot.UI._PickerCheckText(1)"
 		text style "button"
-		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 479 231 197 26
+		area 479 231 36 26
+	}
+	text
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
+		action  "BfBot.UI.PickerSelect(1)"
+		text lua "BfBot.UI._PickerNameText(1)"
+		text style "normal_parchment"
+		text align left center
+		text color lua "BfBot.UI._PickerRowColor(1)"
+		rectangle 5
+		rectangle opacity 120
+		area 517 231 159 26
 	}
 
-	-- Player 2
+	-- Row 2
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_charNames[2] ~= nil"
-		action  "BfBot.UI.PickerToggle(2) BfBot.UI.PickerSelect(2)"
-		text lua "BfBot.UI._PickerBtnText(2)"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
+		action  "BfBot.UI.PickerToggle(2)"
+		text lua "BfBot.UI._PickerCheckText(2)"
 		text style "button"
-		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 479 259 197 26
+		area 479 259 36 26
+	}
+	text
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
+		action  "BfBot.UI.PickerSelect(2)"
+		text lua "BfBot.UI._PickerNameText(2)"
+		text style "normal_parchment"
+		text align left center
+		text color lua "BfBot.UI._PickerRowColor(2)"
+		rectangle 5
+		rectangle opacity 120
+		area 517 259 159 26
 	}
 
-	-- Player 3
+	-- Row 3
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_charNames[3] ~= nil"
-		action  "BfBot.UI.PickerToggle(3) BfBot.UI.PickerSelect(3)"
-		text lua "BfBot.UI._PickerBtnText(3)"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
+		action  "BfBot.UI.PickerToggle(3)"
+		text lua "BfBot.UI._PickerCheckText(3)"
 		text style "button"
-		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 479 287 197 26
+		area 479 287 36 26
+	}
+	text
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
+		action  "BfBot.UI.PickerSelect(3)"
+		text lua "BfBot.UI._PickerNameText(3)"
+		text style "normal_parchment"
+		text align left center
+		text color lua "BfBot.UI._PickerRowColor(3)"
+		rectangle 5
+		rectangle opacity 120
+		area 517 287 159 26
 	}
 
-	-- Player 4
+	-- Row 4
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_charNames[4] ~= nil"
-		action  "BfBot.UI.PickerToggle(4) BfBot.UI.PickerSelect(4)"
-		text lua "BfBot.UI._PickerBtnText(4)"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
+		action  "BfBot.UI.PickerToggle(4)"
+		text lua "BfBot.UI._PickerCheckText(4)"
 		text style "button"
-		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 479 315 197 26
+		area 479 315 36 26
+	}
+	text
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
+		action  "BfBot.UI.PickerSelect(4)"
+		text lua "BfBot.UI._PickerNameText(4)"
+		text style "normal_parchment"
+		text align left center
+		text color lua "BfBot.UI._PickerRowColor(4)"
+		rectangle 5
+		rectangle opacity 120
+		area 517 315 159 26
 	}
 
-	-- Player 5
+	-- Row 5
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_charNames[5] ~= nil"
-		action  "BfBot.UI.PickerToggle(5) BfBot.UI.PickerSelect(5)"
-		text lua "BfBot.UI._PickerBtnText(5)"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
+		action  "BfBot.UI.PickerToggle(5)"
+		text lua "BfBot.UI._PickerCheckText(5)"
 		text style "button"
-		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 479 343 197 26
+		area 479 343 36 26
+	}
+	text
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
+		action  "BfBot.UI.PickerSelect(5)"
+		text lua "BfBot.UI._PickerNameText(5)"
+		text style "normal_parchment"
+		text align left center
+		text color lua "BfBot.UI._PickerRowColor(5)"
+		rectangle 5
+		rectangle opacity 120
+		area 517 343 159 26
 	}
 
-	-- Player 6
+	-- Row 6
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_charNames[6] ~= nil"
-		action  "BfBot.UI.PickerToggle(6) BfBot.UI.PickerSelect(6)"
-		text lua "BfBot.UI._PickerBtnText(6)"
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
+		action  "BfBot.UI.PickerToggle(6)"
+		text lua "BfBot.UI._PickerCheckText(6)"
 		text style "button"
-		text align left center
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 479 371 197 26
+		area 479 371 36 26
+	}
+	text
+	{
+		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
+		action  "BfBot.UI.PickerSelect(6)"
+		text lua "BfBot.UI._PickerNameText(6)"
+		text style "normal_parchment"
+		text align left center
+		text color lua "BfBot.UI._PickerRowColor(6)"
+		rectangle 5
+		rectangle opacity 120
+		area 517 371 159 26
 	}
 
 	-- Move Up button
@@ -769,9 +835,9 @@ menu
 	-- Move Down button
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerTargets"
-		text    "Down"
+		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerOrder"
 		action  "BfBot.UI.PickerMoveDown()"
+		text    "Down"
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip

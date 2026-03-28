@@ -70,8 +70,9 @@ buffbot_targetRow = 0            -- which spell row opened the picker
 buffbot_targetHeader = ""        -- header text for target picker (spell name)
 buffbot_targetLocked = 0         -- 1 if spell is self-only/AoE and not unlocked
 buffbot_targetLockText = ""      -- "(Self-only)" or "(Party-wide)" for locked spells
-buffbot_pickerTargets = {}       -- working copy of ordered target list (name strings)
-buffbot_tgtPickerSel = 0         -- selected row in target picker (for Up/Down reordering)
+buffbot_pickerOrder = {}         -- all party names in display/priority order (reorderable)
+buffbot_pickerChecked = {}       -- {[name]=1} for names included in target list
+buffbot_tgtPickerSel = 0         -- selected ROW index in picker (1-6, for Up/Down/highlight)
 
 -- Rename dialog state
 buffbot_renameInput = ""
@@ -533,7 +534,7 @@ function BfBot.UI.ToggleSelected()
 end
 
 -- ============================================================
--- Target Picking (ordered priority list)
+-- Target Picking (ordered priority list with visual reordering)
 -- ============================================================
 
 --- Open the target picker for a spell row.
@@ -560,18 +561,32 @@ function BfBot.UI.OpenTargets(row)
     buffbot_targetLocked = isLocked
     buffbot_targetLockText = lockText
 
-    -- Build working copy of current targets
-    buffbot_pickerTargets = {}
+    -- Build the ordered display list: checked targets first (in priority order),
+    -- then unchecked party members (in portrait order).
+    buffbot_pickerOrder = {}
+    buffbot_pickerChecked = {}
+
     local tgt = entry.tgt
+    local checkedNames = {}
     if type(tgt) == "table" then
         for _, name in ipairs(tgt) do
-            table.insert(buffbot_pickerTargets, name)
+            table.insert(buffbot_pickerOrder, name)
+            buffbot_pickerChecked[name] = 1
+            checkedNames[name] = true
         end
     elseif type(tgt) == "string" and tgt ~= "s" and tgt ~= "p" then
-        -- Single name string (from lazy slot→name conversion) — wrap into list
-        table.insert(buffbot_pickerTargets, tgt)
+        table.insert(buffbot_pickerOrder, tgt)
+        buffbot_pickerChecked[tgt] = 1
+        checkedNames[tgt] = true
     end
-    -- "s" and "p" don't populate the picker list (they use the quick buttons)
+
+    -- Append unchecked party members in portrait order
+    for slot = 1, 6 do
+        local name = buffbot_charNames[slot]
+        if name and not checkedNames[name] then
+            table.insert(buffbot_pickerOrder, name)
+        end
+    end
 
     Infinity_PushMenu("BUFFBOT_TARGETS")
 end
@@ -583,48 +598,55 @@ function BfBot.UI.OpenTargetsForSelected()
     end
 end
 
---- Get the priority number for a character name in the picker, or 0 if not selected.
-function BfBot.UI._PickerPriority(name)
-    for i, entry in ipairs(buffbot_pickerTargets) do
-        if entry == name then return i end
-    end
-    return 0
+--- Get the display name for row N in the picker (1-6).
+function BfBot.UI._PickerRowName(row)
+    return buffbot_pickerOrder[row] or ""
 end
 
---- Button text for character slot in target picker.
--- Shows "[N] Name" if selected, "[ ] Name" if not.
--- Highlights the currently selected-for-reordering entry with "> " prefix.
-function BfBot.UI._PickerBtnText(slot)
-    local name = buffbot_charNames[slot] or ("Player " .. slot)
-    local pri = BfBot.UI._PickerPriority(name)
-    if pri > 0 then
-        if pri == buffbot_tgtPickerSel then
-            return "> [" .. pri .. "] " .. name
-        end
-        return "[" .. pri .. "] " .. name
-    end
-    return "[ ] " .. name
+--- Button text for a picker row. Left-side checkbox label.
+function BfBot.UI._PickerCheckText(row)
+    local name = buffbot_pickerOrder[row]
+    if not name then return "" end
+    if buffbot_pickerChecked[name] then return "[X]" end
+    return "[ ]"
 end
 
---- Toggle a character in the ordered target list.
--- If not selected: append as next priority.
--- If selected: remove and shift remaining numbers down.
-function BfBot.UI.PickerToggle(slot)
+--- Button text for a picker row. Name label (right side).
+function BfBot.UI._PickerNameText(row)
+    local name = buffbot_pickerOrder[row]
+    if not name then return "" end
+    return name
+end
+
+--- Text color for a picker row — highlight if selected.
+function BfBot.UI._PickerRowColor(row)
+    if row == buffbot_tgtPickerSel then
+        return "{255, 255, 150}"  -- yellow highlight for selected row
+    end
+    local name = buffbot_pickerOrder[row]
+    if name and buffbot_pickerChecked[name] then
+        return "{220, 220, 220}"  -- white for checked
+    end
+    return "{140, 140, 140}"  -- grey for unchecked
+end
+
+--- Toggle the checkbox for a picker row (left-click on checkbox area).
+function BfBot.UI.PickerToggle(row)
     if buffbot_targetLocked == 1 then return end
-    local name = buffbot_charNames[slot]
+    local name = buffbot_pickerOrder[row]
     if not name then return end
 
-    local pri = BfBot.UI._PickerPriority(name)
-    if pri > 0 then
-        -- Remove
-        table.remove(buffbot_pickerTargets, pri)
-        -- Adjust selected row if needed
-        if buffbot_tgtPickerSel >= pri then
-            buffbot_tgtPickerSel = math.max(0, buffbot_tgtPickerSel - 1)
-        end
+    if buffbot_pickerChecked[name] then
+        buffbot_pickerChecked[name] = nil
     else
-        -- Append
-        table.insert(buffbot_pickerTargets, name)
+        buffbot_pickerChecked[name] = 1
+    end
+end
+
+--- Select a picker row (click on name area).
+function BfBot.UI.PickerSelect(row)
+    if row >= 1 and row <= #buffbot_pickerOrder then
+        buffbot_tgtPickerSel = row
     end
 end
 
@@ -643,51 +665,36 @@ function BfBot.UI.PickerSelf()
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
---- Quick-set: All Party. Populates all current party members in portrait order.
+--- Quick-set: All Party. Checks all party members, keeps current order.
 function BfBot.UI.PickerAllParty()
     if buffbot_targetLocked == 1 then return end
-    buffbot_pickerTargets = {}
-    for slot = 1, 6 do
-        local name = buffbot_charNames[slot]
-        if name then
-            table.insert(buffbot_pickerTargets, name)
-        end
+    for _, name in ipairs(buffbot_pickerOrder) do
+        buffbot_pickerChecked[name] = 1
     end
 end
 
---- Move selected target up in priority.
+--- Move selected row up (visually and in priority).
 function BfBot.UI.PickerMoveUp()
     local sel = buffbot_tgtPickerSel
-    if sel <= 1 or sel > #buffbot_pickerTargets then return end
-    buffbot_pickerTargets[sel], buffbot_pickerTargets[sel - 1] =
-        buffbot_pickerTargets[sel - 1], buffbot_pickerTargets[sel]
+    if sel <= 1 or sel > #buffbot_pickerOrder then return end
+    buffbot_pickerOrder[sel], buffbot_pickerOrder[sel - 1] =
+        buffbot_pickerOrder[sel - 1], buffbot_pickerOrder[sel]
     buffbot_tgtPickerSel = sel - 1
 end
 
---- Move selected target down in priority.
+--- Move selected row down (visually and in priority).
 function BfBot.UI.PickerMoveDown()
     local sel = buffbot_tgtPickerSel
-    if sel < 1 or sel >= #buffbot_pickerTargets then return end
-    buffbot_pickerTargets[sel], buffbot_pickerTargets[sel + 1] =
-        buffbot_pickerTargets[sel + 1], buffbot_pickerTargets[sel]
+    if sel < 1 or sel >= #buffbot_pickerOrder then return end
+    buffbot_pickerOrder[sel], buffbot_pickerOrder[sel + 1] =
+        buffbot_pickerOrder[sel + 1], buffbot_pickerOrder[sel]
     buffbot_tgtPickerSel = sel + 1
 end
 
---- Select a target row in the picker (for Up/Down).
--- Click a numbered entry to select it for reordering.
-function BfBot.UI.PickerSelect(slot)
-    local name = buffbot_charNames[slot]
-    if not name then return end
-    local pri = BfBot.UI._PickerPriority(name)
-    if pri > 0 then
-        buffbot_tgtPickerSel = pri
-    end
-end
-
---- Clear targets: reset to smart default.
+--- Clear targets: uncheck all, reset selection.
 function BfBot.UI.PickerClear()
     if buffbot_targetLocked == 1 then return end
-    buffbot_pickerTargets = {}
+    buffbot_pickerChecked = {}
     buffbot_tgtPickerSel = 0
 end
 
@@ -705,22 +712,22 @@ function BfBot.UI.PickerDone()
         return
     end
 
-    -- Determine final tgt value
-    local tgt
-    if #buffbot_pickerTargets == 0 then
-        -- Empty list → use smart default
+    -- Build target list: checked names in display order (top-to-bottom = cast priority)
+    local tgt = {}
+    for _, name in ipairs(buffbot_pickerOrder) do
+        if buffbot_pickerChecked[name] then
+            table.insert(tgt, name)
+        end
+    end
+
+    -- Empty list → use smart default
+    if #tgt == 0 then
         if entry.isSelfOnly == 1 then
             tgt = "s"
         elseif entry.isAoE == 1 then
             tgt = "p"
         else
-            tgt = "s"  -- single-target default: self
-        end
-    else
-        -- Copy the ordered list
-        tgt = {}
-        for _, name in ipairs(buffbot_pickerTargets) do
-            table.insert(tgt, name)
+            tgt = "s"
         end
     end
 
