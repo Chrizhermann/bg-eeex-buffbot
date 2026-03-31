@@ -1,0 +1,14 @@
+{
+  "planPath": "docs/plans/2026-04-01-combat-safety-impl.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Add CombatInterrupt INI preference default", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Add _DetectCombat() helper to execution engine", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Integrate combat detection into _Advance()", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Add _SafetyTick() paranoid BFBTCH cleanup", "status": "pending", "blockedBy": [2]},
+    {"id": 5, "subject": "Task 5: Add .menu tick element for safety net", "status": "pending", "blockedBy": [4]},
+    {"id": 6, "subject": "Task 6: Write unit tests for combat safety", "status": "pending", "blockedBy": [3, 4]},
+    {"id": 7, "subject": "Task 7: Deploy, run tests, and verify in-game", "status": "pending", "blockedBy": [5, 6]},
+    {"id": 8, "subject": "Task 8: Update CLAUDE.md with combat safety details", "status": "pending", "blockedBy": [7]}
+  ],
+  "lastUpdated": "2026-04-01T00:00:00Z"
+}

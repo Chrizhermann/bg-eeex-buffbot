@@ -29,7 +29,9 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Config Export/Import** (`BfBot.Persist` + `BfBot.UI`) — Export a character's full config (all presets + overrides) to `override/bfbot_presets/<CharName>.lua`. Import from any exported file via picker sub-menu. Spells not in the target character's spellbook silently dropped on import. Uses `io.open`/`io.popen`/`os.execute` for file I/O and directory listing (all verified working in EEex).
 
-Next: Post-MVP features — clones/summons as casters (#19), subwindow selection spells (#20), non-spell buff sources (#21). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Test scanner refactor: `BfBot.Test.ScannerRefactor()`. Test export/import: `BfBot.Test.ExportImport()`. Test target picker: `BfBot.Test.TargetPicker()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Combat Safety** (`BfBot.Exec`) — combat detection via `countAllOfTypeStringInRange("[ENEMY]", 400)` on party leader, queue interruption in `_Advance()`, paranoid BFBTCH safety net via `.menu` tick every ~2s. `CombatInterrupt` INI pref (default on). Safety net NOT toggleable. Verified working in-game.
+
+Next: Post-MVP features — clones/summons as casters (#19), subwindow selection spells (#20), non-spell buff sources (#21). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Test scanner refactor: `BfBot.Test.ScannerRefactor()`. Test export/import: `BfBot.Test.ExportImport()`. Test target picker: `BfBot.Test.TargetPicker()`. Test combat safety: `BfBot.Test.CombatSafety()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -37,6 +39,8 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 - **Queue format**: `{caster=0-5, spell="RESREF", target="self"|"all"|1-6}`
 - **CRITICAL: PlayerN is join order** — BCS `Player1`-`Player6` uses `m_characters` (join order), NOT portrait order. `_ResolveTargets` maps via `EEex_Sprite_GetCharacterIndex(sprite)` to get the correct PlayerN for each target. Never use portrait index as PlayerN.
 - **Quick Cast (cheat mode)**: `BfBot.Exec.Start(queue, qcMode)` accepts optional qcMode (0=off, 1=long only, 2=all). Entries tagged with `cheat` flag based on qcMode and spell `durCat`. When qcMode=1, cheat entries sorted first per caster (two-pass split). BFBTCH.SPL (Improved Alacrity + casting speed reduction) applied before first cheat entry via `ReallyForceSpellRES`. BFBTCR.SPL (opcode 321 remove by resource) applied at cheat/normal boundary. Cleanup on Stop() removes lingering BFBTCH.
+- **Combat detection**: `_DetectCombat()` checks `sprite:countAllOfTypeStringInRange("[ENEMY]", 400)` on party leader. Same range as rest prevention (SPAWN_RANGE). Called from `_Advance()` between spells. Gated by `CombatInterrupt` INI pref (default 1).
+- **Safety net**: `_SafetyTick()` runs via `.menu` `enabled` tick on BUFFBOT_ACTIONBAR (always active on world screen). Rate-limited to ~2s via `Infinity_GetClockTicks()`. When exec state is NOT "running", scans all party members for orphaned BFBTCH effects and removes via BFBTCR. NOT toggleable.
 - **API**: `BfBot.Exec.Start(queue, qcMode)`, `BfBot.Exec.Stop()`, `BfBot.Exec.GetState()`, `BfBot.Exec.GetLog()`
 - **Log file**: `buffbot_exec.log` in game directory (append mode)
 

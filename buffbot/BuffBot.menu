@@ -21,6 +21,14 @@ menu
 		scaleToClip
 		area 4 4 48 48
 	}
+
+	-- Safety net tick: runs every frame, rate-limited internally to ~2s.
+	-- Removes orphaned BFBTCH cheat buffs when exec engine not running.
+	label
+	{
+		enabled "BfBot.Exec._SafetyTick()"
+		area 0 0 0 0
+	}
 }
 
 -- ==========================================================

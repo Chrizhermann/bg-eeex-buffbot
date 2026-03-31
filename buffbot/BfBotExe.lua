@@ -15,6 +15,7 @@ BfBot.Exec._skipCount = 0        -- entries skipped across all casters
 BfBot.Exec._totalEntries = 0     -- total entries across all casters
 BfBot.Exec._logFile = "buffbot_exec.log"
 BfBot.Exec._qcMode = 0              -- quick cast mode (0=off, 1=long, 2=all)
+BfBot.Exec._lastSafetyTick = 0  -- clock ticks of last safety check
 
 --- Log an execution event.
 function BfBot.Exec._LogEntry(type, msg)
@@ -46,6 +47,23 @@ function BfBot.Exec._HasActiveEffect(sprite, resref)
         end)
     end)
     return ok and found
+end
+
+--- Check if hostiles are within combat range of the party leader.
+-- Uses the same range (400) and hostility threshold ([ENEMY] = EA >= 200)
+-- as the engine's rest prevention check.
+-- @return boolean true if enemies detected nearby
+function BfBot.Exec._DetectCombat()
+    -- Respect INI preference
+    if BfBot.Persist.GetPref("CombatInterrupt") ~= 1 then
+        return false
+    end
+    local leader = EEex_Sprite_GetInPortrait(0)
+    if not leader then return false end
+    local ok, count = pcall(function()
+        return leader:countAllOfTypeStringInRange("[ENEMY]", 400)
+    end)
+    return ok and count and count > 0
 end
 
 --- Resolve a user-specified target into expanded queue entries.
@@ -355,6 +373,22 @@ function BfBot.Exec._Advance(slot)
     if BfBot.Exec._state ~= "running" then return end
     local caster = BfBot.Exec._casters[slot]
     if not caster or caster.done then return end
+
+    -- Combat detection: abort all casters if hostiles detected
+    if BfBot.Exec._DetectCombat() then
+        BfBot.Exec._LogEntry("INFO", "Combat detected — stopping execution")
+        BfBot.Exec.Stop()
+        -- Notify player via overhead text on party leader
+        pcall(function()
+            local leader = EEex_Sprite_GetInPortrait(0)
+            if leader then
+                EEex_Sprite_DisplayStringHead(leader,
+                    "BuffBot: Combat detected - casting stopped")
+            end
+        end)
+        return
+    end
+
     BfBot.Exec._ProcessCasterEntry(slot, caster.index + 1)
 end
 
@@ -490,6 +524,38 @@ function BfBot.Exec.Stop()
     BfBot._Print(string.format("[BuffBot]   Cast: %d | Skipped: %d",
         BfBot.Exec._castCount, BfBot.Exec._skipCount))
     BfBot._CloseLog()
+end
+
+--- Paranoid safety net: remove orphaned BFBTCH effects from any party member.
+-- Called every frame by .menu enabled tick, rate-limited to ~2 seconds.
+-- NOT toggleable — this is the hard safety guarantee.
+function BfBot.Exec._SafetyTick()
+    -- Rate-limit: ~2 seconds between checks
+    local now = Infinity_GetClockTicks()
+    if now - BfBot.Exec._lastSafetyTick < 2000 then return end
+    BfBot.Exec._lastSafetyTick = now
+
+    -- If exec engine is actively running, it owns cheat management — don't interfere
+    if BfBot.Exec._state == "running" then return end
+
+    -- Check all party members for orphaned BFBTCH effects
+    for i = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(i)
+        if sprite then
+            local hasCheat = BfBot.Exec._HasActiveEffect(sprite, "BFBTCH")
+            if hasCheat then
+                pcall(function()
+                    EEex_Action_QueueResponseStringOnAIBase(
+                        'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
+                end)
+                -- Open exec log briefly to persist the warning to disk
+                BfBot._OpenLogAppend(BfBot.Exec._logFile)
+                BfBot.Exec._LogEntry("WARN",
+                    "Safety net: removed orphaned BFBTCH from " .. BfBot._GetName(sprite))
+                BfBot._CloseLog()
+            end
+        end
+    end
 end
 
 --- Get current execution state.

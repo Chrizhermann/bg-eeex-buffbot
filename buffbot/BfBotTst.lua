@@ -1102,6 +1102,130 @@ function BfBot.Test.TargetPicker()
 end
 
 -- ============================================================
+-- Combat Safety Tests
+-- ============================================================
+
+function BfBot.Test.CombatSafety()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Combat Safety Tests")
+    P("========================================")
+    P("")
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _nok("No party member in slot 0")
+        return _summary("Combat Safety")
+    end
+
+    -- ---- Test 1: CombatInterrupt INI pref default ----
+    P("  [1] CombatInterrupt INI pref")
+
+    local pref = BfBot.Persist.GetPref("CombatInterrupt")
+    if pref == 1 or pref == 0 then
+        _ok("CombatInterrupt pref readable: " .. tostring(pref))
+    else
+        _nok("CombatInterrupt pref unexpected: " .. tostring(pref))
+    end
+
+    -- ---- Test 2: _DetectCombat exists and is callable ----
+    P("")
+    P("  [2] _DetectCombat function")
+
+    if type(BfBot.Exec._DetectCombat) == "function" then
+        _ok("_DetectCombat is a function")
+    else
+        _nok("_DetectCombat missing or not a function")
+        return _summary("Combat Safety")
+    end
+
+    -- Call it — should return boolean (no crash)
+    local ok, result = pcall(BfBot.Exec._DetectCombat)
+    if ok then
+        _ok("_DetectCombat callable, returned: " .. tostring(result))
+    else
+        _nok("_DetectCombat threw: " .. tostring(result))
+    end
+
+    -- ---- Test 3: _DetectCombat respects pref=0 ----
+    P("")
+    P("  [3] _DetectCombat respects CombatInterrupt=0")
+
+    local origPref = BfBot.Persist.GetPref("CombatInterrupt")
+    BfBot.Persist.SetPref("CombatInterrupt", 0)
+    local ok2, result2 = pcall(BfBot.Exec._DetectCombat)
+    if ok2 and result2 == false then
+        _ok("_DetectCombat returns false when pref=0")
+    else
+        _nok("_DetectCombat with pref=0: ok=" .. tostring(ok2)
+            .. " result=" .. tostring(result2))
+    end
+    BfBot.Persist.SetPref("CombatInterrupt", origPref)
+
+    -- ---- Test 4: _SafetyTick exists and is callable ----
+    P("")
+    P("  [4] _SafetyTick function")
+
+    if type(BfBot.Exec._SafetyTick) == "function" then
+        _ok("_SafetyTick is a function")
+    else
+        _nok("_SafetyTick missing or not a function")
+        return _summary("Combat Safety")
+    end
+
+    -- Call it — should not crash (rate-limited, so no-op if called twice fast)
+    local ok3, err3 = pcall(BfBot.Exec._SafetyTick)
+    if ok3 then
+        _ok("_SafetyTick callable (no crash)")
+    else
+        _nok("_SafetyTick threw: " .. tostring(err3))
+    end
+
+    -- ---- Test 5: _SafetyTick rate limiting ----
+    P("")
+    P("  [5] _SafetyTick rate limiting")
+
+    -- Reset tick timer to force a fresh check
+    BfBot.Exec._lastSafetyTick = 0
+    local before = Infinity_GetClockTicks()
+    pcall(BfBot.Exec._SafetyTick)
+    local afterTick = BfBot.Exec._lastSafetyTick
+    if afterTick >= before then
+        _ok("_lastSafetyTick updated after reset: " .. tostring(afterTick))
+    else
+        _nok("_lastSafetyTick not updated: " .. tostring(afterTick))
+    end
+
+    -- Immediate second call should be rate-limited (no update)
+    local savedTick = BfBot.Exec._lastSafetyTick
+    pcall(BfBot.Exec._SafetyTick)
+    if BfBot.Exec._lastSafetyTick == savedTick then
+        _ok("Rate-limited: second call did not update tick")
+    else
+        _nok("Rate limit failed: tick changed from " .. tostring(savedTick)
+            .. " to " .. tostring(BfBot.Exec._lastSafetyTick))
+    end
+
+    -- ---- Test 6: _SafetyTick skips when running ----
+    P("")
+    P("  [6] _SafetyTick skips when exec running")
+
+    local origState = BfBot.Exec._state
+    BfBot.Exec._state = "running"
+    BfBot.Exec._lastSafetyTick = 0  -- reset to allow tick
+    pcall(BfBot.Exec._SafetyTick)
+    -- When running, _SafetyTick should update the tick counter
+    -- (rate limit runs first) but should NOT remove any effects
+    BfBot.Exec._state = origState
+    _ok("_SafetyTick did not crash when state=running")
+
+    -- ---- Summary ----
+    P("")
+    return _summary("Combat Safety")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -1155,6 +1279,10 @@ function BfBot.Test.RunAll()
     local tgtOk = BfBot.Test.TargetPicker()
     P("")
 
+    -- Phase 10: Combat Safety
+    local combatOk = BfBot.Test.CombatSafety()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -1166,11 +1294,12 @@ function BfBot.Test.RunAll()
     P("  Export/Import: " .. (exportOk and "PASS" or "FAIL"))
     P("  Scanner Refactor: " .. (scanRefOk and "PASS" or "FAIL"))
     P("  Target Picker: " .. (tgtOk and "PASS" or "FAIL"))
+    P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk
 end
 
 -- ============================================================

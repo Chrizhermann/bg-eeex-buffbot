@@ -18,6 +18,7 @@ BfBot.Persist._INI_DEFAULTS = {
     HotkeyCode    = 87,   -- F11
     ShowTooltips  = 1,    -- show spell tooltips in panel
     ConfirmCast   = 0,    -- show confirmation before casting
+    CombatInterrupt = 1,  -- stop casting when hostiles detected nearby
 }
 
 -- ---- Boolean sanitization ----
