@@ -20,6 +20,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **Manual spell override** — "Add Spell" picker to include spells the classifier missed, "Remove" to exclude false positives
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
 - **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
+- **Subwindow selection spells** — spells like Protection from Elemental Energy that normally open a selection popup are handled seamlessly. Pre-configure which variant to cast, and BuffBot bypasses the popup entirely
 - **Mod-friendly** — tested with SCS, Spell Revisions, and kit mods. Reads spell data dynamically, so mod-added spells show up automatically
 
 ## Requirements
@@ -89,7 +90,7 @@ This is an alpha release. Everything works, but some things are unfinished:
 BuffBot includes a built-in test suite. In the EEex Lua console:
 
 ```
-BfBot.Test.RunAll()         -- full test suite (180+ tests)
+BfBot.Test.RunAll()         -- full test suite (200+ tests)
 BfBot.Test.ExportImport()   -- export/import tests
 BfBot.UI.Toggle()           -- open/close config panel
 ```
@@ -139,7 +140,7 @@ bg-eeex-buffbot/
 │   ├── BfBotPer.lua      # Persistence (marshal handlers, presets, export/import)
 │   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
 │   ├── BfBotUI.lua       # Config panel logic
-│   ├── BfBotTst.lua      # Test suite (180+ tests)
+│   ├── BfBotTst.lua      # Test suite (200+ tests)
 │   └── BuffBot.menu      # UI definitions (.menu DSL)
 ├── tools/                # Dev utilities
 │   ├── deploy.sh         # Copy files to game override

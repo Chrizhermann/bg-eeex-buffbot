@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.0-alpha (2026-04-02)
+
+### Features
+- Subwindow selection spells (opcode 214) — variant picker for spells like Protection from Elemental Energy (#20)
+  - Auto-detects opcode 214 in spell feature blocks, parses the referenced 2DA for variant sub-spells
+  - Variant picker sub-menu: select which sub-spell (Fire, Cold, Electricity, Acid, etc.) to cast
+  - Enable gate: cannot enable a variant spell without selecting a variant first
+  - Execution engine consumes parent spell slot via `m_flags` manipulation, casts variant directly via `ReallyForceSpellRES` — no subwindow ever opens
+  - Active buff skip detection uses variant resref (the variant produces the buff effects)
+  - Safety skip for variant spells with no variant configured
+  - Dual button layout: variant spells show squeezed button row with Variant button; normal spells unchanged
+  - 20 new tests (200+ total)
+
 ## v1.2.2-alpha (2026-03-27)
 
 ### Features
