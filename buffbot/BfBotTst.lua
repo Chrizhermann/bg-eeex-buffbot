@@ -1226,6 +1226,244 @@ function BfBot.Test.CombatSafety()
 end
 
 -- ============================================================
+-- BfBot.Test.SubwindowDetection — Opcode 214 Variant Detection
+-- ============================================================
+
+function BfBot.Test.SubwindowDetection()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Subwindow Detection Tests (Op 214)")
+    P("========================================")
+    P("")
+
+    -- ---- Test 1: _DetectVariants function exists ----
+    P("  [1] _DetectVariants function exists")
+
+    if type(BfBot.Class._DetectVariants) == "function" then
+        _ok("_DetectVariants is a function")
+    else
+        _nok("_DetectVariants missing or not a function")
+        return _summary("Subwindow Detection")
+    end
+
+    -- ---- Test 2: Normal spell returns nil (no variants) ----
+    P("")
+    P("  [2] Normal spell (SPWI305 Haste) returns nil")
+
+    local hdrOk, hasteHdr = pcall(EEex_Resource_Demand, "SPWI305", "SPL")
+    if hdrOk and hasteHdr then
+        local hasteAbil = hasteHdr:getAbility(0)
+        if hasteAbil then
+            local ok, result = pcall(BfBot.Class._DetectVariants, hasteHdr, hasteAbil)
+            if ok and result == nil then
+                _ok("SPWI305 (Haste) returns nil — no opcode 214")
+            elseif ok then
+                _nok("SPWI305 returned non-nil: " .. type(result))
+            else
+                _nok("_DetectVariants threw on SPWI305: " .. tostring(result))
+            end
+        else
+            _warning("Cannot get ability 0 for SPWI305")
+        end
+    else
+        _warning("Cannot load SPWI305 — skipping normal spell test")
+    end
+
+    -- ---- Test 3: Variant spell (SPWI422 Protection from Energy) ----
+    P("")
+    P("  [3] Variant spell (SPWI422 Protection from Energy)")
+
+    local varHdrOk, varHdr = pcall(EEex_Resource_Demand, "SPWI422", "SPL")
+    if varHdrOk and varHdr then
+        local varAbil = varHdr:getAbility(0)
+        if varAbil then
+            local ok, variants = pcall(BfBot.Class._DetectVariants, varHdr, varAbil)
+            if ok and variants and type(variants) == "table" and #variants > 0 then
+                _ok("SPWI422 returned " .. #variants .. " variant(s)")
+
+                -- ---- Test 3a: Each entry has required fields ----
+                P("")
+                P("  [3a] Variant entry structure")
+                local firstEntry = variants[1]
+                local hasResref = type(firstEntry.resref) == "string" and firstEntry.resref ~= ""
+                local hasName = type(firstEntry.name) == "string" and firstEntry.name ~= ""
+                local hasLabel = type(firstEntry.label) == "string"
+                local hasIcon = type(firstEntry.icon) == "string"
+
+                if hasResref then
+                    _ok("variant[1].resref = " .. firstEntry.resref)
+                else
+                    _nok("variant[1].resref missing or empty")
+                end
+
+                if hasName then
+                    _ok("variant[1].name = " .. firstEntry.name)
+                else
+                    _nok("variant[1].name missing or empty")
+                end
+
+                if hasLabel then
+                    _ok("variant[1].label = " .. tostring(firstEntry.label))
+                else
+                    _nok("variant[1].label missing")
+                end
+
+                if hasIcon then
+                    _ok("variant[1].icon present ('" .. firstEntry.icon .. "')")
+                else
+                    _nok("variant[1].icon missing")
+                end
+
+                -- Log all variants for inspection
+                P("")
+                P("  [3b] All variants:")
+                for i, v in ipairs(variants) do
+                    P("    " .. i .. ": " .. v.resref .. " — " .. v.name
+                        .. " (label=" .. tostring(v.label)
+                        .. " icon=" .. v.icon .. ")")
+                end
+            elseif ok and variants == nil then
+                _warning("SPWI422 returned nil — spell may not have opcode 214 in this install")
+            elseif ok then
+                _nok("SPWI422 returned unexpected: " .. type(variants))
+            else
+                _nok("_DetectVariants threw on SPWI422: " .. tostring(variants))
+            end
+        else
+            _warning("Cannot get ability 0 for SPWI422")
+        end
+    else
+        _warning("Cannot load SPWI422 — not available in this install")
+    end
+
+    -- ---- Test 4: Classify result includes hasVariants ----
+    P("")
+    P("  [4] Classify result includes hasVariants field")
+
+    -- Clear classification cache to ensure fresh classification
+    BfBot._cache.class["SPWI305"] = nil
+    if hdrOk and hasteHdr then
+        local hasteAbil = hasteHdr:getAbility(0)
+        if hasteAbil then
+            local ok, classResult = pcall(BfBot.Class.Classify, "SPWI305", hasteHdr, hasteAbil)
+            if ok and classResult then
+                if classResult.hasVariants == false then
+                    _ok("SPWI305 classify: hasVariants = false")
+                elseif classResult.hasVariants == true then
+                    _nok("SPWI305 classify: hasVariants should be false, got true")
+                else
+                    _nok("SPWI305 classify: hasVariants = " .. tostring(classResult.hasVariants))
+                end
+            else
+                _nok("Classify SPWI305 failed: " .. tostring(classResult))
+            end
+        end
+    else
+        _warning("Skipping classify test — SPWI305 not loaded")
+    end
+
+    -- Test 4b: Classify variant spell
+    BfBot._cache.class["SPWI422"] = nil
+    if varHdrOk and varHdr then
+        local varAbil = varHdr:getAbility(0)
+        if varAbil then
+            local ok, classResult = pcall(BfBot.Class.Classify, "SPWI422", varHdr, varAbil)
+            if ok and classResult then
+                if classResult.hasVariants == true then
+                    _ok("SPWI422 classify: hasVariants = true")
+                    if classResult.variants and #classResult.variants > 0 then
+                        _ok("SPWI422 classify: variants array has "
+                            .. #classResult.variants .. " entries")
+                    else
+                        _nok("SPWI422 classify: variants array missing or empty")
+                    end
+                    -- Variant spells should be classified as buffs
+                    if classResult.isBuff then
+                        _ok("SPWI422 classify: isBuff = true (inherited from variants)")
+                    else
+                        _nok("SPWI422 classify: isBuff should be true, got false")
+                    end
+                else
+                    _warning("SPWI422 classify: hasVariants = false — may not have op214 in this install")
+                end
+            else
+                _nok("Classify SPWI422 failed: " .. tostring(classResult))
+            end
+        end
+    else
+        _warning("Skipping SPWI422 classify test — not loaded")
+    end
+
+    -- ---- Test 5: Scan entry propagates hasVariants ----
+    P("")
+    P("  [5] Scan entry propagates hasVariants")
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if sprite then
+        BfBot.Scan.Invalidate(sprite)
+        BfBot._cache.class = {}  -- clear classify cache for fresh results
+        local spells, count = BfBot.Scan.GetCastableSpells(sprite)
+        if spells and count > 0 then
+            local foundVariant = false
+            local foundNonVariant = false
+            for resref, entry in pairs(spells) do
+                if entry.hasVariants == 1 then
+                    foundVariant = true
+                    _ok("Scan entry " .. resref .. ": hasVariants = 1 ("
+                        .. (entry.variants and #entry.variants or 0) .. " variants)")
+                elseif entry.hasVariants == 0 then
+                    foundNonVariant = true
+                end
+            end
+            if foundNonVariant then
+                _ok("Non-variant scan entries have hasVariants = 0")
+            else
+                _warning("No non-variant spells found in scan (unexpected)")
+            end
+            if not foundVariant then
+                _warning("No variant spells in slot 0 spellbook — structural test OK")
+            end
+        else
+            _warning("No castable spells for slot 0 — cannot verify scan entry")
+        end
+    else
+        _warning("No party member in slot 0 — skipping scan entry test")
+    end
+
+    -- ---- Test 6: hasVariants uses 0/1 integers (not booleans) ----
+    P("")
+    P("  [6] hasVariants in scan entries uses 0/1 integers")
+
+    if sprite then
+        local spells = BfBot.Scan.GetCastableSpells(sprite)
+        if spells then
+            local allIntegers = true
+            local checked = 0
+            for resref, entry in pairs(spells) do
+                if type(entry.hasVariants) ~= "number" then
+                    allIntegers = false
+                    _nok("Scan entry " .. resref .. ": hasVariants is "
+                        .. type(entry.hasVariants) .. " (expected number)")
+                    break
+                end
+                checked = checked + 1
+                if checked >= 10 then break end  -- spot check
+            end
+            if allIntegers and checked > 0 then
+                _ok("hasVariants is integer type in all " .. checked .. " checked entries")
+            elseif checked == 0 then
+                _warning("No entries to check")
+            end
+        end
+    end
+
+    -- ---- Summary ----
+    P("")
+    return _summary("Subwindow Detection")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 

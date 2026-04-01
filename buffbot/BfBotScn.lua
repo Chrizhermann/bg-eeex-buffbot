@@ -64,6 +64,10 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
     local isAoE = (classResult and classResult.isAoE) and 1 or 0
     local isSelfOnly = (classResult and classResult.isSelfOnly) and 1 or 0
 
+    -- Variant detection (0/1 integer flag + variant array)
+    local hasVariants = (classResult and classResult.hasVariants) and 1 or 0
+    local variants = (classResult and classResult.variants) or nil
+
     return {
         resref = resref,
         name = name,
@@ -75,6 +79,8 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
         durCat = durCat,
         isAoE = isAoE,
         isSelfOnly = isSelfOnly,
+        hasVariants = hasVariants,
+        variants = variants,
         class = classResult,
     }
 end

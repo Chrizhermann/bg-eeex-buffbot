@@ -410,6 +410,91 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
 end
 
 -- ============================================================
+-- Variant Detection (Opcode 214 — Select Spell)
+-- ============================================================
+
+--- Detect opcode 214 ("Select Spell") in feature blocks and parse the
+--- referenced 2DA to discover variant sub-spells. Returns nil if no
+--- opcode 214 found, or an array of {label, resref, name, icon} entries.
+function BfBot.Class._DetectVariants(header, ability)
+    local op214Res = nil
+
+    BfBot.Class._IterateFeatureBlocks(header, ability, function(fb, _)
+        local opcode = fb[BfBot._fields.fb_opcode]
+        if opcode == 214 then
+            local ok, res = pcall(function() return fb[BfBot._fields.fb_res]:get() end)
+            if ok and res and res ~= "" then
+                op214Res = res
+                return true  -- stop iteration
+            end
+        end
+    end)
+
+    if not op214Res then return nil end
+
+    -- Load the 2DA
+    local ok2da, tda = pcall(EEex_Resource_Load2DA, op214Res)
+    if not ok2da or not tda then
+        BfBot._Warn("Variant 2DA not found: " .. op214Res)
+        return nil
+    end
+
+    local variants = {}
+    local ok, err = pcall(function()
+        local _, rows = tda:getDimensions()
+        for y = 0, rows - 1 do
+            local varResref = tda:getAtPoint(0, y)  -- column 0 = ResRef
+            local label = tda:getRowLabel(y)         -- row label (e.g., "ProFire")
+            if varResref and varResref ~= "" and varResref ~= "*" then
+                -- Load sub-spell SPL for name and icon
+                local name = varResref
+                local icon = ""
+                local splOk, splHeader = pcall(EEex_Resource_Demand, varResref, "SPL")
+                if splOk and splHeader then
+                    -- Name: try genericName first (SR puts real name there)
+                    local n = nil
+                    local gn = splHeader.genericName
+                    if gn and gn ~= 0 and gn ~= -1 and gn ~= 0xFFFFFFFF and gn ~= 9999999 then
+                        local fetchOk, fetched = pcall(Infinity_FetchString, gn)
+                        if fetchOk and fetched and fetched ~= "" then n = fetched end
+                    end
+                    if not n then
+                        local idn = splHeader.identifiedName
+                        if idn and idn ~= 0 and idn ~= -1 and idn ~= 0xFFFFFFFF and idn ~= 9999999 then
+                            local fetchOk2, fetched2 = pcall(Infinity_FetchString, idn)
+                            if fetchOk2 and fetched2 and fetched2 ~= "" then n = fetched2 end
+                        end
+                    end
+                    if n then name = n end
+
+                    -- Icon from first ability
+                    local abil = splHeader:getAbility(0)
+                    if abil then
+                        local iconOk, abilIcon = pcall(function() return abil.quickSlotIcon:get() end)
+                        if iconOk and abilIcon and abilIcon ~= "" then icon = abilIcon end
+                    end
+                end
+
+                table.insert(variants, {
+                    label = label,
+                    resref = varResref,
+                    name = name,
+                    icon = icon,
+                })
+            end
+        end
+    end)
+
+    if not ok then
+        BfBot._Warn("Error parsing variant 2DA " .. op214Res .. ": " .. tostring(err))
+        return nil
+    end
+
+    if #variants == 0 then return nil end
+    return variants
+end
+
+-- ============================================================
 -- Duration
 -- ============================================================
 
@@ -553,6 +638,16 @@ function BfBot.Class.Classify(resref, header, ability)
         result.isSelfOnly = BfBot.Class.IsSelfOnly(ability)
         result.defaultTarget = BfBot.Class.GetDefaultTarget(ability, result.isAoE)
 
+        -- Detect opcode 214 variants even for overridden spells
+        local ovrVariants = BfBot.Class._DetectVariants(header, ability)
+        if ovrVariants and #ovrVariants > 0 then
+            result.hasVariants = true
+            result.variants = ovrVariants
+        else
+            result.hasVariants = false
+            result.variants = nil
+        end
+
         BfBot._cache.class[resref] = result
         return result
     end
@@ -615,6 +710,22 @@ function BfBot.Class.Classify(resref, header, ability)
 
     -- Default target
     result.defaultTarget = BfBot.Class.GetDefaultTarget(ability, result.isAoE)
+
+    -- Detect opcode 214 variants (subwindow selection spells)
+    local variants = BfBot.Class._DetectVariants(header, ability)
+    if variants and #variants > 0 then
+        result.hasVariants = true
+        result.variants = variants
+        -- Parent spell with only infrastructure opcodes (op214) may score too low.
+        -- Inherit buff status if at least one variant exists.
+        if not result.isBuff then
+            result.isBuff = true
+            result.isAmbiguous = false
+        end
+    else
+        result.hasVariants = false
+        result.variants = nil
+    end
 
     -- Cache and return
     BfBot._cache.class[resref] = result
