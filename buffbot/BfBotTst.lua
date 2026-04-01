@@ -1571,6 +1571,54 @@ function BfBot.Test.SubwindowDetection()
         _nok("_CheckEntry missing or not a function")
     end
 
+    -- ---- Test 14: OpenVariantsForSelected function exists ----
+    P("")
+    P("  [14] OpenVariantsForSelected function exists")
+
+    if type(BfBot.UI.OpenVariantsForSelected) == "function" then
+        _ok("OpenVariantsForSelected is a function")
+    else
+        _nok("OpenVariantsForSelected missing or not a function")
+    end
+
+    -- ---- Test 15: SelectVariant function exists ----
+    P("")
+    P("  [15] SelectVariant function exists")
+
+    if type(BfBot.UI.SelectVariant) == "function" then
+        _ok("SelectVariant is a function")
+    else
+        _nok("SelectVariant missing or not a function")
+    end
+
+    -- ---- Test 16: _VariantBtnText function exists and returns string ----
+    P("")
+    P("  [16] _VariantBtnText function exists and returns string")
+
+    if type(BfBot.UI._VariantBtnText) == "function" then
+        local ok, result = pcall(BfBot.UI._VariantBtnText)
+        if ok and type(result) == "string" then
+            _ok("_VariantBtnText returns string: '" .. result .. "'")
+        elseif ok then
+            _nok("_VariantBtnText returned " .. type(result) .. " (expected string)")
+        else
+            _nok("_VariantBtnText threw: " .. tostring(result))
+        end
+    else
+        _nok("_VariantBtnText missing or not a function")
+    end
+
+    -- ---- Test 17: buffbot_selectedHasVariants global exists and is number ----
+    P("")
+    P("  [17] buffbot_selectedHasVariants global exists and is number")
+
+    if type(buffbot_selectedHasVariants) == "number" then
+        _ok("buffbot_selectedHasVariants = " .. buffbot_selectedHasVariants .. " (number)")
+    else
+        _nok("buffbot_selectedHasVariants is " .. type(buffbot_selectedHasVariants)
+            .. " (expected number)")
+    end
+
     -- ---- Summary ----
     P("")
     return _summary("Subwindow Detection")

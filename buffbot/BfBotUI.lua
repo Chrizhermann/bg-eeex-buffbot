@@ -85,6 +85,12 @@ buffbot_pickerSelected = 0
 buffbot_importList = {}
 buffbot_importSelected = 0
 
+-- Variant picker state (for "Select Variant" sub-menu)
+buffbot_selectedHasVariants = 0    -- 0/1: does the selected spell have variants?
+buffbot_variantTable = {}          -- array for variant picker list
+buffbot_variantHeader = ""         -- header text for variant picker
+buffbot_variantSelected = 0        -- selected row in variant picker
+
 -- ============================================================
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
@@ -126,6 +132,7 @@ function BfBot.UI._OnMenusLoaded()
         EEex_Menu_AddBeforeUIItemRenderListener("bbRenFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbPickFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbImpFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbVarFrame", borderHook)
     end
 
     -- Hook WORLD_ACTIONBAR open/close to push/pop companion button menu
@@ -244,12 +251,20 @@ function BfBot.UI._Layout()
     Infinity_SetArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
     Infinity_SetArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
 
-    -- Spell action buttons: Toggle, Target, Up, Down, Delete Preset
+    -- Spell action buttons: Toggle, Target, Up, Down, Delete Preset (normal layout)
     Infinity_SetArea("bbTog", cx, r5Y, 120, btnH)
     Infinity_SetArea("bbTgt", cx + 126, r5Y, 160, btnH)
     Infinity_SetArea("bbUp", cx + 292, r5Y, 48, btnH)
     Infinity_SetArea("bbDn", cx + 344, r5Y, 48, btnH)
     Infinity_SetArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
+
+    -- Spell action buttons: variant layout (squeezed with Variant button)
+    Infinity_SetArea("bbVTog", cx, r5Y, 90, btnH)
+    Infinity_SetArea("bbVTgt", cx + 94, r5Y, 110, btnH)
+    Infinity_SetArea("bbVVar", cx + 208, r5Y, 110, btnH)
+    Infinity_SetArea("bbVUp", cx + 322, r5Y, 44, btnH)
+    Infinity_SetArea("bbVDn", cx + 370, r5Y, 44, btnH)
+    Infinity_SetArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
 
     -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
     local closeW = 80
@@ -309,6 +324,7 @@ end
 function BfBot.UI._Refresh()
     -- Reset row selection on any refresh
     buffbot_selectedRow = 0
+    buffbot_selectedHasVariants = 0
 
     -- 1. Update party member names for character tabs
     buffbot_charNames = {}
@@ -465,6 +481,20 @@ function BfBot.UI._Refresh()
             end
         end
 
+        -- Variant fields from scan data and config
+        local hasVariants = scan and scan.hasVariants or 0
+        local variants = scan and scan.variants or nil
+        local varResref = spellCfg.var or nil
+        local variantName = nil
+        if varResref and variants then
+            for _, v in ipairs(variants) do
+                if v.resref:upper() == varResref:upper() then
+                    variantName = v.name
+                    break
+                end
+            end
+        end
+
         table.insert(rows, {
             resref   = resref,
             name     = name,
@@ -483,6 +513,10 @@ function BfBot.UI._Refresh()
             isAoE    = scan and scan.isAoE or 0,
             isSelfOnly = scan and scan.isSelfOnly or 0,
             tgtUnlock = spellCfg.tgtUnlock or 0,
+            hasVariants = hasVariants,
+            variants = variants,
+            var      = varResref,
+            variantName = variantName,
         })
     end
 
@@ -512,12 +546,34 @@ function BfBot.UI.SetPreset(idx)
 end
 
 -- ============================================================
+-- Variant State Tracking
+-- ============================================================
+
+--- Update buffbot_selectedHasVariants based on current selection.
+-- Called from list action callback whenever selection changes.
+function BfBot.UI._UpdateVariantState()
+    if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
+        local entry = buffbot_spellTable[buffbot_selectedRow]
+        buffbot_selectedHasVariants = (entry and entry.hasVariants == 1) and 1 or 0
+    else
+        buffbot_selectedHasVariants = 0
+    end
+end
+
+-- ============================================================
 -- Spell Toggle (integer path — NO booleans)
 -- ============================================================
 
 function BfBot.UI.ToggleSpell(row)
     local entry = buffbot_spellTable[row]
     if not entry or entry.castable == 0 then return end
+
+    -- Enable gate: variant spell without variant selected → open picker instead
+    if entry.hasVariants == 1 and entry.on == 0 and not entry.var then
+        BfBot.UI.OpenVariants(row)
+        return
+    end
+
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
     if not sprite then return end
     -- Integer toggle: 1 -> 0, 0 -> 1. NEVER pass boolean to Persist.
@@ -1121,6 +1177,75 @@ end
 --- Import picker has a valid selection.
 function BfBot.UI._ImportHasSelection()
     return buffbot_importSelected > 0 and buffbot_importSelected <= #buffbot_importList
+end
+
+-- ============================================================
+-- Variant Picker (select spell variant for opcode 214 spells)
+-- ============================================================
+
+--- Open the variant picker for a spell row.
+function BfBot.UI.OpenVariants(row)
+    local entry = buffbot_spellTable[row]
+    if not entry or not entry.variants then return end
+
+    buffbot_variantHeader = entry.name or entry.resref
+    buffbot_variantSelected = 0
+    buffbot_variantTable = {}
+
+    for i, v in ipairs(entry.variants) do
+        table.insert(buffbot_variantTable, {
+            resref = v.resref,
+            name   = v.name,
+            icon   = v.icon,
+            label  = v.label,
+        })
+    end
+
+    Infinity_PushMenu("BUFFBOT_VARIANTS")
+end
+
+--- Open variants for currently selected row (button handler).
+function BfBot.UI.OpenVariantsForSelected()
+    if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
+        BfBot.UI.OpenVariants(buffbot_selectedRow)
+    end
+end
+
+--- Select a variant and close the picker.
+function BfBot.UI.SelectVariant(row)
+    local vEntry = buffbot_variantTable[row]
+    if not vEntry then return end
+
+    local spellRow = buffbot_selectedRow
+    local entry = buffbot_spellTable[spellRow]
+    if not entry then
+        Infinity_PopMenu("BUFFBOT_VARIANTS")
+        return
+    end
+
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then
+        Infinity_PopMenu("BUFFBOT_VARIANTS")
+        return
+    end
+
+    -- Store the variant
+    BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref)
+    entry.var = vEntry.resref
+    entry.variantName = vEntry.name
+
+    Infinity_PopMenu("BUFFBOT_VARIANTS")
+end
+
+--- Variant button text for the selected spell.
+function BfBot.UI._VariantBtnText()
+    if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
+        local entry = buffbot_spellTable[buffbot_selectedRow]
+        if entry and entry.variantName then
+            return "Var: " .. entry.variantName
+        end
+    end
+    return "Variant"
 end
 
 --- Can we create more presets? (fewer than 5 exist)

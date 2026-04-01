@@ -388,7 +388,7 @@ menu
 
 		area 350 148 520 250
 		name    "bbList"
-		action      "if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) end"
+		action      "BfBot.UI._UpdateVariantState(); if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) end"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
 		var         "buffbot_selectedRow"
@@ -454,13 +454,14 @@ menu
 
 	-- ======================================================
 	-- Selected spell actions (Toggle + Change Target)
+	-- Normal layout: visible when selected spell has NO variants
 	-- ======================================================
 
 	-- Toggle enable/disable for selected spell
 	button
 	{
 		name    "bbTog"
-		enabled "BfBot.UI._HasSelection()"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.ToggleSelected()"
 		text lua "BfBot.UI._ToggleBtnText()"
 		text style "button"
@@ -473,7 +474,7 @@ menu
 	button
 	{
 		name    "bbTgt"
-		enabled "BfBot.UI._HasSelection()"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		text lua "BfBot.UI._TargetBtnText()"
 		text style "button"
@@ -486,7 +487,7 @@ menu
 	button
 	{
 		name    "bbUp"
-		enabled "BfBot.UI._CanMoveUp()"
+		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.MoveSpellUp()"
 		text    "Up"
 		text style "button"
@@ -499,7 +500,7 @@ menu
 	button
 	{
 		name    "bbDn"
-		enabled "BfBot.UI._CanMoveDown()"
+		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.MoveSpellDown()"
 		text    "Down"
 		text style "button"
@@ -512,13 +513,96 @@ menu
 	button
 	{
 		name    "bbDel"
-		enabled "BfBot.UI._CanDeletePreset()"
+		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text    "Delete Preset"
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 740 434 130 28
+	}
+
+	-- ======================================================
+	-- Variant spell action buttons (squeezed layout)
+	-- Visible only when selected spell HAS variants
+	-- ======================================================
+
+	-- Toggle (variant layout)
+	button
+	{
+		name    "bbVTog"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.ToggleSelected()"
+		text lua "BfBot.UI._ToggleBtnText()"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 350 434 90 28
+	}
+
+	-- Target (variant layout)
+	button
+	{
+		name    "bbVTgt"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.OpenTargetsForSelected()"
+		text lua "BfBot.UI._TargetBtnText()"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 444 434 110 28
+	}
+
+	-- Variant picker button
+	button
+	{
+		name    "bbVVar"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.OpenVariantsForSelected()"
+		text lua "BfBot.UI._VariantBtnText()"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 558 434 110 28
+	}
+
+	-- Up (variant layout)
+	button
+	{
+		name    "bbVUp"
+		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.MoveSpellUp()"
+		text    "Up"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 672 434 44 28
+	}
+
+	-- Down (variant layout)
+	button
+	{
+		name    "bbVDn"
+		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.MoveSpellDown()"
+		text    "Down"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 720 434 44 28
+	}
+
+	-- Delete Preset (variant layout)
+	button
+	{
+		name    "bbVDel"
+		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.DeleteCurrentPreset()"
+		text    "Del Preset"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 768 434 102 28
 	}
 
 	-- ======================================================
@@ -1175,5 +1259,106 @@ menu
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 580 390 120 28
+	}
+}
+
+-- ============================================================
+-- Variant Picker (select spell variant for opcode 214 spells)
+-- ============================================================
+
+menu
+{
+	name    "BUFFBOT_VARIANTS"
+	ignoreesc
+
+	-- Dark overlay (click to close)
+	text
+	{
+		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 50
+		on escape
+	}
+
+	-- Border frame
+	label
+	{
+		name    "bbVarFrame"
+		area 396 156 368 268
+	}
+
+	-- Panel background (parchment)
+	label
+	{
+		area 420 180 320 220
+		mosaic "BFBOTBG"
+	}
+
+	-- Title
+	label
+	{
+		text lua "'Select Variant: ' .. buffbot_variantHeader"
+		text style "title"
+		text color lua "{50, 30, 10}"
+		text align center center
+		area 420 185 320 25
+	}
+
+	-- Variant list
+	list
+	{
+		column
+		{
+			width 15
+			label
+			{
+				area 2 2 32 32
+				icon lua "buffbot_variantTable[rowNumber] and buffbot_variantTable[rowNumber].icon or ''"
+				align center center
+			}
+		}
+
+		column
+		{
+			width 85
+			label
+			{
+				area 0 0 -1 34
+				text lua "buffbot_variantTable[rowNumber] and buffbot_variantTable[rowNumber].name or ''"
+				text style "normal_parchment"
+				text align left center
+			}
+		}
+
+		area 430 215 290 130
+		enabled     "true"
+		table       "buffbot_variantTable"
+		var         "buffbot_variantSelected"
+		rowheight   34
+		scrollbar   "GUISCRC"
+	}
+
+	-- Select button
+	button
+	{
+		enabled "buffbot_variantSelected > 0 and buffbot_variantSelected <= #buffbot_variantTable"
+		action  "BfBot.UI.SelectVariant(buffbot_variantSelected)"
+		text    "Select"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 430 355 140 28
+	}
+
+	-- Cancel button
+	button
+	{
+		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
+		text    "Cancel"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 580 355 140 28
 	}
 }
