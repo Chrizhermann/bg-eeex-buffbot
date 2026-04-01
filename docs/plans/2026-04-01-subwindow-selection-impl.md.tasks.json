@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/plans/2026-04-01-subwindow-selection-impl.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Detect opcode 214 and parse variant 2DA in classifier", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Add variant field to persistence and queue building", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Add _ConsumeSpellSlot and variant execution path", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Add variant picker UI", "status": "pending", "blockedBy": [2]},
+    {"id": 5, "subject": "Task 5: Integrate tests into RunAll and update CLAUDE.md", "status": "pending", "blockedBy": [3, 4]},
+    {"id": 6, "subject": "Task 6: Deploy, run tests, and verify in-game", "status": "pending", "blockedBy": [5]}
+  ],
+  "lastUpdated": "2026-04-01T00:00:00Z"
+}
