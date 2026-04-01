@@ -31,7 +31,9 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Combat Safety** (`BfBot.Exec`) — combat detection via `countAllOfTypeStringInRange("[ENEMY]", 400)` on party leader, queue interruption in `_Advance()`, paranoid BFBTCH safety net via `.menu` tick every ~2s. `CombatInterrupt` INI pref (default on). Safety net NOT toggleable. Verified working in-game.
 
-Next: Post-MVP features — clones/summons as casters (#19), subwindow selection spells (#20), non-spell buff sources (#21). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Test scanner refactor: `BfBot.Test.ScannerRefactor()`. Test export/import: `BfBot.Test.ExportImport()`. Test target picker: `BfBot.Test.TargetPicker()`. Test combat safety: `BfBot.Test.CombatSafety()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
+- **Subwindow Selection** (`BfBot.Class._DetectVariants` + `BfBot.Exec._ConsumeSpellSlot` + `BfBot.UI`) — opcode 214 detection in scanner, 2DA variant discovery, slot consumption via m_flags, variant picker UI. Implementation complete, in-game verification pending.
+
+Next: Post-MVP features — clones/summons as casters (#19), subwindow selection spells (#20), non-spell buff sources (#21). Analysis documents are in `docs/`, mod source in `buffbot/`, deploy via `bash tools/deploy.sh`. Test all modules: `BfBot.Test.RunAll()` in EEex console. Test persistence only: `BfBot.Test.Persist()`. Test execution: `BfBot.Test.Exec()`. Test Quick Cast: `BfBot.Test.QuickCast()`. Test overrides: `BfBot.Test.Override()`. Test scanner refactor: `BfBot.Test.ScannerRefactor()`. Test export/import: `BfBot.Test.ExportImport()`. Test target picker: `BfBot.Test.TargetPicker()`. Test combat safety: `BfBot.Test.CombatSafety()`. Test subwindow detection: `BfBot.Test.SubwindowDetection()`. Toggle UI: `BfBot.UI.Toggle()` or F11.
 
 ### Execution Engine Details
 - **Parallel per-caster**: Each caster gets their own sub-queue and `_Advance(slot)` LuaAction chain. All casters start simultaneously.
@@ -41,6 +43,7 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 - **Quick Cast (cheat mode)**: `BfBot.Exec.Start(queue, qcMode)` accepts optional qcMode (0=off, 1=long only, 2=all). Entries tagged with `cheat` flag based on qcMode and spell `durCat`. When qcMode=1, cheat entries sorted first per caster (two-pass split). BFBTCH.SPL (Improved Alacrity + casting speed reduction) applied before first cheat entry via `ReallyForceSpellRES`. BFBTCR.SPL (opcode 321 remove by resource) applied at cheat/normal boundary. Cleanup on Stop() removes lingering BFBTCH.
 - **Combat detection**: `_DetectCombat()` checks `sprite:countAllOfTypeStringInRange("[ENEMY]", 400)` on party leader. Same range as rest prevention (SPAWN_RANGE). Called from `_Advance()` between spells. Gated by `CombatInterrupt` INI pref (default 1).
 - **Safety net**: `_SafetyTick()` runs via `.menu` `enabled` tick on BUFFBOT_ACTIONBAR (always active on world screen). Rate-limited to ~2s via `Infinity_GetClockTicks()`. When exec state is NOT "running", scans all party members for orphaned BFBTCH effects and removes via BFBTCR. NOT toggleable.
+- **Variant spells**: Queue entries with `var` field take a different path: `_ConsumeSpellSlot()` sets `m_flags = 0` on the parent spell's memorized entry, then `ReallyForceSpellRES(variant, target)` applies the variant directly. No subwindow ever opens. `_CheckEntry` uses variant resref for active effect check. Safety skip if `hasVariants` but no `var` configured.
 - **API**: `BfBot.Exec.Start(queue, qcMode)`, `BfBot.Exec.Stop()`, `BfBot.Exec.GetState()`, `BfBot.Exec.GetLog()`
 - **Log file**: `buffbot_exec.log` in game directory (append mode)
 
@@ -121,6 +124,16 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 - **Directory creation**: WeiDU `MKDIR` at install time + lazy `os.execute("mkdir ...")` on first export.
 - **UI**: Export/Import buttons on the config panel. Import opens BUFFBOT_IMPORT picker sub-menu (scrollable list of available configs, Import/Cancel buttons). Feedback via `Infinity_DisplayString`.
 - **Design doc**: `docs/plans/2026-03-08-config-export-import-design.md`
+
+### Subwindow Selection (Opcode 214) Details
+- **Detection**: `BfBot.Class._DetectVariants(header, ability)` walks feature blocks for opcode 214. When found, reads the 2DA resource via `EEex_Resource_Load2DA()`, iterates rows to build variant array `{label, resref, name, icon}`.
+- **2DA format**: Column 0 = sub-spell resref, row label = variant label (e.g., "ProFire").
+- **Classification**: Parent spells with opcode 214 promoted to `isBuff = true` if they score too low on their own.
+- **Scan entry**: `hasVariants` (0/1 integer), `variants` (array or nil).
+- **Config**: `var` field on per-spell config (string resref or nil). No schema version bump.
+- **Slot consumption**: `_ConsumeSpellSlot(sprite, resref)` — determines spell list from resref prefix (SPWI→mage, SPPR→priest, else→innate), gets level from SPL header, iterates `sprite.m_memorizedSpells*:getReference(level)`, sets `m_flags = 0` on first available match.
+- **UI**: Variant button conditionally replaces normal button layout for variant spells. BUFFBOT_VARIANTS sub-menu for selection. Enable gate: cannot enable variant spell without selecting a variant first.
+- **In-game verified**: SPWI422 (Protection from Elemental Energy) → DVWI426.2DA → {SPWI319 fire, SPWI320 cold, SPWI512 elec, SPWI517 acid}.
 
 ### Known Issue: Old Save Configs Missing Spells
 Save games created before commit 706f31e have preset configs where Long Buffs only contains long/permanent spells and Short Buffs only contains short spells (each preset missing the other category). The code was fixed in 706f31e to distribute ALL buff spells to both presets, but `_CreateDefaultConfig` only runs when no config exists — existing saves retain the old incomplete config. **Mitigated**: Auto-merge in `_Refresh()` adds missing buff spells (disabled, at bottom) when the panel opens, producing the same result as a fresh config.

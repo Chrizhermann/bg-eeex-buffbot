@@ -1619,6 +1619,39 @@ function BfBot.Test.SubwindowDetection()
             .. " (expected number)")
     end
 
+    -- ---- Test 18: buffbot_variantTable global is table ----
+    P("")
+    P("  [18] buffbot_variantTable global is table")
+
+    if type(buffbot_variantTable) == "table" then
+        _ok("buffbot_variantTable is table (len=" .. #buffbot_variantTable .. ")")
+    else
+        _nok("buffbot_variantTable is " .. type(buffbot_variantTable)
+            .. " (expected table)")
+    end
+
+    -- ---- Test 19: buffbot_variantHeader global is string ----
+    P("")
+    P("  [19] buffbot_variantHeader global is string")
+
+    if type(buffbot_variantHeader) == "string" then
+        _ok("buffbot_variantHeader = '" .. buffbot_variantHeader .. "'")
+    else
+        _nok("buffbot_variantHeader is " .. type(buffbot_variantHeader)
+            .. " (expected string)")
+    end
+
+    -- ---- Test 20: buffbot_variantSelected global is number ----
+    P("")
+    P("  [20] buffbot_variantSelected global is number")
+
+    if type(buffbot_variantSelected) == "number" then
+        _ok("buffbot_variantSelected = " .. buffbot_variantSelected)
+    else
+        _nok("buffbot_variantSelected is " .. type(buffbot_variantSelected)
+            .. " (expected number)")
+    end
+
     -- ---- Summary ----
     P("")
     return _summary("Subwindow Detection")
@@ -1682,6 +1715,10 @@ function BfBot.Test.RunAll()
     local combatOk = BfBot.Test.CombatSafety()
     P("")
 
+    -- Phase 11: Subwindow Selection
+    local subwinOk = BfBot.Test.SubwindowDetection()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -1694,11 +1731,12 @@ function BfBot.Test.RunAll()
     P("  Scanner Refactor: " .. (scanRefOk and "PASS" or "FAIL"))
     P("  Target Picker: " .. (tgtOk and "PASS" or "FAIL"))
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
+    P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk
 end
 
 -- ============================================================
