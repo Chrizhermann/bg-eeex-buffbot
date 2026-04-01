@@ -435,6 +435,24 @@ function BfBot.Persist.GetTgtUnlock(sprite, presetIndex, resref)
     return preset.spells[resref].tgtUnlock or 0
 end
 
+--- Get the selected variant resref for a spell in a preset.
+--- @return string|nil: variant resref, or nil if not set
+function BfBot.Persist.GetSpellVariant(sprite, presetIndex, resref)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset or not preset.spells or not preset.spells[resref] then return nil end
+    return preset.spells[resref].var
+end
+
+--- Set the selected variant resref for a spell in a preset.
+function BfBot.Persist.SetSpellVariant(sprite, presetIndex, resref, variantResref)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset then return end
+    if not preset.spells[resref] then
+        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+    end
+    preset.spells[resref].var = variantResref  -- string or nil to clear
+end
+
 --- Set the priority for a spell in a preset.
 function BfBot.Persist.SetSpellPriority(sprite, presetIndex, resref, priority)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
@@ -907,11 +925,13 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
         -- Append to queue (strip pri field — exec engine doesn't use it)
         for _, e in ipairs(entries) do
             local scanData = castable[e.spell]
+            local spellCfg = preset.spells[e.spell]
             table.insert(queue, {
                 caster = e.caster,
                 spell  = e.spell,
                 target = e.target,
                 durCat = scanData and scanData.durCat or "short",
+                var    = spellCfg and spellCfg.var or nil,
             })
         end
 
@@ -1158,11 +1178,13 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     local queue = {}
     for _, e in ipairs(entries) do
         local scanData = castable[e.spell]
+        local spellCfg = preset.spells[e.spell]
         table.insert(queue, {
             caster = e.caster,
             spell  = e.spell,
             target = e.target,
             durCat = scanData and scanData.durCat or "short",
+            var    = spellCfg and spellCfg.var or nil,
         })
     end
 

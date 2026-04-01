@@ -1458,6 +1458,94 @@ function BfBot.Test.SubwindowDetection()
         end
     end
 
+    -- ---- Test 7: GetSpellVariant / SetSpellVariant existence ----
+    P("")
+    P("  [7] GetSpellVariant / SetSpellVariant API exists")
+
+    if type(BfBot.Persist.GetSpellVariant) == "function" then
+        _ok("GetSpellVariant is a function")
+    else
+        _nok("GetSpellVariant missing or not a function")
+    end
+    if type(BfBot.Persist.SetSpellVariant) == "function" then
+        _ok("SetSpellVariant is a function")
+    else
+        _nok("SetSpellVariant missing or not a function")
+    end
+
+    -- ---- Test 8: Set and get variant resref ----
+    P("")
+    P("  [8] Set variant, get it back")
+
+    if sprite then
+        local cfg = BfBot.Persist.GetConfig(sprite)
+        if cfg and cfg.presets and cfg.presets[1] then
+            -- Find any spell in preset 1 to test with
+            local testResref = nil
+            for resref, _ in pairs(cfg.presets[1].spells or {}) do
+                testResref = resref
+                break
+            end
+            if testResref then
+                -- Set variant
+                BfBot.Persist.SetSpellVariant(sprite, 1, testResref, "SPWI319")
+                local got = BfBot.Persist.GetSpellVariant(sprite, 1, testResref)
+                if got == "SPWI319" then
+                    _ok("SetSpellVariant/GetSpellVariant round-trip: " .. tostring(got))
+                else
+                    _nok("Expected 'SPWI319', got: " .. tostring(got))
+                end
+
+                -- ---- Test 9: Clear variant (set to nil) ----
+                P("")
+                P("  [9] Clear variant (set to nil)")
+                BfBot.Persist.SetSpellVariant(sprite, 1, testResref, nil)
+                local cleared = BfBot.Persist.GetSpellVariant(sprite, 1, testResref)
+                if cleared == nil then
+                    _ok("Variant cleared — GetSpellVariant returns nil")
+                else
+                    _nok("Expected nil after clear, got: " .. tostring(cleared))
+                end
+
+                -- ---- Test 10: GetSpellVariant on spell without var field ----
+                P("")
+                P("  [10] GetSpellVariant on spell without var field")
+                -- After clearing, var field is nil — confirm clean read
+                local noVar = BfBot.Persist.GetSpellVariant(sprite, 1, testResref)
+                if noVar == nil then
+                    _ok("No var field returns nil")
+                else
+                    _nok("Expected nil, got: " .. tostring(noVar))
+                end
+
+                -- ---- Test 11: var field survives config round-trip ----
+                P("")
+                P("  [11] var field survives config round-trip")
+                BfBot.Persist.SetSpellVariant(sprite, 1, testResref, "SPWI319")
+                -- Re-read config from UDAux
+                local cfg2 = BfBot.Persist.GetConfig(sprite)
+                local spellEntry = cfg2 and cfg2.presets
+                    and cfg2.presets[1] and cfg2.presets[1].spells
+                    and cfg2.presets[1].spells[testResref]
+                if spellEntry and spellEntry.var == "SPWI319" then
+                    _ok("var field persists in config: " .. spellEntry.var)
+                else
+                    _nok("var field lost in config round-trip, got: "
+                        .. tostring(spellEntry and spellEntry.var))
+                end
+
+                -- Clean up: remove test variant
+                BfBot.Persist.SetSpellVariant(sprite, 1, testResref, nil)
+            else
+                _warning("No spells in preset 1 — cannot test variant API")
+            end
+        else
+            _warning("No config/preset 1 — cannot test variant API")
+        end
+    else
+        _warning("No party member in slot 0 — skipping variant API tests")
+    end
+
     -- ---- Summary ----
     P("")
     return _summary("Subwindow Detection")
