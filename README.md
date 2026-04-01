@@ -4,10 +4,9 @@
 
 Cast all your pre-battle buffs with one click. BuffBot scans each character's spellbook, lets you configure which buffs to cast, in what order, on which targets — then executes the entire sequence automatically across all party members in parallel.
 
-> **Alpha Release** — fully functional but rough around the edges. Placeholder icons, unpolished panel visuals. [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
+> **Alpha Release** — fully functional but rough around the edges. [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
 
-<!-- TODO: Add screenshot of the config panel here -->
-<!-- ![BuffBot Config Panel](docs/screenshots/panel.png) -->
+[![BuffBot Showcase](https://img.youtube.com/vi/9fjnUKG1tfQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=9fjnUKG1tfQ)
 
 ## Features
 
