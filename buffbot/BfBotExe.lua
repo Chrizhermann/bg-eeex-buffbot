@@ -49,6 +49,57 @@ function BfBot.Exec._HasActiveEffect(sprite, resref)
     return ok and found
 end
 
+--- Programmatically consume one spell slot for a given spell resref.
+--- Sets m_flags = 0 on the first available memorized entry matching the resref.
+--- Used by the variant spell path to consume the parent spell slot before
+--- casting the variant directly via ReallyForceSpellRES.
+--- @param sprite userdata: the casting sprite
+--- @param resref string: the parent spell resref to consume
+--- @return boolean: true if slot consumed, false if no available slot found
+function BfBot.Exec._ConsumeSpellSlot(sprite, resref)
+    if not sprite or not resref then return false end
+
+    -- Determine spell list field from resref prefix
+    local prefix = resref:sub(1, 4):upper()
+    local listField
+    if prefix == "SPWI" then
+        listField = "m_memorizedSpellsMage"
+    elseif prefix == "SPPR" then
+        listField = "m_memorizedSpellsPriest"
+    else
+        listField = "m_memorizedSpellsInnate"
+    end
+
+    -- Get spell level from SPL header (1-based in header → 0-based index for array)
+    local levelIndex = 0
+    local hdrOk, header = pcall(EEex_Resource_Demand, resref, "SPL")
+    if hdrOk and header then
+        levelIndex = (header.spellLevel or 1) - 1
+    end
+    -- Innates are all at index 0
+    if listField == "m_memorizedSpellsInnate" then levelIndex = 0 end
+
+    -- Find and consume the first available slot
+    local consumed = false
+    local ok = pcall(function()
+        local memList = sprite[listField]
+        if not memList then return end
+        local levelList = memList:getReference(levelIndex)
+        if not levelList then return end
+        EEex_Utility_IterateCPtrList(levelList, function(spell)
+            if consumed then return true end
+            local sid = spell.m_spellId:get()
+            if sid == resref and spell.m_flags == 1 then
+                spell.m_flags = 0
+                consumed = true
+                return true
+            end
+        end)
+    end)
+
+    return ok and consumed
+end
+
 --- Check if hostiles are within combat range of the party leader.
 -- Uses the same range (400) and hostility threshold ([ENEMY] = EA >= 200)
 -- as the engine's rest prevention check.
@@ -199,6 +250,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                 splstates = splstates,
                 isAoE = isAoE,
                 cheat = isCheat,
+                var = entry.var,
             })
             totalEntries = totalEntries + 1
         end
@@ -291,7 +343,9 @@ function BfBot.Exec._CheckEntry(entry)
     end
 
     -- Effect list check (authoritative — runs when SPLSTATEs ambiguous or spell has none)
-    if BfBot.Exec._HasActiveEffect(targetSprite, entry.resref) then
+    -- For variant spells, the variant resref produces the actual buff effects
+    local checkResref = entry.var or entry.resref
+    if BfBot.Exec._HasActiveEffect(targetSprite, checkResref) then
         BfBot.Exec._LogEntry("SKIP", label .. " (already active)")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
         return false
@@ -299,7 +353,7 @@ function BfBot.Exec._CheckEntry(entry)
 
     -- SPLSTATE said active but effect list disagrees — old logic would have falsely skipped
     if splstatePositive then
-        BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught)")
+        BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught, checked " .. checkResref .. ")")
     end
 
     return true
@@ -336,6 +390,20 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
         return
     end
 
+    -- Safety: variant spell with no variant configured — skip
+    if not entry.var then
+        local scanSpells = BfBot.Scan.GetCastableSpells(entry.casterSprite)
+        local spellScan = scanSpells and scanSpells[entry.resref]
+        if spellScan and spellScan.hasVariants == 1 then
+            BfBot.Exec._LogEntry("SKIP",
+                entry.casterName .. " -> " .. entry.spellName
+                .. " (variant spell — no variant configured)")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            BfBot.Exec._ProcessCasterEntry(slot, index + 1)
+            return
+        end
+    end
+
     -- Quick Cast: apply cheat buff before first cheat entry that passes pre-flight
     -- Use ReallyForceSpellRES (not ApplySpellRES which silently fails for override SPLs)
     if caster.cheatBoundary > 0 and not caster.cheatApplied and entry.cheat then
@@ -354,17 +422,35 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
         BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast OFF")
     end
 
-    -- Build BCS action strings
-    local spellAction = string.format('SpellRES("%s",%s)', entry.resref, entry.targetObj)
+    -- Cast the spell
     local advanceAction = string.format('EEex_LuaAction("BfBot.Exec._Advance(%d)")', slot)
 
-    -- Queue both on the caster: spell first, then our callback
-    EEex_Action_QueueResponseStringOnAIBase(spellAction, entry.casterSprite)
-    EEex_Action_QueueResponseStringOnAIBase(advanceAction, entry.casterSprite)
-
-    BfBot.Exec._LogEntry("CAST",
-        entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName)
-    BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+    if entry.var then
+        -- Variant spell path: consume parent spell slot, then cast the variant
+        -- directly via ReallyForceSpellRES (variant SPL is not in the spellbook)
+        if not BfBot.Exec._ConsumeSpellSlot(entry.casterSprite, entry.resref) then
+            BfBot.Exec._LogEntry("SKIP",
+                entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
+                .. " (no slot for variant)")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            BfBot.Exec._ProcessCasterEntry(slot, index + 1)
+            return
+        end
+        local varAction = string.format('ReallyForceSpellRES("%s",%s)', entry.var, entry.targetObj)
+        EEex_Action_QueueResponseStringOnAIBase(varAction, entry.casterSprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, entry.casterSprite)
+        BfBot.Exec._LogEntry("CAST",
+            entry.casterName .. " -> " .. entry.spellName .. " [" .. entry.var .. "] -> " .. entry.targetName)
+        BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+    else
+        -- Normal path: queue SpellRES action (engine handles slot consumption)
+        local spellAction = string.format('SpellRES("%s",%s)', entry.resref, entry.targetObj)
+        EEex_Action_QueueResponseStringOnAIBase(spellAction, entry.casterSprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, entry.casterSprite)
+        BfBot.Exec._LogEntry("CAST",
+            entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName)
+        BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+    end
 end
 
 --- Called by the engine via EEex_LuaAction after a caster's spell completes.

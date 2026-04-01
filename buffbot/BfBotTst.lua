@@ -1546,6 +1546,31 @@ function BfBot.Test.SubwindowDetection()
         _warning("No party member in slot 0 — skipping variant API tests")
     end
 
+    -- ---- Test 12: _ConsumeSpellSlot function exists ----
+    P("")
+    P("  [12] _ConsumeSpellSlot function exists")
+
+    if type(BfBot.Exec._ConsumeSpellSlot) == "function" then
+        _ok("_ConsumeSpellSlot is a function")
+    else
+        _nok("_ConsumeSpellSlot missing or not a function")
+    end
+
+    -- ---- Test 13: Variant execution path exists in engine ----
+    P("")
+    P("  [13] Variant execution path exists in engine")
+
+    if type(BfBot.Exec._ProcessCasterEntry) == "function" then
+        _ok("_ProcessCasterEntry is a function")
+    else
+        _nok("_ProcessCasterEntry missing or not a function")
+    end
+    if type(BfBot.Exec._CheckEntry) == "function" then
+        _ok("_CheckEntry is a function")
+    else
+        _nok("_CheckEntry missing or not a function")
+    end
+
     -- ---- Summary ----
     P("")
     return _summary("Subwindow Detection")
