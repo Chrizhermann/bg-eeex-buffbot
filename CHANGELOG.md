@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.1-alpha (2026-04-05)
+
+### Installer
+- LuaJIT auto-detection and installation — BuffBot installer now checks for EEex LuaJIT and installs it from EEex's own files if missing
+- Fixes crash on EEex devel branch when LuaJIT component not selected (`io` global nil at BfBotInn.lua:12)
+
+### Runtime
+- Graceful degradation without LuaJIT — core features (scanning, config, casting) work; F12 innates, Quick Cast, Export/Import, and logging disabled with clear warning message
+
 ## v1.3.0-alpha (2026-04-02)
 
 ### Features

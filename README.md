@@ -25,9 +25,9 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ## Requirements
 
 - **BG:EE**, **BG2:EE**, or **EET**
-- **[EEex](https://github.com/Bubb13/EEex)** v0.11.0-alpha or later
+- **[EEex](https://github.com/Bubb13/EEex)** v0.10.0-alpha or later (with LuaJIT component recommended)
 
-EEex is required for Lua access to engine internals (spell data, character state, save game persistence). BuffBot will not load without it.
+EEex is required for Lua access to engine internals (spell data, character state, save game persistence). The BuffBot installer automatically detects and installs the EEex LuaJIT component if it's not already active. Without LuaJIT, BuffBot runs in reduced mode (no F12 innates, Quick Cast, export/import, or log files).
 
 ## Installation
 
@@ -36,6 +36,7 @@ EEex is required for Lua access to engine internals (spell data, character state
 1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases) and extract it into your game directory
 2. Run `setup-buffbot.exe` (or use your preferred WeiDU launcher)
 3. Select "BuffBot: In-Game Buff Automation" when prompted
+4. Accept the "EEex LuaJIT Support" component if prompted (auto-skipped if already installed)
 
 **Uninstall:** re-run the setup and choose uninstall. WeiDU removes all mod files and restores the TLK automatically.
 
