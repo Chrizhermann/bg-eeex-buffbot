@@ -3,6 +3,14 @@
 -- EEex's M___EEex.lua loads first, then M_BfBot.lua.
 if not EEex_Active then return end
 
+BfBot = BfBot or {}
+if not io then
+    BfBot._noIO = 1
+    EEex_Menu_AddAfterMainFileLoadedListener(function()
+        Infinity_DisplayString("BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.")
+    end)
+end
+
 Infinity_DoFile("BfBotCor")  -- Namespace, logging, shared utilities, caches
 Infinity_DoFile("BfBotCls")  -- Classifier (standalone, uses BfBot._Print/_Log only)
 Infinity_DoFile("BfBotScn")  -- Scanner (depends on Class)

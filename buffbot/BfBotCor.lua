@@ -22,10 +22,11 @@ BfBot._logHandle = nil
 
 -- Open log file for writing (call once before test runs)
 function BfBot._OpenLog()
+    if BfBot._noIO then return end
     local h, err = io.open(BfBot._logFile, "w")
     if h then
         BfBot._logHandle = h
-        h:write("=== BuffBot Log " .. os.date("%Y-%m-%d %H:%M:%S") .. " ===\n")
+        h:write("=== BuffBot Log " .. (os.date and os.date("%Y-%m-%d %H:%M:%S") or "?") .. " ===\n")
     end
 end
 
@@ -39,12 +40,13 @@ end
 
 -- Open log file in append mode (doesn't truncate)
 function BfBot._OpenLogAppend(filename)
+    if BfBot._noIO then return false end
     BfBot._CloseLog()
     local fname = filename or BfBot._logFile
     local h, err = io.open(fname, "a")
     if h then
         BfBot._logHandle = h
-        h:write("\n=== BuffBot Log " .. os.date("%Y-%m-%d %H:%M:%S") .. " ===\n")
+        h:write("\n=== BuffBot Log " .. (os.date and os.date("%Y-%m-%d %H:%M:%S") or "?") .. " ===\n")
     end
     return h ~= nil
 end
