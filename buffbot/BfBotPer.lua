@@ -628,6 +628,7 @@ end
 
 --- Ensure the presets directory exists.
 function BfBot.Persist._EnsurePresetsDir()
+    if not os then return end
     os.execute('mkdir "' .. BfBot.Persist._PRESETS_DIR .. '" 2>nul')
 end
 
@@ -635,6 +636,7 @@ end
 -- @param sprite  character sprite
 -- @return true, safeName on success; false, errorMsg on failure
 function BfBot.Persist.ExportConfig(sprite)
+    if BfBot._noIO then return false, "LuaJIT required for export" end
     if not sprite then return false, "no sprite" end
 
     local config = BfBot.Persist.GetConfig(sprite)
@@ -659,7 +661,7 @@ function BfBot.Persist.ExportConfig(sprite)
 
     -- Write header comment
     f:write("-- BuffBot config export: " .. rawName .. "\n")
-    f:write("-- Exported: " .. os.date("%Y-%m-%d %H:%M:%S") .. "\n")
+    f:write("-- Exported: " .. (os.date and os.date("%Y-%m-%d %H:%M:%S") or "?") .. "\n")
     f:write("-- Schema version: " .. tostring(config.v) .. "\n\n")
 
     -- Serialize config
@@ -673,6 +675,7 @@ end
 --- List available export files in the presets directory.
 -- @return array of {name=displayName, filename=fullFilename}
 function BfBot.Persist.ListExports()
+    if BfBot._noIO then return {} end
     local results = {}
     local pipe = io.popen('dir /b "override\\bfbot_presets\\*.lua" 2>nul')
     if not pipe then return results end
@@ -694,6 +697,7 @@ end
 -- @param filename  filename (just the name, e.g. "Jaheira.lua")
 -- @return true, presetCount, skippedCount on success; false, errorMsg on failure
 function BfBot.Persist.ImportConfig(sprite, filename)
+    if BfBot._noIO then return false, "LuaJIT required for import" end
     if not sprite then return false, "no sprite" end
     if not filename then return false, "no filename" end
 
