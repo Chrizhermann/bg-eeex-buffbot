@@ -2256,22 +2256,26 @@ function BfBot.Test.Innate()
     P("")
 
     -- Check SPL files on disk
-    local splFound, splMissing = 0, 0
-    for slot = 0, 5 do
-        for preset = 1, BfBot.MAX_PRESETS do
-            local resref = string.format("BFBT%d%d", slot, preset)
-            local path = "override/" .. resref .. ".SPL"
-            local f = io.open(path, "rb")
-            if f then
-                local size = f:seek("end")
-                f:close()
-                splFound = splFound + 1
-            else
-                splMissing = splMissing + 1
+    if BfBot._noIO then
+        P("[BuffBot] SPL file check skipped (no io — LuaJIT not installed)")
+    else
+        local splFound, splMissing = 0, 0
+        for slot = 0, 5 do
+            for preset = 1, BfBot.MAX_PRESETS do
+                local resref = string.format("BFBT%d%d", slot, preset)
+                local path = "override/" .. resref .. ".SPL"
+                local f = io.open(path, "rb")
+                if f then
+                    local size = f:seek("end")
+                    f:close()
+                    splFound = splFound + 1
+                else
+                    splMissing = splMissing + 1
+                end
             end
         end
+        P(string.format("[BuffBot] SPL files on disk: %d found, %d missing", splFound, splMissing))
     end
-    P(string.format("[BuffBot] SPL files on disk: %d found, %d missing", splFound, splMissing))
     P("")
 
     -- Check known innates per party member
