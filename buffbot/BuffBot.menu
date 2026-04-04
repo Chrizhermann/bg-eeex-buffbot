@@ -430,7 +430,7 @@ menu
 	button
 	{
 		name    "bbExp"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot._noIO"
 		action  "BfBot.UI.ExportConfig()"
 		text    "Export"
 		text style "button"
@@ -443,7 +443,7 @@ menu
 	button
 	{
 		name    "bbImp"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot._noIO"
 		action  "BfBot.UI.OpenImportPicker()"
 		text    "Import"
 		text style "button"
@@ -654,7 +654,7 @@ menu
 	text
 	{
 		name    "bbQC"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot._noIO"
 		action  "BfBot.UI.CycleQuickCast()"
 		text lua "BfBot.UI._QuickCastLabel()"
 		text style "normal"
