@@ -9,10 +9,12 @@ BfBot.Innate = {}
 -- Read base strref from file (written by tools/patch_tlk.py at deploy time).
 -- If the file doesn't exist, innates will have no tooltip names.
 BfBot.Innate._baseStrref = nil
-local _sf = io.open("override/bfbot_strrefs.txt", "r")
-if _sf then
-    BfBot.Innate._baseStrref = tonumber(_sf:read("*l"))
-    _sf:close()
+if io then
+    local _sf = io.open("override/bfbot_strrefs.txt", "r")
+    if _sf then
+        BfBot.Innate._baseStrref = tonumber(_sf:read("*l"))
+        _sf:close()
+    end
 end
 
 -- ---- Binary packing helpers (little-endian) ----
@@ -335,6 +337,7 @@ end
 BfBot.Innate._SPL_VERSION = 5  -- bump this when _BuildSPL format changes (v5: added BFBTRM.SPL)
 
 function BfBot.Innate._EnsureSPLFiles()
+    if BfBot._noIO then return 0 end
     local count = 0
     for slot = 0, 5 do
         for preset = 1, BfBot.MAX_PRESETS do
@@ -399,6 +402,7 @@ end
 --- Grant innate abilities to all party members based on their configured presets.
 -- Skips innates the character already has (prevents duplicates across sessions).
 function BfBot.Innate.Grant()
+    if BfBot._noIO then return end
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if sprite then
@@ -518,6 +522,7 @@ end
 -- Multiple passes to clean up accumulated innates from saves affected by the
 -- old RemoveSpellRES bug (which silently failed, causing unbounded accumulation).
 function BfBot.Innate.Revoke(slot)
+    if BfBot._noIO then return end
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
     -- Each pass removes one copy of each BFBT innate via opcode 172.
@@ -531,6 +536,7 @@ end
 
 --- Refresh innates for a specific character (e.g., after preset create/delete).
 function BfBot.Innate.Refresh(slot)
+    if BfBot._noIO then return end
     BfBot.Innate.Revoke(slot)
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
@@ -547,6 +553,7 @@ end
 
 --- Refresh innates for ALL party members.
 function BfBot.Innate.RefreshAll()
+    if BfBot._noIO then return end
     for slot = 0, 5 do
         BfBot.Innate.Refresh(slot)
     end
@@ -559,9 +566,10 @@ end
 
 --- Log a message to the innate log file (append mode).
 local function _InnateLog(msg)
+    if not io then return end
     local logf = io.open("buffbot_innate.log", "a")
     if logf then
-        logf:write(string.format("[%s] %s\n", os.date("%Y-%m-%d %H:%M:%S"), msg))
+        logf:write(string.format("[%s] %s\n", os.date and os.date("%Y-%m-%d %H:%M:%S") or "?", msg))
         logf:close()
     end
 end
