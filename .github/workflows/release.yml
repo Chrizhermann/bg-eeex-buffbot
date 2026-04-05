@@ -1,0 +1,76 @@
+name: Release Packaging
+
+on:
+  release:
+    types: [published]
+
+env:
+  WEIDU_TAG: "v249.00"
+  WEIDU_ASSET: "WeiDU-Windows-249-amd64.zip"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WeiDU
+        run: |
+          gh release download "$WEIDU_TAG" \
+            --repo WeiDUorg/weidu \
+            --pattern "$WEIDU_ASSET" \
+            --dir /tmp/weidu
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Extract and rename WeiDU
+        run: |
+          cd /tmp/weidu
+          unzip "$WEIDU_ASSET"
+          WEIDU_PATH=$(find /tmp/weidu -iname 'weidu.exe' -type f | head -1)
+          if [ -z "$WEIDU_PATH" ]; then
+            echo "::error::weidu.exe not found in $WEIDU_ASSET"
+            exit 1
+          fi
+          cp "$WEIDU_PATH" /tmp/setup-buffbot.exe
+          echo "Found WeiDU at: $WEIDU_PATH"
+
+      - name: Build release archive
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          STAGING="/tmp/buffbot-release"
+          mkdir -p "$STAGING/buffbot"
+
+          # WeiDU installer
+          cp /tmp/setup-buffbot.exe "$STAGING/"
+          cp setup-buffbot.tp2 "$STAGING/"
+
+          # Mod files
+          shopt -s nullglob
+          cp buffbot/*.lua   "$STAGING/buffbot/"
+          cp buffbot/*.menu  "$STAGING/buffbot/"
+          cp buffbot/*.BAM   "$STAGING/buffbot/"
+          cp buffbot/*.MOS   "$STAGING/buffbot/"
+          cp buffbot/*.PVRZ  "$STAGING/buffbot/"
+
+          # Docs
+          cp README.md    "$STAGING/"
+          cp CHANGELOG.md "$STAGING/"
+
+          # Create zip (flat — player extracts directly into game dir)
+          cd "$STAGING"
+          zip -r "/tmp/buffbot-${TAG}.zip" .
+
+          echo "Archive contents:"
+          unzip -l "/tmp/buffbot-${TAG}.zip"
+
+      - name: Upload release asset
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          gh release upload "$TAG" \
+            "/tmp/buffbot-${TAG}.zip" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
