@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.3.1-alpha~
+VERSION ~v1.3.2-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0
@@ -69,7 +69,8 @@ REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEe
 OUTER_SET luajit_active = 0
 ACTION_IF FILE_EXISTS ~InfinityLoader.ini~ THEN BEGIN
   COPY - ~InfinityLoader.ini~ ~InfinityLoader.ini~
-    PATCH_IF (INDEX_BUFFER (~LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~) >= 0) THEN BEGIN
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ num_matches
+    PATCH_IF (num_matches > 0) THEN BEGIN
       SET luajit_active = 1
     END
   BUT_ONLY
