@@ -92,10 +92,101 @@ buffbot_variantHeader = ""         -- header text for variant picker
 buffbot_variantSelected = 0        -- selected row in variant picker
 
 -- ============================================================
+-- Runtime MOS Generation (ultrawide / high-res support)
+-- ============================================================
+
+--- Generate BFBOTBG.MOS sized to the current screen by tiling existing
+-- PVRZ blocks. The base parchment tile is 2048x1152 (4 PVRZ blocks).
+-- At resolutions where 80% of screen exceeds that, the static MOS
+-- leaves a black gap. This function writes a tiled MOS V2 to override.
+function BfBot.UI._GenerateBgMOS()
+    if BfBot._noIO then return end
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
+
+    -- Panel is 80% of screen; add margin so MOS fully covers border overhang
+    local pw = math.floor(sw * 0.8) + 64
+    local ph = math.floor(sh * 0.8) + 64
+
+    -- How many times to repeat the 2048x1152 base tile
+    local tilesX = math.ceil(pw / 2048)
+    local tilesY = math.ceil(ph / 1152)
+    local mosW = tilesX * 2048
+    local mosH = tilesY * 1152
+
+    -- Skip regeneration if current MOS already covers this size
+    if BfBot.UI._mosW and BfBot.UI._mosW >= mosW and BfBot.UI._mosH >= mosH then
+        return
+    end
+
+    -- MOS V2 binary helpers
+    local function u32(n)
+        return string.char(
+            n % 256,
+            math.floor(n / 256) % 256,
+            math.floor(n / 65536) % 256,
+            math.floor(n / 16777216) % 256
+        )
+    end
+
+    -- Base tile: 4 PVRZ blocks composing a 2048x1152 parchment tile
+    --   MOS9900 (1024x1024) @ (0,0)     | MOS9901 (1024x1024) @ (1024,0)
+    --   MOS9902 (1024x128)  @ (0,1024)   | MOS9903 (1024x128)  @ (1024,1024)
+    local blocks = {
+        { page = 0x26AC, w = 1024, h = 1024, ox = 0,    oy = 0    },  -- MOS9900
+        { page = 0x26AD, w = 1024, h = 1024, ox = 1024, oy = 0    },  -- MOS9901
+        { page = 0x26AE, w = 1024, h = 128,  ox = 0,    oy = 1024 },  -- MOS9902
+        { page = 0x26AF, w = 1024, h = 128,  ox = 1024, oy = 1024 },  -- MOS9903
+    }
+
+    local numBlocks = tilesX * tilesY * 4
+    local parts = {}
+
+    -- MOS V2 header (24 bytes)
+    parts[#parts + 1] = "MOS V2  "
+    parts[#parts + 1] = u32(mosW)
+    parts[#parts + 1] = u32(mosH)
+    parts[#parts + 1] = u32(numBlocks)
+    parts[#parts + 1] = u32(24)  -- offset to block entries
+
+    -- Block entries (28 bytes each): tile the base pattern across the target area
+    for ty = 0, tilesY - 1 do
+        for tx = 0, tilesX - 1 do
+            for _, b in ipairs(blocks) do
+                parts[#parts + 1] = u32(b.page)   -- PVRZ page
+                parts[#parts + 1] = u32(0)         -- source X (always 0)
+                parts[#parts + 1] = u32(0)         -- source Y (always 0)
+                parts[#parts + 1] = u32(b.w)       -- width
+                parts[#parts + 1] = u32(b.h)       -- height
+                parts[#parts + 1] = u32(tx * 2048 + b.ox)  -- target X
+                parts[#parts + 1] = u32(ty * 1152 + b.oy)  -- target Y
+            end
+        end
+    end
+
+    local ok, err = pcall(function()
+        local f = io.open("override/BFBOTBG.MOS", "wb")
+        if f then
+            f:write(table.concat(parts))
+            f:close()
+        end
+    end)
+
+    if ok then
+        BfBot.UI._mosW = mosW
+        BfBot.UI._mosH = mosH
+    end
+end
+
+-- ============================================================
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
 
 function BfBot.UI._OnMenusLoaded()
+    -- Generate resolution-appropriate parchment background MOS
+    -- MUST happen before EEex_Menu_LoadFile so the menu picks up the right MOS
+    BfBot.UI._GenerateBgMOS()
+
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
 
@@ -159,6 +250,14 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListsCheckedListener(BfBot.UI._OnSpellListChanged)
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
+
+    -- Resolution change: regenerate MOS and re-layout if panel is open
+    EEex_Menu_AddWindowSizeChangedListener(function(w, h)
+        BfBot.UI._GenerateBgMOS()
+        if buffbot_isOpen then
+            BfBot.UI._Layout()
+        end
+    end)
 
     -- Load debug mode preference from INI
     local debugPref = Infinity_GetINIValue("BuffBot", "Debug", 0)
