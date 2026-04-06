@@ -25,7 +25,7 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Duration Column** (`BfBot.UI` + `BfBot.Scan` + `BfBot.Class`) — spell list shows per-caster-level buff duration in mixed format (e.g. `1h 30m`, `5m`, `Perm`, `Inst`). Duration computed per-sprite in scan entry (not shared classification cache). `GetDuration()` prefers timed effects over permanent — fixes spells with permanent infrastructure opcodes (326 Apply Effects, 48 Cure Intoxication) coexisting with real timed buffs.
 
-- **Dynamic Panel Sizing** (`BfBot.UI._Layout`) — panel covers ~80% of screen, centered, computed via `Infinity_GetScreenSize()` + `Infinity_SetArea()`. All elements named for dynamic positioning.
+- **Dynamic Panel Sizing** (`BfBot.UI._Layout`) — panel covers ~80% of screen, centered, computed via `Infinity_GetScreenSize()` + `Infinity_SetArea()`. All elements named for dynamic positioning. Parchment background MOS generated at runtime (`_GenerateBgMOS`) by tiling existing PVRZ blocks to match screen size — supports ultrawide, 4K, and arbitrary resolutions. Resolution changes handled via `EEex_Menu_AddWindowSizeChangedListener`.
 
 - **Config Export/Import** (`BfBot.Persist` + `BfBot.UI`) — Export a character's full config (all presets + overrides) to `override/bfbot_presets/<CharName>.lua`. Import from any exported file via picker sub-menu. Spells not in the target character's spellbook silently dropped on import. Uses `io.open`/`io.popen`/`os.execute` for file I/O and directory listing (all verified working in EEex).
 
