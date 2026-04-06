@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.3-alpha (2026-04-06)
+
+### Bug Fix
+- Panel rendering broken on ultrawide / non-standard resolutions (#25) — parchment background MOS was a fixed 2048x1152 image, leaving a black gap on ultrawides (3440x1440+). Now generates the MOS at runtime by tiling existing PVRZ blocks to match the actual screen size. Also handles resolution changes mid-session.
+
 ## v1.3.2-alpha (2026-04-06)
 
 ### Bug Fix
