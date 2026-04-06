@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.2-alpha (2026-04-06)
+
+### Bug Fix
+- LuaJIT auto-installer was never actually installing LuaJIT — `INDEX_BUFFER` matched a documentation comment in `InfinityLoader.ini` instead of the actual setting, causing the component to always skip with "LuaJIT is already active"
+- Replaced with `COUNT_REGEXP_INSTANCES` using `^` line anchor to match only actual INI setting lines
+- Verified working on both EEex stable (v0.11.0-alpha) and devel branches
+
 ## v1.3.1-alpha (2026-04-05)
 
 ### Installer
