@@ -40,6 +40,9 @@ __pycache__/
 # Local dev config (contains user-specific game path)
 tools/deploy.conf
 
+# Git worktrees (parallel development)
+.worktrees/
+
 # Drafts and AI context (not for public repo)
 docs/forum-post-*.md
 CLAUDE.md

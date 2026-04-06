@@ -262,24 +262,9 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         return nil, "no valid entries after expansion"
     end
 
-    -- When qcMode=1 (long only), sort cheat entries before normal entries per caster
-    if qcMode == 1 then
-        for slot, entries in pairs(byCaster) do
-            local cheatEntries = {}
-            local normalEntries = {}
-            for _, e in ipairs(entries) do
-                if e.cheat then
-                    table.insert(cheatEntries, e)
-                else
-                    table.insert(normalEntries, e)
-                end
-            end
-            local merged = {}
-            for _, e in ipairs(cheatEntries) do table.insert(merged, e) end
-            for _, e in ipairs(normalEntries) do table.insert(merged, e) end
-            byCaster[slot] = merged
-        end
-    end
+    -- Cast order: user-set priority (pri) is always respected.
+    -- Quick Cast applies Improved Alacrity to the entire queue — no reordering
+    -- by duration category. "What you see is what you get."
 
     return byCaster, totalEntries
 end
@@ -404,17 +389,17 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
         end
     end
 
-    -- Quick Cast: apply cheat buff before first cheat entry that passes pre-flight
+    -- Quick Cast: apply IA before first entry that passes pre-flight (covers whole queue)
     -- Use ReallyForceSpellRES (not ApplySpellRES which silently fails for override SPLs)
-    if caster.cheatBoundary > 0 and not caster.cheatApplied and entry.cheat then
+    if caster.cheatBoundary > 0 and not caster.cheatApplied then
         EEex_Action_QueueResponseStringOnAIBase(
             'ReallyForceSpellRES("BFBTCH",Myself)', entry.casterSprite)
         caster.cheatApplied = true
         BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast ON")
     end
 
-    -- Quick Cast: remove cheat buff at cheat/normal boundary
-    -- Use > instead of == to handle skipped entries at the boundary
+    -- Quick Cast: safety removal if index somehow exceeds boundary
+    -- With cheatBoundary = #entries, this only fires if queue is exhausted (handled by _Complete)
     if index > caster.cheatBoundary and caster.cheatApplied then
         EEex_Action_QueueResponseStringOnAIBase(
             'ReallyForceSpellRES("BFBTCR",Myself)', entry.casterSprite)
@@ -549,11 +534,11 @@ function BfBot.Exec.Start(queue, qcMode)
         local sprite = entries[1].casterSprite
         local name = entries[1].casterName
 
+        -- Quick Cast: IA covers the entire queue (no two-pass split).
+        -- cheatBoundary = last entry index → BFBTCR only fires at _Complete().
         local cheatBoundary = 0
         if BfBot.Exec._qcMode > 0 then
-            for i, e in ipairs(entries) do
-                if e.cheat then cheatBoundary = i end
-            end
+            cheatBoundary = #entries
         end
 
         BfBot.Exec._casters[slot] = {
