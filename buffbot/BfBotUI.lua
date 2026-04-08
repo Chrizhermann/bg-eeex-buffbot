@@ -428,6 +428,87 @@ function BfBot.UI._Layout()
 end
 
 -- ============================================================
+-- Drag & Resize Handlers (called by .menu handle elements)
+-- ============================================================
+
+--- Called per-frame during title bar drag. Moves the panel.
+function BfBot.UI._OnDrag()
+    local dx = motionX or 0
+    local dy = motionY or 0
+    if dx == 0 and dy == 0 then return end
+
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
+
+    -- Current geometry (read from state or compute default)
+    local pw = BfBot.UI._panelW or math.floor(sw * 0.8)
+    local ph = BfBot.UI._panelH or math.floor(sh * 0.8)
+    local px = (BfBot.UI._panelX or math.floor((sw - pw) / 2)) + dx
+    local py = (BfBot.UI._panelY or math.floor((sh - ph) / 2)) + dy
+
+    -- Clamp to screen (keep fully on-screen)
+    px = math.max(0, math.min(px, sw - pw))
+    py = math.max(0, math.min(py, sh - ph))
+
+    BfBot.UI._panelX = px
+    BfBot.UI._panelY = py
+    BfBot.UI._Layout()
+end
+
+--- Called per-frame during bottom-right corner drag. Resizes the panel.
+function BfBot.UI._OnResize()
+    local dx = motionX or 0
+    local dy = motionY or 0
+    if dx == 0 and dy == 0 then return end
+
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
+
+    local pw = (BfBot.UI._panelW or math.floor(sw * 0.8)) + dx
+    local ph = (BfBot.UI._panelH or math.floor(sh * 0.8)) + dy
+
+    -- Enforce minimums
+    pw = math.max(BfBot.UI._MIN_W, pw)
+    ph = math.max(BfBot.UI._MIN_H, ph)
+
+    -- Clamp to screen (panel must fit from current position)
+    local px = BfBot.UI._panelX or math.floor((sw - pw) / 2)
+    pw = math.min(pw, sw - px)
+    ph = math.min(ph, sh - (BfBot.UI._panelY or math.floor((sh - ph) / 2)))
+
+    -- Recalculate py clamp after ph change
+    local py = BfBot.UI._panelY or math.floor((sh - ph) / 2)
+    ph = math.min(ph, sh - py)
+
+    BfBot.UI._panelW = pw
+    BfBot.UI._panelH = ph
+
+    -- Regenerate MOS if panel + border exceeds current texture
+    local bpad = 24
+    local needW = pw + 2 * bpad + 64
+    local needH = ph + 2 * bpad + 64
+    if not BfBot.UI._mosW or needW > BfBot.UI._mosW
+       or not BfBot.UI._mosH or needH > BfBot.UI._mosH then
+        BfBot.UI._GenerateBgMOS()
+    end
+
+    BfBot.UI._Layout()
+end
+
+--- Reset panel to default 80%-centered layout.
+function BfBot.UI._ResetLayout()
+    BfBot.UI._panelX = nil
+    BfBot.UI._panelY = nil
+    BfBot.UI._panelW = nil
+    BfBot.UI._panelH = nil
+    BfBot.Persist.SetPref("PanelX", 0)
+    BfBot.Persist.SetPref("PanelY", 0)
+    BfBot.Persist.SetPref("PanelW", 0)
+    BfBot.Persist.SetPref("PanelH", 0)
+    BfBot.UI._Layout()
+end
+
+-- ============================================================
 -- Panel Open/Close
 -- ============================================================
 
