@@ -321,16 +321,16 @@ function BfBot.UI._CloseActionbarBtn()
 end
 
 -- ============================================================
--- Dynamic Layout (resize panel to ~80% of screen on open)
+-- Dynamic Layout (user-stored or default 80% of screen)
 -- ============================================================
 
 function BfBot.UI._Layout()
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
-    local pw = math.floor(sw * 0.8)
-    local ph = math.floor(sh * 0.8)
-    local px = math.floor((sw - pw) / 2)
-    local py = math.floor((sh - ph) / 2)
+    local pw = BfBot.UI._panelW or math.floor(sw * 0.8)
+    local ph = BfBot.UI._panelH or math.floor(sh * 0.8)
+    local px = BfBot.UI._panelX or math.floor((sw - pw) / 2)
+    local py = BfBot.UI._panelY or math.floor((sh - ph) / 2)
     local pad = 10
     local cx = px + pad
     local cw = pw - 2 * pad
@@ -416,6 +416,15 @@ function BfBot.UI._Layout()
 
     -- Status line
     Infinity_SetArea("bbStatus", cx, r7Y, cw, 24)
+
+    -- Drag handle covers title bar area
+    Infinity_SetArea("bbDragHandle", px, py, pw, 35)
+
+    -- Resize handle at bottom-right corner
+    Infinity_SetArea("bbResizeHandle", px + pw - 20, py + ph - 20, 20, 20)
+
+    -- Reset button in title bar (right-aligned, 50px wide)
+    Infinity_SetArea("bbReset", px + pw - 60, py + 5, 50, 24)
 end
 
 -- ============================================================
