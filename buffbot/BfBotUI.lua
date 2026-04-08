@@ -285,9 +285,23 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
-    -- Resolution change: regenerate MOS and re-layout if panel is open
+    -- Resolution change: regenerate MOS, clamp stored geometry, re-layout
     EEex_Menu_AddWindowSizeChangedListener(function(w, h)
         BfBot.UI._GenerateBgMOS()
+        -- Clamp stored geometry to new screen bounds
+        if BfBot.UI._panelW or BfBot.UI._panelH then
+            local sw, sh = w, h
+            if BfBot.UI._panelW and BfBot.UI._panelW > sw then BfBot.UI._panelW = nil end
+            if BfBot.UI._panelH and BfBot.UI._panelH > sh then BfBot.UI._panelH = nil end
+            local cpw = BfBot.UI._panelW or math.floor(sw * 0.8)
+            local cph = BfBot.UI._panelH or math.floor(sh * 0.8)
+            if BfBot.UI._panelX and BfBot.UI._panelX + cpw > sw then
+                BfBot.UI._panelX = math.max(0, sw - cpw)
+            end
+            if BfBot.UI._panelY and BfBot.UI._panelY + cph > sh then
+                BfBot.UI._panelY = math.max(0, sh - cph)
+            end
+        end
         if buffbot_isOpen then
             BfBot.UI._Layout()
         end
