@@ -19,6 +19,10 @@ BfBot.Persist._INI_DEFAULTS = {
     ShowTooltips  = 1,    -- show spell tooltips in panel
     ConfirmCast   = 0,    -- show confirmation before casting
     CombatInterrupt = 1,  -- stop casting when hostiles detected nearby
+    PanelX        = 0,    -- 0 = use default (centered)
+    PanelY        = 0,
+    PanelW        = 0,    -- 0 = use default (80% of screen)
+    PanelH        = 0,
 }
 
 -- ---- Boolean sanitization ----

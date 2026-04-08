@@ -14,6 +14,16 @@ BfBot.UI._charSlot = 0        -- selected character slot (0-5)
 BfBot.UI._presetIdx = 1       -- selected preset index (1-5)
 BfBot.UI._initialized = false
 
+-- Panel geometry (nil = use default 80%-centered)
+BfBot.UI._panelX = nil
+BfBot.UI._panelY = nil
+BfBot.UI._panelW = nil
+BfBot.UI._panelH = nil
+
+-- Minimum panel dimensions (widest button row ~420px + padding)
+BfBot.UI._MIN_W = 550
+BfBot.UI._MIN_H = 350
+
 --- Ensure _presetIdx points to a valid preset for the given config.
 -- Returns the clamped index (also sets BfBot.UI._presetIdx).
 function BfBot.UI._ClampPresetIdx(config)
@@ -179,6 +189,30 @@ function BfBot.UI._GenerateBgMOS()
 end
 
 -- ============================================================
+-- Layout Persistence (INI-backed panel position/size)
+-- ============================================================
+
+--- Load saved panel geometry from INI. Values of 0 mean "use default".
+function BfBot.UI._LoadLayout()
+    local x = BfBot.Persist.GetPref("PanelX")
+    local y = BfBot.Persist.GetPref("PanelY")
+    local w = BfBot.Persist.GetPref("PanelW")
+    local h = BfBot.Persist.GetPref("PanelH")
+    BfBot.UI._panelX = (x ~= 0) and x or nil
+    BfBot.UI._panelY = (y ~= 0) and y or nil
+    BfBot.UI._panelW = (w ~= 0) and w or nil
+    BfBot.UI._panelH = (h ~= 0) and h or nil
+end
+
+--- Save current panel geometry to INI.
+function BfBot.UI._SaveLayout()
+    BfBot.Persist.SetPref("PanelX", BfBot.UI._panelX or 0)
+    BfBot.Persist.SetPref("PanelY", BfBot.UI._panelY or 0)
+    BfBot.Persist.SetPref("PanelW", BfBot.UI._panelW or 0)
+    BfBot.Persist.SetPref("PanelH", BfBot.UI._panelH or 0)
+end
+
+-- ============================================================
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
 
@@ -262,6 +296,9 @@ function BfBot.UI._OnMenusLoaded()
     -- Load debug mode preference from INI
     local debugPref = Infinity_GetINIValue("BuffBot", "Debug", 0)
     BfBot._debugMode = (debugPref == 1) and 1 or 0
+
+    -- Load saved panel geometry from INI
+    BfBot.UI._LoadLayout()
 
     BfBot.UI._initialized = true
 end
@@ -411,6 +448,7 @@ end
 
 function BfBot.UI._OnClose()
     buffbot_isOpen = false
+    BfBot.UI._SaveLayout()
 end
 
 -- ============================================================
