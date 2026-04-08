@@ -198,18 +198,18 @@ function BfBot.UI._LoadLayout()
     local y = BfBot.Persist.GetPref("PanelY")
     local w = BfBot.Persist.GetPref("PanelW")
     local h = BfBot.Persist.GetPref("PanelH")
-    BfBot.UI._panelX = (x ~= 0) and x or nil
-    BfBot.UI._panelY = (y ~= 0) and y or nil
-    BfBot.UI._panelW = (w ~= 0) and w or nil
-    BfBot.UI._panelH = (h ~= 0) and h or nil
+    BfBot.UI._panelX = (x >= 0) and x or nil
+    BfBot.UI._panelY = (y >= 0) and y or nil
+    BfBot.UI._panelW = (w > 0) and w or nil
+    BfBot.UI._panelH = (h > 0) and h or nil
 end
 
 --- Save current panel geometry to INI.
 function BfBot.UI._SaveLayout()
-    BfBot.Persist.SetPref("PanelX", BfBot.UI._panelX or 0)
-    BfBot.Persist.SetPref("PanelY", BfBot.UI._panelY or 0)
-    BfBot.Persist.SetPref("PanelW", BfBot.UI._panelW or 0)
-    BfBot.Persist.SetPref("PanelH", BfBot.UI._panelH or 0)
+    BfBot.Persist.SetPref("PanelX", BfBot.UI._panelX or -1)
+    BfBot.Persist.SetPref("PanelY", BfBot.UI._panelY or -1)
+    BfBot.Persist.SetPref("PanelW", BfBot.UI._panelW or -1)
+    BfBot.Persist.SetPref("PanelH", BfBot.UI._panelH or -1)
 end
 
 -- ============================================================
@@ -289,7 +289,7 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Menu_AddWindowSizeChangedListener(function(w, h)
         BfBot.UI._GenerateBgMOS()
         -- Clamp stored geometry to new screen bounds
-        if BfBot.UI._panelW or BfBot.UI._panelH then
+        if BfBot.UI._panelW or BfBot.UI._panelH or BfBot.UI._panelX or BfBot.UI._panelY then
             local sw, sh = w, h
             if BfBot.UI._panelW and BfBot.UI._panelW > sw then BfBot.UI._panelW = nil end
             if BfBot.UI._panelH and BfBot.UI._panelH > sh then BfBot.UI._panelH = nil end
@@ -454,7 +454,7 @@ function BfBot.UI._OnDrag()
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
 
-    -- Current geometry (read from state or compute default)
+    -- Materialize all 4 values on first interaction
     local pw = BfBot.UI._panelW or math.floor(sw * 0.8)
     local ph = BfBot.UI._panelH or math.floor(sh * 0.8)
     local px = (BfBot.UI._panelX or math.floor((sw - pw) / 2)) + dx
@@ -466,6 +466,8 @@ function BfBot.UI._OnDrag()
 
     BfBot.UI._panelX = px
     BfBot.UI._panelY = py
+    BfBot.UI._panelW = pw
+    BfBot.UI._panelH = ph
     BfBot.UI._Layout()
 end
 
@@ -485,15 +487,14 @@ function BfBot.UI._OnResize()
     pw = math.max(BfBot.UI._MIN_W, pw)
     ph = math.max(BfBot.UI._MIN_H, ph)
 
-    -- Clamp to screen (panel must fit from current position)
+    -- Materialize position + clamp size to screen
     local px = BfBot.UI._panelX or math.floor((sw - pw) / 2)
-    pw = math.min(pw, sw - px)
-    ph = math.min(ph, sh - (BfBot.UI._panelY or math.floor((sh - ph) / 2)))
-
-    -- Recalculate py clamp after ph change
     local py = BfBot.UI._panelY or math.floor((sh - ph) / 2)
+    pw = math.min(pw, sw - px)
     ph = math.min(ph, sh - py)
 
+    BfBot.UI._panelX = px
+    BfBot.UI._panelY = py
     BfBot.UI._panelW = pw
     BfBot.UI._panelH = ph
 
@@ -515,10 +516,10 @@ function BfBot.UI._ResetLayout()
     BfBot.UI._panelY = nil
     BfBot.UI._panelW = nil
     BfBot.UI._panelH = nil
-    BfBot.Persist.SetPref("PanelX", 0)
-    BfBot.Persist.SetPref("PanelY", 0)
-    BfBot.Persist.SetPref("PanelW", 0)
-    BfBot.Persist.SetPref("PanelH", 0)
+    BfBot.Persist.SetPref("PanelX", -1)
+    BfBot.Persist.SetPref("PanelY", -1)
+    BfBot.Persist.SetPref("PanelW", -1)
+    BfBot.Persist.SetPref("PanelH", -1)
     BfBot.UI._Layout()
 end
 
