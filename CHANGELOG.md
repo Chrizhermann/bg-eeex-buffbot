@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.7-alpha (2026-04-10)
+
+### Added
+- **Sort by Duration button** — one-click reorder of the current preset's spell list by duration (permanent > long > short > instant). Persists immediately. Available in both normal and variant button layouts.
+
 ## v1.3.4-alpha (2026-04-08)
 
 ### Added

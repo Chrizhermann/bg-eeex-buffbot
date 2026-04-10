@@ -11,7 +11,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ## Features
 
 - **Dynamic spellbook scanning** — discovers buff spells from all sources (memorized, innate, HLAs, kit abilities) in real time. No hardcoded spell lists — works with modded spells automatically
-- **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, duration display, target assignment, and priority ordering
+- **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, duration display, target assignment, priority ordering, and sort-by-duration
 - **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, Undead Prebuff, etc.) with create/rename/delete
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for instant casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally
 - **F12 innate abilities** — each character gets one innate per preset in their special abilities, triggering buffing directly from gameplay without opening the panel

@@ -401,11 +401,12 @@ function BfBot.UI._Layout()
     Infinity_SetArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
     Infinity_SetArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
 
-    -- Spell action buttons: Toggle, Target, Up, Down, Delete Preset (normal layout)
+    -- Spell action buttons: Toggle, Target, Up, Down, Sort, Delete Preset (normal layout)
     Infinity_SetArea("bbTog", cx, r5Y, 120, btnH)
     Infinity_SetArea("bbTgt", cx + 126, r5Y, 160, btnH)
     Infinity_SetArea("bbUp", cx + 292, r5Y, 48, btnH)
     Infinity_SetArea("bbDn", cx + 344, r5Y, 48, btnH)
+    Infinity_SetArea("bbSort", cx + 398, r5Y, 48, btnH)
     Infinity_SetArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
 
     -- Spell action buttons: variant layout (squeezed with Variant button)
@@ -414,6 +415,7 @@ function BfBot.UI._Layout()
     Infinity_SetArea("bbVVar", cx + 208, r5Y, 110, btnH)
     Infinity_SetArea("bbVUp", cx + 322, r5Y, 44, btnH)
     Infinity_SetArea("bbVDn", cx + 370, r5Y, 44, btnH)
+    Infinity_SetArea("bbVSort", cx + 418, r5Y, 44, btnH)
     Infinity_SetArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
 
     -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
@@ -1253,6 +1255,21 @@ function BfBot.UI.MoveSpellDown()
     BfBot.UI._RenumberPriorities()
     -- Follow the moved spell
     buffbot_selectedRow = row + 1
+end
+
+--- Sort the current preset's spell list by duration (longest first).
+--- Permanent > long > short > instant > unknown. Persists via _RenumberPriorities.
+function BfBot.UI.SortByDuration()
+    if #buffbot_spellTable == 0 then return end
+    -- Map dur to a sort key: permanent (-1) → huge, nil → -2 (bottom)
+    local function durKey(entry)
+        local d = entry.dur
+        if d == nil then return -2 end
+        if d == -1 then return 1e9 end  -- permanent sorts first
+        return d                         -- timed: higher seconds = earlier
+    end
+    table.sort(buffbot_spellTable, function(a, b) return durKey(a) > durKey(b) end)
+    BfBot.UI._RenumberPriorities()
 end
 
 -- ============================================================

@@ -550,6 +550,19 @@ menu
 		area 694 434 48 28
 	}
 
+	-- Sort preset by duration (longest first)
+	button
+	{
+		name    "bbSort"
+		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants ~= 1"
+		action  "BfBot.UI.SortByDuration()"
+		text    "Sort"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 748 434 48 28
+	}
+
 	-- Delete current preset
 	button
 	{
@@ -560,7 +573,7 @@ menu
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 740 434 130 28
+		area 800 434 130 28
 	}
 
 	-- ======================================================
@@ -633,6 +646,19 @@ menu
 		area 720 434 44 28
 	}
 
+	-- Sort (variant layout)
+	button
+	{
+		name    "bbVSort"
+		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
+		action  "BfBot.UI.SortByDuration()"
+		text    "Sort"
+		text style "button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 768 434 44 28
+	}
+
 	-- Delete Preset (variant layout)
 	button
 	{
@@ -643,7 +669,7 @@ menu
 		text style "button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 768 434 102 28
+		area 816 434 102 28
 	}
 
 	-- ======================================================
