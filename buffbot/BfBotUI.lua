@@ -14,6 +14,16 @@ BfBot.UI._charSlot = 0        -- selected character slot (0-5)
 BfBot.UI._presetIdx = 1       -- selected preset index (1-5)
 BfBot.UI._initialized = false
 
+-- Panel geometry (nil = use default 80%-centered)
+BfBot.UI._panelX = nil
+BfBot.UI._panelY = nil
+BfBot.UI._panelW = nil
+BfBot.UI._panelH = nil
+
+-- Minimum panel dimensions (widest button row ~420px + padding)
+BfBot.UI._MIN_W = 550
+BfBot.UI._MIN_H = 350
+
 --- Ensure _presetIdx points to a valid preset for the given config.
 -- Returns the clamped index (also sets BfBot.UI._presetIdx).
 function BfBot.UI._ClampPresetIdx(config)
@@ -179,6 +189,30 @@ function BfBot.UI._GenerateBgMOS()
 end
 
 -- ============================================================
+-- Layout Persistence (INI-backed panel position/size)
+-- ============================================================
+
+--- Load saved panel geometry from INI. Values of 0 mean "use default".
+function BfBot.UI._LoadLayout()
+    local x = BfBot.Persist.GetPref("PanelX")
+    local y = BfBot.Persist.GetPref("PanelY")
+    local w = BfBot.Persist.GetPref("PanelW")
+    local h = BfBot.Persist.GetPref("PanelH")
+    BfBot.UI._panelX = (x >= 0) and x or nil
+    BfBot.UI._panelY = (y >= 0) and y or nil
+    BfBot.UI._panelW = (w > 0) and w or nil
+    BfBot.UI._panelH = (h > 0) and h or nil
+end
+
+--- Save current panel geometry to INI.
+function BfBot.UI._SaveLayout()
+    BfBot.Persist.SetPref("PanelX", BfBot.UI._panelX or -1)
+    BfBot.Persist.SetPref("PanelY", BfBot.UI._panelY or -1)
+    BfBot.Persist.SetPref("PanelW", BfBot.UI._panelW or -1)
+    BfBot.Persist.SetPref("PanelH", BfBot.UI._panelH or -1)
+end
+
+-- ============================================================
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
 
@@ -251,9 +285,23 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
-    -- Resolution change: regenerate MOS and re-layout if panel is open
+    -- Resolution change: regenerate MOS, clamp stored geometry, re-layout
     EEex_Menu_AddWindowSizeChangedListener(function(w, h)
         BfBot.UI._GenerateBgMOS()
+        -- Clamp stored geometry to new screen bounds
+        if BfBot.UI._panelW or BfBot.UI._panelH or BfBot.UI._panelX or BfBot.UI._panelY then
+            local sw, sh = w, h
+            if BfBot.UI._panelW and BfBot.UI._panelW > sw then BfBot.UI._panelW = nil end
+            if BfBot.UI._panelH and BfBot.UI._panelH > sh then BfBot.UI._panelH = nil end
+            local cpw = BfBot.UI._panelW or math.floor(sw * 0.8)
+            local cph = BfBot.UI._panelH or math.floor(sh * 0.8)
+            if BfBot.UI._panelX and BfBot.UI._panelX + cpw > sw then
+                BfBot.UI._panelX = math.max(0, sw - cpw)
+            end
+            if BfBot.UI._panelY and BfBot.UI._panelY + cph > sh then
+                BfBot.UI._panelY = math.max(0, sh - cph)
+            end
+        end
         if buffbot_isOpen then
             BfBot.UI._Layout()
         end
@@ -262,6 +310,9 @@ function BfBot.UI._OnMenusLoaded()
     -- Load debug mode preference from INI
     local debugPref = Infinity_GetINIValue("BuffBot", "Debug", 0)
     BfBot._debugMode = (debugPref == 1) and 1 or 0
+
+    -- Load saved panel geometry from INI
+    BfBot.UI._LoadLayout()
 
     BfBot.UI._initialized = true
 end
@@ -284,16 +335,16 @@ function BfBot.UI._CloseActionbarBtn()
 end
 
 -- ============================================================
--- Dynamic Layout (resize panel to ~80% of screen on open)
+-- Dynamic Layout (user-stored or default 80% of screen)
 -- ============================================================
 
 function BfBot.UI._Layout()
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
-    local pw = math.floor(sw * 0.8)
-    local ph = math.floor(sh * 0.8)
-    local px = math.floor((sw - pw) / 2)
-    local py = math.floor((sh - ph) / 2)
+    local pw = BfBot.UI._panelW or math.floor(sw * 0.8)
+    local ph = BfBot.UI._panelH or math.floor(sh * 0.8)
+    local px = BfBot.UI._panelX or math.floor((sw - pw) / 2)
+    local py = BfBot.UI._panelY or math.floor((sh - ph) / 2)
     local pad = 10
     local cx = px + pad
     local cw = pw - 2 * pad
@@ -379,6 +430,97 @@ function BfBot.UI._Layout()
 
     -- Status line
     Infinity_SetArea("bbStatus", cx, r7Y, cw, 24)
+
+    -- Drag handle covers title bar area
+    Infinity_SetArea("bbDragHandle", px, py, pw, 35)
+
+    -- Resize handle at bottom-right corner
+    Infinity_SetArea("bbResizeHandle", px + pw - 20, py + ph - 20, 20, 20)
+
+    -- Reset button in title bar (right-aligned, 50px wide)
+    Infinity_SetArea("bbReset", px + pw - 60, py + 5, 50, 24)
+end
+
+-- ============================================================
+-- Drag & Resize Handlers (called by .menu handle elements)
+-- ============================================================
+
+--- Called per-frame during title bar drag. Moves the panel.
+function BfBot.UI._OnDrag()
+    local dx = motionX or 0
+    local dy = motionY or 0
+    if dx == 0 and dy == 0 then return end
+
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
+
+    -- Materialize all 4 values on first interaction
+    local pw = BfBot.UI._panelW or math.floor(sw * 0.8)
+    local ph = BfBot.UI._panelH or math.floor(sh * 0.8)
+    local px = (BfBot.UI._panelX or math.floor((sw - pw) / 2)) + dx
+    local py = (BfBot.UI._panelY or math.floor((sh - ph) / 2)) + dy
+
+    -- Clamp to screen (keep fully on-screen)
+    px = math.max(0, math.min(px, sw - pw))
+    py = math.max(0, math.min(py, sh - ph))
+
+    BfBot.UI._panelX = px
+    BfBot.UI._panelY = py
+    BfBot.UI._panelW = pw
+    BfBot.UI._panelH = ph
+    BfBot.UI._Layout()
+end
+
+--- Called per-frame during bottom-right corner drag. Resizes the panel.
+function BfBot.UI._OnResize()
+    local dx = motionX or 0
+    local dy = motionY or 0
+    if dx == 0 and dy == 0 then return end
+
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
+
+    local pw = (BfBot.UI._panelW or math.floor(sw * 0.8)) + dx
+    local ph = (BfBot.UI._panelH or math.floor(sh * 0.8)) + dy
+
+    -- Enforce minimums
+    pw = math.max(BfBot.UI._MIN_W, pw)
+    ph = math.max(BfBot.UI._MIN_H, ph)
+
+    -- Materialize position + clamp size to screen
+    local px = BfBot.UI._panelX or math.floor((sw - pw) / 2)
+    local py = BfBot.UI._panelY or math.floor((sh - ph) / 2)
+    pw = math.min(pw, sw - px)
+    ph = math.min(ph, sh - py)
+
+    BfBot.UI._panelX = px
+    BfBot.UI._panelY = py
+    BfBot.UI._panelW = pw
+    BfBot.UI._panelH = ph
+
+    -- Regenerate MOS if panel + border exceeds current texture
+    local bpad = 24
+    local needW = pw + 2 * bpad + 64
+    local needH = ph + 2 * bpad + 64
+    if not BfBot.UI._mosW or needW > BfBot.UI._mosW
+       or not BfBot.UI._mosH or needH > BfBot.UI._mosH then
+        BfBot.UI._GenerateBgMOS()
+    end
+
+    BfBot.UI._Layout()
+end
+
+--- Reset panel to default 80%-centered layout.
+function BfBot.UI._ResetLayout()
+    BfBot.UI._panelX = nil
+    BfBot.UI._panelY = nil
+    BfBot.UI._panelW = nil
+    BfBot.UI._panelH = nil
+    BfBot.Persist.SetPref("PanelX", -1)
+    BfBot.Persist.SetPref("PanelY", -1)
+    BfBot.Persist.SetPref("PanelW", -1)
+    BfBot.Persist.SetPref("PanelH", -1)
+    BfBot.UI._Layout()
 end
 
 -- ============================================================
@@ -411,6 +553,7 @@ end
 
 function BfBot.UI._OnClose()
     buffbot_isOpen = false
+    BfBot.UI._SaveLayout()
 end
 
 -- ============================================================

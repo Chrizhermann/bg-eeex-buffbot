@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.4-alpha (2026-04-08)
+
+### Added
+- **Movable panel** -- drag the title bar to reposition the config panel (#24)
+- **Resizable panel** -- drag the bottom-right corner to resize (#24)
+- **Reset Layout button** -- restores default 80%-centered panel
+- Panel position/size persisted to baldur.ini across sessions
+- Screen clamping on resolution change
+
 ## v1.3.3-alpha (2026-04-06)
 
 ### Bug Fix

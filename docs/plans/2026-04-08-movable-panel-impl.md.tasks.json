@@ -1,0 +1,15 @@
+{
+  "planPath": "docs/plans/2026-04-08-movable-panel-impl.md",
+  "tasks": [
+    {"id": 0, "subject": "Task 0: Create feature branch", "status": "pending"},
+    {"id": 1, "subject": "Task 1: Add INI defaults + _LoadLayout/_SaveLayout", "status": "pending", "blockedBy": [0]},
+    {"id": 2, "subject": "Task 2: Modify _Layout() to use stored geometry", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Add _OnDrag/_OnResize/_ResetLayout handlers", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Add handle elements + reset button to .menu", "status": "pending", "blockedBy": [2]},
+    {"id": 5, "subject": "Task 5: Update resolution change handler for clamping", "status": "pending", "blockedBy": [3]},
+    {"id": 6, "subject": "Task 6: Add MovablePanel unit tests", "status": "pending", "blockedBy": [3, 4, 5]},
+    {"id": 7, "subject": "Task 7: Update CLAUDE.md and CHANGELOG", "status": "pending", "blockedBy": [6]},
+    {"id": 8, "subject": "Task 8: Deploy and in-game test", "status": "pending", "blockedBy": [7]}
+  ],
+  "lastUpdated": "2026-04-08T12:00:00Z"
+}

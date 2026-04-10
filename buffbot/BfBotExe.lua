@@ -262,24 +262,8 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         return nil, "no valid entries after expansion"
     end
 
-    -- When qcMode=1 (long only), sort cheat entries before normal entries per caster
-    if qcMode == 1 then
-        for slot, entries in pairs(byCaster) do
-            local cheatEntries = {}
-            local normalEntries = {}
-            for _, e in ipairs(entries) do
-                if e.cheat then
-                    table.insert(cheatEntries, e)
-                else
-                    table.insert(normalEntries, e)
-                end
-            end
-            local merged = {}
-            for _, e in ipairs(cheatEntries) do table.insert(merged, e) end
-            for _, e in ipairs(normalEntries) do table.insert(merged, e) end
-            byCaster[slot] = merged
-        end
-    end
+    -- Cast order: user-set priority (pri) is always respected — no reordering.
+    -- Quick Cast toggles IA on/off per entry based on cheat flag (durCat).
 
     return byCaster, totalEntries
 end
@@ -404,22 +388,20 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
         end
     end
 
-    -- Quick Cast: apply cheat buff before first cheat entry that passes pre-flight
-    -- Use ReallyForceSpellRES (not ApplySpellRES which silently fails for override SPLs)
-    if caster.cheatBoundary > 0 and not caster.cheatApplied and entry.cheat then
-        EEex_Action_QueueResponseStringOnAIBase(
-            'ReallyForceSpellRES("BFBTCH",Myself)', entry.casterSprite)
-        caster.cheatApplied = true
-        BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast ON")
-    end
-
-    -- Quick Cast: remove cheat buff at cheat/normal boundary
-    -- Use > instead of == to handle skipped entries at the boundary
-    if index > caster.cheatBoundary and caster.cheatApplied then
-        EEex_Action_QueueResponseStringOnAIBase(
-            'ReallyForceSpellRES("BFBTCR",Myself)', entry.casterSprite)
-        caster.cheatApplied = false
-        BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast OFF")
+    -- Quick Cast: toggle IA on/off per entry based on cheat flag.
+    -- Preserves user priority order — no reordering by duration category.
+    if caster.cheatBoundary > 0 then
+        if entry.cheat and not caster.cheatApplied then
+            EEex_Action_QueueResponseStringOnAIBase(
+                'ReallyForceSpellRES("BFBTCH",Myself)', entry.casterSprite)
+            caster.cheatApplied = true
+            BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast ON")
+        elseif not entry.cheat and caster.cheatApplied then
+            EEex_Action_QueueResponseStringOnAIBase(
+                'ReallyForceSpellRES("BFBTCR",Myself)', entry.casterSprite)
+            caster.cheatApplied = false
+            BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast OFF")
+        end
     end
 
     -- Cast the spell
@@ -549,6 +531,8 @@ function BfBot.Exec.Start(queue, qcMode)
         local sprite = entries[1].casterSprite
         local name = entries[1].casterName
 
+        -- Quick Cast: cheatBoundary > 0 means this caster has cheat entries.
+        -- IA toggles on/off per entry — no reordering by duration.
         local cheatBoundary = 0
         if BfBot.Exec._qcMode > 0 then
             for i, e in ipairs(entries) do

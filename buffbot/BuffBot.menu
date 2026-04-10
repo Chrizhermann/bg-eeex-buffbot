@@ -82,6 +82,35 @@ menu
 		area 340 55 540 30
 	}
 
+	-- Title bar drag handle (invisible — covers title area for dragging)
+	handle
+	{
+		name       "bbDragHandle"
+		actionDrag "BfBot.UI._OnDrag()"
+		area 340 55 540 35
+	}
+
+	-- Bottom-right resize handle (small grip area)
+	handle
+	{
+		name       "bbResizeHandle"
+		actionDrag "BfBot.UI._OnResize()"
+		area 860 540 20 20
+	}
+
+	-- Reset layout button (right side of title bar)
+	text
+	{
+		name    "bbReset"
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI._ResetLayout()"
+		text    "Reset"
+		text style "normal"
+		text color lua "{180, 160, 130}"
+		text align center center
+		area 820 55 50 24
+	}
+
 	-- ======================================================
 	-- Character tabs (6 slots, visibility gated by party)
 	-- ======================================================
