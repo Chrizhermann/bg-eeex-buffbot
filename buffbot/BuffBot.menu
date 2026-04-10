@@ -102,12 +102,12 @@ menu
 		area 860 540 20 20
 	}
 
-	-- Bottom-right resize handle (small grip area, ON TOP of grip visual)
+	-- Bottom-right resize handle (ON TOP of grip visual, sized for easy grabbing)
 	handle
 	{
 		name       "bbResizeHandle"
 		actionDrag "BfBot.UI._OnResize()"
-		area 860 540 20 20
+		area 800 500 56 32
 	}
 
 	-- Reset layout button (right side of title bar)
