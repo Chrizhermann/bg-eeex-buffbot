@@ -434,7 +434,8 @@ function BfBot.UI._Layout()
     -- Drag handle covers title bar area
     Infinity_SetArea("bbDragHandle", px, py, pw, 35)
 
-    -- Resize handle at bottom-right corner
+    -- Resize grip visual + handle at bottom-right corner
+    Infinity_SetArea("bbResizeGrip", px + pw - 20, py + ph - 20, 20, 20)
     Infinity_SetArea("bbResizeHandle", px + pw - 20, py + ph - 20, 20, 20)
 
     -- Reset button in title bar (right-aligned, 50px wide)

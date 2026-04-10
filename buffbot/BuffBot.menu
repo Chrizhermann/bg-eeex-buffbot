@@ -90,7 +90,19 @@ menu
 		area 340 55 540 35
 	}
 
-	-- Bottom-right resize handle (small grip area)
+	-- Resize grip visual indicator (BEFORE handle so handle gets click priority)
+	label
+	{
+		name    "bbResizeGrip"
+		enabled "buffbot_isOpen"
+		text    "///"
+		text style "normal"
+		text color lua "{120, 100, 70}"
+		text align center center
+		area 860 540 20 20
+	}
+
+	-- Bottom-right resize handle (small grip area, ON TOP of grip visual)
 	handle
 	{
 		name       "bbResizeHandle"
