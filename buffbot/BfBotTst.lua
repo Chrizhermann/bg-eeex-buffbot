@@ -2180,6 +2180,32 @@ function BfBot.Test.Persist()
     if not hasBool then _ok("Boolean sanitization works")
     else _nok("Boolean survived at " .. tostring(boolPath)) end
 
+    -- Table-format target validation (ordered name list from target picker)
+    local tblCfg = BfBot.Persist.GetDefaultConfig()
+    tblCfg.presets[1].spells["TESTSPELL"] = {
+        on = 1, tgt = {"Branwen", "Ajantis"}, pri = 1
+    }
+    tblCfg.presets[1].spells["TESTSPELL2"] = {
+        on = 1, tgt = {"Branwen", 42, "Ajantis", true}, pri = 2  -- mixed types
+    }
+    tblCfg.presets[1].spells["TESTSPELL3"] = {
+        on = 1, tgt = {}, pri = 3  -- empty table
+    }
+    local repairedTbl = BfBot.Persist._ValidateConfig(tblCfg)
+    local tgt1 = repairedTbl.presets[1].spells["TESTSPELL"].tgt
+    if type(tgt1) == "table" and #tgt1 == 2 and tgt1[1] == "Branwen" and tgt1[2] == "Ajantis" then
+        _ok("Table target {Branwen,Ajantis} preserved through validation")
+    else _nok("Table target lost: " .. tostring(type(tgt1))) end
+
+    local tgt2 = repairedTbl.presets[1].spells["TESTSPELL2"].tgt
+    if type(tgt2) == "table" and #tgt2 == 2 and tgt2[1] == "Branwen" and tgt2[2] == "Ajantis" then
+        _ok("Non-string entries stripped from table target")
+    else _nok("Mixed table not cleaned: " .. tostring(type(tgt2)) .. " len=" .. tostring(type(tgt2) == "table" and #tgt2 or "?")) end
+
+    local tgt3 = repairedTbl.presets[1].spells["TESTSPELL3"].tgt
+    if tgt3 == "p" then _ok("Empty table target → 'p' default")
+    else _nok("Empty table not defaulted: " .. tostring(tgt3)) end
+
     -- ---- Test 8: Marshal round-trip ----
     P("")
     P("  [8] Marshal export/import round-trip")
@@ -2211,6 +2237,20 @@ function BfBot.Test.Persist()
                 else
                     _nok("Round-trip lost data: on=" .. tostring(reEntry and reEntry.on) ..
                          " pri=" .. tostring(reEntry and reEntry.pri))
+                end
+
+                -- Test table-format target survives round-trip
+                BfBot.Persist.SetSpellTarget(sprite, 1, testResref, {"Branwen", "Ajantis"})
+                local exported2 = BfBot.Persist._Export(sprite)
+                if exported2 and exported2.cfg then
+                    BfBot.Persist._Import(sprite, exported2)
+                    local rtEntry = BfBot.Persist.GetSpellConfig(sprite, 1, testResref)
+                    if rtEntry and type(rtEntry.tgt) == "table" and #rtEntry.tgt == 2
+                       and rtEntry.tgt[1] == "Branwen" and rtEntry.tgt[2] == "Ajantis" then
+                        _ok("Round-trip preserved table target {Branwen,Ajantis}")
+                    else
+                        _nok("Round-trip lost table target: " .. tostring(type(rtEntry and rtEntry.tgt)))
+                    end
                 end
             end
         end

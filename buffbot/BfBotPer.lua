@@ -214,7 +214,24 @@ function BfBot.Persist._ValidateConfig(config)
                         preset.spells[resref] = nil  -- remove corrupt entry
                     else
                         if type(entry.on) ~= "number" then entry.on = 0 end
-                        if type(entry.tgt) ~= "string" then entry.tgt = "p" end
+                        -- tgt: string ("s", "p", "1"-"6") or table of name strings
+                        local tt = type(entry.tgt)
+                        if tt == "table" then
+                            -- Validate table entries: keep only strings, drop corrupt
+                            local cleaned = {}
+                            for _, v in ipairs(entry.tgt) do
+                                if type(v) == "string" then
+                                    table.insert(cleaned, v)
+                                end
+                            end
+                            if #cleaned == 0 then
+                                entry.tgt = "p"  -- empty table → default
+                            else
+                                entry.tgt = cleaned
+                            end
+                        elseif tt ~= "string" then
+                            entry.tgt = "p"
+                        end
                         if type(entry.pri) ~= "number" then entry.pri = 999 end
                     end
                 end
