@@ -107,7 +107,7 @@ menu
 	{
 		name       "bbResizeHandle"
 		actionDrag "BfBot.UI._OnResize()"
-		area 800 500 56 32
+		area 800 500 80 48
 	}
 
 	-- Reset layout button (right side of title bar)

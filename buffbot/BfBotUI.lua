@@ -436,7 +436,7 @@ function BfBot.UI._Layout()
 
     -- Resize grip visual + handle at bottom-right corner
     Infinity_SetArea("bbResizeGrip", px + pw - 20, py + ph - 20, 20, 20)
-    Infinity_SetArea("bbResizeHandle", px + pw - 56, py + ph - 32, 56, 32)
+    Infinity_SetArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
 
     -- Reset button in title bar (right-aligned, 50px wide)
     Infinity_SetArea("bbReset", px + pw - 60, py + 5, 50, 24)
