@@ -1658,6 +1658,113 @@ function BfBot.Test.SubwindowDetection()
 end
 
 -- ============================================================
+-- Movable Panel tests
+-- ============================================================
+
+function BfBot.Test.MovablePanel()
+    _reset()
+    P("== MovablePanel ==")
+
+    -- Test 1: Default layout (no stored values)
+    BfBot.UI._panelX = nil
+    BfBot.UI._panelY = nil
+    BfBot.UI._panelW = nil
+    BfBot.UI._panelH = nil
+    local sw, sh = Infinity_GetScreenSize()
+    local defW = math.floor(sw * 0.8)
+    local defH = math.floor(sh * 0.8)
+    local defX = math.floor((sw - defW) / 2)
+    local defY = math.floor((sh - defH) / 2)
+    BfBot.UI._Layout()
+    local bx, by, bw, bh = Infinity_GetArea("bbBg")
+    _check(bx == defX, "default X = centered (" .. tostring(bx) .. " == " .. tostring(defX) .. ")")
+    _check(by == defY, "default Y = centered (" .. tostring(by) .. " == " .. tostring(defY) .. ")")
+    _check(bw == defW, "default W = 80% screen (" .. tostring(bw) .. " == " .. tostring(defW) .. ")")
+    _check(bh == defH, "default H = 80% screen (" .. tostring(bh) .. " == " .. tostring(defH) .. ")")
+
+    -- Test 2: Stored position used
+    BfBot.UI._panelX = 100
+    BfBot.UI._panelY = 50
+    BfBot.UI._panelW = 800
+    BfBot.UI._panelH = 600
+    BfBot.UI._Layout()
+    bx, by, bw, bh = Infinity_GetArea("bbBg")
+    _check(bx == 100, "stored X applied (" .. tostring(bx) .. ")")
+    _check(by == 50,  "stored Y applied (" .. tostring(by) .. ")")
+    _check(bw == 800, "stored W applied (" .. tostring(bw) .. ")")
+    _check(bh == 600, "stored H applied (" .. tostring(bh) .. ")")
+
+    -- Test 3: Drag handle positioned on title bar
+    local hx, hy, hw, hh = Infinity_GetArea("bbDragHandle")
+    _check(hx == 100, "drag handle X = panel X (" .. tostring(hx) .. ")")
+    _check(hy == 50,  "drag handle Y = panel Y (" .. tostring(hy) .. ")")
+    _check(hw == 800, "drag handle W = panel W (" .. tostring(hw) .. ")")
+
+    -- Test 4: Resize handle at bottom-right
+    local rx, ry, rw, rh = Infinity_GetArea("bbResizeHandle")
+    _check(rx == 100 + 800 - 20, "resize handle X = bottom-right (" .. tostring(rx) .. ")")
+    _check(ry == 50 + 600 - 20,  "resize handle Y = bottom-right (" .. tostring(ry) .. ")")
+    _check(rw == 20, "resize handle W = 20 (" .. tostring(rw) .. ")")
+
+    -- Test 5: Reset clears stored values
+    BfBot.UI._ResetLayout()
+    _check(BfBot.UI._panelX == nil, "reset clears X")
+    _check(BfBot.UI._panelY == nil, "reset clears Y")
+    _check(BfBot.UI._panelW == nil, "reset clears W")
+    _check(BfBot.UI._panelH == nil, "reset clears H")
+    bx, by, bw, bh = Infinity_GetArea("bbBg")
+    _check(bx == defX, "reset restores default X (" .. tostring(bx) .. ")")
+    _check(bw == defW, "reset restores default W (" .. tostring(bw) .. ")")
+
+    -- Test 6: _OnResize enforces minimum width
+    BfBot.UI._panelX = 100
+    BfBot.UI._panelY = 50
+    BfBot.UI._panelW = 600
+    BfBot.UI._panelH = 400
+    motionX = -200  -- shrink by 200px -> 400 < MIN_W(550)
+    motionY = 0
+    BfBot.UI._OnResize()
+    _check(BfBot.UI._panelW >= BfBot.UI._MIN_W,
+        "resize enforces min W (" .. tostring(BfBot.UI._panelW) .. " >= " .. tostring(BfBot.UI._MIN_W) .. ")")
+
+    -- Test 7: _OnResize enforces minimum height
+    BfBot.UI._panelW = 600
+    BfBot.UI._panelH = 400
+    motionX = 0
+    motionY = -200  -- shrink by 200px -> 200 < MIN_H(350)
+    BfBot.UI._OnResize()
+    _check(BfBot.UI._panelH >= BfBot.UI._MIN_H,
+        "resize enforces min H (" .. tostring(BfBot.UI._panelH) .. " >= " .. tostring(BfBot.UI._MIN_H) .. ")")
+
+    -- Test 8: _OnDrag clamps to screen
+    BfBot.UI._panelW = 800
+    BfBot.UI._panelH = 600
+    BfBot.UI._panelX = sw - 100  -- near right edge
+    BfBot.UI._panelY = 50
+    motionX = 200  -- try to push off screen
+    motionY = 0
+    BfBot.UI._OnDrag()
+    _check(BfBot.UI._panelX + 800 <= sw,
+        "drag clamps X to screen (" .. tostring(BfBot.UI._panelX) .. " + 800 <= " .. tostring(sw) .. ")")
+
+    -- Test 9: _OnDrag clamps Y to >= 0
+    BfBot.UI._panelX = 100
+    BfBot.UI._panelY = 10
+    motionX = 0
+    motionY = -50  -- try to push above screen
+    BfBot.UI._OnDrag()
+    _check(BfBot.UI._panelY >= 0,
+        "drag clamps Y >= 0 (" .. tostring(BfBot.UI._panelY) .. ")")
+
+    -- Clean up: restore defaults
+    motionX = nil
+    motionY = nil
+    BfBot.UI._ResetLayout()
+
+    return _summary("MovablePanel")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -1719,6 +1826,10 @@ function BfBot.Test.RunAll()
     local subwinOk = BfBot.Test.SubwindowDetection()
     P("")
 
+    -- Phase 12: Movable Panel
+    local movPanelOk = BfBot.Test.MovablePanel()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -1732,11 +1843,12 @@ function BfBot.Test.RunAll()
     P("  Target Picker: " .. (tgtOk and "PASS" or "FAIL"))
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
+    P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and movPanelOk
 end
 
 -- ============================================================
