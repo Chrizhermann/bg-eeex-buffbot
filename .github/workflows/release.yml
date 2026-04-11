@@ -45,10 +45,10 @@ jobs:
 
           # WeiDU installer
           cp /tmp/setup-buffbot.exe "$STAGING/"
-          cp setup-buffbot.tp2 "$STAGING/"
 
           # Mod files
           shopt -s nullglob
+          cp buffbot/setup-buffbot.tp2 "$STAGING/buffbot/"
           cp buffbot/*.lua   "$STAGING/buffbot/"
           cp buffbot/*.menu  "$STAGING/buffbot/"
           cp buffbot/*.BAM   "$STAGING/buffbot/"

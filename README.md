@@ -132,6 +132,7 @@ Requires Python 3 for TLK patching (innate ability tooltip names).
 ```
 bg-eeex-buffbot/
 ├── buffbot/              # Mod source files (copied to override/)
+│   ├── setup-buffbot.tp2 # WeiDU installer
 │   ├── M_BfBot.lua       # Bootstrap (auto-loaded by EEex)
 │   ├── BfBotCor.lua      # Core namespace, logging, field resolution, caches
 │   ├── BfBotCls.lua      # Buff classifier (opcode scoring)
@@ -146,7 +147,6 @@ bg-eeex-buffbot/
 │   ├── deploy.sh         # Copy files to game override
 │   └── patch_tlk.py      # TLK patcher for innate tooltips
 ├── docs/                 # Design docs and analysis
-├── setup-buffbot.tp2     # WeiDU installer
 └── README.md
 ```
 

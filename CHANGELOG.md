@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.8-alpha (2026-04-11)
+
+### Fixed
+- **WeiDU packaging** — moved `setup-buffbot.tp2` inside the `buffbot/` mod folder (standard convention). Fixes compatibility with mod managers and automated installers (BiG World Setup, Project Infinity, etc.) that expect the tp2 inside the mod folder.
+
 ## v1.3.7-alpha (2026-04-10)
 
 ### Added
