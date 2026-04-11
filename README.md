@@ -6,6 +6,8 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 
 > **Alpha Release** — fully functional but rough around the edges. [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
 
+> **IMPORTANT: Update to v1.3.9+** — Versions before v1.3.9 have a bug where F12 innate abilities (BuffBot 1, BuffBot 2, etc.) accumulate duplicate copies over time. This can cause dozens of duplicate entries in your special abilities and may crash the game on rest. **v1.3.9 fixes this and automatically cleans up existing saves.** If you see multiple copies of BuffBot abilities, update to the latest release — they will be cleaned up on first load.
+
 [![BuffBot Showcase](https://img.youtube.com/vi/9fjnUKG1tfQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=9fjnUKG1tfQ)
 
 ## Features

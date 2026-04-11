@@ -599,11 +599,20 @@ end
 --- Paranoid safety net: remove orphaned BFBTCH effects from any party member.
 -- Called every frame by .menu enabled tick, rate-limited to ~2 seconds.
 -- NOT toggleable — this is the hard safety guarantee.
+-- Also runs a one-time innate cleanup on first world screen entry to scrub
+-- accumulated duplicates from saves affected by the old opcode 171 bug.
 function BfBot.Exec._SafetyTick()
     -- Rate-limit: ~2 seconds between checks
     local now = Infinity_GetClockTicks()
     if now - BfBot.Exec._lastSafetyTick < 2000 then return end
     BfBot.Exec._lastSafetyTick = now
+
+    -- One-time startup cleanup: scrub accumulated innate duplicates from old saves.
+    -- Runs once per session on first world screen tick (party is guaranteed loaded).
+    if not BfBot.Exec._startupCleanupDone then
+        BfBot.Exec._startupCleanupDone = true
+        pcall(BfBot.Innate.RefreshAll)
+    end
 
     -- If exec engine is actively running, it owns cheat management — don't interfere
     if BfBot.Exec._state == "running" then return end

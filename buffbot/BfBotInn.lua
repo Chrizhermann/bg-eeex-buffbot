@@ -36,12 +36,19 @@ local function _splResref(s)
 end
 local function _splPad(n) return string.rep("\0", n) end
 
+--- Number of opcode 172 (Remove Innate) cleanup effects per BFBT SPL.
+-- Each cast removes up to this many accumulated known+memorized duplicates.
+-- Startup cleanup (Revoke with 50 passes of BFBTRM) handles heavier accumulation.
+BfBot.Innate._CLEANUP_PASSES = 5
+
 --- Build a minimal SPL binary for a BuffBot innate ability.
 -- @param slot number: party slot (0-5), baked into opcode 402 param1
 -- @param preset number: preset index (1-8), baked into opcode 402 param2
--- @return string: raw SPL binary data (250 bytes)
+-- @return string: raw SPL binary data
 function BfBot.Innate._BuildSPL(slot, preset)
     local selfRef = string.format("BFBT%d%d", slot, preset)
+    local numCleanup = BfBot.Innate._CLEANUP_PASSES
+    local numFeats = 1 + numCleanup  -- 1 opcode 402 + N opcode 172
 
     -- Name strref: base + (preset-1) if TLK was patched, else -1 (no name)
     local nameStrref = 0xFFFFFFFF
@@ -101,7 +108,7 @@ function BfBot.Innate._BuildSPL(slot, preset)
         .. _splWord(0)                          -- 0x0018: Dice thrown
         .. _splWord(0)                          -- 0x001A: Enchanted
         .. _splWord(0)                          -- 0x001C: Damage type
-        .. _splWord(2)                          -- 0x001E: Feature block count = 2
+        .. _splWord(numFeats)                   -- 0x001E: Feature block count
         .. _splWord(0)                          -- 0x0020: Feature block offset (index)
         .. _splWord(0)                          -- 0x0022: Charges
         .. _splWord(0)                          -- 0x0024: Charge depletion
@@ -125,25 +132,31 @@ function BfBot.Innate._BuildSPL(slot, preset)
         .. _splDword(0)                         -- 0x0028: Save bonus
         .. _splDword(0)                         -- 0x002C: Stacking ID
 
-    -- Feature Block 2: Opcode 171 (Give Innate Spell Ability — re-grant self)
-    local feat171 = _splWord(171)               -- 0x0000: Opcode
-        .. _splByte(1)                          -- 0x0002: Target = self
-        .. _splByte(0)                          -- 0x0003: Power
-        .. _splDword(0)                         -- 0x0004: Param1
-        .. _splDword(0)                         -- 0x0008: Param2
-        .. _splByte(0)                          -- 0x000C: Timing = 0 (instant/duration)
-        .. _splByte(0)                          -- 0x000D: Dispel/resistance
-        .. _splDword(0)                         -- 0x000E: Duration
-        .. _splByte(100)                        -- 0x0012: Probability1
-        .. _splByte(0)                          -- 0x0013: Probability2
-        .. _splResref(selfRef)                  -- 0x0014: Resource = self (re-grant)
-        .. _splDword(0)                         -- 0x001C: Dice thrown
-        .. _splDword(0)                         -- 0x0020: Dice sides
-        .. _splDword(0)                         -- 0x0024: Save type
-        .. _splDword(0)                         -- 0x0028: Save bonus
-        .. _splDword(0)                         -- 0x002C: Stacking ID
+    -- Feature Blocks 2..N+1: Opcode 172 (Remove Innate — cleanup duplicates)
+    -- Removes up to _CLEANUP_PASSES accumulated known+memorized entries of this
+    -- innate. Fires as spell effects (immediate) before the Lua-queued re-grant
+    -- action executes. Prevents opcode 171 accumulation from old versions.
+    local cleanupEffects = {}
+    for i = 1, numCleanup do
+        cleanupEffects[i] = _splWord(172)       -- 0x0000: Opcode = Remove Innate
+            .. _splByte(1)                      -- 0x0002: Target = self
+            .. _splByte(0)                      -- 0x0003: Power
+            .. _splDword(0)                     -- 0x0004: Param1
+            .. _splDword(0)                     -- 0x0008: Param2
+            .. _splByte(1)                      -- 0x000C: Timing = 1 (instant/permanent)
+            .. _splByte(0)                      -- 0x000D: Dispel/resistance
+            .. _splDword(0)                     -- 0x000E: Duration
+            .. _splByte(100)                    -- 0x0012: Probability1
+            .. _splByte(0)                      -- 0x0013: Probability2
+            .. _splResref(selfRef)              -- 0x0014: Resource = self (innate to remove)
+            .. _splDword(0)                     -- 0x001C: Dice thrown
+            .. _splDword(0)                     -- 0x0020: Dice sides
+            .. _splDword(0)                     -- 0x0024: Save type
+            .. _splDword(0)                     -- 0x0028: Save bonus
+            .. _splDword(0)                     -- 0x002C: Stacking ID
+    end
 
-    return header .. ability .. feat402 .. feat171
+    return header .. ability .. feat402 .. table.concat(cleanupEffects)
 end
 
 --- Build a cheat-mode helper SPL (BFBTCH.SPL) that grants Improved Alacrity
@@ -334,7 +347,7 @@ end
 --- Write all SPL files to the override folder (always overwrites).
 -- Called once at mod init time (before menus load).
 -- SPL version tag lets us detect when binary format changes.
-BfBot.Innate._SPL_VERSION = 5  -- bump this when _BuildSPL format changes (v5: added BFBTRM.SPL)
+BfBot.Innate._SPL_VERSION = 6  -- bump this when _BuildSPL format changes (v6: replaced opcode 171 with 172 cleanup)
 
 function BfBot.Innate._EnsureSPLFiles()
     if BfBot._noIO then return 0 end
@@ -526,9 +539,9 @@ function BfBot.Innate.Revoke(slot)
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
     -- Each pass removes one copy of each BFBT innate via opcode 172.
-    -- 5 passes handles up to 5x accumulation from the old bug.
-    -- Extra passes are cheap no-ops when nothing remains to remove.
-    for i = 1, 5 do
+    -- 50 passes handles heavy accumulation from old saves affected by
+    -- the opcode 171 bug. Extra passes are cheap no-ops.
+    for i = 1, 50 do
         EEex_Action_QueueResponseStringOnAIBase(
             'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
     end
@@ -545,8 +558,10 @@ function BfBot.Innate.Refresh(slot)
     for idx = 1, BfBot.MAX_PRESETS do
         if config.presets[idx] then
             local resref = string.format("BFBT%d%d", slot, idx)
-            EEex_Action_QueueResponseStringOnAIBase(
-                'AddSpecialAbility("' .. resref .. '")', sprite)
+            if not BfBot.Innate._HasInnate(sprite, resref) then
+                EEex_Action_QueueResponseStringOnAIBase(
+                    'AddSpecialAbility("' .. resref .. '")', sprite)
+            end
         end
     end
 end
@@ -577,11 +592,32 @@ end
 --- Opcode 402 Invoke Lua handler — triggers a specific preset for a specific character.
 -- param1 is a CGameEffect userdata: m_effectAmount = party slot, m_dWFlags = preset index.
 -- Wrapped in pcall so Lua errors produce diagnostics instead of engine "panic".
+--
+-- Re-grant flow: the SPL's opcode 172 effects fire as spell effects (immediate),
+-- removing the known+memorized entries. Then the AddSpecialAbility action queued
+-- here executes next tick, adding back exactly one clean copy. This replaces the
+-- old opcode 171 approach which created duplicate known entries on every cast.
 function BFBOTGO(param1, param2, special)
     local slot = param1 and param1.m_effectAmount or 0
     local presetIdx = param1 and param1.m_dWFlags or 1
 
     _InnateLog(string.format("BFBOTGO: slot=%d preset=%d", slot, presetIdx))
+
+    -- Re-grant the innate BEFORE main logic (outside pcall — always runs).
+    -- The SPL's opcode 172 effects remove the known+memorized entries as
+    -- immediate spell effects. This AddSpecialAbility queues for next tick,
+    -- adding back exactly one clean copy. No _HasInnate check needed here
+    -- because opcode 172 already removed the entries.
+    pcall(function()
+        if slot >= 0 and slot <= 5 and presetIdx >= 1 and presetIdx <= BfBot.MAX_PRESETS then
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite then
+                local resref = string.format("BFBT%d%d", slot, presetIdx)
+                EEex_Action_QueueResponseStringOnAIBase(
+                    'AddSpecialAbility("' .. resref .. '")', sprite)
+            end
+        end
+    end)
 
     local ok, err = pcall(function()
         -- Validate slot range

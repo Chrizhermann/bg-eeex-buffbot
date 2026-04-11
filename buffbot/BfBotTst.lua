@@ -2623,6 +2623,40 @@ function BfBot.Test.QuickCast()
     if removerData:sub(1, 4) == "SPL " then _ok("BFBTCR signature OK")
     else _nok("BFBTCR bad signature: " .. removerData:sub(1, 4)) end
 
+    -- ---- Test 7: Innate SPL structure (no opcode 171, has opcode 172 cleanup) ----
+    P("")
+    P("  [7] Innate SPL structure (opcode 172 cleanup)")
+
+    local innateData = BfBot.Innate._BuildSPL(0, 1)
+    -- Expected size: Header(114) + Ability(40) + 1*feat402(48) + N*feat172(48 each)
+    local numCleanup = BfBot.Innate._CLEANUP_PASSES
+    local expectedSize = 114 + 40 + 48 + (numCleanup * 48)
+    if type(innateData) == "string" and #innateData == expectedSize then
+        _ok("BFBT01.SPL: " .. expectedSize .. " bytes (1 + " .. numCleanup .. " effects)")
+    else
+        _nok("BFBT01.SPL: expected " .. expectedSize .. " got "
+            .. tostring(innateData and #innateData))
+    end
+
+    if innateData:sub(1, 4) == "SPL " then _ok("BFBT01 signature OK")
+    else _nok("BFBT01 bad signature") end
+
+    -- Verify opcode 171 is NOT present (was the accumulation source)
+    local has171 = false
+    -- Scan all feature blocks starting after header+ability (offset 154)
+    local featStart = 114 + 40
+    for i = 0, (1 + numCleanup - 1) do
+        local off = featStart + (i * 48) + 1  -- +1 for Lua 1-based indexing
+        local lo = innateData:byte(off)
+        local hi = innateData:byte(off + 1)
+        if lo and hi then
+            local opcode = lo + hi * 256
+            if opcode == 171 then has171 = true end
+        end
+    end
+    if not has171 then _ok("No opcode 171 (Give Innate) — accumulation source removed")
+    else _nok("Opcode 171 still present — innates will accumulate!") end
+
     -- ---- Summary ----
     P("")
     return _summary("Quick Cast")

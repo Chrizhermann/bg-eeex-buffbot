@@ -149,8 +149,8 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
     end)
 
-    -- Grant innate abilities for the new config's presets
-    if BfBot.Innate and BfBot.Innate.Grant then
+    -- Grant innate abilities for the new config's presets (with duplicate guard)
+    if BfBot.Innate and BfBot.Innate._HasInnate then
         local slot = nil
         for s = 0, 5 do
             if EEex_Sprite_GetInPortrait(s) == sprite then slot = s; break end
@@ -159,8 +159,10 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
             for idx = 1, BfBot.MAX_PRESETS do
                 if config.presets[idx] then
                     local resref = string.format("BFBT%d%d", slot, idx)
-                    EEex_Action_QueueResponseStringOnAIBase(
-                        'AddSpecialAbility("' .. resref .. '")', sprite)
+                    if not BfBot.Innate._HasInnate(sprite, resref) then
+                        EEex_Action_QueueResponseStringOnAIBase(
+                            'AddSpecialAbility("' .. resref .. '")', sprite)
+                    end
                 end
             end
         end

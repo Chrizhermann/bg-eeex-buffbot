@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.9-alpha (2026-04-11)
+
+### Fixed
+- **CRITICAL: F12 innate ability accumulation** — each use of an F12 innate added a duplicate known spell entry via opcode 171 (Give Innate). Over time (and especially after resting), characters accumulated dozens of copies (37+ reported). This corrupts the CRE spell list and can crash the engine on rest.
+  - **Root cause**: opcode 171 unconditionally adds to both the known AND memorized spell lists on every application. The "re-grant after cast" pattern creates unbounded accumulation.
+  - **Fix**: removed opcode 171 from all BFBT SPLs. Replaced with opcode 172 (Remove Innate) for post-cast cleanup + Lua-side `AddSpecialAbility` re-grant with duplicate guard.
+  - **Backwards compatible**: existing saves with accumulated innates are automatically cleaned up on first session load (one-time startup cleanup via `RefreshAll` with 50-pass `Revoke`).
+  - All innate grant paths now check `_HasInnate` before calling `AddSpecialAbility` to prevent future duplicates.
+
 ## v1.3.8-alpha (2026-04-11)
 
 ### Fixed
