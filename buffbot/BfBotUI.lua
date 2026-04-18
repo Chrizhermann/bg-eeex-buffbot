@@ -1276,7 +1276,9 @@ end
 -- Spell Override (Add / Remove)
 -- ============================================================
 
---- Build the picker list: non-buff castable spells not in current preset.
+--- Build the picker list: castable spells the user can add to the preset.
+--- Includes non-buff spells (manual inclusion) and previously-excluded buffs
+--- (recovery from accidental Remove). Excluded spells sort to the top.
 function BfBot.UI._BuildPickerList()
     buffbot_pickerSpells = {}
     buffbot_pickerSelected = 0
@@ -1293,22 +1295,27 @@ function BfBot.UI._BuildPickerList()
         if preset.spells[resref] then goto nextSpell end
         -- Skip spells with no classification
         if not scan.class then goto nextSpell end
-        -- Skip spells already classified as buffs (auto-merge handles those)
-        if scan.class.isBuff then goto nextSpell end
-        -- Skip excluded spells
         local ovr = config.ovr and config.ovr[resref]
-        if ovr == -1 then goto nextSpell end
+        -- Skip spells classified as buffs, unless they were excluded by the user
+        -- (excluded buffs must remain addable so accidental Remove can be undone).
+        if scan.class.isBuff and ovr ~= -1 then goto nextSpell end
 
         table.insert(buffbot_pickerSpells, {
-            resref = resref,
-            name   = scan.name or resref,
-            icon   = scan.icon or "",
-            durCat = scan.durCat or "?",
-            count  = scan.count or 0,
+            resref   = resref,
+            name     = scan.name or resref,
+            icon     = scan.icon or "",
+            durCat   = scan.durCat or "?",
+            count    = scan.count or 0,
+            excluded = (ovr == -1) and 1 or 0,
         })
         ::nextSpell::
     end
-    table.sort(buffbot_pickerSpells, function(a, b) return a.name < b.name end)
+    -- Sort excluded spells first (recently-removed → prominent for undo),
+    -- then alphabetical within each group.
+    table.sort(buffbot_pickerSpells, function(a, b)
+        if a.excluded ~= b.excluded then return a.excluded > b.excluded end
+        return a.name < b.name
+    end)
 end
 
 --- Open the spell picker sub-menu.

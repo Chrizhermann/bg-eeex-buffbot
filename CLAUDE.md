@@ -99,8 +99,8 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 
 ### Manual Spell Override Details (GitHub #1)
 - **Storage**: `config.ovr = {[resref] = 1 (include) | -1 (exclude)}` — per-character, persists in saves via schema v5
-- **Include flow**: "Add Spell" → picker shows non-buff castable spells → select → `SetOverride(resref, 1)` → cache invalidation → auto-merge adds to preset on next refresh (disabled, at bottom)
-- **Exclude flow**: "Remove" button → `SetOverride(resref, -1)` → removed from ALL presets → auto-merge skips excluded spells
+- **Include flow**: "Add Spell" → picker shows non-buff castable spells + previously-excluded spells (for accidental-Remove undo) → select → `SetOverride(resref, 1)` → cache invalidation → auto-merge adds to preset on next refresh (disabled, at bottom). Excluded spells sort to the top of the picker.
+- **Exclude flow**: "Remove" button → `SetOverride(resref, -1)` → removed from ALL presets → auto-merge skips excluded spells. Reversible via the Add Spell picker.
 - **Visual**: Manually included spells shown with light blue name `{150, 200, 255}`
 - **Sync**: Overrides loaded from config into `BfBot.Class.SetOverride()` during marshal import
 - **UI**: BUFFBOT_SPELLPICKER sub-menu with scrollable list (icon, name, durCat, count), "Add to Buff List" + "Cancel" buttons

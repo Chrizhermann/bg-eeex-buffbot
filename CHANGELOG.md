@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.10-alpha (2026-04-18)
+
+### Fixed
+- **Remove button was not reversible** — once a spell was removed from the buff list, it was also hidden from the Add Spell picker, so an accidental Remove click had no recovery path. The picker now includes previously-excluded spells and sorts them to the top for easy undo. Clicking the spell in the picker flips the override back to "include" and auto-merge restores it to the preset.
+
 ## v1.3.9-alpha (2026-04-11)
 
 ### Fixed
