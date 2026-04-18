@@ -501,6 +501,23 @@ function BfBot.Persist.SetSpellPriority(sprite, presetIndex, resref, priority)
     preset.spells[resref].pri = priority
 end
 
+--- Get the lock state for a spell in a preset (0 = unlocked, 1 = locked).
+function BfBot.Persist.GetSpellLock(sprite, presetIndex, resref)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset or not preset.spells or not preset.spells[resref] then return 0 end
+    return preset.spells[resref].lock or 0
+end
+
+--- Set the lock state for a spell in a preset. Creates the entry if missing.
+function BfBot.Persist.SetSpellLock(sprite, presetIndex, resref, locked)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset then return end
+    if not preset.spells[resref] then
+        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+    end
+    preset.spells[resref].lock = (locked == 1) and 1 or 0
+end
+
 --- Get the config entry for a spell in a preset.
 function BfBot.Persist.GetSpellConfig(sprite, presetIndex, resref)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
