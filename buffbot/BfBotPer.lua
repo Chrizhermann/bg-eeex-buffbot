@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 5
+BfBot.Persist._SCHEMA_VERSION = 6
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -65,7 +65,7 @@ function BfBot.Persist._MakeDefaultSpellEntry(classResult, enabled)
     if classResult and classResult.defaultTarget == "s" then
         tgt = "s"
     end
-    return { on = (enabled == 0) and 0 or 1, tgt = tgt, pri = 999 }
+    return { on = (enabled == 0) and 0 or 1, tgt = tgt, pri = 999, lock = 0 }
 end
 
 --- Scan a character's spells and create a populated default config.
@@ -235,6 +235,9 @@ function BfBot.Persist._ValidateConfig(config)
                             entry.tgt = "p"
                         end
                         if type(entry.pri) ~= "number" then entry.pri = 999 end
+                        if type(entry.lock) ~= "number" or (entry.lock ~= 0 and entry.lock ~= 1) then
+                            entry.lock = 0
+                        end
                     end
                 end
             end
@@ -282,6 +285,21 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
     end
     if fromVersion < 5 then
         if not config.ovr then config.ovr = {} end
+    end
+    if fromVersion < 6 then
+        -- Add lock = 0 to all existing spell entries (validator default would also
+        -- handle missing, but making it explicit documents the migration).
+        if config.presets then
+            for _, preset in pairs(config.presets) do
+                if type(preset) == "table" and type(preset.spells) == "table" then
+                    for _, entry in pairs(preset.spells) do
+                        if type(entry) == "table" and entry.lock == nil then
+                            entry.lock = 0
+                        end
+                    end
+                end
+            end
+        end
     end
     config.v = BfBot.Persist._SCHEMA_VERSION
     return config
