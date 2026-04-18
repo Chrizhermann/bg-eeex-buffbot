@@ -1,0 +1,20 @@
+{
+  "planPath": "docs/plans/2026-04-18-spell-lock.md",
+  "tasks": [
+    {"id": 7,  "subject": "Task 1: Schema v5→v6 + validator + migration + default entry", "status": "pending"},
+    {"id": 8,  "subject": "Task 2: GetSpellLock / SetSpellLock API",                        "status": "pending", "blockedBy": [7]},
+    {"id": 9,  "subject": "Task 3: BfBot.Test.SpellLockPersist + wire into RunAll",         "status": "pending", "blockedBy": [8]},
+    {"id": 10, "subject": "Task 4: Deploy + verify persistence in-game",                    "status": "pending", "blockedBy": [9]},
+    {"id": 11, "subject": "Task 5: Extend _Refresh row build with lock field",              "status": "pending", "blockedBy": [10]},
+    {"id": 12, "subject": "Task 6: Rewrite SortByDuration — pin-in-place",                  "status": "pending", "blockedBy": [11]},
+    {"id": 13, "subject": "Task 7: _FindNextUnlocked + _CanMoveUp/Down + MoveSpellUp/Down", "status": "pending", "blockedBy": [11]},
+    {"id": 14, "subject": "Task 8: BfBot.Test.SpellLockOrder + deploy + verify",            "status": "pending", "blockedBy": [12, 13]},
+    {"id": 15, "subject": "Task 9: ToggleLock + _LockText + _LockColor view helpers",       "status": "pending", "blockedBy": [14]},
+    {"id": 16, "subject": "Task 10: Menu 7th column + shrink target + cellNumber dispatch", "status": "pending", "blockedBy": [15]},
+    {"id": 17, "subject": "Task 11: _SpellNameColor locked tint",                           "status": "pending", "blockedBy": [11]},
+    {"id": 18, "subject": "Task 12: Deploy + end-to-end in-game smoke test",                "status": "pending", "blockedBy": [16, 17]},
+    {"id": 19, "subject": "Task 13: Update CLAUDE.md",                                      "status": "pending", "blockedBy": [18]},
+    {"id": 20, "subject": "Task 14: Update MEMORY.md",                                      "status": "pending", "blockedBy": [19]}
+  ],
+  "lastUpdated": "2026-04-18"
+}
