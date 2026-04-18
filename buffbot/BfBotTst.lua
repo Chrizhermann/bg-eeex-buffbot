@@ -748,6 +748,114 @@ function BfBot.Test.Override()
 end
 
 -- ============================================================
+-- BfBot.Test.SpellLockPersist — Spell lock persistence
+-- ============================================================
+
+function BfBot.Test.SpellLockPersist()
+    P("=== SpellLockPersist: persistence layer ===")
+    _reset()
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _nok("No sprite in slot 0")
+        return _summary("SpellLockPersist")
+    end
+
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then
+        _nok("No config for slot 0")
+        return _summary("SpellLockPersist")
+    end
+
+    -- Pick any real spell resref in preset 1
+    local testResref = nil
+    for resref, _ in pairs(config.presets[1].spells) do
+        testResref = resref
+        break
+    end
+    if not testResref then
+        _warning("Preset 1 has no spells; skipping lock API test")
+        return _summary("SpellLockPersist")
+    end
+
+    -- Test 1: Default lock = 0
+    local initial = BfBot.Persist.GetSpellLock(sprite, 1, testResref)
+    _check(initial == 0, "Default lock is 0 for " .. testResref)
+
+    -- Test 2: SetSpellLock(1) persists
+    BfBot.Persist.SetSpellLock(sprite, 1, testResref, 1)
+    local afterSet = BfBot.Persist.GetSpellLock(sprite, 1, testResref)
+    _check(afterSet == 1, "Lock set to 1 reads back as 1")
+
+    -- Test 3: SetSpellLock(0) resets
+    BfBot.Persist.SetSpellLock(sprite, 1, testResref, 0)
+    local afterReset = BfBot.Persist.GetSpellLock(sprite, 1, testResref)
+    _check(afterReset == 0, "Lock reset to 0 reads back as 0")
+
+    -- Test 4: Validator defaults missing lock to 0
+    local dirty = {
+        v = 6, ap = 1,
+        presets = {
+            [1] = {
+                name = "Test", cat = "custom",
+                spells = {
+                    ["TSTABC"] = { on = 1, tgt = "s", pri = 1 }, -- no lock field
+                },
+            },
+            [2] = { name = "Two", cat = "custom", spells = {} },
+        },
+    }
+    local repaired = BfBot.Persist._ValidateConfig(dirty)
+    _check(repaired.presets[1].spells["TSTABC"].lock == 0,
+           "Validator defaults missing lock to 0")
+
+    -- Test 5: Validator rejects non-0/1 lock
+    local weird = {
+        v = 6, ap = 1,
+        presets = {
+            [1] = {
+                name = "Test", cat = "custom",
+                spells = {
+                    ["TSTABC"] = { on = 1, tgt = "s", pri = 1, lock = 42 },
+                    ["TSTDEF"] = { on = 1, tgt = "s", pri = 2, lock = "yes" },
+                },
+            },
+            [2] = { name = "Two", cat = "custom", spells = {} },
+        },
+    }
+    local cleaned = BfBot.Persist._ValidateConfig(weird)
+    _check(cleaned.presets[1].spells["TSTABC"].lock == 0,
+           "Validator zeroes non-0/1 numeric lock")
+    _check(cleaned.presets[1].spells["TSTDEF"].lock == 0,
+           "Validator zeroes string lock")
+
+    -- Test 6: v5→v6 migration preserves existing fields and adds lock=0
+    local v5 = {
+        v = 5, ap = 1,
+        presets = {
+            [1] = {
+                name = "Legacy", cat = "long", qc = 0,
+                spells = {
+                    ["TSTLEG"] = { on = 1, tgt = "s", pri = 3 },
+                },
+            },
+            [2] = { name = "Two", cat = "short", qc = 0, spells = {} },
+        },
+        opts = { skip = 1 }, ovr = {},
+    }
+    local migrated = BfBot.Persist._MigrateConfig(v5, v5.v)
+    _check(migrated.v == 6, "Migration bumps version to 6")
+    _check(migrated.presets[1].spells["TSTLEG"].lock == 0,
+           "Migration adds lock=0 to legacy entries")
+    _check(migrated.presets[1].spells["TSTLEG"].on == 1,
+           "Migration preserves 'on' field")
+    _check(migrated.presets[1].spells["TSTLEG"].pri == 3,
+           "Migration preserves 'pri' field")
+
+    return _summary("SpellLockPersist")
+end
+
+-- ============================================================
 -- BfBot.Test.ExportImport — Config export/import tests
 -- ============================================================
 
@@ -1826,6 +1934,10 @@ function BfBot.Test.RunAll()
     local subwinOk = BfBot.Test.SubwindowDetection()
     P("")
 
+    -- Phase: Spell Lock Persistence
+    local lockOk = BfBot.Test.SpellLockPersist()
+    P("")
+
     -- Phase 12: Movable Panel
     local movPanelOk = BfBot.Test.MovablePanel()
     P("")
@@ -1843,12 +1955,13 @@ function BfBot.Test.RunAll()
     P("  Target Picker: " .. (tgtOk and "PASS" or "FAIL"))
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
+    P("  Spell Lock Persist: " .. (lockOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and movPanelOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and movPanelOk
 end
 
 -- ============================================================
