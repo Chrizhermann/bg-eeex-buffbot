@@ -1637,6 +1637,31 @@ function BfBot.UI._CheckboxText(row)
     return "[ ]"
 end
 
+--- Lock column display text.
+function BfBot.UI._LockText(row)
+    local entry = buffbot_spellTable[row]
+    if entry and entry.lock == 1 then return "[L]" end
+    return "[ ]"
+end
+
+--- Lock column color: gold when locked, muted otherwise.
+function BfBot.UI._LockColor(row)
+    local entry = buffbot_spellTable[row]
+    if entry and entry.lock == 1 then return {230, 200, 60} end
+    return {120, 100, 80}
+end
+
+--- Toggle the lock state on a spell row.
+function BfBot.UI.ToggleLock(row)
+    local entry = buffbot_spellTable[row]
+    if not entry then return end
+    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if not sprite then return end
+    local newState = (entry.lock == 1) and 0 or 1
+    entry.lock = newState  -- immediate visual update
+    BfBot.Persist.SetSpellLock(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+end
+
 --- Convert target config value to display text.
 -- tgt can be: "s", "p", a name string, or a table of name strings.
 -- Also handles legacy slot strings ("1"-"6") for backwards compatibility.
