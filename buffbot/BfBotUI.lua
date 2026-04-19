@@ -1259,17 +1259,45 @@ function BfBot.UI.MoveSpellDown()
 end
 
 --- Sort the current preset's spell list by duration (longest first).
---- Permanent > long > short > instant > unknown. Persists via _RenumberPriorities.
+--- Locked spells stay at their current row index. Unlocked spells fill
+--- the remaining rows in duration-desc order. Persists via _RenumberPriorities.
 function BfBot.UI.SortByDuration()
-    if #buffbot_spellTable == 0 then return end
-    -- Map dur to a sort key: permanent (-1) → huge, nil → -2 (bottom)
+    local n = #buffbot_spellTable
+    if n == 0 then return end
+
     local function durKey(entry)
         local d = entry.dur
         if d == nil then return -2 end
         if d == -1 then return 1e9 end  -- permanent sorts first
-        return d                         -- timed: higher seconds = earlier
+        return d
     end
-    table.sort(buffbot_spellTable, function(a, b) return durKey(a) > durKey(b) end)
+
+    -- Partition: keep locked entries pinned to their row indices
+    local locked = {}   -- [row] = entry
+    local unlocked = {} -- ordered list
+    for i, entry in ipairs(buffbot_spellTable) do
+        if entry.lock == 1 then
+            locked[i] = entry
+        else
+            table.insert(unlocked, entry)
+        end
+    end
+
+    -- Sort unlocked by duration desc
+    table.sort(unlocked, function(a, b) return durKey(a) > durKey(b) end)
+
+    -- Rebuild: locked at their row, unlocked fill the gaps
+    local result = {}
+    local uIdx = 1
+    for i = 1, n do
+        if locked[i] then
+            result[i] = locked[i]
+        else
+            result[i] = unlocked[uIdx]
+            uIdx = uIdx + 1
+        end
+    end
+    buffbot_spellTable = result
     BfBot.UI._RenumberPriorities()
 end
 
