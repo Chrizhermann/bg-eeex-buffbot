@@ -1101,6 +1101,7 @@ menu
 		var     "buffbot_renameInput"
 		action  "return 1"
 		text style "edit"
+		text color lua "{50, 30, 10}"
 		maxlines 1
 		area 460 308 240 24
 	}
