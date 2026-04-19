@@ -856,6 +856,124 @@ function BfBot.Test.SpellLockPersist()
 end
 
 -- ============================================================
+-- BfBot.Test.SpellLockOrder — Sort and move semantics with locks
+-- ============================================================
+
+function BfBot.Test.SpellLockOrder()
+    P("=== SpellLockOrder: sort + move with locks ===")
+    _reset()
+
+    -- Stub buffbot_spellTable directly; these algorithms are pure data ops.
+    local saved = buffbot_spellTable
+    local savedRow = buffbot_selectedRow
+    local savedIsOpen = buffbot_isOpen
+    buffbot_isOpen = true
+
+    -- We stub _RenumberPriorities to a no-op since it needs a real sprite
+    local savedRenum = BfBot.UI._RenumberPriorities
+    BfBot.UI._RenumberPriorities = function() end
+
+    -- Test 1: Sort pins locked rows
+    buffbot_spellTable = {
+        { resref = "A", dur = 10, lock = 0 },
+        { resref = "B", dur = 20, lock = 1 },
+        { resref = "C", dur = 30, lock = 0 },
+        { resref = "D", dur = 15, lock = 0 },
+    }
+    BfBot.UI.SortByDuration()
+    local order = table.concat({
+        buffbot_spellTable[1].resref,
+        buffbot_spellTable[2].resref,
+        buffbot_spellTable[3].resref,
+        buffbot_spellTable[4].resref,
+    }, ",")
+    _check(order == "C,B,D,A",
+           "Sort pins B@2, unlocked sort desc: expected C,B,D,A; got " .. order)
+
+    -- Test 2: Sort with all locked = no change
+    buffbot_spellTable = {
+        { resref = "A", dur = 10, lock = 1 },
+        { resref = "B", dur = 20, lock = 1 },
+    }
+    BfBot.UI.SortByDuration()
+    _check(buffbot_spellTable[1].resref == "A" and buffbot_spellTable[2].resref == "B",
+           "Sort with all locked preserves order")
+
+    -- Test 3: Sort with all unlocked = normal sort
+    buffbot_spellTable = {
+        { resref = "A", dur = 10, lock = 0 },
+        { resref = "B", dur = 30, lock = 0 },
+        { resref = "C", dur = 20, lock = 0 },
+    }
+    BfBot.UI.SortByDuration()
+    _check(buffbot_spellTable[1].resref == "B" and
+           buffbot_spellTable[2].resref == "C" and
+           buffbot_spellTable[3].resref == "A",
+           "Sort all unlocked sorts desc by dur")
+
+    -- Test 4: _FindNextUnlocked skips locked rows
+    buffbot_spellTable = {
+        { resref = "A", lock = 0 },
+        { resref = "B", lock = 1 },
+        { resref = "C", lock = 1 },
+        { resref = "D", lock = 0 },
+    }
+    _check(BfBot.UI._FindNextUnlocked(1, 1) == 4,
+           "_FindNextUnlocked skips two locked rows going down")
+    _check(BfBot.UI._FindNextUnlocked(4, -1) == 1,
+           "_FindNextUnlocked skips two locked rows going up")
+    _check(BfBot.UI._FindNextUnlocked(4, 1) == nil,
+           "_FindNextUnlocked returns nil past end")
+    _check(BfBot.UI._FindNextUnlocked(1, -1) == nil,
+           "_FindNextUnlocked returns nil before start")
+
+    -- Test 5: _CanMoveUp/Down false for locked selected
+    buffbot_spellTable = {
+        { resref = "A", lock = 0 },
+        { resref = "B", lock = 1 },
+        { resref = "C", lock = 0 },
+    }
+    buffbot_selectedRow = 2
+    _check(not BfBot.UI._CanMoveUp(),   "_CanMoveUp false for locked selected")
+    _check(not BfBot.UI._CanMoveDown(), "_CanMoveDown false for locked selected")
+
+    -- Test 6: MoveSpellDown skips locked row
+    buffbot_spellTable = {
+        { resref = "A", lock = 0 },
+        { resref = "B", lock = 1 },
+        { resref = "C", lock = 0 },
+    }
+    buffbot_selectedRow = 1
+    BfBot.UI.MoveSpellDown()
+    _check(buffbot_spellTable[1].resref == "C" and
+           buffbot_spellTable[2].resref == "B" and
+           buffbot_spellTable[3].resref == "A",
+           "MoveSpellDown skips locked: A->3, C->1, B stays at 2")
+    _check(buffbot_selectedRow == 3, "Selection follows moved spell")
+
+    -- Test 7: MoveSpellUp past locked
+    buffbot_spellTable = {
+        { resref = "A", lock = 0 },
+        { resref = "B", lock = 1 },
+        { resref = "C", lock = 0 },
+    }
+    buffbot_selectedRow = 3
+    BfBot.UI.MoveSpellUp()
+    _check(buffbot_spellTable[1].resref == "C" and
+           buffbot_spellTable[2].resref == "B" and
+           buffbot_spellTable[3].resref == "A",
+           "MoveSpellUp skips locked: C->1, A->3")
+
+    -- Restore globals
+    buffbot_spellTable = saved
+    buffbot_selectedRow = savedRow
+    buffbot_isOpen = savedIsOpen
+    BfBot.UI._RenumberPriorities = savedRenum
+
+    return _summary("SpellLockOrder")
+end
+
+-- ============================================================
 -- BfBot.Test.ExportImport — Config export/import tests
 -- ============================================================
 
@@ -1938,6 +2056,10 @@ function BfBot.Test.RunAll()
     local lockOk = BfBot.Test.SpellLockPersist()
     P("")
 
+    -- Phase: Spell Lock Order
+    local lockOrderOk = BfBot.Test.SpellLockOrder()
+    P("")
+
     -- Phase 12: Movable Panel
     local movPanelOk = BfBot.Test.MovablePanel()
     P("")
@@ -1956,12 +2078,13 @@ function BfBot.Test.RunAll()
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
     P("  Spell Lock Persist: " .. (lockOk and "PASS" or "FAIL"))
+    P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and movPanelOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk
 end
 
 -- ============================================================
