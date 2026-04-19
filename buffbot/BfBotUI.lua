@@ -758,6 +758,7 @@ function BfBot.UI._Refresh()
             isAoE    = scan and scan.isAoE or 0,
             isSelfOnly = scan and scan.isSelfOnly or 0,
             tgtUnlock = spellCfg.tgtUnlock or 0,
+            lock      = spellCfg.lock or 0,
             hasVariants = hasVariants,
             variants = variants,
             var      = varResref,
