@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.11-alpha (2026-04-19)
+
+### Added
+- **Spell Position Lock** — pin a spell's row in a preset so it stays put when you press Sort by Duration. Locked spells also can't be reordered by Move Up/Down, and those buttons skip past locked rows when moving unlocked spells around. Click the new `[ ]` column on the right of the spell list to toggle — it flips to `[L]` in gold, and the spell name takes a warm gold-brown tint so locked rows are visible at a glance. Lock state persists in the save game (schema v6). Existing saves migrate automatically (`lock=0` for all pre-existing spells).
+
 ## v1.3.10-alpha (2026-04-18)
 
 ### Fixed
