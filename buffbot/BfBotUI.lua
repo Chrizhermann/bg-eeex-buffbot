@@ -1621,12 +1621,14 @@ function BfBot.UI._FormatDuration(seconds)
     return s .. "s"
 end
 
---- Spell name color: grey for unavailable, dark blue for manual include, dark brown for normal.
+--- Spell name color: grey for unavailable, dark blue for manual include,
+--- gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
     if not entry then return {50, 30, 10} end
     if entry.castable == 0 then return {140, 130, 120} end
     if entry.ovr == 1 then return {40, 80, 160} end
+    if entry.lock == 1 then return {100, 70, 20} end  -- warm gold-brown
     return {50, 30, 10}
 end
 
