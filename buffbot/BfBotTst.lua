@@ -1884,6 +1884,50 @@ function BfBot.Test.SubwindowDetection()
 end
 
 -- ============================================================
+-- BfBot.Test.DurationRecursion
+-- Issue #33: hierarchical spells (op=146 -> sub-spell) reporting
+-- Inst/Perm when the real timed effects live in the sub-spell.
+-- ============================================================
+
+function BfBot.Test.DurationRecursion()
+    P("=== DurationRecursion: op=146 sub-spell duration (issue #33) ===")
+    _reset()
+
+    local function testSpell(resref, minDur, label)
+        local ok, hdr = pcall(EEex_Resource_Demand, resref, "SPL")
+        if not ok or not hdr then
+            _warning(label .. " (" .. resref .. "): SPL not loadable - skipping")
+            return
+        end
+        local ability = hdr:getAbility(0)
+        if not ability then
+            _warning(label .. " (" .. resref .. "): no ability 0 - skipping")
+            return
+        end
+        local dur = BfBot.Class.GetDuration(hdr, ability)
+        _check(type(dur) == "number" and dur >= minDur,
+            string.format("%s (%s): duration=%s (want >=%d)",
+                label, resref, tostring(dur), minDur))
+    end
+
+    -- Main fix: hierarchical spells that deliver effects via op=146 sub-spells.
+    -- Parent SPLs contain only op=146 "Cast Spell" references; real timed
+    -- effects live in the sub-spells. Classifier must recurse.
+    testSpell("SPPR327", 30, "Prayer (op=146 -> #PRAYERG 30s)")
+    testSpell("OHTMPS2", 60, "Chaos of Battle (op=146 -> OHTMPS2D 60s)")
+
+    -- Regression: Chant's parent SPL has a direct op=176 sibling at 60s.
+    -- Must still report >= 60 after the fix (parent-own timed opcodes keep working).
+    testSpell("SPPR203", 60, "Chant (parent op=176 regression)")
+
+    -- Regression: Aid is non-hierarchical, direct timed opcodes only.
+    -- Ability 0 at base caster level — must still show >= 60s.
+    testSpell("SPPR201", 60, "Aid (non-hierarchical regression)")
+
+    return _summary("DurationRecursion")
+end
+
+-- ============================================================
 -- Movable Panel tests
 -- ============================================================
 
@@ -2064,6 +2108,10 @@ function BfBot.Test.RunAll()
     local movPanelOk = BfBot.Test.MovablePanel()
     P("")
 
+    -- Phase 13: Duration Recursion (issue #33)
+    local durRecOk = BfBot.Test.DurationRecursion()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2080,11 +2128,12 @@ function BfBot.Test.RunAll()
     P("  Spell Lock Persist: " .. (lockOk and "PASS" or "FAIL"))
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
+    P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk
 end
 
 -- ============================================================

@@ -498,17 +498,62 @@ end
 -- Duration
 -- ============================================================
 
+-- Extract the sub-spell resref from an op=146 feature block. The resource
+-- field may be a userdata (ResRef) or a plain string depending on the EEex
+-- binding; handle both. Returns nil for empty / unusable values.
+local function _subSpellRef(fb)
+    local v = fb[BfBot._fields.fb_res]
+    if v == nil then return nil end
+    if type(v) == "userdata" then
+        local ok, s = pcall(function() return v:get() end)
+        if ok and type(s) == "string" and s ~= "" then return s end
+        return nil
+    end
+    if type(v) == "string" and v ~= "" then return v end
+    return nil
+end
+
 --- Compute effective duration from feature blocks.
 --- Returns duration in seconds (-1 for permanent) and type string.
-function BfBot.Class.GetDuration(header, ability)
+--- Recurses through op=146 (Cast Spell) into the sub-spell so that
+--- hierarchical spells (e.g. Prayer, Chaos of Battle, SR Barkskin)
+--- report the timed durations that live in their children.
+--- Depth-limited (max 2) and cycle-guarded to stay bounded.
+function BfBot.Class.GetDuration(header, ability, _depth, _visited)
+    _depth = _depth or 0
+    _visited = _visited or {}
+
     local maxDuration = 0
     local hasPermanent = false
 
     BfBot.Class._IterateFeatureBlocks(header, ability, function(fb, _)
         local opcode = fb[BfBot._fields.fb_opcode]
-        if not opcode or not BfBot.Class._IsGameplayOpcode(opcode) then
+        if not opcode then return end
+
+        -- Hierarchical delivery: op=146 "Cast Spell" chains a sub-spell
+        -- whose feature blocks carry the real timed effects. Recurse.
+        if opcode == 146 and _depth < 2 then
+            local subRes = _subSpellRef(fb)
+            if subRes and not _visited[subRes] then
+                _visited[subRes] = true
+                local rOk, subHdr = pcall(EEex_Resource_Demand, subRes, "SPL")
+                if rOk and subHdr then
+                    local subAbility = subHdr:getAbility(0)
+                    if subAbility then
+                        local subDur, subType = BfBot.Class.GetDuration(
+                            subHdr, subAbility, _depth + 1, _visited)
+                        if subDur and subDur > 0 then
+                            if subDur > maxDuration then maxDuration = subDur end
+                        elseif subType == "permanent" then
+                            hasPermanent = true
+                        end
+                    end
+                end
+            end
             return
         end
+
+        if not BfBot.Class._IsGameplayOpcode(opcode) then return end
 
         local rawTiming = fb[BfBot._fields.fb_timing]
         if not rawTiming then return end

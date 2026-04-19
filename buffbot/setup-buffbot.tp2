@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.3.10-alpha~
+VERSION ~v1.3.12-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0

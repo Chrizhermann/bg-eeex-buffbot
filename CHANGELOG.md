@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.12-alpha (2026-04-19)
+
+### Fixed
+- **Duration shown as "Inst" or "Perm" for spells with sub-spell delivery** (#33) — hierarchical spells like Prayer and Chaos of Battle deliver their real effects through opcode 146 (Cast Spell) into a sub-spell. The classifier was only reading the parent SPL, which had no timed effects of its own, so the duration column showed `Inst`. `BfBot.Class.GetDuration` now recurses into op=146 sub-spells (depth-limited, cycle-guarded) and reports the max duration across parent and children. Prayer now shows 30s, Chaos of Battle shows 60s, and the same pattern (including SR Barkskin) works correctly for duration.
+
 ## v1.3.11-alpha (2026-04-19)
 
 ### Added
