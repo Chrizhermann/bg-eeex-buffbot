@@ -417,7 +417,7 @@ menu
 		-- Column 6: Target display
 		column
 		{
-			width 32
+			width 26
 			label
 			{
 				area 0 0 -1 36
@@ -427,9 +427,23 @@ menu
 			}
 		}
 
+		-- Column 7: Lock toggle ([L] / [ ])
+		column
+		{
+			width 6
+			label
+			{
+				area 0 0 -1 36
+				text lua "BfBot.UI._LockText(rowNumber)"
+				text style "normal_parchment"
+				text align center center
+				text color lua "BfBot.UI._LockColor(rowNumber)"
+			}
+		}
+
 		area 350 148 520 250
 		name    "bbList"
-		action      "BfBot.UI._UpdateVariantState(); if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) end"
+		action      "BfBot.UI._UpdateVariantState(); if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) elseif cellNumber == 7 then BfBot.UI.ToggleLock(buffbot_selectedRow) end"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
 		var         "buffbot_selectedRow"
