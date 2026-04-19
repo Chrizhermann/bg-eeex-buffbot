@@ -1224,38 +1224,67 @@ function BfBot.UI._RenumberPriorities()
     end
 end
 
---- Can the selected spell be moved up? (selection exists and row > 1)
+--- Return the next row in `direction` (+1 down, -1 up) whose entry is
+--- not locked, or nil if none exists within bounds.
+function BfBot.UI._FindNextUnlocked(startRow, direction)
+    local n = #buffbot_spellTable
+    local row = startRow + direction
+    while row >= 1 and row <= n do
+        local e = buffbot_spellTable[row]
+        if e and e.lock ~= 1 then return row end
+        row = row + direction
+    end
+    return nil
+end
+
+--- Can the selected spell move up? Selected must be unlocked and have an
+--- unlocked row above it.
 function BfBot.UI._CanMoveUp()
-    return buffbot_isOpen and buffbot_selectedRow > 1 and buffbot_selectedRow <= #buffbot_spellTable
+    if not buffbot_isOpen then return false end
+    local row = buffbot_selectedRow
+    if row <= 1 or row > #buffbot_spellTable then return false end
+    local entry = buffbot_spellTable[row]
+    if not entry or entry.lock == 1 then return false end
+    return BfBot.UI._FindNextUnlocked(row, -1) ~= nil
 end
 
---- Can the selected spell be moved down? (selection exists and row < last)
+--- Can the selected spell move down? Selected must be unlocked and have an
+--- unlocked row below it.
 function BfBot.UI._CanMoveDown()
-    return buffbot_isOpen and buffbot_selectedRow > 0 and buffbot_selectedRow < #buffbot_spellTable
+    if not buffbot_isOpen then return false end
+    local row = buffbot_selectedRow
+    if row < 1 or row >= #buffbot_spellTable then return false end
+    local entry = buffbot_spellTable[row]
+    if not entry or entry.lock == 1 then return false end
+    return BfBot.UI._FindNextUnlocked(row, 1) ~= nil
 end
 
---- Move the selected spell up one position.
+--- Move the selected spell up to the next unlocked row.
 function BfBot.UI.MoveSpellUp()
     local row = buffbot_selectedRow
     if row <= 1 or row > #buffbot_spellTable then return end
-    -- Swap in display table
-    buffbot_spellTable[row], buffbot_spellTable[row - 1] = buffbot_spellTable[row - 1], buffbot_spellTable[row]
-    -- Renumber all priorities
+    local entry = buffbot_spellTable[row]
+    if not entry or entry.lock == 1 then return end
+    local target = BfBot.UI._FindNextUnlocked(row, -1)
+    if not target then return end
+    buffbot_spellTable[row], buffbot_spellTable[target] =
+        buffbot_spellTable[target], buffbot_spellTable[row]
     BfBot.UI._RenumberPriorities()
-    -- Follow the moved spell
-    buffbot_selectedRow = row - 1
+    buffbot_selectedRow = target
 end
 
---- Move the selected spell down one position.
+--- Move the selected spell down to the next unlocked row.
 function BfBot.UI.MoveSpellDown()
     local row = buffbot_selectedRow
     if row < 1 or row >= #buffbot_spellTable then return end
-    -- Swap in display table
-    buffbot_spellTable[row], buffbot_spellTable[row + 1] = buffbot_spellTable[row + 1], buffbot_spellTable[row]
-    -- Renumber all priorities
+    local entry = buffbot_spellTable[row]
+    if not entry or entry.lock == 1 then return end
+    local target = BfBot.UI._FindNextUnlocked(row, 1)
+    if not target then return end
+    buffbot_spellTable[row], buffbot_spellTable[target] =
+        buffbot_spellTable[target], buffbot_spellTable[row]
     BfBot.UI._RenumberPriorities()
-    -- Follow the moved spell
-    buffbot_selectedRow = row + 1
+    buffbot_selectedRow = target
 end
 
 --- Sort the current preset's spell list by duration (longest first).
