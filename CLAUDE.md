@@ -19,9 +19,11 @@ Alpha — core features working, UI functional, testing in progress:
 
 - **Manual Cast Order** (`BfBot.UI`) — Move Up/Down buttons for reordering spells within presets. Per-character, per-preset. Priority renumbered contiguously (1, 2, 3, ...) after each move. Selection follows the moved spell. Verified working in-game.
 
+- **Spell Position Lock** (`BfBot.UI.ToggleLock` + `BfBot.Persist.Get/SetSpellLock`) — per-preset, per-spell row lock. Locked spells stay at their row during Sort by Duration. Move Up/Down skips over locked rows and cannot move a locked spell. UI: 7th column on the right of the spell list, `[L]` / `[ ]` direct click to toggle. Warm gold-brown tint on locked spell names. Persists in save games via schema v6.
+
 - **Auto-Merge New Spells** (`BfBot.UI._Refresh`) — New buff spells gained from leveling up or memorization changes are automatically merged into existing presets (disabled, at bottom of list) when the panel refreshes. No longer requires starting a new game to see new spells.
 
-- **Manual Spell Override** (`BfBot.UI` + `BfBot.Persist`) — "Add Spell" picker sub-menu for including non-buff spells, "Remove" button for excluding false positives. Classification-level overrides stored per-character in `config.ovr`, synced to classifier on load. Schema v5.
+- **Manual Spell Override** (`BfBot.UI` + `BfBot.Persist`) — "Add Spell" picker sub-menu for including non-buff spells, "Remove" button for excluding false positives. Classification-level overrides stored per-character in `config.ovr`, synced to classifier on load. Schema v6.
 
 - **Duration Column** (`BfBot.UI` + `BfBot.Scan` + `BfBot.Class`) — spell list shows per-caster-level buff duration in mixed format (e.g. `1h 30m`, `5m`, `Perm`, `Inst`). Duration computed per-sprite in scan entry (not shared classification cache). `GetDuration()` prefers timed effects over permanent — fixes spells with permanent infrastructure opcodes (326 Apply Effects, 48 Cure Intoxication) coexisting with real timed buffs.
 
@@ -51,7 +53,7 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 - **Per-character config**: stored in `EEex_GetUDAux(sprite)["BB"]` via marshal handlers. Survives save/load automatically.
 - **Marshal handler name**: `"BuffBot"` — registered via `EEex_Sprite_AddMarshalHandlers` in `BfBot.Persist.Init()` (called at M_ load time)
 - **CRITICAL: No booleans in config** — EEex marshal only supports number/string/table values. Booleans cause `EEex_Error()` and crash saves. All boolean-like fields use `1`/`0`.
-- **Config schema** (v5): `{v=5, ap=1, presets={[1]={name,cat,qc=0,spells={[resref]={on,tgt,pri,tgtUnlock}}}, [2]={...}}, opts={skip=1}, ovr={[resref]=1|-1}}` — `tgt` can be `"s"`, `"p"`, a character name string, or a table of name strings (`{"Branwen","Ajantis"}`) for ordered priority targeting. Legacy slot strings (`"1"`-`"6"`) also accepted and lazily converted to names. `tgtUnlock` (optional, 0/1) overrides targeting type lock for modded spells. `qc` is per-preset Quick Cast mode (0=off, 1=long only, 2=all). `ovr` stores classification overrides (1=include, -1=exclude).
+- **Config schema** (v6): `{v=6, ap=1, presets={[1]={name,cat,qc=0,spells={[resref]={on,tgt,pri,tgtUnlock,lock}}}, [2]={...}}, opts={skip=1}, ovr={[resref]=1|-1}}` — `tgt` can be `"s"`, `"p"`, a character name string, or a table of name strings (`{"Branwen","Ajantis"}`) for ordered priority targeting. Legacy slot strings (`"1"`-`"6"`) also accepted and lazily converted to names. `tgtUnlock` (optional, 0/1) overrides targeting type lock for modded spells. `qc` is per-preset Quick Cast mode (0=off, 1=long only, 2=all). `ovr` stores classification overrides (1=include, -1=exclude). `lock` (optional, 0/1) pins a spell's row position during Sort and prevents Move Up/Down.
 - **Auto-population**: `_CreateDefaultConfig` scans castable spells, sorts by duration, puts ALL buff spells into BOTH default presets. Preset 1 ("Long Buffs") has long/permanent enabled + rest disabled; Preset 2 ("Short Buffs") has short enabled + rest disabled. Enabled spells get low priorities (cast first), disabled get high. Instant spells included but disabled in both.
 - **Queue building**: `BuildQueueFromPreset(idx)` walks all party members, filters to enabled+castable spells, maps targets (`"s"->"self"`, `"p"->"all"`, `"N"->tonumber(N)`, table→one entry per slot), returns queue for `BfBot.Exec.Start()`
 - **INI preferences**: cross-save global settings in `baldur.ini` section `[BuffBot]` via `Infinity_GetINIValue`/`Infinity_SetINIValue`
@@ -98,7 +100,7 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 - **API**: `BfBot.Innate.Grant()`, `.Revoke(slot)`, `.Refresh(slot)`, `.RefreshAll()`, `._HasInnate(sprite, resref)`, `._EnsureSPLFiles()`, `._BuildSPL(slot, preset)`, `._BuildRemoverSPL()`
 
 ### Manual Spell Override Details (GitHub #1)
-- **Storage**: `config.ovr = {[resref] = 1 (include) | -1 (exclude)}` — per-character, persists in saves via schema v5
+- **Storage**: `config.ovr = {[resref] = 1 (include) | -1 (exclude)}` — per-character, persists in saves via schema v6
 - **Include flow**: "Add Spell" → picker shows non-buff castable spells + previously-excluded spells (for accidental-Remove undo) → select → `SetOverride(resref, 1)` → cache invalidation → auto-merge adds to preset on next refresh (disabled, at bottom). Excluded spells sort to the top of the picker.
 - **Exclude flow**: "Remove" button → `SetOverride(resref, -1)` → removed from ALL presets → auto-merge skips excluded spells. Reversible via the Add Spell picker.
 - **Visual**: Manually included spells shown with light blue name `{150, 200, 255}`
@@ -117,7 +119,7 @@ Next: Post-MVP features — clones/summons as casters (#19), subwindow selection
 - **Design doc**: `docs/plans/2026-02-28-cheat-mode-design.md`
 
 ### Config Export/Import Details (GitHub #2)
-- **File format**: Full character config serialized as a Lua file in `override/bfbot_presets/`. Format: `BfBot._import = {v=5, ap=N, presets={...}, opts={...}, ovr={...}}`
+- **File format**: Full character config serialized as a Lua file in `override/bfbot_presets/`. Format: `BfBot._import = {v=6, ap=N, presets={...}, opts={...}, ovr={...}}`
 - **Export**: `ExportConfig(sprite)` → sanitizes character name for filename → `_Serialize()` recursive table serializer (handles number/string/table, converts booleans to 1/0, sorts keys) → writes to `override/bfbot_presets/<SafeName>.lua`. Overwrites silently on re-export.
 - **Import**: `ImportConfig(sprite, filename)` → `io.open` + `loadstring` → validates via `_ValidateConfig` + `_MigrateConfig` → filters spells not in target character's spellbook via `GetCastableSpells` → stores to UDAux → syncs overrides to classifier. Returns `true, presetCount, skippedCount` or `false, errorMsg`.
 - **Directory listing**: `ListExports()` uses `io.popen('dir /b "override\\bfbot_presets\\*.lua" 2>nul')` to enumerate available files. Returns `{name, filename}` array. No index file or manifest needed.
