@@ -6,6 +6,13 @@
 
 BfBot.UI = {}
 
+-- Convert "{R, G, B}" string → {R, G, B} table. Used by color functions
+-- that consume _T() (string) and hand tables back to the engine.
+local function _parseColor(s)
+    local r, g, b = s:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
+    return { tonumber(r) or 0, tonumber(g) or 0, tonumber(b) or 0 }
+end
+
 -- ============================================================
 -- Internal State
 -- ============================================================
@@ -932,13 +939,13 @@ end
 --- Text color for a picker row — highlight if selected.
 function BfBot.UI._PickerRowColor(row)
     if row == buffbot_tgtPickerSel then
-        return "{255, 255, 150}"  -- yellow highlight for selected row
+        return BfBot.UI._T("pickerSel")
     end
     local name = buffbot_pickerOrder[row]
     if name and buffbot_pickerChecked[name] then
-        return "{220, 220, 220}"  -- white for checked
+        return BfBot.UI._T("pickerOn")
     end
-    return "{140, 140, 140}"  -- grey for unchecked
+    return BfBot.UI._T("pickerOff")
 end
 
 --- Toggle the checkbox for a picker row (left-click on checkbox area).
@@ -1630,11 +1637,11 @@ end
 --- gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return {50, 30, 10} end
-    if entry.castable == 0 then return {140, 130, 120} end
-    if entry.ovr == 1 then return {40, 80, 160} end
-    if entry.lock == 1 then return {100, 70, 20} end  -- warm gold-brown
-    return {50, 30, 10}
+    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
+    if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
+    return _parseColor(BfBot.UI._T("text"))
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
@@ -1654,8 +1661,8 @@ end
 --- Lock column color: gold when locked, muted otherwise.
 function BfBot.UI._LockColor(row)
     local entry = buffbot_spellTable[row]
-    if entry and entry.lock == 1 then return {230, 200, 60} end
-    return {120, 100, 80}
+    if entry and entry.lock == 1 then return _parseColor(BfBot.UI._T("lockActive")) end
+    return _parseColor(BfBot.UI._T("lockInactive"))
 end
 
 --- Toggle the lock state on a spell row.
@@ -1736,11 +1743,11 @@ end
 
 function BfBot.UI._QuickCastColor()
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return {80, 60, 40} end
+    if not sprite then return _parseColor(BfBot.UI._T("qcOff")) end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    if qc == 1 then return {160, 120, 20} end
-    if qc == 2 then return {180, 60, 30} end
-    return {80, 60, 40}
+    if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
+    if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
+    return _parseColor(BfBot.UI._T("qcOff"))
 end
 
 function BfBot.UI._QuickCastTooltip()
