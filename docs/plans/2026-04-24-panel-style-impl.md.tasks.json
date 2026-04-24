@@ -1,0 +1,24 @@
+{
+  "planPath": "docs/plans/2026-04-24-panel-style-impl.md",
+  "tasks": [
+    {"id": 0, "subject": "Task 0: Create feature branch", "status": "pending"},
+    {"id": 1, "subject": "Task 1: PNG → PVRZ conversion tool", "status": "pending", "blockedBy": [0]},
+    {"id": 2, "subject": "Task 2: Theme module skeleton + palettes", "status": "pending", "blockedBy": [0]},
+    {"id": 3, "subject": "Task 3: _T accessor + Theming test phase", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Custom bb_* text styles", "status": "pending", "blockedBy": [3]},
+    {"id": 5, "subject": "Task 5: Migrate .menu text styles to bb_*", "status": "pending", "blockedBy": [4]},
+    {"id": 6, "subject": "Task 6: Migrate .menu colors to _T()", "status": "pending", "blockedBy": [5]},
+    {"id": 7, "subject": "Task 7: Migrate Lua color functions", "status": "pending", "blockedBy": [3]},
+    {"id": 8, "subject": "Task 8: Font size live refresh", "status": "pending", "blockedBy": [4]},
+    {"id": 9, "subject": "Task 9: Dark mode overlay labels", "status": "pending", "blockedBy": [2]},
+    {"id": 10, "subject": "Task 10: Dynamic border rendering", "status": "pending", "blockedBy": [1, 2]},
+    {"id": 11, "subject": "Task 11: Per-theme background MOS", "status": "pending", "blockedBy": [1, 2]},
+    {"id": 12, "subject": "Task 12: INI persistence", "status": "pending", "blockedBy": [2]},
+    {"id": 13, "subject": "Task 13: EEex Options API discovery (spike)", "status": "pending"},
+    {"id": 14, "subject": "Task 14: EEex Options tab integration", "status": "pending", "blockedBy": [12, 13]},
+    {"id": 15, "subject": "Task 15: Installer updates", "status": "pending", "blockedBy": [1, 2]},
+    {"id": 16, "subject": "Task 16: In-game verification pass", "status": "pending", "blockedBy": [6, 7, 8, 9, 10, 11, 14, 15]},
+    {"id": 17, "subject": "Task 17: Docs + release v1.3.13-alpha", "status": "pending", "blockedBy": [16]}
+  ],
+  "lastUpdated": "2026-04-24T20:00:00Z"
+}
