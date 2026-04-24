@@ -77,7 +77,7 @@ menu
 		enabled "buffbot_isOpen"
 		text lua "buffbot_title"
 		text style "bb_title"
-		text color lua "{50, 30, 10}"
+		text color lua "BfBot.UI._T('title')"
 		text align center center
 		area 340 55 540 30
 	}
@@ -97,7 +97,7 @@ menu
 		enabled "buffbot_isOpen"
 		text    "///"
 		text style "bb_normal"
-		text color lua "{120, 100, 70}"
+		text color lua "BfBot.UI._T('grip')"
 		text align center center
 		area 860 540 20 20
 	}
@@ -118,7 +118,7 @@ menu
 		action  "BfBot.UI._ResetLayout()"
 		text    "Reset"
 		text style "bb_normal"
-		text color lua "{180, 160, 130}"
+		text color lua "BfBot.UI._T('reset')"
 		text align center center
 		area 820 55 50 24
 	}
@@ -810,7 +810,7 @@ menu
 		text lua "buffbot_targetHeader"
 		text style "bb_normal_parchment"
 		text align left center
-		text color lua "{120, 90, 20}"
+		text color lua "BfBot.UI._T('headerSub')"
 		area 479 149 202 20
 	}
 
@@ -821,7 +821,7 @@ menu
 		text lua "buffbot_targetLockText"
 		text style "bb_normal_parchment"
 		text align center center
-		text color lua "{150, 120, 80}"
+		text color lua "BfBot.UI._T('lockText')"
 		area 479 174 202 20
 	}
 
@@ -1090,7 +1090,7 @@ menu
 	{
 		text    "Rename Preset:"
 		text style "bb_normal_parchment"
-		text color lua "{50, 30, 10}"
+		text color lua "BfBot.UI._T('title')"
 		text align left center
 		area 460 285 240 20
 	}
@@ -1101,7 +1101,7 @@ menu
 		var     "buffbot_renameInput"
 		action  "return 1"
 		text style "bb_edit"
-		text color lua "{50, 30, 10}"
+		text color lua "BfBot.UI._T('text')"
 		maxlines 1
 		area 460 308 240 24
 	}
@@ -1167,7 +1167,7 @@ menu
 	{
 		text    "Add Spell to Buff List"
 		text style "bb_title"
-		text color lua "{50, 30, 10}"
+		text color lua "BfBot.UI._T('title')"
 		text align center center
 		area 380 105 400 25
 	}
@@ -1292,7 +1292,7 @@ menu
 	{
 		text    "Import Config"
 		text style "bb_title"
-		text color lua "{50, 30, 10}"
+		text color lua "BfBot.UI._T('title')"
 		text align center center
 		area 420 155 320 25
 	}
@@ -1382,7 +1382,7 @@ menu
 	{
 		text lua "'Select Variant: ' .. buffbot_variantHeader"
 		text style "bb_title"
-		text color lua "{50, 30, 10}"
+		text color lua "BfBot.UI._T('title')"
 		text align center center
 		area 420 185 320 25
 	}
