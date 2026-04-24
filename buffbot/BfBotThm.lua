@@ -184,11 +184,15 @@ BfBot.Theme._palettes = {
 -- Active palette reference; defaults to bg2_light (pixel-match current behavior).
 BfBot.Theme._active = BfBot.Theme._palettes.bg2_light
 
---- Theme color accessor (PLACEHOLDER NAME — renamed to BfBot.UI._T in Task 3).
+-- Pre-create BfBot.UI namespace. BfBotThm loads before BfBotUI, so BfBot.UI
+-- doesn't exist yet; the `or {}` guard creates it without stomping if it does.
+BfBot.UI = BfBot.UI or {}
+
+--- Theme color accessor.
 -- Returns the active palette's value for the given semantic key, or magenta
 -- "{255, 0, 255}" if the key is missing (visible debug signal).
 -- @param key string — one of the keys listed in the Palette Key Glossary above
-function BfBot.UI_T_PENDING_MOVE(key)
+function BfBot.UI._T(key)
     local v = BfBot.Theme._active[key]
     if v == nil then return "{255, 0, 255}" end
     return v

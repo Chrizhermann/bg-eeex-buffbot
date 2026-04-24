@@ -2035,6 +2035,41 @@ function BfBot.Test.MovablePanel()
 end
 
 -- ============================================================
+-- BfBot.Test.Theming — Theme module unit tests (issue #32)
+-- ============================================================
+function BfBot.Test.Theming()
+    P("==== Test: Theming ====")
+    local pass = 0
+    local fail = 0
+
+    local function check(label, cond)
+        if cond then pass = pass + 1; P("  PASS: " .. label)
+        else fail = fail + 1; P("  FAIL: " .. label) end
+    end
+
+    -- _T returns valid color for known key in default palette
+    check("_T('title') returns string on default palette",
+        type(BfBot.UI._T("title")) == "string" and BfBot.UI._T("title"):find("^{"))
+
+    -- Unknown key returns magenta sentinel
+    check("_T(unknown) returns magenta",
+        BfBot.UI._T("nonexistent") == "{255, 0, 255}")
+
+    -- Every palette has all 20 required keys
+    local required = {"overlay","borderResref","bgResref","title","text","textMuted","textAccent",
+                      "grip","reset","headerSub","lockText","spellLocked","pickerSel","pickerOn",
+                      "pickerOff","qcOff","qcLong","qcAll","lockActive","lockInactive"}
+    for paletteName, palette in pairs(BfBot.Theme._palettes) do
+        for _, key in ipairs(required) do
+            check(paletteName .. " has " .. key, palette[key] ~= nil)
+        end
+    end
+
+    P(string.format("  %d pass / %d fail", pass, fail))
+    return fail == 0
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2112,6 +2147,10 @@ function BfBot.Test.RunAll()
     local durRecOk = BfBot.Test.DurationRecursion()
     P("")
 
+    -- Phase 14: Theming (issue #32)
+    local themingOk = BfBot.Test.Theming()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2129,11 +2168,12 @@ function BfBot.Test.RunAll()
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
+    P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk and themingOk
 end
 
 -- ============================================================
