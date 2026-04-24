@@ -217,6 +217,11 @@ end
 -- ============================================================
 
 function BfBot.UI._OnMenusLoaded()
+    -- Register bb_* custom text styles (deep-copies of engine styles) BEFORE
+    -- the menu renders. The .menu references these via `text style "bb_*"`,
+    -- so they must exist before EEex_Menu_LoadFile hands the menu to the engine.
+    BfBot.Theme._RegisterStyles()
+
     -- Generate resolution-appropriate parchment background MOS
     -- MUST happen before EEex_Menu_LoadFile so the menu picks up the right MOS
     BfBot.UI._GenerateBgMOS()

@@ -197,3 +197,52 @@ function BfBot.UI._T(key)
     if v == nil then return "{255, 0, 255}" end
     return v
 end
+
+-- ============================================================
+-- Custom bb_* text styles (font size scaling)
+-- ============================================================
+-- BuffBot registers its own text styles as deep-copies of engine styles.
+-- This lets us scale `point` (font size) per user preference without
+-- mutating the shared engine styles (which other menus use).
+
+-- Base sizes for our custom styles (tuned for BuffBot panel density)
+BfBot.Theme._BASE_POINTS = {
+    bb_normal           = 12,
+    bb_button           = 14,
+    bb_title            = 18,
+    bb_normal_parchment = 12,
+    bb_edit             = 12,
+}
+BfBot.Theme._STYLE_PARENTS = {
+    bb_normal           = "normal",
+    bb_button           = "button",
+    bb_title            = "title",
+    bb_normal_parchment = "normal_parchment",
+    bb_edit             = "edit",
+}
+-- Font size multiplier: 1=small, 2=medium (default), 3=large
+BfBot.Theme._SIZE_MULT = { [1] = 0.85, [2] = 1.0, [3] = 1.20 }
+BfBot.Theme._fontSize = 2
+
+--- Register bb_* custom styles by deep-copying engine styles. Called once at init.
+function BfBot.Theme._RegisterStyles()
+    if not styles then return end
+    if not EEex or not EEex.DeepCopy then return end
+    for bbName, parent in pairs(BfBot.Theme._STYLE_PARENTS) do
+        if styles[parent] and not styles[bbName] then
+            styles[bbName] = EEex.DeepCopy(styles[parent])
+        end
+    end
+    BfBot.Theme._RefreshStyles()
+end
+
+--- Re-apply current font size to bb_* styles. Called on theme change + font size change.
+function BfBot.Theme._RefreshStyles()
+    if not styles then return end
+    local mult = BfBot.Theme._SIZE_MULT[BfBot.Theme._fontSize] or 1.0
+    for bbName, basePt in pairs(BfBot.Theme._BASE_POINTS) do
+        if styles[bbName] then
+            styles[bbName].point = math.floor(basePt * mult)
+        end
+    end
+end
