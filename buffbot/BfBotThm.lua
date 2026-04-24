@@ -246,3 +246,18 @@ function BfBot.Theme._RefreshStyles()
         end
     end
 end
+
+--- Set font size (1=small, 2=medium, 3=large). Clamped to [1,3].
+-- Triggers immediate refresh of bb_* style point values.
+function BfBot.Theme._SetFontSize(n)
+    n = tonumber(n) or 2
+    if n < 1 then n = 1 end
+    if n > 3 then n = 3 end
+    BfBot.Theme._fontSize = n
+    BfBot.Theme._RefreshStyles()
+end
+
+--- Get current font size (1-3).
+function BfBot.Theme._GetFontSize()
+    return BfBot.Theme._fontSize
+end

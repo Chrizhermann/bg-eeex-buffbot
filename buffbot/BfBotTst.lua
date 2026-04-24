@@ -2065,6 +2065,27 @@ function BfBot.Test.Theming()
         end
     end
 
+    -- Font size setter/getter round-trip with clamping
+    BfBot.Theme._SetFontSize(1)
+    check("SetFontSize(1) stores small", BfBot.Theme._GetFontSize() == 1)
+    BfBot.Theme._SetFontSize(3)
+    check("SetFontSize(3) stores large", BfBot.Theme._GetFontSize() == 3)
+    BfBot.Theme._SetFontSize(99)
+    check("SetFontSize(99) clamps to 3", BfBot.Theme._GetFontSize() == 3)
+    BfBot.Theme._SetFontSize(0)
+    check("SetFontSize(0) clamps to 1", BfBot.Theme._GetFontSize() == 1)
+    BfBot.Theme._SetFontSize(2)  -- restore default
+
+    -- bb_* style point size reflects font size setting
+    if styles and styles.bb_normal then
+        check("bb_normal.point = 12 at default size", styles.bb_normal.point == 12)
+        BfBot.Theme._SetFontSize(3)
+        check("bb_normal.point = 14 at large", styles.bb_normal.point == math.floor(12 * 1.20))
+        BfBot.Theme._SetFontSize(1)
+        check("bb_normal.point = 10 at small", styles.bb_normal.point == math.floor(12 * 0.85))
+        BfBot.Theme._SetFontSize(2)  -- restore default
+    end
+
     P(string.format("  %d pass / %d fail", pass, fail))
     return fail == 0
 end
