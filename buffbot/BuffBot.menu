@@ -76,7 +76,7 @@ menu
 		name    "bbTitle"
 		enabled "buffbot_isOpen"
 		text lua "buffbot_title"
-		text style "title"
+		text style "bb_title"
 		text color lua "{50, 30, 10}"
 		text align center center
 		area 340 55 540 30
@@ -96,7 +96,7 @@ menu
 		name    "bbResizeGrip"
 		enabled "buffbot_isOpen"
 		text    "///"
-		text style "normal"
+		text style "bb_normal"
 		text color lua "{120, 100, 70}"
 		text align center center
 		area 860 540 20 20
@@ -117,7 +117,7 @@ menu
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI._ResetLayout()"
 		text    "Reset"
-		text style "normal"
+		text style "bb_normal"
 		text color lua "{180, 160, 130}"
 		text align center center
 		area 820 55 50 24
@@ -133,7 +133,7 @@ menu
 		enabled "buffbot_charNames[1] ~= nil"
 		action  "BfBot.UI.SetChar(0)"
 		text lua "buffbot_charNames[1]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsCharSelected(0) and 1 or 0"
 		scaleToClip
@@ -146,7 +146,7 @@ menu
 		enabled "buffbot_charNames[2] ~= nil"
 		action  "BfBot.UI.SetChar(1)"
 		text lua "buffbot_charNames[2]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsCharSelected(1) and 1 or 0"
 		scaleToClip
@@ -159,7 +159,7 @@ menu
 		enabled "buffbot_charNames[3] ~= nil"
 		action  "BfBot.UI.SetChar(2)"
 		text lua "buffbot_charNames[3]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsCharSelected(2) and 1 or 0"
 		scaleToClip
@@ -172,7 +172,7 @@ menu
 		enabled "buffbot_charNames[4] ~= nil"
 		action  "BfBot.UI.SetChar(3)"
 		text lua "buffbot_charNames[4]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsCharSelected(3) and 1 or 0"
 		scaleToClip
@@ -185,7 +185,7 @@ menu
 		enabled "buffbot_charNames[5] ~= nil"
 		action  "BfBot.UI.SetChar(4)"
 		text lua "buffbot_charNames[5]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsCharSelected(4) and 1 or 0"
 		scaleToClip
@@ -198,7 +198,7 @@ menu
 		enabled "buffbot_charNames[6] ~= nil"
 		action  "BfBot.UI.SetChar(5)"
 		text lua "buffbot_charNames[6]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsCharSelected(5) and 1 or 0"
 		scaleToClip
@@ -215,7 +215,7 @@ menu
 		enabled "buffbot_presetNames[1] ~= nil"
 		action  "BfBot.UI.SetPreset(1)"
 		text lua "buffbot_presetNames[1]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(1) and 1 or 0"
 		scaleToClip
@@ -228,7 +228,7 @@ menu
 		enabled "buffbot_presetNames[2] ~= nil"
 		action  "BfBot.UI.SetPreset(2)"
 		text lua "buffbot_presetNames[2]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(2) and 1 or 0"
 		scaleToClip
@@ -241,7 +241,7 @@ menu
 		enabled "buffbot_presetNames[3] ~= nil"
 		action  "BfBot.UI.SetPreset(3)"
 		text lua "buffbot_presetNames[3]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(3) and 1 or 0"
 		scaleToClip
@@ -254,7 +254,7 @@ menu
 		enabled "buffbot_presetNames[4] ~= nil"
 		action  "BfBot.UI.SetPreset(4)"
 		text lua "buffbot_presetNames[4]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(4) and 1 or 0"
 		scaleToClip
@@ -267,7 +267,7 @@ menu
 		enabled "buffbot_presetNames[5] ~= nil"
 		action  "BfBot.UI.SetPreset(5)"
 		text lua "buffbot_presetNames[5]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(5) and 1 or 0"
 		scaleToClip
@@ -280,7 +280,7 @@ menu
 		enabled "buffbot_presetNames[6] ~= nil"
 		action  "BfBot.UI.SetPreset(6)"
 		text lua "buffbot_presetNames[6]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(6) and 1 or 0"
 		scaleToClip
@@ -293,7 +293,7 @@ menu
 		enabled "buffbot_presetNames[7] ~= nil"
 		action  "BfBot.UI.SetPreset(7)"
 		text lua "buffbot_presetNames[7]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(7) and 1 or 0"
 		scaleToClip
@@ -306,7 +306,7 @@ menu
 		enabled "buffbot_presetNames[8] ~= nil"
 		action  "BfBot.UI.SetPreset(8)"
 		text lua "buffbot_presetNames[8]"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		frame lua "BfBot.UI._IsPresetSelected(8) and 1 or 0"
 		scaleToClip
@@ -320,7 +320,7 @@ menu
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.OpenRename()"
 		text    "Rename"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 758 118 56 24
@@ -333,7 +333,7 @@ menu
 		enabled "BfBot.UI._CanCreatePreset()"
 		action  "BfBot.UI.CreateNewPreset()"
 		text    "New"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 818 118 50 24
@@ -355,7 +355,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "BfBot.UI._CheckboxText(rowNumber)"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
@@ -382,7 +382,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber].name"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align left center
 				text color lua "BfBot.UI._SpellNameColor(rowNumber)"
 			}
@@ -396,7 +396,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber] and buffbot_spellTable[rowNumber].durText or ''"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
@@ -409,7 +409,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber].countText"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
@@ -422,7 +422,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "buffbot_spellTable[rowNumber].targetText"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
@@ -435,7 +435,7 @@ menu
 			{
 				area 0 0 -1 36
 				text lua "BfBot.UI._LockText(rowNumber)"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 				text color lua "BfBot.UI._LockColor(rowNumber)"
 			}
@@ -462,7 +462,7 @@ menu
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.OpenSpellPicker()"
 		text    "Add Spell"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 350 402 120 28
@@ -475,7 +475,7 @@ menu
 		enabled "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ExcludeSelected()"
 		text    "Remove"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 476 402 120 28
@@ -488,7 +488,7 @@ menu
 		enabled "buffbot_isOpen and not BfBot._noIO"
 		action  "BfBot.UI.ExportConfig()"
 		text    "Export"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 610 402 90 28
@@ -501,7 +501,7 @@ menu
 		enabled "buffbot_isOpen and not BfBot._noIO"
 		action  "BfBot.UI.OpenImportPicker()"
 		text    "Import"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 706 402 90 28
@@ -519,7 +519,7 @@ menu
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.ToggleSelected()"
 		text lua "BfBot.UI._ToggleBtnText()"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 350 434 120 28
@@ -532,7 +532,7 @@ menu
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		text lua "BfBot.UI._TargetBtnText()"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 476 434 160 28
@@ -545,7 +545,7 @@ menu
 		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.MoveSpellUp()"
 		text    "Up"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 642 434 48 28
@@ -558,7 +558,7 @@ menu
 		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.MoveSpellDown()"
 		text    "Down"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 694 434 48 28
@@ -571,7 +571,7 @@ menu
 		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.SortByDuration()"
 		text    "Sort"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 748 434 48 28
@@ -584,7 +584,7 @@ menu
 		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text    "Delete Preset"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 800 434 130 28
@@ -602,7 +602,7 @@ menu
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.ToggleSelected()"
 		text lua "BfBot.UI._ToggleBtnText()"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 350 434 90 28
@@ -615,7 +615,7 @@ menu
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		text lua "BfBot.UI._TargetBtnText()"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 444 434 110 28
@@ -628,7 +628,7 @@ menu
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.OpenVariantsForSelected()"
 		text lua "BfBot.UI._VariantBtnText()"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 558 434 110 28
@@ -641,7 +641,7 @@ menu
 		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.MoveSpellUp()"
 		text    "Up"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 672 434 44 28
@@ -654,7 +654,7 @@ menu
 		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.MoveSpellDown()"
 		text    "Down"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 720 434 44 28
@@ -667,7 +667,7 @@ menu
 		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.SortByDuration()"
 		text    "Sort"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 768 434 44 28
@@ -680,7 +680,7 @@ menu
 		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text    "Del Preset"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 816 434 102 28
@@ -698,7 +698,7 @@ menu
 		clickable lua "BfBot.UI._CanCast()"
 		action  "BfBot.UI.Cast()"
 		text lua "buffbot_castLabel"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 350 468 100 28
@@ -712,7 +712,7 @@ menu
 		clickable lua "BfBot.UI._CanCast()"
 		action  "BfBot.UI.CastCharacter()"
 		text lua "buffbot_castCharLabel"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 454 468 140 28
@@ -725,7 +725,7 @@ menu
 		enabled "BfBot.UI._IsRunning()"
 		action  "BfBot.UI.Stop()"
 		text    "Stop"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 536 468 80 28
@@ -738,7 +738,7 @@ menu
 		enabled "buffbot_isOpen and not BfBot._noIO"
 		action  "BfBot.UI.CycleQuickCast()"
 		text lua "BfBot.UI._QuickCastLabel()"
-		text style "normal"
+		text style "bb_normal"
 		text color lua "BfBot.UI._QuickCastColor()"
 		text align center center
 		tooltip lua "BfBot.UI._QuickCastTooltip()"
@@ -754,7 +754,7 @@ menu
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.Close()"
 		text    "Close"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 790 468 80 28
@@ -766,7 +766,7 @@ menu
 		name    "bbStatus"
 		enabled "buffbot_isOpen"
 		text lua "buffbot_status"
-		text style "normal_parchment"
+		text style "bb_normal_parchment"
 		text align left center
 		area 350 500 520 24
 	}
@@ -808,7 +808,7 @@ menu
 	label
 	{
 		text lua "buffbot_targetHeader"
-		text style "normal_parchment"
+		text style "bb_normal_parchment"
 		text align left center
 		text color lua "{120, 90, 20}"
 		area 479 149 202 20
@@ -819,7 +819,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 1"
 		text lua "buffbot_targetLockText"
-		text style "normal_parchment"
+		text style "bb_normal_parchment"
 		text align center center
 		text color lua "{150, 120, 80}"
 		area 479 174 202 20
@@ -831,7 +831,7 @@ menu
 		enabled "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerSelf()"
 		text    "Self"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 199 95 26
@@ -843,7 +843,7 @@ menu
 		enabled "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerAllParty()"
 		text    "All Party"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 581 199 95 26
@@ -855,7 +855,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
 		action  "BfBot.UI.PickerToggle(1)"
 		text lua "BfBot.UI._PickerCheckText(1)"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 231 36 26
@@ -865,7 +865,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
 		action  "BfBot.UI.PickerSelect(1)"
 		text lua "BfBot.UI._PickerNameText(1)"
-		text style "normal"
+		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(1)"
 		rectangle 5
@@ -879,7 +879,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
 		action  "BfBot.UI.PickerToggle(2)"
 		text lua "BfBot.UI._PickerCheckText(2)"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 259 36 26
@@ -889,7 +889,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
 		action  "BfBot.UI.PickerSelect(2)"
 		text lua "BfBot.UI._PickerNameText(2)"
-		text style "normal"
+		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(2)"
 		rectangle 5
@@ -903,7 +903,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
 		action  "BfBot.UI.PickerToggle(3)"
 		text lua "BfBot.UI._PickerCheckText(3)"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 287 36 26
@@ -913,7 +913,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
 		action  "BfBot.UI.PickerSelect(3)"
 		text lua "BfBot.UI._PickerNameText(3)"
-		text style "normal"
+		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(3)"
 		rectangle 5
@@ -927,7 +927,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
 		action  "BfBot.UI.PickerToggle(4)"
 		text lua "BfBot.UI._PickerCheckText(4)"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 315 36 26
@@ -937,7 +937,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
 		action  "BfBot.UI.PickerSelect(4)"
 		text lua "BfBot.UI._PickerNameText(4)"
-		text style "normal"
+		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(4)"
 		rectangle 5
@@ -951,7 +951,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
 		action  "BfBot.UI.PickerToggle(5)"
 		text lua "BfBot.UI._PickerCheckText(5)"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 343 36 26
@@ -961,7 +961,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
 		action  "BfBot.UI.PickerSelect(5)"
 		text lua "BfBot.UI._PickerNameText(5)"
-		text style "normal"
+		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(5)"
 		rectangle 5
@@ -975,7 +975,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
 		action  "BfBot.UI.PickerToggle(6)"
 		text lua "BfBot.UI._PickerCheckText(6)"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 371 36 26
@@ -985,7 +985,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
 		action  "BfBot.UI.PickerSelect(6)"
 		text lua "BfBot.UI._PickerNameText(6)"
-		text style "normal"
+		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(6)"
 		rectangle 5
@@ -999,7 +999,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 1"
 		action  "BfBot.UI.PickerMoveUp()"
 		text    "Up"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 403 95 26
@@ -1011,7 +1011,7 @@ menu
 		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerOrder"
 		action  "BfBot.UI.PickerMoveDown()"
 		text    "Down"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 581 403 95 26
@@ -1023,7 +1023,7 @@ menu
 		enabled "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerClear()"
 		text    "Clear"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 435 95 26
@@ -1034,7 +1034,7 @@ menu
 	{
 		action  "BfBot.UI.PickerDone()"
 		text    "Done"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 581 435 95 26
@@ -1046,7 +1046,7 @@ menu
 		enabled "buffbot_targetLocked == 1"
 		action  "BfBot.UI.PickerUnlock()"
 		text    "Unlock Targeting"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 479 467 197 26
@@ -1089,7 +1089,7 @@ menu
 	label
 	{
 		text    "Rename Preset:"
-		text style "normal_parchment"
+		text style "bb_normal_parchment"
 		text color lua "{50, 30, 10}"
 		text align left center
 		area 460 285 240 20
@@ -1100,7 +1100,7 @@ menu
 	{
 		var     "buffbot_renameInput"
 		action  "return 1"
-		text style "edit"
+		text style "bb_edit"
 		text color lua "{50, 30, 10}"
 		maxlines 1
 		area 460 308 240 24
@@ -1111,7 +1111,7 @@ menu
 	{
 		action  "BfBot.UI.ConfirmRename(); Infinity_PopMenu('BUFFBOT_RENAME')"
 		text    "OK"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 460 338 80 24
@@ -1122,7 +1122,7 @@ menu
 	{
 		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
 		text    "Cancel"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 550 338 80 24
@@ -1166,7 +1166,7 @@ menu
 	label
 	{
 		text    "Add Spell to Buff List"
-		text style "title"
+		text style "bb_title"
 		text color lua "{50, 30, 10}"
 		text align center center
 		area 380 105 400 25
@@ -1193,7 +1193,7 @@ menu
 			{
 				area 0 0 -1 34
 				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].name or ''"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align left center
 			}
 		}
@@ -1205,7 +1205,7 @@ menu
 			{
 				area 0 0 -1 34
 				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].durCat or ''"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
@@ -1217,7 +1217,7 @@ menu
 			{
 				area 0 0 -1 34
 				text lua "buffbot_pickerSpells[rowNumber] and ('x' .. buffbot_pickerSpells[rowNumber].count) or ''"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
@@ -1236,7 +1236,7 @@ menu
 		enabled "BfBot.UI._PickerHasSelection()"
 		action  "BfBot.UI.AddPickedSpell()"
 		text    "Add to Buff List"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 390 430 180 28
@@ -1247,7 +1247,7 @@ menu
 	{
 		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
 		text    "Cancel"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 580 430 100 28
@@ -1291,7 +1291,7 @@ menu
 	label
 	{
 		text    "Import Config"
-		text style "title"
+		text style "bb_title"
 		text color lua "{50, 30, 10}"
 		text align center center
 		area 420 155 320 25
@@ -1307,7 +1307,7 @@ menu
 			{
 				area 0 0 -1 34
 				text lua "buffbot_importList[rowNumber] and buffbot_importList[rowNumber].name or ''"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align left center
 			}
 		}
@@ -1326,7 +1326,7 @@ menu
 		enabled "BfBot.UI._ImportHasSelection()"
 		action  "BfBot.UI.ImportSelected()"
 		text    "Import"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 430 390 140 28
@@ -1337,7 +1337,7 @@ menu
 	{
 		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
 		text    "Cancel"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 580 390 120 28
@@ -1381,7 +1381,7 @@ menu
 	label
 	{
 		text lua "'Select Variant: ' .. buffbot_variantHeader"
-		text style "title"
+		text style "bb_title"
 		text color lua "{50, 30, 10}"
 		text align center center
 		area 420 185 320 25
@@ -1408,7 +1408,7 @@ menu
 			{
 				area 0 0 -1 34
 				text lua "buffbot_variantTable[rowNumber] and buffbot_variantTable[rowNumber].name or ''"
-				text style "normal_parchment"
+				text style "bb_normal_parchment"
 				text align left center
 			}
 		}
@@ -1427,7 +1427,7 @@ menu
 		enabled "buffbot_variantSelected > 0 and buffbot_variantSelected <= #buffbot_variantTable"
 		action  "BfBot.UI.SelectVariant(buffbot_variantSelected)"
 		text    "Select"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 430 355 140 28
@@ -1438,7 +1438,7 @@ menu
 	{
 		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
 		text    "Cancel"
-		text style "button"
+		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
 		area 580 355 140 28
