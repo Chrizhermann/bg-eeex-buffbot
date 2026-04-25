@@ -363,6 +363,7 @@ function BfBot.UI._Layout()
 
     -- Panel background (parchment inside, border frame extends 24px beyond)
     Infinity_SetArea("bbBg", px, py, pw, ph)
+    Infinity_SetArea("bbDarkOverlay", px, py, pw, ph)
     local bpad = 24  -- border overhang in pixels
     Infinity_SetArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
 

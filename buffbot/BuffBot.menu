@@ -70,6 +70,16 @@ menu
 		mosaic "BFBOTBG"
 	}
 
+	-- Dark mode overlay (theme-driven opacity, position synced via _Layout)
+	label
+	{
+		name    "bbDarkOverlay"
+		enabled "buffbot_isOpen"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 340 50 540 510
+	}
+
 	-- Title
 	label
 	{
@@ -804,6 +814,15 @@ menu
 		mosaic "BFBOTBG"
 	}
 
+	-- Dark mode overlay (theme-driven opacity)
+	label
+	{
+		name    "bbDarkOverlayTgt"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 474 144 212 402
+	}
+
 	-- Header: spell name
 	label
 	{
@@ -1085,6 +1104,15 @@ menu
 		mosaic "BFBOTBG"
 	}
 
+	-- Dark mode overlay (theme-driven opacity)
+	label
+	{
+		name    "bbDarkOverlayRen"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 450 280 260 90
+	}
+
 	-- Label
 	label
 	{
@@ -1160,6 +1188,15 @@ menu
 	{
 		area 380 100 400 380
 		mosaic "BFBOTBG"
+	}
+
+	-- Dark mode overlay (theme-driven opacity)
+	label
+	{
+		name    "bbDarkOverlayPick"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 380 100 400 380
 	}
 
 	-- Title
@@ -1287,6 +1324,15 @@ menu
 		mosaic "BFBOTBG"
 	}
 
+	-- Dark mode overlay (theme-driven opacity)
+	label
+	{
+		name    "bbDarkOverlayImp"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 420 150 320 300
+	}
+
 	-- Title
 	label
 	{
@@ -1375,6 +1421,15 @@ menu
 	{
 		area 420 180 320 220
 		mosaic "BFBOTBG"
+	}
+
+	-- Dark mode overlay (theme-driven opacity)
+	label
+	{
+		name    "bbDarkOverlayVar"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 420 180 320 220
 	}
 
 	-- Title
