@@ -309,3 +309,276 @@ function BfBot.Theme.Apply(name)
     BfBot.Theme._SaveToINI()
     return true
 end
+
+-- ============================================================
+-- Active palette decomposition (mode + accent helpers)
+-- ============================================================
+-- The active palette name is "<accent>_<mode>" where:
+--   accent ∈ { bg2, sod, bg1 }
+--   mode   ∈ { light, dark }
+-- These helpers split that compound name so the EEex Options UI can
+-- expose the two axes (Dark Mode toggle + Color Scheme radio) without
+-- the user thinking in terms of palette names.
+
+--- Returns 1 if the active palette name ends in "_dark", else 0.
+-- Numeric (not boolean) so it round-trips through EEex_Options storage,
+-- which uses numeric INI values for toggle widgets.
+function BfBot.Theme._IsDark()
+    for name, palette in pairs(BfBot.Theme._palettes) do
+        if palette == BfBot.Theme._active then
+            return (name:match("_dark$") ~= nil) and 1 or 0
+        end
+    end
+    return 0
+end
+
+--- Returns "bg2" / "sod" / "bg1" for the active palette's accent prefix.
+-- Falls back to "bg2" if the active palette can't be located in the table
+-- (should never happen in practice — _active is always one of _palettes).
+function BfBot.Theme._GetAccentName()
+    for name, palette in pairs(BfBot.Theme._palettes) do
+        if palette == BfBot.Theme._active then
+            return name:match("^(%w+)_") or "bg2"
+        end
+    end
+    return "bg2"
+end
+
+--- Set dark mode while preserving the current accent.
+-- @param dark — 1, 0, true, or false (numeric forms come from EEex options).
+function BfBot.Theme._SetDarkMode(dark)
+    local accent = BfBot.Theme._GetAccentName()
+    local truthy = (dark == 1 or dark == true)
+    local suffix = truthy and "_dark" or "_light"
+    BfBot.Theme.Apply(accent .. suffix)
+end
+
+--- Returns 1/2/3 for the active accent (BG2 / SOD / BG1).
+function BfBot.Theme._GetAccentIndex()
+    local accent = BfBot.Theme._GetAccentName()
+    return ({bg2=1, sod=2, bg1=3})[accent] or 1
+end
+
+--- Set the accent by index (1=BG2, 2=SOD, 3=BG1) preserving dark/light.
+-- Out-of-range / non-numeric input falls back to BG2.
+function BfBot.Theme._SetAccent(idx)
+    local accent = ({[1]="bg2", [2]="sod", [3]="bg1"})[idx] or "bg2"
+    local suffix = (BfBot.Theme._IsDark() == 1) and "_dark" or "_light"
+    BfBot.Theme.Apply(accent .. suffix)
+end
+
+-- ============================================================
+-- EEex Options tab registration
+-- ============================================================
+-- Adds a "BuffBot" tab to the EEex Options menu (Esc → Options) with three
+-- controls: Dark Mode toggle, Color Scheme radio (3 options), Text Size
+-- radio (3 options). Calls into the helpers above for value get/set.
+--
+-- Persistence note: each option uses a custom storage that bridges directly
+-- to BfBot.Theme — read() derives the current value from the live theme
+-- (no separate INI key for these options), write() applies the value via
+-- BfBot.Theme.Apply / _SetFontSize. Those helpers themselves call
+-- _SaveToINI, so the existing [BuffBot]Theme + [BuffBot]FontSize INI keys
+-- remain the single source of truth. No new INI keys are introduced.
+--
+-- _registered guards against double-registration (e.g., Infinity_DoFile
+-- reloading BfBotThm during dev) — EEex has no AddTab counterpart for
+-- removal, so re-registering would duplicate the tab.
+
+BfBot.Theme._registered = BfBot.Theme._registered or false
+
+--- Register translation strings into uiStrings so EEex's t() resolver finds
+-- them. uiStrings is the global table populated by EEex's L_*.LUA / X-en_US
+-- localization files. Falls through silently for missing keys (showing the
+-- raw key in the UI), so populating it here is the safest path.
+local function _populateUiStrings()
+    if not uiStrings then return end
+    uiStrings.BuffBot_Tab               = "BuffBot"
+    uiStrings.BuffBot_DarkMode          = "Dark Mode"
+    uiStrings.BuffBot_DarkMode_Desc     = "Dim the panel parchment for low-light play. The accent palette is preserved."
+    uiStrings.BuffBot_Accent            = "Color Scheme"
+    uiStrings.BuffBot_Accent_Desc       = "Choose the panel accent palette: classic BG2 parchment, the steel-blue Siege of Dragonspear, or the warm BG1 amber."
+    uiStrings.BuffBot_Accent_BG2        = "Baldur's Gate 2"
+    uiStrings.BuffBot_Accent_SOD        = "Siege of Dragonspear"
+    uiStrings.BuffBot_Accent_BG1        = "Baldur's Gate 1"
+    uiStrings.BuffBot_TextSize          = "Text Size"
+    uiStrings.BuffBot_TextSize_Desc     = "Scale all panel text. Restart the panel (close and reopen) to see changes apply across every section."
+    uiStrings.BuffBot_TextSize_Small    = "Small"
+    uiStrings.BuffBot_TextSize_Medium   = "Medium"
+    uiStrings.BuffBot_TextSize_Large    = "Large"
+end
+
+--- Build a custom storage class that bridges between an EEex option's
+-- numeric value and live BfBot.Theme state. `getter` reads the current
+-- value (number); `setter(value)` applies it. Both sides go through
+-- BfBot.Theme helpers, which themselves persist to baldur.ini via
+-- _SaveToINI — so this storage is effectively a thin adapter.
+local function _makeBridgeStorage(getter, setter)
+    -- Inherit from EEex_Options_Private_Storage so canReadEarly() is false
+    -- (we want late-phase read so all dependencies are loaded).
+    if not EEex_Options_Private_Storage then return nil end
+    local storage = {}
+    storage.__index = storage
+    setmetatable(storage, EEex_Options_Private_Storage)
+    -- Storage must implement read/write; canReadEarly is inherited (returns false).
+    function storage:read(option)
+        local ok, val = pcall(getter)
+        if ok then return val end
+        return option:_getDefault()
+    end
+    function storage:write(option, value)
+        pcall(setter, value)
+    end
+    -- Static factory matching EEex's convention.
+    storage.new = function(o)
+        if o == nil then o = {} end
+        setmetatable(o, storage)
+        return o
+    end
+    return storage
+end
+
+--- Register the BuffBot tab + options in EEex's Options UI.
+-- Idempotent: subsequent calls return early via the _registered flag.
+-- Safe-degrades when EEex Options is not loaded (older EEex builds).
+function BfBot.Theme._RegisterOptionsTab()
+    if BfBot.Theme._registered then return end
+    if not EEex_Options_AddTab then return end
+    if not EEex_Options_Register then return end
+    if not EEex_Options_Option then return end
+    if not EEex_Options_DisplayEntry then return end
+    if not EEex_Options_ToggleType or not EEex_Options_ToggleWidget then return end
+    if not EEex_Options_ClampedAccessor then return end
+    if not EEex_Options_Private_Storage then return end
+
+    _populateUiStrings()
+
+    -- Dark Mode (binary toggle: 0/1)
+    local DarkBridge = _makeBridgeStorage(
+        function() return BfBot.Theme._IsDark() end,
+        function(v) BfBot.Theme._SetDarkMode(v) end
+    )
+    EEex_Options_Register("BuffBot_DarkMode", EEex_Options_Option.new({
+        ["default"]  = 0,
+        ["type"]     = EEex_Options_ToggleType.new(),
+        ["accessor"] = EEex_Options_ClampedAccessor.new({ ["min"] = 0, ["max"] = 1 }),
+        ["storage"]  = DarkBridge.new(),
+    }))
+
+    -- Color Scheme (3-way radio: 1=BG2, 2=SOD, 3=BG1)
+    local AccentBridge = _makeBridgeStorage(
+        function() return BfBot.Theme._GetAccentIndex() end,
+        function(v) BfBot.Theme._SetAccent(v) end
+    )
+    EEex_Options_Register("BuffBot_Accent", EEex_Options_Option.new({
+        ["default"]  = 1,
+        ["type"]     = EEex_Options_ToggleType.new(),
+        ["accessor"] = EEex_Options_ClampedAccessor.new({ ["min"] = 1, ["max"] = 3 }),
+        ["storage"]  = AccentBridge.new(),
+    }))
+
+    -- Text Size (3-way radio: 1=Small, 2=Medium, 3=Large)
+    local SizeBridge = _makeBridgeStorage(
+        function() return BfBot.Theme._GetFontSize() end,
+        function(v)
+            BfBot.Theme._SetFontSize(v)
+            BfBot.Theme._SaveToINI()
+        end
+    )
+    EEex_Options_Register("BuffBot_TextSize", EEex_Options_Option.new({
+        ["default"]  = 2,
+        ["type"]     = EEex_Options_ToggleType.new(),
+        ["accessor"] = EEex_Options_ClampedAccessor.new({ ["min"] = 1, ["max"] = 3 }),
+        ["storage"]  = SizeBridge.new(),
+    }))
+
+    -- Tab definition: 3 groups separated by dividers in the UI.
+    EEex_Options_AddTab("BuffBot_Tab", function() return {
+        -- Group 1: Dark Mode (single toggle)
+        {
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_DarkMode",
+                ["label"]       = "BuffBot_DarkMode",
+                ["description"] = "BuffBot_DarkMode_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new(),
+            }),
+        },
+        -- Group 2: Color Scheme (3 toggles in a radio group, all defer to BuffBot_Accent)
+        {
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_Accent",
+                ["label"]       = "BuffBot_Accent_BG2",
+                ["description"] = "BuffBot_Accent_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new({
+                    ["toggleValue"]       = 1,
+                    ["disallowToggleOff"] = true,
+                }),
+            }),
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_Accent",
+                ["label"]       = "BuffBot_Accent_SOD",
+                ["description"] = "BuffBot_Accent_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new({
+                    ["toggleValue"]       = 2,
+                    ["disallowToggleOff"] = true,
+                }),
+            }),
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_Accent",
+                ["label"]       = "BuffBot_Accent_BG1",
+                ["description"] = "BuffBot_Accent_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new({
+                    ["toggleValue"]       = 3,
+                    ["disallowToggleOff"] = true,
+                }),
+            }),
+        },
+        -- Group 3: Text Size (3 toggles in a radio group, all defer to BuffBot_TextSize)
+        {
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_TextSize",
+                ["label"]       = "BuffBot_TextSize_Small",
+                ["description"] = "BuffBot_TextSize_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new({
+                    ["toggleValue"]       = 1,
+                    ["disallowToggleOff"] = true,
+                }),
+            }),
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_TextSize",
+                ["label"]       = "BuffBot_TextSize_Medium",
+                ["description"] = "BuffBot_TextSize_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new({
+                    ["toggleValue"]       = 2,
+                    ["disallowToggleOff"] = true,
+                }),
+            }),
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_TextSize",
+                ["label"]       = "BuffBot_TextSize_Large",
+                ["description"] = "BuffBot_TextSize_Desc",
+                ["widget"]      = EEex_Options_ToggleWidget.new({
+                    ["toggleValue"]       = 3,
+                    ["disallowToggleOff"] = true,
+                }),
+            }),
+        },
+    } end)
+
+    -- _ReadOptions(false) already fired before _OnMenusLoaded, so our newly
+    -- registered options were not in the auto-read pass. Manually push the
+    -- live theme state into each option's _workingValue so widgets render
+    -- the correct selected state on first open.
+    local function _seed(id)
+        local opt = EEex_Options_Get and EEex_Options_Get(id)
+        if opt and opt._read then
+            local val = opt:_read()
+            if val ~= nil then opt:_set(val, true) end
+        end
+    end
+    _seed("BuffBot_DarkMode")
+    _seed("BuffBot_Accent")
+    _seed("BuffBot_TextSize")
+
+    BfBot.Theme._registered = true
+end

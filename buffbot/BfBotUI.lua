@@ -259,6 +259,11 @@ function BfBot.UI._OnMenusLoaded()
     -- the bb_* styles registered above.
     BfBot.Theme._LoadFromINI()
 
+    -- Register the BuffBot tab in EEex's Options menu. Must run AFTER
+    -- _LoadFromINI so the option storage's read() returns the persisted
+    -- (not default) values. Idempotent — subsequent calls are no-ops.
+    BfBot.Theme._RegisterOptionsTab()
+
     -- Generate resolution-appropriate parchment background MOS for every theme.
     -- MUST happen before EEex_Menu_LoadFile so the menu picks up the right MOS
     -- for whichever theme is active (and the others when the user switches).
