@@ -254,6 +254,11 @@ function BfBot.UI._OnMenusLoaded()
     -- so they must exist before EEex_Menu_LoadFile hands the menu to the engine.
     BfBot.Theme._RegisterStyles()
 
+    -- Restore saved theme + font size from baldur.ini. Must run AFTER
+    -- _RegisterStyles because _LoadFromINI calls _RefreshStyles, which mutates
+    -- the bb_* styles registered above.
+    BfBot.Theme._LoadFromINI()
+
     -- Generate resolution-appropriate parchment background MOS for every theme.
     -- MUST happen before EEex_Menu_LoadFile so the menu picks up the right MOS
     -- for whichever theme is active (and the others when the user switches).

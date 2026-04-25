@@ -261,3 +261,51 @@ end
 function BfBot.Theme._GetFontSize()
     return BfBot.Theme._fontSize
 end
+
+-- ============================================================
+-- INI persistence (Theme + FontSize)
+-- ============================================================
+
+--- Load saved theme + font size from INI; apply to active palette + styles.
+-- Called from BfBot.UI._OnMenusLoaded AFTER _RegisterStyles, so _RefreshStyles
+-- has bb_* styles to operate on.
+function BfBot.Theme._LoadFromINI()
+    local name = BfBot.Persist.GetPref("Theme")
+    -- Defensive coercion: if INI accessor returns a non-string for any reason,
+    -- fall back to the default palette name.
+    if type(name) ~= "string" or name == "" then name = "bg2_light" end
+    local palette = BfBot.Theme._palettes[name]
+    if palette then
+        BfBot.Theme._active = palette
+    end
+    -- FontSize: clamp to [1,3]
+    local sz = tonumber(BfBot.Persist.GetPref("FontSize")) or 2
+    if sz < 1 then sz = 1 end
+    if sz > 3 then sz = 3 end
+    BfBot.Theme._fontSize = sz
+    BfBot.Theme._RefreshStyles()
+end
+
+--- Save current theme name + font size to INI.
+-- Reverse-looks-up the active palette to find its registered name.
+function BfBot.Theme._SaveToINI()
+    for name, palette in pairs(BfBot.Theme._palettes) do
+        if palette == BfBot.Theme._active then
+            BfBot.Persist.SetPref("Theme", name)
+            break
+        end
+    end
+    BfBot.Persist.SetPref("FontSize", BfBot.Theme._fontSize)
+end
+
+--- Apply a palette by name + persist + refresh styles.
+-- @param name string — palette key (e.g. "bg2_light", "sod_dark")
+-- @return true if palette exists and was applied; false otherwise.
+function BfBot.Theme.Apply(name)
+    local palette = BfBot.Theme._palettes[name]
+    if not palette then return false end
+    BfBot.Theme._active = palette
+    BfBot.Theme._RefreshStyles()
+    BfBot.Theme._SaveToINI()
+    return true
+end
