@@ -236,32 +236,45 @@ function BfBot.UI._OnMenusLoaded()
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
 
-    -- Register 9-slice border texture for custom panel frame
+    -- Register 9-slice border textures (one per theme variant)
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
-    local regOk, regErr = pcall(function()
-        EEex.RegisterSlicedRect("BuffBot_Border", {
-            ["topLeft"]     = {   0,   0, 128, 128 },
-            ["top"]         = { 128,   0, 256, 128 },
-            ["topRight"]    = { 384,   0, 128, 128 },
-            ["right"]       = { 384, 128, 128, 256 },
-            ["bottomRight"] = { 384, 384, 128, 128 },
-            ["bottom"]      = { 128, 384, 256, 128 },
-            ["bottomLeft"]  = {   0, 384, 128, 128 },
-            ["left"]        = {   0, 128, 128, 256 },
-            ["center"]      = { 128, 128, 256, 256 },
-            ["dimensions"]  = { 512, 512 },
-            ["resref"]      = "BFBOTFR",
-            ["flags"]       = 0,
-        })
-    end)
-    BfBot.UI._borderStatus = regOk and "registered" or ("FAILED: " .. tostring(regErr))
+    local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
+    local anyOk = false
+    local errs = {}
+    for _, resref in ipairs(BORDER_RESREFS) do
+        local regOk, regErr = pcall(function()
+            EEex.RegisterSlicedRect("BuffBot_Border_" .. resref, {
+                ["topLeft"]     = {   0,   0, 128, 128 },
+                ["top"]         = { 128,   0, 256, 128 },
+                ["topRight"]    = { 384,   0, 128, 128 },
+                ["right"]       = { 384, 128, 128, 256 },
+                ["bottomRight"] = { 384, 384, 128, 128 },
+                ["bottom"]      = { 128, 384, 256, 128 },
+                ["bottomLeft"]  = {   0, 384, 128, 128 },
+                ["left"]        = {   0, 128, 128, 256 },
+                ["center"]      = { 128, 128, 256, 256 },
+                ["dimensions"]  = { 512, 512 },
+                ["resref"]      = resref,
+                ["flags"]       = 0,
+            })
+        end)
+        if regOk then
+            anyOk = true
+        else
+            table.insert(errs, resref .. ": " .. tostring(regErr))
+        end
+    end
+    BfBot.UI._borderStatus = anyOk
+        and (#errs == 0 and "registered" or ("registered (partial; " .. table.concat(errs, "; ") .. ")"))
+        or ("FAILED: " .. table.concat(errs, "; "))
 
     -- Render hooks: draw 9-slice border on main panel + all sub-menus
-    if regOk then
+    -- Active theme's borderResref is read at draw time, so theme switches take effect immediately
+    if anyOk then
         local borderHook = function(item)
             pcall(function()
-                EEex.DrawSlicedRect("BuffBot_Border", { item:getArea() })
+                EEex.DrawSlicedRect("BuffBot_Border_" .. BfBot.Theme._active.borderResref, { item:getArea() })
             end)
         end
         EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame",  borderHook)
