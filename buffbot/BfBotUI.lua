@@ -112,12 +112,43 @@ buffbot_variantSelected = 0        -- selected row in variant picker
 -- Runtime MOS Generation (ultrawide / high-res support)
 -- ============================================================
 
---- Generate BFBOTBG.MOS sized to the current screen by tiling existing
--- PVRZ blocks. The base parchment tile is 2048x1152 (4 PVRZ blocks).
--- At resolutions where 80% of screen exceeds that, the static MOS
--- leaves a black gap. This function writes a tiled MOS V2 to override.
-function BfBot.UI._GenerateBgMOS()
+-- Per-theme PVRZ block layout. Each theme's 4 pages compose a 2048x1152
+-- base parchment tile that gets repeated to fill the target panel size.
+-- PVRZ page numbers match the MOS####.PVRZ filename digits in hex
+-- (0x26AC = 9900, 0x26B6 = 9910, 0x26C0 = 9920).
+local BLOCKS_BY_THEME = {
+    BFBOTBG  = {  -- BG2 default: MOS9900-9903
+        { page = 0x26AC, w = 1024, h = 1024, ox = 0,    oy = 0    },
+        { page = 0x26AD, w = 1024, h = 1024, ox = 1024, oy = 0    },
+        { page = 0x26AE, w = 1024, h = 128,  ox = 0,    oy = 1024 },
+        { page = 0x26AF, w = 1024, h = 128,  ox = 1024, oy = 1024 },
+    },
+    BFBOTBG2 = {  -- SOD: MOS9910-9913
+        { page = 0x26B6, w = 1024, h = 1024, ox = 0,    oy = 0    },
+        { page = 0x26B7, w = 1024, h = 1024, ox = 1024, oy = 0    },
+        { page = 0x26B8, w = 1024, h = 128,  ox = 0,    oy = 1024 },
+        { page = 0x26B9, w = 1024, h = 128,  ox = 1024, oy = 1024 },
+    },
+    BFBOTBG3 = {  -- BG1: MOS9920-9923
+        { page = 0x26C0, w = 1024, h = 1024, ox = 0,    oy = 0    },
+        { page = 0x26C1, w = 1024, h = 1024, ox = 1024, oy = 0    },
+        { page = 0x26C2, w = 1024, h = 128,  ox = 0,    oy = 1024 },
+        { page = 0x26C3, w = 1024, h = 128,  ox = 1024, oy = 1024 },
+    },
+}
+
+--- Generate a per-theme parchment background MOS sized to cover the current
+-- panel by tiling 4 PVRZ blocks (one base tile = 2048x1152). At resolutions
+-- where 80% of screen exceeds the base tile, a static MOS leaves a black gap.
+-- This function writes a tiled MOS V2 to override/<themeBgResref>.MOS.
+-- @param themeBgResref string  e.g. "BFBOTBG", "BFBOTBG2", "BFBOTBG3"
+function BfBot.UI._GenerateBgMOS(themeBgResref)
     if BfBot._noIO then return end
+    themeBgResref = themeBgResref
+        or (BfBot.Theme and BfBot.Theme._active and BfBot.Theme._active.bgResref)
+        or "BFBOTBG"
+    local blocks = BLOCKS_BY_THEME[themeBgResref] or BLOCKS_BY_THEME.BFBOTBG
+
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
 
@@ -131,8 +162,12 @@ function BfBot.UI._GenerateBgMOS()
     local mosW = tilesX * 2048
     local mosH = tilesY * 1152
 
-    -- Skip regeneration if current MOS already covers this size
-    if BfBot.UI._mosW and BfBot.UI._mosW >= mosW and BfBot.UI._mosH >= mosH then
+    -- Per-theme MOS dimension cache (skip regeneration if already covered)
+    BfBot.UI._mosW = BfBot.UI._mosW or {}
+    BfBot.UI._mosH = BfBot.UI._mosH or {}
+    if BfBot.UI._mosW[themeBgResref] and BfBot.UI._mosH[themeBgResref]
+       and BfBot.UI._mosW[themeBgResref] >= mosW
+       and BfBot.UI._mosH[themeBgResref] >= mosH then
         return
     end
 
@@ -145,16 +180,6 @@ function BfBot.UI._GenerateBgMOS()
             math.floor(n / 16777216) % 256
         )
     end
-
-    -- Base tile: 4 PVRZ blocks composing a 2048x1152 parchment tile
-    --   MOS9900 (1024x1024) @ (0,0)     | MOS9901 (1024x1024) @ (1024,0)
-    --   MOS9902 (1024x128)  @ (0,1024)   | MOS9903 (1024x128)  @ (1024,1024)
-    local blocks = {
-        { page = 0x26AC, w = 1024, h = 1024, ox = 0,    oy = 0    },  -- MOS9900
-        { page = 0x26AD, w = 1024, h = 1024, ox = 1024, oy = 0    },  -- MOS9901
-        { page = 0x26AE, w = 1024, h = 128,  ox = 0,    oy = 1024 },  -- MOS9902
-        { page = 0x26AF, w = 1024, h = 128,  ox = 1024, oy = 1024 },  -- MOS9903
-    }
 
     local numBlocks = tilesX * tilesY * 4
     local parts = {}
@@ -182,7 +207,7 @@ function BfBot.UI._GenerateBgMOS()
     end
 
     local ok, err = pcall(function()
-        local f = io.open("override/BFBOTBG.MOS", "wb")
+        local f = io.open("override/" .. themeBgResref .. ".MOS", "wb")
         if f then
             f:write(table.concat(parts))
             f:close()
@@ -190,8 +215,8 @@ function BfBot.UI._GenerateBgMOS()
     end)
 
     if ok then
-        BfBot.UI._mosW = mosW
-        BfBot.UI._mosH = mosH
+        BfBot.UI._mosW[themeBgResref] = mosW
+        BfBot.UI._mosH[themeBgResref] = mosH
     end
 end
 
@@ -229,9 +254,12 @@ function BfBot.UI._OnMenusLoaded()
     -- so they must exist before EEex_Menu_LoadFile hands the menu to the engine.
     BfBot.Theme._RegisterStyles()
 
-    -- Generate resolution-appropriate parchment background MOS
+    -- Generate resolution-appropriate parchment background MOS for every theme.
     -- MUST happen before EEex_Menu_LoadFile so the menu picks up the right MOS
-    BfBot.UI._GenerateBgMOS()
+    -- for whichever theme is active (and the others when the user switches).
+    for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
+        BfBot.UI._GenerateBgMOS(resref)
+    end
 
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
@@ -310,9 +338,11 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
-    -- Resolution change: regenerate MOS, clamp stored geometry, re-layout
+    -- Resolution change: regenerate MOS for every theme, clamp stored geometry, re-layout
     EEex_Menu_AddWindowSizeChangedListener(function(w, h)
-        BfBot.UI._GenerateBgMOS()
+        for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
+            BfBot.UI._GenerateBgMOS(resref)
+        end
         -- Clamp stored geometry to new screen bounds
         if BfBot.UI._panelW or BfBot.UI._panelH or BfBot.UI._panelX or BfBot.UI._panelY then
             local sw, sh = w, h
@@ -374,8 +404,12 @@ function BfBot.UI._Layout()
     local cx = px + pad
     local cw = pw - 2 * pad
 
-    -- Panel background (parchment inside, border frame extends 24px beyond)
-    Infinity_SetArea("bbBg", px, py, pw, ph)
+    -- Panel background (parchment inside, border frame extends 24px beyond).
+    -- Three labels exist (one per theme); only the active theme's is enabled,
+    -- but all three need their area updated so theme switches are seamless.
+    Infinity_SetArea("bbBg",  px, py, pw, ph)
+    Infinity_SetArea("bbBg2", px, py, pw, ph)
+    Infinity_SetArea("bbBg3", px, py, pw, ph)
     Infinity_SetArea("bbDarkOverlay", px, py, pw, ph)
     local bpad = 24  -- border overhang in pixels
     Infinity_SetArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
@@ -527,13 +561,16 @@ function BfBot.UI._OnResize()
     BfBot.UI._panelW = pw
     BfBot.UI._panelH = ph
 
-    -- Regenerate MOS if panel + border exceeds current texture
+    -- Regenerate MOS for every theme if panel + border exceeds current textures
     local bpad = 24
     local needW = pw + 2 * bpad + 64
     local needH = ph + 2 * bpad + 64
-    if not BfBot.UI._mosW or needW > BfBot.UI._mosW
-       or not BfBot.UI._mosH or needH > BfBot.UI._mosH then
-        BfBot.UI._GenerateBgMOS()
+    for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
+        local cachedW = BfBot.UI._mosW and BfBot.UI._mosW[resref]
+        local cachedH = BfBot.UI._mosH and BfBot.UI._mosH[resref]
+        if not cachedW or needW > cachedW or not cachedH or needH > cachedH then
+            BfBot.UI._GenerateBgMOS(resref)
+        end
     end
 
     BfBot.UI._Layout()

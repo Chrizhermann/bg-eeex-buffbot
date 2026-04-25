@@ -61,13 +61,29 @@ menu
 		area 340 50 540 510
 	}
 
-	-- Panel background (parchment texture, renders on top of border)
+	-- Panel background (parchment texture, renders on top of border).
+	-- Three labels per theme; only the active theme's `enabled` evaluates true.
+	-- _Layout() repositions all three so theme switches stay aligned.
 	label
 	{
 		name    "bbBg"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		area 340 50 540 510
 		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbBg2"
+		enabled "buffbot_isOpen and BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 340 50 540 510
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbBg3"
+		enabled "buffbot_isOpen and BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 340 50 540 510
+		mosaic "BFBOTBG3"
 	}
 
 	-- Dark mode overlay (theme-driven opacity, position synced via _Layout)
@@ -807,11 +823,27 @@ menu
 		area 450 120 260 450
 	}
 
-	-- Panel background (parchment)
+	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
+		name    "bbTgtBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		area 474 144 212 402
 		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbTgtBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 474 144 212 402
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbTgtBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 474 144 212 402
+		mosaic "BFBOTBG3"
 	}
 
 	-- Dark mode overlay (theme-driven opacity)
@@ -1097,11 +1129,27 @@ menu
 		area 426 256 308 138
 	}
 
-	-- Small panel background (parchment)
+	-- Small panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
+		name    "bbRenBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		area 450 280 260 90
 		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbRenBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 450 280 260 90
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbRenBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 450 280 260 90
+		mosaic "BFBOTBG3"
 	}
 
 	-- Dark mode overlay (theme-driven opacity)
@@ -1183,11 +1231,27 @@ menu
 		area 356 76 448 428
 	}
 
-	-- Panel background (parchment)
+	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
+		name    "bbPickBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		area 380 100 400 380
 		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbPickBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 380 100 400 380
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbPickBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 380 100 400 380
+		mosaic "BFBOTBG3"
 	}
 
 	-- Dark mode overlay (theme-driven opacity)
@@ -1317,11 +1381,27 @@ menu
 		area 396 126 368 348
 	}
 
-	-- Panel background (parchment)
+	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
+		name    "bbImpBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		area 420 150 320 300
 		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbImpBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 420 150 320 300
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbImpBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 420 150 320 300
+		mosaic "BFBOTBG3"
 	}
 
 	-- Dark mode overlay (theme-driven opacity)
@@ -1416,11 +1496,27 @@ menu
 		area 396 156 368 268
 	}
 
-	-- Panel background (parchment)
+	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
+		name    "bbVarBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		area 420 180 320 220
 		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbVarBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 420 180 320 220
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbVarBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 420 180 320 220
+		mosaic "BFBOTBG3"
 	}
 
 	-- Dark mode overlay (theme-driven opacity)
