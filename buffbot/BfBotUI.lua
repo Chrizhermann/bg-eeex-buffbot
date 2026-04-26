@@ -4,7 +4,9 @@
 -- state management, spell table population)
 -- ============================================================
 
-BfBot.UI = {}
+-- BfBotThm has already set BfBot.UI = {} and added BfBot.UI._T. Use `or {}`
+-- so we don't wipe _T (which the .menu evaluates per-frame for theme colors).
+BfBot.UI = BfBot.UI or {}
 
 -- Convert "{R, G, B}" string → {R, G, B} table. Used by color functions
 -- that consume _T() (string) and hand tables back to the engine.
@@ -274,6 +276,18 @@ function BfBot.UI._OnMenusLoaded()
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
 
+    -- Apply current font size to live menu items (per-element point mutation).
+    -- The engine snapshots `style.point` at parse time, so style changes only
+    -- take effect for items parsed afterward. _ApplyFontSizesToMenus walks the
+    -- already-parsed items and writes the scaled point directly into each.
+    BfBot.Theme._ApplyFontSizesToMenus()
+
+    -- Register per-frame render listeners that re-apply the scaled point to
+    -- each item right before it's drawn. Without this, item types that
+    -- snapshot `text.point` at push time (buttons, list cells) only pick up
+    -- the new size on the next push, not on a live size change.
+    BfBot.Theme._RegisterFontRenderListeners()
+
     -- Register 9-slice border textures (one per theme variant)
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
@@ -414,18 +428,29 @@ function BfBot.UI._Layout()
     local cx = px + pad
     local cw = pw - 2 * pad
 
+    -- Helper: set area on a named item AND, if it exists, its paired
+    -- "<name>_t" text overlay. Buttons use a layered pattern -- a button
+    -- item below (BAM, click sound, frame state) and a paired text item
+    -- above (no action, scalable caption) -- so the overlay must follow
+    -- the button's area on every layout. pcall is defensive: items that
+    -- don't have an overlay will silently skip the overlay set.
+    local function setArea(name, x, y, w, h)
+        Infinity_SetArea(name, x, y, w, h)
+        pcall(Infinity_SetArea, name .. "_t", x, y, w, h)
+    end
+
     -- Panel background (parchment inside, border frame extends 24px beyond).
     -- Three labels exist (one per theme); only the active theme's is enabled,
     -- but all three need their area updated so theme switches are seamless.
-    Infinity_SetArea("bbBg",  px, py, pw, ph)
-    Infinity_SetArea("bbBg2", px, py, pw, ph)
-    Infinity_SetArea("bbBg3", px, py, pw, ph)
-    Infinity_SetArea("bbDarkOverlay", px, py, pw, ph)
+    setArea("bbBg",  px, py, pw, ph)
+    setArea("bbBg2", px, py, pw, ph)
+    setArea("bbBg3", px, py, pw, ph)
+    setArea("bbDarkOverlay", px, py, pw, ph)
     local bpad = 24  -- border overhang in pixels
-    Infinity_SetArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
+    setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
 
     -- Title
-    Infinity_SetArea("bbTitle", px, py + 5, pw, 30)
+    setArea("bbTitle", px, py + 5, pw, 30)
 
     -- Character tabs (6 buttons, evenly spaced)
     local charY = py + 40
@@ -433,7 +458,7 @@ function BfBot.UI._Layout()
     local charGap = 4
     local charW = math.floor((cw - 5 * charGap) / 6)
     for i = 0, 5 do
-        Infinity_SetArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
+        setArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
     end
 
     -- Preset tabs (up to MAX_PRESETS buttons + Rename 56px + New 50px)
@@ -446,17 +471,17 @@ function BfBot.UI._Layout()
     local preAvailW = cw - renW - newW - 2 * preGap
     local preW = math.floor((preAvailW - (maxP - 1) * preGap) / maxP)
     for i = 1, maxP do
-        Infinity_SetArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
+        setArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
     end
     local renX = cx + maxP * (preW + preGap)
-    Infinity_SetArea("bbRen", renX, preY, renW, preH)
-    Infinity_SetArea("bbNew", renX + renW + preGap, preY, newW, preH)
+    setArea("bbRen", renX, preY, renW, preH)
+    setArea("bbNew", renX + renW + preGap, preY, newW, preH)
 
     -- Spell list (fills middle area)
     local listY = py + 98
     local footerH = 130
     local listH = math.max(ph - 98 - footerH, 50)
-    Infinity_SetArea("bbList", cx, listY, cw, listH)
+    setArea("bbList", cx, listY, cw, listH)
 
     -- Bottom rows (positioned from panel bottom)
     local btnH = 28
@@ -466,27 +491,27 @@ function BfBot.UI._Layout()
     local r7Y = r6Y + 32                -- Status
 
     -- Override buttons: Add Spell + Remove (left) + Export + Import (right)
-    Infinity_SetArea("bbAdd", cx, r4Y, 120, btnH)
-    Infinity_SetArea("bbRmv", cx + 126, r4Y, 120, btnH)
-    Infinity_SetArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
-    Infinity_SetArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
+    setArea("bbAdd", cx, r4Y, 120, btnH)
+    setArea("bbRmv", cx + 126, r4Y, 120, btnH)
+    setArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
+    setArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
 
     -- Spell action buttons: Toggle, Target, Up, Down, Sort, Delete Preset (normal layout)
-    Infinity_SetArea("bbTog", cx, r5Y, 120, btnH)
-    Infinity_SetArea("bbTgt", cx + 126, r5Y, 160, btnH)
-    Infinity_SetArea("bbUp", cx + 292, r5Y, 48, btnH)
-    Infinity_SetArea("bbDn", cx + 344, r5Y, 48, btnH)
-    Infinity_SetArea("bbSort", cx + 398, r5Y, 48, btnH)
-    Infinity_SetArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
+    setArea("bbTog", cx, r5Y, 120, btnH)
+    setArea("bbTgt", cx + 126, r5Y, 160, btnH)
+    setArea("bbUp", cx + 292, r5Y, 48, btnH)
+    setArea("bbDn", cx + 344, r5Y, 48, btnH)
+    setArea("bbSort", cx + 398, r5Y, 48, btnH)
+    setArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
 
     -- Spell action buttons: variant layout (squeezed with Variant button)
-    Infinity_SetArea("bbVTog", cx, r5Y, 90, btnH)
-    Infinity_SetArea("bbVTgt", cx + 94, r5Y, 110, btnH)
-    Infinity_SetArea("bbVVar", cx + 208, r5Y, 110, btnH)
-    Infinity_SetArea("bbVUp", cx + 322, r5Y, 44, btnH)
-    Infinity_SetArea("bbVDn", cx + 370, r5Y, 44, btnH)
-    Infinity_SetArea("bbVSort", cx + 418, r5Y, 44, btnH)
-    Infinity_SetArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
+    setArea("bbVTog", cx, r5Y, 90, btnH)
+    setArea("bbVTgt", cx + 94, r5Y, 110, btnH)
+    setArea("bbVVar", cx + 208, r5Y, 110, btnH)
+    setArea("bbVUp", cx + 322, r5Y, 44, btnH)
+    setArea("bbVDn", cx + 370, r5Y, 44, btnH)
+    setArea("bbVSort", cx + 418, r5Y, 44, btnH)
+    setArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
 
     -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
     local closeW = 80
@@ -494,24 +519,24 @@ function BfBot.UI._Layout()
     local castAllW = 100
     local castCharW = 140
     local stopW = 60
-    Infinity_SetArea("bbCast", cx, r6Y, castAllW, btnH)
-    Infinity_SetArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
-    Infinity_SetArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
-    Infinity_SetArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
-    Infinity_SetArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
+    setArea("bbCast", cx, r6Y, castAllW, btnH)
+    setArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
+    setArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
+    setArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
+    setArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
 
     -- Status line
-    Infinity_SetArea("bbStatus", cx, r7Y, cw, 24)
+    setArea("bbStatus", cx, r7Y, cw, 24)
 
     -- Drag handle covers title bar area
-    Infinity_SetArea("bbDragHandle", px, py, pw, 35)
+    setArea("bbDragHandle", px, py, pw, 35)
 
     -- Resize grip visual + handle at bottom-right corner
-    Infinity_SetArea("bbResizeGrip", px + pw - 20, py + ph - 20, 20, 20)
-    Infinity_SetArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
+    setArea("bbResizeGrip", px + pw - 20, py + ph - 20, 20, 20)
+    setArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
 
     -- Reset button in title bar (right-aligned, 50px wide)
-    Infinity_SetArea("bbReset", px + pw - 60, py + 5, 50, 24)
+    setArea("bbReset", px + pw - 60, py + 5, 50, 24)
 end
 
 -- ============================================================

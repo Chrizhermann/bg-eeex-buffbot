@@ -213,6 +213,13 @@ BfBot.Theme._BASE_POINTS = {
     bb_normal_parchment = 12,
     bb_edit             = 12,
 }
+-- Parent style each bb_* deep-copies from. ITEM_BUTTON renders its
+-- caption through a code path that ignores `text.point` — no Lua
+-- mutation can scale button text in BG2EE (Bubb's mods don't try
+-- either). We accept that and keep the original "button" parent
+-- (STONESML / carved stone) for the right BG aesthetic. Body text,
+-- list cells, the title, and clickable text elements (Quick Cast,
+-- Reset) all do scale via their own item-type render paths.
 BfBot.Theme._STYLE_PARENTS = {
     bb_normal           = "normal",
     bb_button           = "button",
@@ -224,19 +231,26 @@ BfBot.Theme._STYLE_PARENTS = {
 BfBot.Theme._SIZE_MULT = { [1] = 0.85, [2] = 1.0, [3] = 1.20 }
 BfBot.Theme._fontSize = 2
 
---- Register bb_* custom styles by deep-copying engine styles. Called once at init.
+--- Register bb_* custom styles by deep-copying engine styles.
+-- Always re-deep-copies so changes to _STYLE_PARENTS take effect on Lua
+-- reload (the prior `not styles[bbName]` guard would have stuck a stale
+-- copy across an Infinity_DoFile reload).
 function BfBot.Theme._RegisterStyles()
     if not styles then return end
     if not EEex or not EEex.DeepCopy then return end
     for bbName, parent in pairs(BfBot.Theme._STYLE_PARENTS) do
-        if styles[parent] and not styles[bbName] then
+        if styles[parent] then
             styles[bbName] = EEex.DeepCopy(styles[parent])
         end
     end
     BfBot.Theme._RefreshStyles()
 end
 
---- Re-apply current font size to bb_* styles. Called on theme change + font size change.
+--- Re-apply current font size to bb_* styles. The engine snapshots
+-- `style.point` into each menu item's `text.point` at parse time, so style
+-- mutation alone won't reflow live items — `_ApplyFontSizesToMenus` does
+-- the live update. We still mutate the styles so any future menu reparse
+-- AND wrap calculations like Infinity_GetContentHeight read the new size.
 function BfBot.Theme._RefreshStyles()
     if not styles then return end
     local mult = BfBot.Theme._SIZE_MULT[BfBot.Theme._fontSize] or 1.0
@@ -247,14 +261,131 @@ function BfBot.Theme._RefreshStyles()
     end
 end
 
+-- Map IE font name → BuffBot's base point. After reparenting bb_button to
+-- "normal", every body/button/edit/cell style uses NORMAL; bb_title uses
+-- REALMS. STONESML stays in the map as a safety net for any leftover
+-- engine style we didn't migrate. Engine items in OTHER menus aren't
+-- touched — iteration is scoped to our owned menus.
+BfBot.Theme._FONT_TO_BASE_POINT = {
+    NORMAL   = 12,  -- bb_normal, bb_button, bb_normal_parchment, bb_edit
+    STONESML = 14,  -- legacy fallback (no bb_* style currently uses STONESML)
+    REALMS   = 18,  -- bb_title
+}
+
+-- Menus we own (defined in buffbot/BuffBot.menu). Iterated by name.
+BfBot.Theme._OWNED_MENUS = {
+    "BUFFBOT_MAIN",
+    "BUFFBOT_TARGETS",
+    "BUFFBOT_RENAME",
+    "BUFFBOT_SPELLPICKER",
+    "BUFFBOT_IMPORT",
+    "BUFFBOT_VARIANTS",
+}
+
+--- Compute the correct point size for a uiItem by looking up its font name
+-- in the BuffBot font→base table and multiplying by the current size mult.
+-- No-op when item lacks a recognized font (skips engine items in unrelated
+-- menus we don't own).
+local function _updateItemPoint(item)
+    local txt = item and item.text
+    if not txt or not txt.font then return end
+    local ok, fontName = pcall(function() return txt.font:get() end)
+    if not ok or not fontName then return end
+    local base = BfBot.Theme._FONT_TO_BASE_POINT[fontName]
+    if not base then return end
+    local mult = BfBot.Theme._SIZE_MULT[BfBot.Theme._fontSize] or 1.0
+    txt.point = math.floor(base * mult)
+end
+
+--- Walk every text-bearing item in BuffBot's menus and write the scaled
+-- point directly. Used for the immediate one-shot update on size change.
+-- For ITEM_LIST items we also walk `item.list.columns.items` (column
+-- templates), since list-cell labels live nested in the list struct and
+-- aren't reachable via the top-level `item.next` chain.
+function BfBot.Theme._ApplyFontSizesToMenus()
+    if not EEex_Menu_Find then return end
+    for _, menuName in ipairs(BfBot.Theme._OWNED_MENUS) do
+        local menu = EEex_Menu_Find(menuName)
+        if menu and menu.items then
+            local item = menu.items
+            while item ~= nil do
+                _updateItemPoint(item)
+                if item.list then
+                    local cols = item.list.columns
+                    if cols and cols.items then
+                        local col = cols.items
+                        while col ~= nil do
+                            _updateItemPoint(col)
+                            col = col.next
+                        end
+                    end
+                end
+                item = item.next
+            end
+        end
+    end
+end
+
+--- Register per-frame render listeners that update each item's text.point
+-- right before render. The one-shot mutation in _ApplyFontSizesToMenus only
+-- updates the visible state on items the engine re-reads from `text.point`
+-- per frame (ITEM_TEXT does, ITEM_BUTTON often snapshots at push). With a
+-- BeforeUIItemRenderListener per named item, point gets re-applied every
+-- frame so it survives any internal snapshot/cache.
+--
+-- For lists, BeforeListRendersItemListener fires per cell render — perfect
+-- for the spell-row cells that re-instantiate from column templates per row.
+function BfBot.Theme._RegisterFontRenderListeners()
+    if not EEex_Menu_AddBeforeUIItemRenderListener then return end
+    if BfBot.Theme._fontListenersRegistered then return end
+
+    -- Global cache of items we've already wired so reload doesn't re-stack.
+    -- Listener storage is by-name, so re-registering just replaces.
+    local function _attachItemListeners(menu)
+        if not menu or not menu.items then return end
+        local item = menu.items
+        while item ~= nil do
+            local nameOk, name = pcall(function() return item.name:get() end)
+            if nameOk and name and name ~= "" and item.text and item.text.font then
+                -- Skip border-frame items (their listeners are owned by
+                -- BfBot.UI border render hooks and would be replaced).
+                if not name:match("^bb.*Frame$") then
+                    EEex_Menu_AddBeforeUIItemRenderListener(name, _updateItemPoint)
+                end
+            end
+            -- For lists, register a per-cell render listener that updates
+            -- each cell's text.point right before it's drawn.
+            if item.list and EEex_Menu_AddBeforeListRendersItemListener then
+                local listNameOk, listName = pcall(function() return item.name:get() end)
+                if listNameOk and listName and listName ~= "" then
+                    EEex_Menu_AddBeforeListRendersItemListener(listName, function(_list, cell)
+                        _updateItemPoint(cell)
+                    end)
+                end
+            end
+            item = item.next
+        end
+    end
+
+    for _, menuName in ipairs(BfBot.Theme._OWNED_MENUS) do
+        _attachItemListeners(EEex_Menu_Find(menuName))
+    end
+    BfBot.Theme._fontListenersRegistered = true
+end
+
 --- Set font size (1=small, 2=medium, 3=large). Clamped to [1,3].
--- Triggers immediate refresh of bb_* style point values.
+-- Mutates the styles table (for future reparses + content-height math) and
+-- writes the scaled point directly into every live BuffBot menu item.
+-- The render listeners registered in _RegisterFontRenderListeners then
+-- re-apply this on each subsequent frame so types that snapshot text.point
+-- (e.g. buttons) still pick up the new size.
 function BfBot.Theme._SetFontSize(n)
     n = tonumber(n) or 2
     if n < 1 then n = 1 end
     if n > 3 then n = 3 end
     BfBot.Theme._fontSize = n
     BfBot.Theme._RefreshStyles()
+    BfBot.Theme._ApplyFontSizesToMenus()
 end
 
 --- Get current font size (1-3).
@@ -402,7 +533,7 @@ local function _populateUiStrings()
     uiStrings.BuffBot_Accent_SOD        = "Siege of Dragonspear"
     uiStrings.BuffBot_Accent_BG1        = "Baldur's Gate 1"
     uiStrings.BuffBot_TextSize          = "Text Size"
-    uiStrings.BuffBot_TextSize_Desc     = "Scale all panel text. Restart the panel (close and reopen) to see changes apply across every section."
+    uiStrings.BuffBot_TextSize_Desc     = "Scale all panel text. Close and reopen the BuffBot panel after changing this for the new size to take effect."
     uiStrings.BuffBot_TextSize_Small    = "Small"
     uiStrings.BuffBot_TextSize_Medium   = "Medium"
     uiStrings.BuffBot_TextSize_Large    = "Large"
@@ -492,6 +623,70 @@ function BfBot.Theme._RegisterOptionsTab()
         ["storage"]  = SizeBridge.new(),
     }))
 
+    -- Build the radio-group DisplayEntries up front so we can capture them
+    -- in module-local tables. EEex's toggleAction only updates the clicked
+    -- widget's `toggleState`; sibling widgets sharing an optionID only
+    -- re-sync on panel show. We patch _setWorkingValue on the radio options
+    -- below to keep all siblings in sync per-click.
+    local accentEntries = {
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_Accent",
+            ["label"]       = "BuffBot_Accent_BG2",
+            ["description"] = "BuffBot_Accent_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 1,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_Accent",
+            ["label"]       = "BuffBot_Accent_SOD",
+            ["description"] = "BuffBot_Accent_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 2,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_Accent",
+            ["label"]       = "BuffBot_Accent_BG1",
+            ["description"] = "BuffBot_Accent_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 3,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+    }
+    local sizeEntries = {
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_TextSize",
+            ["label"]       = "BuffBot_TextSize_Small",
+            ["description"] = "BuffBot_TextSize_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 1,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_TextSize",
+            ["label"]       = "BuffBot_TextSize_Medium",
+            ["description"] = "BuffBot_TextSize_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 2,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_TextSize",
+            ["label"]       = "BuffBot_TextSize_Large",
+            ["description"] = "BuffBot_TextSize_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 3,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+    }
+
     -- Tab definition: 3 groups separated by dividers in the UI.
     EEex_Options_AddTab("BuffBot_Tab", function() return {
         -- Group 1: Dark Mode (single toggle)
@@ -503,66 +698,10 @@ function BfBot.Theme._RegisterOptionsTab()
                 ["widget"]      = EEex_Options_ToggleWidget.new(),
             }),
         },
-        -- Group 2: Color Scheme (3 toggles in a radio group, all defer to BuffBot_Accent)
-        {
-            EEex_Options_DisplayEntry.new({
-                ["optionID"]    = "BuffBot_Accent",
-                ["label"]       = "BuffBot_Accent_BG2",
-                ["description"] = "BuffBot_Accent_Desc",
-                ["widget"]      = EEex_Options_ToggleWidget.new({
-                    ["toggleValue"]       = 1,
-                    ["disallowToggleOff"] = true,
-                }),
-            }),
-            EEex_Options_DisplayEntry.new({
-                ["optionID"]    = "BuffBot_Accent",
-                ["label"]       = "BuffBot_Accent_SOD",
-                ["description"] = "BuffBot_Accent_Desc",
-                ["widget"]      = EEex_Options_ToggleWidget.new({
-                    ["toggleValue"]       = 2,
-                    ["disallowToggleOff"] = true,
-                }),
-            }),
-            EEex_Options_DisplayEntry.new({
-                ["optionID"]    = "BuffBot_Accent",
-                ["label"]       = "BuffBot_Accent_BG1",
-                ["description"] = "BuffBot_Accent_Desc",
-                ["widget"]      = EEex_Options_ToggleWidget.new({
-                    ["toggleValue"]       = 3,
-                    ["disallowToggleOff"] = true,
-                }),
-            }),
-        },
-        -- Group 3: Text Size (3 toggles in a radio group, all defer to BuffBot_TextSize)
-        {
-            EEex_Options_DisplayEntry.new({
-                ["optionID"]    = "BuffBot_TextSize",
-                ["label"]       = "BuffBot_TextSize_Small",
-                ["description"] = "BuffBot_TextSize_Desc",
-                ["widget"]      = EEex_Options_ToggleWidget.new({
-                    ["toggleValue"]       = 1,
-                    ["disallowToggleOff"] = true,
-                }),
-            }),
-            EEex_Options_DisplayEntry.new({
-                ["optionID"]    = "BuffBot_TextSize",
-                ["label"]       = "BuffBot_TextSize_Medium",
-                ["description"] = "BuffBot_TextSize_Desc",
-                ["widget"]      = EEex_Options_ToggleWidget.new({
-                    ["toggleValue"]       = 2,
-                    ["disallowToggleOff"] = true,
-                }),
-            }),
-            EEex_Options_DisplayEntry.new({
-                ["optionID"]    = "BuffBot_TextSize",
-                ["label"]       = "BuffBot_TextSize_Large",
-                ["description"] = "BuffBot_TextSize_Desc",
-                ["widget"]      = EEex_Options_ToggleWidget.new({
-                    ["toggleValue"]       = 3,
-                    ["disallowToggleOff"] = true,
-                }),
-            }),
-        },
+        -- Group 2: Color Scheme (3 toggles sharing BuffBot_Accent option)
+        accentEntries,
+        -- Group 3: Text Size (3 toggles sharing BuffBot_TextSize option)
+        sizeEntries,
     } end)
 
     -- _ReadOptions(false) already fired before _OnMenusLoaded, so our newly
@@ -579,6 +718,25 @@ function BfBot.Theme._RegisterOptionsTab()
     _seed("BuffBot_DarkMode")
     _seed("BuffBot_Accent")
     _seed("BuffBot_TextSize")
+
+    -- Patch _setWorkingValue on the two radio-group options to keep all
+    -- sibling widgets' visual state in sync per-click. EEex's toggleAction
+    -- only updates the clicked widget's `toggleState`; without this, the
+    -- previous selection visually stays selected until the user closes and
+    -- reopens the Options menu (which re-runs _onShowBeforeLayout).
+    local function _patchRadio(optionID, entries)
+        local opt = EEex_Options_Get(optionID)
+        if not opt then return end
+        opt._setWorkingValue = function(self, newValue, needCopy)
+            newValue = EEex_Options_Option._setWorkingValue(self, newValue, needCopy)
+            for _, de in ipairs(entries) do
+                de.widget.toggleState = (de.widget.toggleValue == newValue)
+            end
+            return newValue
+        end
+    end
+    _patchRadio("BuffBot_Accent", accentEntries)
+    _patchRadio("BuffBot_TextSize", sizeEntries)
 
     BfBot.Theme._registered = true
 end

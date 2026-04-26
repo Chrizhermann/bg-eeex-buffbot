@@ -260,6 +260,71 @@ def load_rgba(path: Path) -> Image.Image:
     return img
 
 
+def chromakey_white_to_transparent(
+    img: Image.Image,
+    strict_threshold: int = 240,
+    flood_threshold: int = 200,
+) -> Image.Image:
+    """Convert background pixels to fully transparent (alpha=0).
+
+    Some AI-generated source PNGs are mode RGB (no alpha) with a white-ish
+    background where transparency was intended. Border PNGs need real alpha
+    so the 9-slice frame doesn't render a solid white box around the panel.
+
+    Two-pass strategy:
+      1. Strict: any pixel with R, G, AND B all >= strict_threshold (240)
+         becomes transparent. Catches the pure-white core background.
+      2. Flood-fill from the four corners using flood_threshold (200): any
+         pixel connected to a corner via near-white neighbors (luminance >=
+         flood_threshold) also becomes transparent. Catches the slightly
+         darker "leftover" pixels at the boundary that the strict pass
+         misses but that are clearly part of the background.
+
+    Frame highlights (isolated bright pixels surrounded by darker frame
+    pixels) survive because they're not reachable by flood-fill from a
+    corner. RGB is zeroed alongside alpha so DXT5 doesn't pick up
+    near-white pixels as block reference colors (which produced visible
+    white halos at antialiased alpha boundaries).
+    """
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+
+    # Pass 1: strict threshold
+    for y in range(h):
+        for x in range(w):
+            r, g, b, _ = px[x, y]
+            if r >= strict_threshold and g >= strict_threshold and b >= strict_threshold:
+                px[x, y] = (0, 0, 0, 0)
+
+    # Pass 2: flood-fill from each corner. Pixel is "background-like" if all
+    # three channels are >= flood_threshold OR already alpha=0 from pass 1.
+    def is_bg(x: int, y: int) -> bool:
+        r, g, b, a = px[x, y]
+        if a == 0:
+            return True
+        return r >= flood_threshold and g >= flood_threshold and b >= flood_threshold
+
+    visited = [[False] * w for _ in range(h)]
+    stack = []
+    for cx, cy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        if is_bg(cx, cy) and not visited[cy][cx]:
+            stack.append((cx, cy))
+    while stack:
+        x, y = stack.pop()
+        if visited[y][x]:
+            continue
+        visited[y][x] = True
+        if not is_bg(x, y):
+            continue
+        px[x, y] = (0, 0, 0, 0)
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx]:
+                stack.append((nx, ny))
+
+    return rgba
+
+
 def ensure_multiple_of_4(w: int, h: int) -> None:
     if w % 4 != 0 or h % 4 != 0:
         raise ValueError(
@@ -270,6 +335,27 @@ def ensure_multiple_of_4(w: int, h: int) -> None:
 def resize_exact(img: Image.Image, w: int, h: int) -> Image.Image:
     ensure_multiple_of_4(w, h)
     return img.resize((w, h), Image.LANCZOS)
+
+
+def zero_rgb_where_low_alpha(img: Image.Image, alpha_floor: int = 32) -> Image.Image:
+    """Set RGB=0 wherever alpha is below the floor.
+
+    LANCZOS resize on a chroma-keyed image can produce partial-alpha pixels
+    with mid-grey or even white RGB (interpolated between fully-transparent
+    keyed pixels and adjacent frame pixels). DXT5 then picks block reference
+    colors from those high-RGB low-alpha pixels, and partial-alpha pixels
+    near the boundary render with visible white halos/speckles. Zeroing the
+    RGB of low-alpha pixels eliminates the source of those reference colors.
+    """
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a < alpha_floor:
+                px[x, y] = (0, 0, 0, a)
+    return rgba
 
 
 # Background slicing layout — the source is resized to 2048x1152 then split
@@ -352,13 +438,21 @@ def run_theme(theme_name: str) -> None:
         verify_pvrz(out_path)
         print(f"    {out_name}: {tile.size[0]}x{tile.size[1]} -> {n} bytes")
 
-    # --- Border (resize to exactly 512x512) ---
+    # --- Border (chroma-key white→transparent at full res, then resize to 512x512) ---
+    # Most AI-generated border PNGs ship as mode RGB with a solid white
+    # background; without chroma-keying, the 9-slice frame renders an opaque
+    # white box around the panel. We chroma-key BEFORE resizing so LANCZOS
+    # produces clean antialiased alpha edges, then ALSO zero RGB on low-alpha
+    # pixels post-resize so DXT5 doesn't pick up white reference colors from
+    # partial-alpha edge pixels (which caused visible white speckles).
     br_img = load_rgba(border_src)
     print(f"  border source size: {br_img.size[0]}x{br_img.size[1]}")
-    br_resized = resize_exact(br_img, 512, 512)
-    n = write_pvrz(br_resized, border_out)
+    br_keyed = chromakey_white_to_transparent(br_img)
+    br_resized = resize_exact(br_keyed, 512, 512)
+    br_clean = zero_rgb_where_low_alpha(br_resized, alpha_floor=32)
+    n = write_pvrz(br_clean, border_out)
     verify_pvrz(border_out)
-    print(f"    {border_out.name}: 512x512 -> {n} bytes")
+    print(f"    {border_out.name}: 512x512 -> {n} bytes (chroma-keyed + low-alpha RGB zeroed)")
 
     print()
 
