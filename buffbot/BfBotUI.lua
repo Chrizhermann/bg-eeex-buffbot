@@ -4,7 +4,16 @@
 -- state management, spell table population)
 -- ============================================================
 
-BfBot.UI = {}
+-- BfBotThm has already set BfBot.UI = {} and added BfBot.UI._T. Use `or {}`
+-- so we don't wipe _T (which the .menu evaluates per-frame for theme colors).
+BfBot.UI = BfBot.UI or {}
+
+-- Convert "{R, G, B}" string → {R, G, B} table. Used by color functions
+-- that consume _T() (string) and hand tables back to the engine.
+local function _parseColor(s)
+    local r, g, b = s:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
+    return { tonumber(r) or 0, tonumber(g) or 0, tonumber(b) or 0 }
+end
 
 -- ============================================================
 -- Internal State
@@ -105,12 +114,43 @@ buffbot_variantSelected = 0        -- selected row in variant picker
 -- Runtime MOS Generation (ultrawide / high-res support)
 -- ============================================================
 
---- Generate BFBOTBG.MOS sized to the current screen by tiling existing
--- PVRZ blocks. The base parchment tile is 2048x1152 (4 PVRZ blocks).
--- At resolutions where 80% of screen exceeds that, the static MOS
--- leaves a black gap. This function writes a tiled MOS V2 to override.
-function BfBot.UI._GenerateBgMOS()
+-- Per-theme PVRZ block layout. Each theme's 4 pages compose a 2048x1152
+-- base parchment tile that gets repeated to fill the target panel size.
+-- PVRZ page numbers match the MOS####.PVRZ filename digits in hex
+-- (0x26AC = 9900, 0x26B6 = 9910, 0x26C0 = 9920).
+local BLOCKS_BY_THEME = {
+    BFBOTBG  = {  -- BG2 default: MOS9900-9903
+        { page = 0x26AC, w = 1024, h = 1024, ox = 0,    oy = 0    },
+        { page = 0x26AD, w = 1024, h = 1024, ox = 1024, oy = 0    },
+        { page = 0x26AE, w = 1024, h = 128,  ox = 0,    oy = 1024 },
+        { page = 0x26AF, w = 1024, h = 128,  ox = 1024, oy = 1024 },
+    },
+    BFBOTBG2 = {  -- SOD: MOS9910-9913
+        { page = 0x26B6, w = 1024, h = 1024, ox = 0,    oy = 0    },
+        { page = 0x26B7, w = 1024, h = 1024, ox = 1024, oy = 0    },
+        { page = 0x26B8, w = 1024, h = 128,  ox = 0,    oy = 1024 },
+        { page = 0x26B9, w = 1024, h = 128,  ox = 1024, oy = 1024 },
+    },
+    BFBOTBG3 = {  -- BG1: MOS9920-9923
+        { page = 0x26C0, w = 1024, h = 1024, ox = 0,    oy = 0    },
+        { page = 0x26C1, w = 1024, h = 1024, ox = 1024, oy = 0    },
+        { page = 0x26C2, w = 1024, h = 128,  ox = 0,    oy = 1024 },
+        { page = 0x26C3, w = 1024, h = 128,  ox = 1024, oy = 1024 },
+    },
+}
+
+--- Generate a per-theme parchment background MOS sized to cover the current
+-- panel by tiling 4 PVRZ blocks (one base tile = 2048x1152). At resolutions
+-- where 80% of screen exceeds the base tile, a static MOS leaves a black gap.
+-- This function writes a tiled MOS V2 to override/<themeBgResref>.MOS.
+-- @param themeBgResref string  e.g. "BFBOTBG", "BFBOTBG2", "BFBOTBG3"
+function BfBot.UI._GenerateBgMOS(themeBgResref)
     if BfBot._noIO then return end
+    themeBgResref = themeBgResref
+        or (BfBot.Theme and BfBot.Theme._active and BfBot.Theme._active.bgResref)
+        or "BFBOTBG"
+    local blocks = BLOCKS_BY_THEME[themeBgResref] or BLOCKS_BY_THEME.BFBOTBG
+
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
 
@@ -124,8 +164,12 @@ function BfBot.UI._GenerateBgMOS()
     local mosW = tilesX * 2048
     local mosH = tilesY * 1152
 
-    -- Skip regeneration if current MOS already covers this size
-    if BfBot.UI._mosW and BfBot.UI._mosW >= mosW and BfBot.UI._mosH >= mosH then
+    -- Per-theme MOS dimension cache (skip regeneration if already covered)
+    BfBot.UI._mosW = BfBot.UI._mosW or {}
+    BfBot.UI._mosH = BfBot.UI._mosH or {}
+    if BfBot.UI._mosW[themeBgResref] and BfBot.UI._mosH[themeBgResref]
+       and BfBot.UI._mosW[themeBgResref] >= mosW
+       and BfBot.UI._mosH[themeBgResref] >= mosH then
         return
     end
 
@@ -138,16 +182,6 @@ function BfBot.UI._GenerateBgMOS()
             math.floor(n / 16777216) % 256
         )
     end
-
-    -- Base tile: 4 PVRZ blocks composing a 2048x1152 parchment tile
-    --   MOS9900 (1024x1024) @ (0,0)     | MOS9901 (1024x1024) @ (1024,0)
-    --   MOS9902 (1024x128)  @ (0,1024)   | MOS9903 (1024x128)  @ (1024,1024)
-    local blocks = {
-        { page = 0x26AC, w = 1024, h = 1024, ox = 0,    oy = 0    },  -- MOS9900
-        { page = 0x26AD, w = 1024, h = 1024, ox = 1024, oy = 0    },  -- MOS9901
-        { page = 0x26AE, w = 1024, h = 128,  ox = 0,    oy = 1024 },  -- MOS9902
-        { page = 0x26AF, w = 1024, h = 128,  ox = 1024, oy = 1024 },  -- MOS9903
-    }
 
     local numBlocks = tilesX * tilesY * 4
     local parts = {}
@@ -175,7 +209,7 @@ function BfBot.UI._GenerateBgMOS()
     end
 
     local ok, err = pcall(function()
-        local f = io.open("override/BFBOTBG.MOS", "wb")
+        local f = io.open("override/" .. themeBgResref .. ".MOS", "wb")
         if f then
             f:write(table.concat(parts))
             f:close()
@@ -183,8 +217,8 @@ function BfBot.UI._GenerateBgMOS()
     end)
 
     if ok then
-        BfBot.UI._mosW = mosW
-        BfBot.UI._mosH = mosH
+        BfBot.UI._mosW[themeBgResref] = mosW
+        BfBot.UI._mosH[themeBgResref] = mosH
     end
 end
 
@@ -217,39 +251,82 @@ end
 -- ============================================================
 
 function BfBot.UI._OnMenusLoaded()
-    -- Generate resolution-appropriate parchment background MOS
+    -- Register bb_* custom text styles (deep-copies of engine styles) BEFORE
+    -- the menu renders. The .menu references these via `text style "bb_*"`,
+    -- so they must exist before EEex_Menu_LoadFile hands the menu to the engine.
+    BfBot.Theme._RegisterStyles()
+
+    -- Restore saved theme + font size from baldur.ini. Must run AFTER
+    -- _RegisterStyles because _LoadFromINI calls _RefreshStyles, which mutates
+    -- the bb_* styles registered above.
+    BfBot.Theme._LoadFromINI()
+
+    -- Register the BuffBot tab in EEex's Options menu. Must run AFTER
+    -- _LoadFromINI so the option storage's read() returns the persisted
+    -- (not default) values. Idempotent — subsequent calls are no-ops.
+    BfBot.Theme._RegisterOptionsTab()
+
+    -- Generate resolution-appropriate parchment background MOS for every theme.
     -- MUST happen before EEex_Menu_LoadFile so the menu picks up the right MOS
-    BfBot.UI._GenerateBgMOS()
+    -- for whichever theme is active (and the others when the user switches).
+    for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
+        BfBot.UI._GenerateBgMOS(resref)
+    end
 
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
 
-    -- Register 9-slice border texture for custom panel frame
+    -- Apply current font size to live menu items (per-element point mutation).
+    -- The engine snapshots `style.point` at parse time, so style changes only
+    -- take effect for items parsed afterward. _ApplyFontSizesToMenus walks the
+    -- already-parsed items and writes the scaled point directly into each.
+    BfBot.Theme._ApplyFontSizesToMenus()
+
+    -- Register per-frame render listeners that re-apply the scaled point to
+    -- each item right before it's drawn. Without this, item types that
+    -- snapshot `text.point` at push time (buttons, list cells) only pick up
+    -- the new size on the next push, not on a live size change.
+    BfBot.Theme._RegisterFontRenderListeners()
+
+    -- Register 9-slice border textures (one per theme variant)
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
-    local regOk, regErr = pcall(function()
-        EEex.RegisterSlicedRect("BuffBot_Border", {
-            ["topLeft"]     = {   0,   0, 128, 128 },
-            ["top"]         = { 128,   0, 256, 128 },
-            ["topRight"]    = { 384,   0, 128, 128 },
-            ["right"]       = { 384, 128, 128, 256 },
-            ["bottomRight"] = { 384, 384, 128, 128 },
-            ["bottom"]      = { 128, 384, 256, 128 },
-            ["bottomLeft"]  = {   0, 384, 128, 128 },
-            ["left"]        = {   0, 128, 128, 256 },
-            ["center"]      = { 128, 128, 256, 256 },
-            ["dimensions"]  = { 512, 512 },
-            ["resref"]      = "BFBOTFR",
-            ["flags"]       = 0,
-        })
-    end)
-    BfBot.UI._borderStatus = regOk and "registered" or ("FAILED: " .. tostring(regErr))
+    local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
+    local anyOk = false
+    local errs = {}
+    for _, resref in ipairs(BORDER_RESREFS) do
+        local regOk, regErr = pcall(function()
+            EEex.RegisterSlicedRect("BuffBot_Border_" .. resref, {
+                ["topLeft"]     = {   0,   0, 128, 128 },
+                ["top"]         = { 128,   0, 256, 128 },
+                ["topRight"]    = { 384,   0, 128, 128 },
+                ["right"]       = { 384, 128, 128, 256 },
+                ["bottomRight"] = { 384, 384, 128, 128 },
+                ["bottom"]      = { 128, 384, 256, 128 },
+                ["bottomLeft"]  = {   0, 384, 128, 128 },
+                ["left"]        = {   0, 128, 128, 256 },
+                ["center"]      = { 128, 128, 256, 256 },
+                ["dimensions"]  = { 512, 512 },
+                ["resref"]      = resref,
+                ["flags"]       = 0,
+            })
+        end)
+        if regOk then
+            anyOk = true
+        else
+            table.insert(errs, resref .. ": " .. tostring(regErr))
+        end
+    end
+    BfBot.UI._borderStatus = anyOk
+        and (#errs == 0 and "registered" or ("registered (partial; " .. table.concat(errs, "; ") .. ")"))
+        or ("FAILED: " .. table.concat(errs, "; "))
 
     -- Render hooks: draw 9-slice border on main panel + all sub-menus
-    if regOk then
+    -- Active theme's borderResref is read at draw time, so theme switches take effect immediately
+    if anyOk then
         local borderHook = function(item)
             pcall(function()
-                EEex.DrawSlicedRect("BuffBot_Border", { item:getArea() })
+                EEex.DrawSlicedRect("BuffBot_Border_" .. BfBot.Theme._active.borderResref, { item:getArea() })
             end)
         end
         EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame",  borderHook)
@@ -285,9 +362,11 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
     EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
 
-    -- Resolution change: regenerate MOS, clamp stored geometry, re-layout
+    -- Resolution change: regenerate MOS for every theme, clamp stored geometry, re-layout
     EEex_Menu_AddWindowSizeChangedListener(function(w, h)
-        BfBot.UI._GenerateBgMOS()
+        for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
+            BfBot.UI._GenerateBgMOS(resref)
+        end
         -- Clamp stored geometry to new screen bounds
         if BfBot.UI._panelW or BfBot.UI._panelH or BfBot.UI._panelX or BfBot.UI._panelY then
             local sw, sh = w, h
@@ -349,13 +428,29 @@ function BfBot.UI._Layout()
     local cx = px + pad
     local cw = pw - 2 * pad
 
-    -- Panel background (parchment inside, border frame extends 24px beyond)
-    Infinity_SetArea("bbBg", px, py, pw, ph)
+    -- Helper: set area on a named item AND, if it exists, its paired
+    -- "<name>_t" text overlay. Buttons use a layered pattern -- a button
+    -- item below (BAM, click sound, frame state) and a paired text item
+    -- above (no action, scalable caption) -- so the overlay must follow
+    -- the button's area on every layout. pcall is defensive: items that
+    -- don't have an overlay will silently skip the overlay set.
+    local function setArea(name, x, y, w, h)
+        Infinity_SetArea(name, x, y, w, h)
+        pcall(Infinity_SetArea, name .. "_t", x, y, w, h)
+    end
+
+    -- Panel background (parchment inside, border frame extends 24px beyond).
+    -- Three labels exist (one per theme); only the active theme's is enabled,
+    -- but all three need their area updated so theme switches are seamless.
+    setArea("bbBg",  px, py, pw, ph)
+    setArea("bbBg2", px, py, pw, ph)
+    setArea("bbBg3", px, py, pw, ph)
+    setArea("bbDarkOverlay", px, py, pw, ph)
     local bpad = 24  -- border overhang in pixels
-    Infinity_SetArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
+    setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
 
     -- Title
-    Infinity_SetArea("bbTitle", px, py + 5, pw, 30)
+    setArea("bbTitle", px, py + 5, pw, 30)
 
     -- Character tabs (6 buttons, evenly spaced)
     local charY = py + 40
@@ -363,7 +458,7 @@ function BfBot.UI._Layout()
     local charGap = 4
     local charW = math.floor((cw - 5 * charGap) / 6)
     for i = 0, 5 do
-        Infinity_SetArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
+        setArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
     end
 
     -- Preset tabs (up to MAX_PRESETS buttons + Rename 56px + New 50px)
@@ -376,17 +471,17 @@ function BfBot.UI._Layout()
     local preAvailW = cw - renW - newW - 2 * preGap
     local preW = math.floor((preAvailW - (maxP - 1) * preGap) / maxP)
     for i = 1, maxP do
-        Infinity_SetArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
+        setArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
     end
     local renX = cx + maxP * (preW + preGap)
-    Infinity_SetArea("bbRen", renX, preY, renW, preH)
-    Infinity_SetArea("bbNew", renX + renW + preGap, preY, newW, preH)
+    setArea("bbRen", renX, preY, renW, preH)
+    setArea("bbNew", renX + renW + preGap, preY, newW, preH)
 
     -- Spell list (fills middle area)
     local listY = py + 98
     local footerH = 130
     local listH = math.max(ph - 98 - footerH, 50)
-    Infinity_SetArea("bbList", cx, listY, cw, listH)
+    setArea("bbList", cx, listY, cw, listH)
 
     -- Bottom rows (positioned from panel bottom)
     local btnH = 28
@@ -396,27 +491,27 @@ function BfBot.UI._Layout()
     local r7Y = r6Y + 32                -- Status
 
     -- Override buttons: Add Spell + Remove (left) + Export + Import (right)
-    Infinity_SetArea("bbAdd", cx, r4Y, 120, btnH)
-    Infinity_SetArea("bbRmv", cx + 126, r4Y, 120, btnH)
-    Infinity_SetArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
-    Infinity_SetArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
+    setArea("bbAdd", cx, r4Y, 120, btnH)
+    setArea("bbRmv", cx + 126, r4Y, 120, btnH)
+    setArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
+    setArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
 
     -- Spell action buttons: Toggle, Target, Up, Down, Sort, Delete Preset (normal layout)
-    Infinity_SetArea("bbTog", cx, r5Y, 120, btnH)
-    Infinity_SetArea("bbTgt", cx + 126, r5Y, 160, btnH)
-    Infinity_SetArea("bbUp", cx + 292, r5Y, 48, btnH)
-    Infinity_SetArea("bbDn", cx + 344, r5Y, 48, btnH)
-    Infinity_SetArea("bbSort", cx + 398, r5Y, 48, btnH)
-    Infinity_SetArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
+    setArea("bbTog", cx, r5Y, 120, btnH)
+    setArea("bbTgt", cx + 126, r5Y, 160, btnH)
+    setArea("bbUp", cx + 292, r5Y, 48, btnH)
+    setArea("bbDn", cx + 344, r5Y, 48, btnH)
+    setArea("bbSort", cx + 398, r5Y, 48, btnH)
+    setArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
 
     -- Spell action buttons: variant layout (squeezed with Variant button)
-    Infinity_SetArea("bbVTog", cx, r5Y, 90, btnH)
-    Infinity_SetArea("bbVTgt", cx + 94, r5Y, 110, btnH)
-    Infinity_SetArea("bbVVar", cx + 208, r5Y, 110, btnH)
-    Infinity_SetArea("bbVUp", cx + 322, r5Y, 44, btnH)
-    Infinity_SetArea("bbVDn", cx + 370, r5Y, 44, btnH)
-    Infinity_SetArea("bbVSort", cx + 418, r5Y, 44, btnH)
-    Infinity_SetArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
+    setArea("bbVTog", cx, r5Y, 90, btnH)
+    setArea("bbVTgt", cx + 94, r5Y, 110, btnH)
+    setArea("bbVVar", cx + 208, r5Y, 110, btnH)
+    setArea("bbVUp", cx + 322, r5Y, 44, btnH)
+    setArea("bbVDn", cx + 370, r5Y, 44, btnH)
+    setArea("bbVSort", cx + 418, r5Y, 44, btnH)
+    setArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
 
     -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
     local closeW = 80
@@ -424,24 +519,24 @@ function BfBot.UI._Layout()
     local castAllW = 100
     local castCharW = 140
     local stopW = 60
-    Infinity_SetArea("bbCast", cx, r6Y, castAllW, btnH)
-    Infinity_SetArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
-    Infinity_SetArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
-    Infinity_SetArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
-    Infinity_SetArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
+    setArea("bbCast", cx, r6Y, castAllW, btnH)
+    setArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
+    setArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
+    setArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
+    setArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
 
     -- Status line
-    Infinity_SetArea("bbStatus", cx, r7Y, cw, 24)
+    setArea("bbStatus", cx, r7Y, cw, 24)
 
     -- Drag handle covers title bar area
-    Infinity_SetArea("bbDragHandle", px, py, pw, 35)
+    setArea("bbDragHandle", px, py, pw, 35)
 
     -- Resize grip visual + handle at bottom-right corner
-    Infinity_SetArea("bbResizeGrip", px + pw - 20, py + ph - 20, 20, 20)
-    Infinity_SetArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
+    setArea("bbResizeGrip", px + pw - 20, py + ph - 20, 20, 20)
+    setArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
 
     -- Reset button in title bar (right-aligned, 50px wide)
-    Infinity_SetArea("bbReset", px + pw - 60, py + 5, 50, 24)
+    setArea("bbReset", px + pw - 60, py + 5, 50, 24)
 end
 
 -- ============================================================
@@ -501,13 +596,16 @@ function BfBot.UI._OnResize()
     BfBot.UI._panelW = pw
     BfBot.UI._panelH = ph
 
-    -- Regenerate MOS if panel + border exceeds current texture
+    -- Regenerate MOS for every theme if panel + border exceeds current textures
     local bpad = 24
     local needW = pw + 2 * bpad + 64
     local needH = ph + 2 * bpad + 64
-    if not BfBot.UI._mosW or needW > BfBot.UI._mosW
-       or not BfBot.UI._mosH or needH > BfBot.UI._mosH then
-        BfBot.UI._GenerateBgMOS()
+    for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
+        local cachedW = BfBot.UI._mosW and BfBot.UI._mosW[resref]
+        local cachedH = BfBot.UI._mosH and BfBot.UI._mosH[resref]
+        if not cachedW or needW > cachedW or not cachedH or needH > cachedH then
+            BfBot.UI._GenerateBgMOS(resref)
+        end
     end
 
     BfBot.UI._Layout()
@@ -927,13 +1025,13 @@ end
 --- Text color for a picker row — highlight if selected.
 function BfBot.UI._PickerRowColor(row)
     if row == buffbot_tgtPickerSel then
-        return "{255, 255, 150}"  -- yellow highlight for selected row
+        return BfBot.UI._T("pickerSel")
     end
     local name = buffbot_pickerOrder[row]
     if name and buffbot_pickerChecked[name] then
-        return "{220, 220, 220}"  -- white for checked
+        return BfBot.UI._T("pickerOn")
     end
-    return "{140, 140, 140}"  -- grey for unchecked
+    return BfBot.UI._T("pickerOff")
 end
 
 --- Toggle the checkbox for a picker row (left-click on checkbox area).
@@ -1625,11 +1723,11 @@ end
 --- gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return {50, 30, 10} end
-    if entry.castable == 0 then return {140, 130, 120} end
-    if entry.ovr == 1 then return {40, 80, 160} end
-    if entry.lock == 1 then return {100, 70, 20} end  -- warm gold-brown
-    return {50, 30, 10}
+    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
+    if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
+    return _parseColor(BfBot.UI._T("text"))
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
@@ -1649,8 +1747,8 @@ end
 --- Lock column color: gold when locked, muted otherwise.
 function BfBot.UI._LockColor(row)
     local entry = buffbot_spellTable[row]
-    if entry and entry.lock == 1 then return {230, 200, 60} end
-    return {120, 100, 80}
+    if entry and entry.lock == 1 then return _parseColor(BfBot.UI._T("lockActive")) end
+    return _parseColor(BfBot.UI._T("lockInactive"))
 end
 
 --- Toggle the lock state on a spell row.
@@ -1731,11 +1829,11 @@ end
 
 function BfBot.UI._QuickCastColor()
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return {80, 60, 40} end
+    if not sprite then return _parseColor(BfBot.UI._T("qcOff")) end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    if qc == 1 then return {160, 120, 20} end
-    if qc == 2 then return {180, 60, 30} end
-    return {80, 60, 40}
+    if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
+    if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
+    return _parseColor(BfBot.UI._T("qcOff"))
 end
 
 function BfBot.UI._QuickCastTooltip()

@@ -23,6 +23,8 @@ BfBot.Persist._INI_DEFAULTS = {
     PanelY        = -1,
     PanelW        = -1,   -- -1 = use default (80% of screen)
     PanelH        = -1,
+    Theme         = "bg2_light",  -- palette key (string)
+    FontSize      = 2,    -- 1=small, 2=medium, 3=large
 }
 
 -- ---- Boolean sanitization ----
@@ -1010,16 +1012,34 @@ end
 -- ---- INI preferences (global, cross-save) ----
 
 --- Get a global preference from baldur.ini.
+-- String defaults dispatch to Infinity_GetINIString; numbers use Infinity_GetINIValue.
 function BfBot.Persist.GetPref(key)
     local default = BfBot.Persist._INI_DEFAULTS[key] or 0
+    if type(default) == "string" then
+        if Infinity_GetINIString then
+            local ok, val = pcall(Infinity_GetINIString, "BuffBot", key, default)
+            if ok then return val end
+        end
+        return default
+    end
     local ok, val = pcall(Infinity_GetINIValue, "BuffBot", key, default)
     if ok then return val end
     return default
 end
 
 --- Set a global preference in baldur.ini.
+-- String values dispatch to Infinity_SetINIString if available; numbers use Infinity_SetINIValue.
 function BfBot.Persist.SetPref(key, value)
-    pcall(Infinity_SetINIValue, "BuffBot", key, value)
+    if type(value) == "string" then
+        if Infinity_SetINIString then
+            pcall(Infinity_SetINIString, "BuffBot", key, value)
+        else
+            -- Fallback: some EEex builds may only expose SetINIValue
+            pcall(Infinity_SetINIValue, "BuffBot", key, value)
+        end
+    else
+        pcall(Infinity_SetINIValue, "BuffBot", key, value)
+    end
 end
 
 -- ---- Preset management ----

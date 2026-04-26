@@ -29,6 +29,7 @@ COPY ~buffbot/BfBotExe.lua~  ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~
 COPY ~buffbot/BfBotInn.lua~  ~override~
 COPY ~buffbot/BfBotUI.lua~   ~override~
+COPY ~buffbot/BfBotThm.lua~  ~override~
 COPY ~buffbot/BfBotTst.lua~  ~override~
 COPY ~buffbot/BuffBot.menu~  ~override~
 
@@ -41,6 +42,20 @@ COPY ~buffbot/MOS9902.PVRZ~ ~override~
 COPY ~buffbot/MOS9903.PVRZ~ ~override~
 COPY ~buffbot/BFBOTFR.PVRZ~ ~override~
 COPY ~buffbot/BFBOTAB.BAM~  ~override~
+
+// ---- Theme assets (issue #32) ----
+// SOD theme background + border
+COPY ~buffbot/MOS9910.PVRZ~ ~override~
+COPY ~buffbot/MOS9911.PVRZ~ ~override~
+COPY ~buffbot/MOS9912.PVRZ~ ~override~
+COPY ~buffbot/MOS9913.PVRZ~ ~override~
+COPY ~buffbot/BFBOTFR2.PVRZ~ ~override~
+// BG1 theme background + border
+COPY ~buffbot/MOS9920.PVRZ~ ~override~
+COPY ~buffbot/MOS9921.PVRZ~ ~override~
+COPY ~buffbot/MOS9922.PVRZ~ ~override~
+COPY ~buffbot/MOS9923.PVRZ~ ~override~
+COPY ~buffbot/BFBOTFR3.PVRZ~ ~override~
 
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~

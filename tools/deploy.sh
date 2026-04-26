@@ -17,7 +17,7 @@ OVERRIDE_DIR="$GAME_DIR/override"
 echo "Deploying BuffBot to: $OVERRIDE_DIR"
 
 # Verify source files exist
-for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     if [ ! -f "$SRC_DIR/$f" ]; then
         echo "ERROR: $SRC_DIR/$f not found"
         exit 1
@@ -31,7 +31,7 @@ if [ ! -d "$OVERRIDE_DIR" ]; then
 fi
 
 # Copy source files
-for f in M_BfBot.lua BfBotCor.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 

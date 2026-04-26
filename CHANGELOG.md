@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.3.13-alpha (2026-04-27)
+
+### Added
+- **Panel themes** — six selectable color schemes (Baldur's Gate 2 / Siege of Dragonspear / Baldur's Gate 1, each in light or dark mode) configurable in-game under a new "BuffBot" tab in the EEex Options menu. Theme switches apply live without reopening the panel. The default `bg2_light` preserves the v1.3.12 look pixel-for-pixel.
+- **Text size scaling** — Small / Medium / Large in the same EEex Options tab. Title, spell-row text, list cells, and clickable text elements (Quick Cast, Reset) resize live. The character-tab and action-button captions stay at engine-default size — IE's BAM-button render path ignores `text.point` regardless of font, and Bubb's mods accept the same constraint.
+- **EEex Options integration** — three settings (Dark Mode, Color Scheme, Text Size) under the new BuffBot tab. Persisted in `baldur.ini` under `[BuffBot]` as `Theme` (string) and `FontSize` (number).
+
+### Fixed
+- **Border PVRZ transparency on SOD / BG1 themes** — the new border PVRZs were generated from RGB-mode source PNGs with no alpha channel, so the 9-slice frame rendered an opaque white box around the panel. The PNG → PVRZ tool now chroma-keys white-ish backgrounds with a strict 240 threshold + corner flood-fill at 200, then zeros RGB on low-alpha pixels post-resize so DXT5 doesn't bleed white into antialiased edges.
+
 ## v1.3.12-alpha (2026-04-19)
 
 ### Fixed
