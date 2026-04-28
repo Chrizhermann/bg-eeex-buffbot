@@ -16,6 +16,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify version consistency
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG_NOV="${TAG#v}"
+
+          TP2_VERSION=$(grep -E '^VERSION ~' buffbot/setup-buffbot.tp2 | sed -E 's/^VERSION ~([^~]+)~.*$/\1/')
+          COR_VERSION=$(grep -E '^BfBot\.VERSION = "' buffbot/BfBotCor.lua | sed -E 's/^BfBot\.VERSION = "([^"]+)".*$/\1/')
+
+          echo "Release tag:       $TAG"
+          echo "tp2 VERSION:       $TP2_VERSION"
+          echo "BfBotCor.VERSION:  $COR_VERSION"
+
+          fail=0
+          if [ "$TP2_VERSION" != "$TAG" ]; then
+            echo "::error file=buffbot/setup-buffbot.tp2,line=3::tp2 VERSION ($TP2_VERSION) does not match release tag ($TAG)"
+            fail=1
+          fi
+          if [ "$COR_VERSION" != "$TAG_NOV" ]; then
+            echo "::error file=buffbot/BfBotCor.lua,line=9::BfBot.VERSION ($COR_VERSION) does not match release tag without v-prefix ($TAG_NOV)"
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] || exit 1
+
       - name: Download WeiDU
         run: |
           gh release download "$WEIDU_TAG" \

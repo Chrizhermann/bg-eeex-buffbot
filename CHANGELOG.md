@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.14-alpha (2026-04-28)
+
+### Fixed
+- **tp2 VERSION mismatch in v1.3.13-alpha** — the WeiDU `setup-buffbot.tp2` shipped with `VERSION ~v1.3.12-alpha~` despite the release being v1.3.13-alpha. Cosmetic only (visible in WeiDU install output, no functional impact), reported by Born2BSalty. Re-released as v1.3.14-alpha with the version line corrected and CI guards added so it can't happen again: `release.yml` now fails packaging if the release tag, tp2 VERSION, and `BfBot.VERSION` disagree, and a new `version-check.yml` fails every PR/push if the tp2 VERSION ≠ `v` + `BfBot.VERSION`. `tools/bump-version.sh` updates both files atomically.
+
 ## v1.3.13-alpha (2026-04-27)
 
 ### Added

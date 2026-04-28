@@ -1,0 +1,27 @@
+name: Version Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tp2 VERSION matches BfBot.VERSION
+        run: |
+          TP2=$(grep -E '^VERSION ~' buffbot/setup-buffbot.tp2 | sed -E 's/^VERSION ~([^~]+)~.*$/\1/')
+          COR=$(grep -E '^BfBot\.VERSION = "' buffbot/BfBotCor.lua | sed -E 's/^BfBot\.VERSION = "([^"]+)".*$/\1/')
+
+          echo "tp2 VERSION:       $TP2"
+          echo "BfBotCor.VERSION:  $COR"
+
+          if [ "$TP2" != "v$COR" ]; then
+            echo "::error file=buffbot/setup-buffbot.tp2,line=3::tp2 VERSION ($TP2) must equal 'v' + BfBotCor.VERSION (v$COR). Run: bash tools/bump-version.sh <version>"
+            exit 1
+          fi
+
+          echo "OK: versions match ($TP2 / $COR)"
