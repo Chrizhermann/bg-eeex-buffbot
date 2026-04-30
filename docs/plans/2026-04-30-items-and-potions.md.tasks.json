@@ -1,0 +1,26 @@
+{
+  "planPath": "docs/plans/2026-04-30-items-and-potions.md",
+  "tasks": [
+    {"id": 1, "subject": "Cut feature branch feat/items-and-potions", "status": "pending"},
+    {"id": 2, "subject": "Probe — EEex inventory + quickitem field paths", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Probe — UseItem BCS + Item:getAbility(i)", "status": "pending", "blockedBy": [1]},
+    {"id": 4, "subject": "Schema v7 — bump, migrate, validate", "status": "pending", "blockedBy": [1]},
+    {"id": 5, "subject": "Rename _MakeDefaultSpellEntry → _MakeDefaultEntry", "status": "pending", "blockedBy": [4]},
+    {"id": 6, "subject": "ImportConfig — kind-aware filtering", "status": "pending", "blockedBy": [5]},
+    {"id": 7, "subject": "Classifier — collect leafResrefs in GetDuration", "status": "pending", "blockedBy": [1]},
+    {"id": 8, "subject": "Scanner — _BuildItemCatalog helper", "status": "pending", "blockedBy": [2, 3, 7]},
+    {"id": 9, "subject": "Scanner — merge items + add kind to spells", "status": "pending", "blockedBy": [8]},
+    {"id": 10, "subject": "Exec — _BuildQueue carries kind + leafResrefs", "status": "pending", "blockedBy": [9, 6]},
+    {"id": 11, "subject": "Exec — pre-flight uses leafResrefs list", "status": "pending", "blockedBy": [10]},
+    {"id": 12, "subject": "Exec — UseItem cast path", "status": "pending", "blockedBy": [11]},
+    {"id": 13, "subject": "Theme — itemColor palette key for 6 themes", "status": "pending", "blockedBy": [1]},
+    {"id": 14, "subject": "UI — mixed list rendering (itemColor + variant hidden)", "status": "pending", "blockedBy": [9, 13]},
+    {"id": 15, "subject": "UI — picker sub-sections (Spells / Items)", "status": "pending", "blockedBy": [9]},
+    {"id": 16, "subject": "BfBotTst — Items() test phase", "status": "pending", "blockedBy": [12]},
+    {"id": 17, "subject": "Manual QA on representative items", "status": "pending", "blockedBy": [14, 15, 16]},
+    {"id": 18, "subject": "bg-modding-learn — capture verified knowledge", "status": "pending", "blockedBy": [17]},
+    {"id": 19, "subject": "Version bump v1.4.0-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
+    {"id": 20, "subject": "Push branch + open PR (#21 partial)", "status": "pending", "blockedBy": [19]}
+  ],
+  "lastUpdated": "2026-04-30T00:00:00Z"
+}
