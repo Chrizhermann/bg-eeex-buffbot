@@ -721,7 +721,7 @@ menu
 	{
 		name    "bbCast"
 		enabled "buffbot_isOpen"
-		clickable lua "BfBot.UI._CanCast()"
+		clickable lua "BfBot.UI._CanCastAll()"
 		action  "BfBot.UI.Cast()"
 		text lua "buffbot_castLabel"
 		text style "bb_button"

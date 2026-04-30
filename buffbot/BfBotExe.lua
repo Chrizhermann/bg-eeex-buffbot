@@ -460,15 +460,77 @@ function BfBot.Exec._Advance(slot)
     BfBot.Exec._ProcessCasterEntry(slot, caster.index + 1)
 end
 
+--- Reset all execution state without dereferencing cached sprites.
+--- Used to recover from save-reload mid-cast (issue #38), where _casters
+--- holds freed CGameSprite pointers from the pre-reload party. Calling
+--- into the engine on those pointers would segfault — clear the table
+--- first, never touch caster.sprite. Caller is responsible for closing
+--- the exec log (see Stop / _Complete recovery branches); this keeps the
+--- function side-effect free so the in-game test suite can capture its
+--- own output to the log around each subtest.
+function BfBot.Exec._HardReset()
+    BfBot.Exec._state         = "idle"
+    BfBot.Exec._casters       = {}
+    BfBot.Exec._activeCasters = 0
+    BfBot.Exec._castCount     = 0
+    BfBot.Exec._skipCount     = 0
+    BfBot.Exec._totalEntries  = 0
+    BfBot.Exec._qcMode        = 0
+end
+
+--- Detect stale execution state from a save reload mid-cast.
+--- After loading a save while casting, _casters[].sprite still holds
+--- freed CGameSprite pointers from the pre-reload party. We can't safely
+--- compare sprite identity directly — EEex returns a fresh userdata
+--- wrapper per call to EEex_Sprite_GetInPortrait, and `==` falls through
+--- to a __eq metamethod that does NOT pointer-compare the wrapped
+--- CGameSprite (verified empirically with two consecutive calls returning
+--- different wrappers and `==` evaluating to false).
+---
+--- Instead, compare the cached character name (a plain string captured
+--- at Start time) against the freshly-fetched portrait sprite's name.
+--- The fresh sprite is safe to dereference; the cached string never
+--- references engine memory. This catches the "different-party-composition
+--- reload" case (e.g. user reloads to before recruiting an NPC). It does
+--- NOT catch the "same-save reload" case where party composition is
+--- unchanged — Stop's cleanup loop must independently re-resolve sprites
+--- from the portrait so it doesn't dereference cached caster.sprite.
+--- @return boolean: true if state is "running" but at least one caster's
+---     cached name no longer matches the current portrait at that slot.
+function BfBot.Exec._IsStateStale()
+    if BfBot.Exec._state ~= "running" then return false end
+
+    for slot, caster in pairs(BfBot.Exec._casters) do
+        if caster.name then
+            local fresh = EEex_Sprite_GetInPortrait(slot)
+            local freshName = fresh and BfBot._GetName(fresh) or nil
+            if freshName ~= caster.name then return true end
+        end
+    end
+
+    return false
+end
+
 --- Log execution summary and transition to "done" state.
 function BfBot.Exec._Complete()
-    -- Clean up lingering cheat buffs
+    -- Fast-path recovery from save-reload (issue #38) — see Stop().
+    if BfBot.Exec._IsStateStale() then
+        BfBot.Exec._HardReset()
+        BfBot._CloseLog()
+        return
+    end
+
+    -- Clean up lingering cheat buffs — re-resolve sprite from portrait,
+    -- never dereference cached caster.sprite (see Stop() rationale).
     for slot, caster in pairs(BfBot.Exec._casters) do
-        if caster.cheatApplied and caster.sprite then
-            pcall(function()
-                EEex_Action_QueueResponseStringOnAIBase(
-                    'ReallyForceSpellRES("BFBTCR",Myself)', caster.sprite)
-            end)
+        if caster.cheatApplied then
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite then
+                pcall(function()
+                    EEex_Action_QueueResponseStringOnAIBase(
+                        'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
+                end)
+            end
             caster.cheatApplied = false
         end
     end
@@ -572,19 +634,39 @@ end
 
 --- Stop execution mid-queue.
 function BfBot.Exec.Stop()
+    -- Fast-path recovery from save-reload mid-cast with party composition
+    -- change (issue #38): hard-reset to idle without entering the cleanup
+    -- loop — there's nothing to clean up because the buffs were applied to
+    -- the previous save's party.
+    if BfBot.Exec._IsStateStale() then
+        BfBot._Print("[BuffBot] Stale execution state from save reload — resetting.")
+        BfBot.Exec._HardReset()
+        BfBot._CloseLog()
+        return
+    end
+
     if BfBot.Exec._state ~= "running" then
         BfBot._Print("[BuffBot] Not running.")
         return
     end
     BfBot.Exec._state = "stopped"
 
-    -- Clean up lingering cheat buffs
+    -- Clean up lingering cheat buffs. Re-resolve the sprite from the
+    -- current portrait slot rather than using cached caster.sprite — that
+    -- userdata wraps a freed CGameSprite pointer if the user reloaded a
+    -- save mid-cast (issue #38), and pcall does NOT catch the access
+    -- violation that engine calls would trigger on the freed pointer.
+    -- This re-resolution is safe even when _IsStateStale missed a same-
+    -- party reload: BFBTCR is a no-op on targets without an active BFBTCH.
     for slot, caster in pairs(BfBot.Exec._casters) do
-        if caster.cheatApplied and caster.sprite then
-            pcall(function()
-                EEex_Action_QueueResponseStringOnAIBase(
-                    'ReallyForceSpellRES("BFBTCR",Myself)', caster.sprite)
-            end)
+        if caster.cheatApplied then
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite then
+                pcall(function()
+                    EEex_Action_QueueResponseStringOnAIBase(
+                        'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
+                end)
+            end
             caster.cheatApplied = false
         end
     end
@@ -612,6 +694,16 @@ function BfBot.Exec._SafetyTick()
     if not BfBot.Exec._startupCleanupDone then
         BfBot.Exec._startupCleanupDone = true
         pcall(BfBot.Innate.RefreshAll)
+    end
+
+    -- Proactively recover from save-reload mid-cast (issue #38). The
+    -- EEex_LuaAction chain that drives _Advance does NOT resume after a
+    -- save load, so _state stays "running" forever and the UI gates
+    -- Cast/CastChar off. Detect via portrait-set mismatch and reset so the
+    -- user sees a clean idle state on next menu open — and so the running
+    -- branch below falls through to the BFBTCH cleanup loop.
+    if BfBot.Exec._IsStateStale() then
+        BfBot.Exec._HardReset()
     end
 
     -- If exec engine is actively running, it owns cheat management — don't interfere
