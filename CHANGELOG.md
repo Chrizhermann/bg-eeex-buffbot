@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.15-alpha (2026-04-30)
+
+### Fixed
+- **"Cast All" greyed out when the selected character has no preset spells** — the gate fed both action buttons via `BfBot.UI._CanCast()`, which only checked the current character's spell table. On characters with nothing configured for the active preset (e.g. Safana on a buff preset), Cast All was disabled even though other party members had spells in the same preset. Cast All now uses a new `BfBot.UI._CanCastAll()` that mirrors `BuildQueueFromPreset`'s cross-party scope: it falls through to the other portrait slots when the current character is empty. Cast Character keeps the original char-scoped gate.
+- **Crash when pressing Stop after reloading a save mid-cast** (#38) — reported by sov_ on Discord. After loading a save while a buff queue was running, only the Stop button was enabled; clicking it triggered an access violation. `BfBot.Exec._casters[].sprite` cached `CGameSprite` userdata from the pre-reload party, and the post-reload save freed those C++ objects — calling `EEex_Action_QueueResponseStringOnAIBase` on the stale userdata segfaulted at the engine level (and `pcall` does not catch C++ access violations). Stop and `_Complete` now re-resolve the caster sprite from the current portrait slot in their cleanup loops, so they never dereference the freed pointer; `BFBTCR` is a no-op on targets without an active `BFBTCH`, so the cleanup is safe even when the slot now holds a different character. A new `_IsStateStale` heuristic compares cached caster names against the live portrait names and proactively hard-resets execution state from `_SafetyTick` when party composition changed across the reload, so the Cast / Cast Character buttons re-enable themselves on the next safety tick instead of leaving the user stuck pressing Stop. Covered by `BfBot.Test.StaleState` (8 assertions).
+
 ## v1.3.14-alpha (2026-04-28)
 
 ### Fixed

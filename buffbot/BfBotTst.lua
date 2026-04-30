@@ -2091,6 +2091,217 @@ function BfBot.Test.Theming()
 end
 
 -- ============================================================
+-- BfBot.Test.StaleState — Save-reload mid-cast recovery (issue #38)
+-- ============================================================
+function BfBot.Test.StaleState()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Stale State Recovery Tests (issue #38)")
+    P("========================================")
+    P("")
+
+    -- Precondition: don't run if exec is currently active
+    if BfBot.Exec.GetState() == "running" then
+        _warning("Skipping: exec currently running")
+        return _summary("Stale State")
+    end
+
+    -- Save state to restore on exit
+    local savedState        = BfBot.Exec._state
+    local savedCasters      = BfBot.Exec._casters
+    local savedActive       = BfBot.Exec._activeCasters
+    local savedLastTick     = BfBot.Exec._lastSafetyTick
+
+    local function _restore()
+        BfBot.Exec._state           = savedState
+        BfBot.Exec._casters         = savedCasters
+        BfBot.Exec._activeCasters   = savedActive
+        BfBot.Exec._lastSafetyTick  = savedLastTick
+    end
+
+    -- A non-userdata sentinel for the "freed pointer" simulation. The
+    -- "stale-test" name is what _IsStateStale compares against the live
+    -- portrait sprite's name — guaranteed not to match a real character.
+    local STALE = "STALE_TEST_SENTINEL"
+
+    local function _poison(cheatApplied)
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            [0] = {
+                sprite = STALE,
+                cheatApplied = cheatApplied and true or false,
+                queue = {},
+                index = 0,
+                done = false,
+                name = "stale-test",
+                cheatBoundary = 0,
+            },
+        }
+        BfBot.Exec._activeCasters = 1
+    end
+
+    -- Re-open the log between subtests because Stop()/_Complete()'s stale
+    -- branch closes the log handle (correct production behavior — caller
+    -- of Stop owned the log via Start). The test runner needs the log open
+    -- to capture _summary() output after those subtests run.
+    local function _reopenLog()
+        if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+    end
+
+    -- ---- Test 1: _HardReset exists and clears state ----
+    P("  [1] _HardReset clears state without dereferencing cached sprites")
+    if type(BfBot.Exec._HardReset) ~= "function" then
+        _nok("_HardReset is not a function")
+        _restore()
+        return _summary("Stale State")
+    end
+
+    _poison(true)
+    local hrOk, hrErr = pcall(BfBot.Exec._HardReset)
+    if hrOk
+        and BfBot.Exec._state == "idle"
+        and next(BfBot.Exec._casters) == nil
+        and BfBot.Exec._activeCasters == 0
+    then
+        _ok("_HardReset cleared state to idle and emptied _casters")
+    else
+        _nok(string.format("_HardReset incomplete: ok=%s err=%s state=%s casters_empty=%s active=%s",
+            tostring(hrOk), tostring(hrErr), tostring(BfBot.Exec._state),
+            tostring(next(BfBot.Exec._casters) == nil), tostring(BfBot.Exec._activeCasters)))
+    end
+
+    -- ---- Test 2: _IsStateStale ----
+    P("")
+    P("  [2] _IsStateStale detection")
+    if type(BfBot.Exec._IsStateStale) ~= "function" then
+        _nok("_IsStateStale is not a function")
+        _restore()
+        return _summary("Stale State")
+    end
+
+    -- 2a: idle state is never stale (regardless of _casters)
+    BfBot.Exec._state = "idle"
+    BfBot.Exec._casters = {}
+    _check(BfBot.Exec._IsStateStale() == false, "idle state is not stale")
+
+    -- 2b: running with cached name matching current portrait name → not stale
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if sprite then
+        local realName = BfBot._GetName(sprite)
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = { [0] = { sprite = sprite, name = realName, cheatApplied = false } }
+        BfBot.Exec._activeCasters = 1
+        _check(BfBot.Exec._IsStateStale() == false,
+            "running with cached name matching portrait[0] is not stale")
+    else
+        _warning("No sprite in portrait 0; skipping fresh-name match case")
+    end
+
+    -- 2c: running with cached name that does not match portrait → stale
+    _poison(false)
+    _check(BfBot.Exec._IsStateStale() == true,
+        "running with cached name 'stale-test' does not match portrait → stale")
+
+    -- ---- Test 3: Stop() with stale state hard-resets without engine call ----
+    P("")
+    P("  [3] Stop() recovers from stale state")
+    _poison(true)  -- cheatApplied=true would trigger BFBTCR cleanup loop in buggy code
+    local stopOk, stopErr = pcall(BfBot.Exec.Stop)
+    _reopenLog()  -- Stop's stale branch closed the log
+    if stopOk
+        and BfBot.Exec._state == "idle"
+        and next(BfBot.Exec._casters) == nil
+    then
+        _ok("Stop() with stale state hard-reset to idle (no engine call attempted)")
+    else
+        _nok(string.format("Stop() with stale state: ok=%s err=%s state=%s casters_empty=%s",
+            tostring(stopOk), tostring(stopErr), tostring(BfBot.Exec._state),
+            tostring(next(BfBot.Exec._casters) == nil)))
+    end
+
+    -- ---- Test 4: _Complete() with stale state hard-resets ----
+    P("")
+    P("  [4] _Complete() recovers from stale state")
+    _poison(true)
+    BfBot.Exec._activeCasters = 0  -- _Complete is only called when all casters finished
+    local cmpOk, cmpErr = pcall(BfBot.Exec._Complete)
+    _reopenLog()  -- _Complete's stale branch closed the log
+    if cmpOk
+        and BfBot.Exec._state == "idle"
+        and next(BfBot.Exec._casters) == nil
+    then
+        _ok("_Complete() with stale state hard-reset to idle")
+    else
+        _nok(string.format("_Complete() with stale state: ok=%s err=%s state=%s casters_empty=%s",
+            tostring(cmpOk), tostring(cmpErr), tostring(BfBot.Exec._state),
+            tostring(next(BfBot.Exec._casters) == nil)))
+    end
+
+    -- ---- Test 5: _SafetyTick proactively resets stale state ----
+    P("")
+    P("  [5] _SafetyTick proactively resets stale state")
+    _poison(false)
+    BfBot.Exec._lastSafetyTick = 0  -- force tick to run past rate limit
+    local stOk, stErr = pcall(BfBot.Exec._SafetyTick)
+    if stOk
+        and BfBot.Exec._state == "idle"
+        and next(BfBot.Exec._casters) == nil
+    then
+        _ok("_SafetyTick reset stale running state to idle")
+    else
+        _nok(string.format("_SafetyTick stale reset: ok=%s err=%s state=%s casters_empty=%s",
+            tostring(stOk), tostring(stErr), tostring(BfBot.Exec._state),
+            tostring(next(BfBot.Exec._casters) == nil)))
+    end
+
+    -- ---- Test 6: Stop() with name-match (same-save reload) re-resolves
+    --      sprite from portrait instead of dereferencing cached pointer.
+    -- This is the critical safety property: even when _IsStateStale misses
+    -- the case (party composition unchanged), Stop must not pass the cached
+    -- caster.sprite to engine functions. We poison caster.sprite with a
+    -- string sentinel and set caster.name to match the current portrait;
+    -- _IsStateStale returns false, the cleanup loop runs, and it must
+    -- re-resolve from EEex_Sprite_GetInPortrait(slot) without crashing.
+    P("")
+    P("  [6] Stop() with same-party reload re-resolves sprite from portrait")
+    if sprite then  -- captured in Test 2b
+        local realName = BfBot._GetName(sprite)
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            [0] = {
+                sprite = STALE,         -- simulated freed pointer
+                name = realName,        -- matches portrait → not detected as stale
+                cheatApplied = true,    -- forces cleanup loop to engage
+                queue = {}, index = 0, done = false, cheatBoundary = 0,
+            },
+        }
+        BfBot.Exec._activeCasters = 1
+        local rrOk, rrErr = pcall(BfBot.Exec.Stop)
+        _reopenLog()  -- Stop's normal exit closed the log
+        local entry = BfBot.Exec._casters[0]
+        if rrOk
+            and BfBot.Exec._state == "stopped"
+            and entry and entry.cheatApplied == false
+        then
+            _ok("Stop() did not deref STALE sentinel; cleanup ran on fresh portrait sprite")
+        else
+            _nok(string.format("Stop() with cached sentinel + name match: ok=%s err=%s state=%s cheatApplied=%s",
+                tostring(rrOk), tostring(rrErr), tostring(BfBot.Exec._state),
+                tostring(entry and entry.cheatApplied)))
+        end
+    else
+        _warning("No sprite in portrait 0; skipping re-resolve safety case")
+    end
+
+    -- ---- Cleanup ----
+    _restore()
+
+    P("")
+    return _summary("Stale State")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2172,6 +2383,10 @@ function BfBot.Test.RunAll()
     local themingOk = BfBot.Test.Theming()
     P("")
 
+    -- Phase 15: Stale State Recovery (issue #38)
+    local staleOk = BfBot.Test.StaleState()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2190,11 +2405,12 @@ function BfBot.Test.RunAll()
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
+    P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk and themingOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk and themingOk and staleOk
 end
 
 -- ============================================================

@@ -1296,9 +1296,33 @@ function BfBot.UI._IsPresetSelected(idx)
     return BfBot.UI._presetIdx == idx
 end
 
---- Can we start casting? (exec idle + spells exist)
+--- Can we start casting for the current character? (exec idle + current char has preset spells)
 function BfBot.UI._CanCast()
     return BfBot.Exec.GetState() ~= "running" and #buffbot_spellTable > 0
+end
+
+--- Can we start "Cast All"? (exec idle + any party member has preset spells)
+--- Mirrors BuildQueueFromPreset's cross-party scope so the gate doesn't grey
+--- out when only the currently-selected char has nothing configured.
+function BfBot.UI._CanCastAll()
+    if BfBot.Exec.GetState() == "running" then return false end
+    if #buffbot_spellTable > 0 then return true end
+    local presetIdx = BfBot.UI._presetIdx
+    for slot = 0, 5 do
+        if slot ~= BfBot.UI._charSlot then
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite then
+                local config = BfBot.Persist.GetConfig(sprite)
+                if config and config.presets then
+                    local preset = config.presets[presetIdx]
+                    if preset and preset.spells and next(preset.spells) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
 end
 
 --- Is execution currently running?
