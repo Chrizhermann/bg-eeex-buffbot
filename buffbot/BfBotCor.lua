@@ -95,11 +95,24 @@ end
 -- Shared Utilities
 -- ============================================================
 
+--- Strip Infinity Engine color escape codes (^0xAABBGGRR<text>^-) from a string.
+-- Tweaks Anthology's "Colorize NPC Names and Tooltips" component rewrites CRE
+-- name strrefs to wrap them in color escapes. The engine's main renderer parses
+-- the escape; `text lua "..."` bindings in .menu files do not, so the prefix
+-- leaks as literal text on tabs/buttons. Strip at the source.
+function BfBot._StripColorEscape(s)
+    if type(s) ~= "string" then return s end
+    return (s:gsub("%^%-", ""):gsub("%^0x%x%x%x%x%x%x%x%x", ""))
+end
+
 --- Get character name safely. Used by Exec, Innate, and UI modules.
 function BfBot._GetName(sprite)
     if not sprite then return "?" end
     local ok, name = pcall(function() return sprite:getName() end)
-    if ok and name and name ~= "" then return name end
+    if ok and name and name ~= "" then
+        name = BfBot._StripColorEscape(name)
+        if name ~= "" then return name end
+    end
     return "?"
 end
 

@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 6
+BfBot.Persist._SCHEMA_VERSION = 7
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -297,6 +297,30 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
                     for _, entry in pairs(preset.spells) do
                         if type(entry) == "table" and entry.lock == nil then
                             entry.lock = 0
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if fromVersion < 7 then
+        -- Strip Tweaks Anthology "Colorize NPC Names" color escapes (^0xAABBGGRR<name>^-)
+        -- from persisted target names. Pre-v7 configs may have prefixed names baked in,
+        -- which would never match a stripped _GetName(sprite) result post-fix. See #40.
+        if config.presets then
+            for _, preset in pairs(config.presets) do
+                if type(preset) == "table" and type(preset.spells) == "table" then
+                    for _, entry in pairs(preset.spells) do
+                        if type(entry) == "table" then
+                            if type(entry.tgt) == "string" then
+                                entry.tgt = BfBot._StripColorEscape(entry.tgt)
+                            elseif type(entry.tgt) == "table" then
+                                for i, v in ipairs(entry.tgt) do
+                                    if type(v) == "string" then
+                                        entry.tgt[i] = BfBot._StripColorEscape(v)
+                                    end
+                                end
+                            end
                         end
                     end
                 end
