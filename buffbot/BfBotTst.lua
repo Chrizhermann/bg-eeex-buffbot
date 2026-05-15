@@ -3000,7 +3000,8 @@ function BfBot.Test.Innate()
             local bfbtInnates = {}
             local otherCount = 0
 
-            -- Iterate known innate spells
+            -- Iterate known innate spells, tracking per-resref accumulation
+            local bfbtCounts = {}
             local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
             if iter then
                 while iter:hasNext() do
@@ -3008,15 +3009,19 @@ function BfBot.Test.Innate()
                     local resref = spell.m_spellId:get()
                     if resref and resref:sub(1, 4) == "BFBT" then
                         table.insert(bfbtInnates, resref)
+                        bfbtCounts[resref] = (bfbtCounts[resref] or 0) + 1
                     else
                         otherCount = otherCount + 1
                     end
                 end
             end
 
+            local maxAcc = BfBot.Innate._MaxAccumulation(sprite)
+            local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""
+
             if #bfbtInnates > 0 then
-                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)",
-                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount))
+                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)%s",
+                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount, accNote))
             else
                 P(string.format("[BuffBot] Slot %d (%s): NO BuffBot innates  (%d other innates)",
                     slot, name, otherCount))

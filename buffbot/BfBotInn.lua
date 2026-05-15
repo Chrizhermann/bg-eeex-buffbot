@@ -412,6 +412,31 @@ function BfBot.Innate._HasInnate(sprite, resref)
     return ok and result
 end
 
+--- Count the maximum accumulation of any BuffBot innate on this sprite.
+-- Returns 0 if no BFBT{slot}{preset} innates exist, 1 for normal post-grant state,
+-- >1 only when legacy saves affected by the v1.3.9 opcode-171 bug have accumulated
+-- duplicate copies. Drives lazy revoke so clean saves don't pay the 50-pass tax.
+function BfBot.Innate._MaxAccumulation(sprite)
+    local ok, maxCount = pcall(function()
+        local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
+        if not iter then return 0 end
+        local counts = {}
+        while iter:hasNext() do
+            local spell = iter:next()
+            local resref = spell.m_spellId:get()
+            if resref and resref:match("^BFBT[0-5][1-8]$") then
+                counts[resref] = (counts[resref] or 0) + 1
+            end
+        end
+        local m = 0
+        for _, c in pairs(counts) do
+            if c > m then m = c end
+        end
+        return m
+    end)
+    return ok and maxCount or 0
+end
+
 --- Grant innate abilities to all party members based on their configured presets.
 -- Skips innates the character already has (prevents duplicates across sessions).
 function BfBot.Innate.Grant()
@@ -531,17 +556,19 @@ function BfBot.Innate._BuildRemoverSPL()
 end
 
 --- Remove all BuffBot innates from a specific character.
--- Uses BFBTRM.SPL (opcode 172) via ReallyForceSpellRES for reliable removal.
--- Multiple passes to clean up accumulated innates from saves affected by the
--- old RemoveSpellRES bug (which silently failed, causing unbounded accumulation).
+-- Uses BFBTRM.SPL (opcode 172) via ReallyForceSpellRES. Each cast removes
+-- one copy of each BFBT innate. Lazy-count: queue exactly as many passes as
+-- needed based on observed accumulation. Clean saves typically need 0, normal
+-- post-grant state needs 1, legacy saves with v1.3.9 opcode-171 accumulation
+-- need more. Capped at 50 as a safety ceiling for pathological cases.
 function BfBot.Innate.Revoke(slot)
     if BfBot._noIO then return end
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
-    -- Each pass removes one copy of each BFBT innate via opcode 172.
-    -- 50 passes handles heavy accumulation from old saves affected by
-    -- the opcode 171 bug. Extra passes are cheap no-ops.
-    for i = 1, 50 do
+    local accumulation = BfBot.Innate._MaxAccumulation(sprite)
+    if accumulation == 0 then return end
+    local passes = math.min(accumulation + 1, 50)
+    for i = 1, passes do
         EEex_Action_QueueResponseStringOnAIBase(
             'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
     end
