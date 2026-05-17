@@ -3065,21 +3065,22 @@ function BfBot.Test.Innate()
             local bfbtInnates = {}
             local otherCount = 0
 
-            -- Iterate known innate spells, tracking per-resref accumulation
+            -- Iterate known innate spells, tracking per-resref accumulation.
+            -- Uses for-style iterator (yields level, index, resref) per the EEex
+            -- API for plain GetKnownInnateSpellsIterator (the WithAbility variant
+            -- yields a 4th value). Wrapped in pcall to keep the diagnostic alive
+            -- even if a sprite returns a weird iterator state.
             local bfbtCounts = {}
-            local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
-            if iter then
-                while iter:hasNext() do
-                    local spell = iter:next()
-                    local resref = spell.m_spellId:get()
+            pcall(function()
+                for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
                     if resref and resref:sub(1, 4) == "BFBT" then
                         table.insert(bfbtInnates, resref)
                         bfbtCounts[resref] = (bfbtCounts[resref] or 0) + 1
-                    else
+                    elseif resref then
                         otherCount = otherCount + 1
                     end
                 end
-            end
+            end)
 
             local maxAcc = BfBot.Innate._MaxAccumulation(sprite)
             local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""

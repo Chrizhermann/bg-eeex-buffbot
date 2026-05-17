@@ -399,13 +399,14 @@ function BfBot.Innate._EnsureSPLFiles()
 end
 
 --- Check if a character already has a specific innate ability.
+-- Uses the for-style iterator (yields level, index, resref), NOT iter:hasNext()
+-- which is for userdata-style iterators on a different EEex API. The wrong
+-- pattern was silently swallowed by pcall, making this function always return
+-- false and causing Grant() to re-add innates every load.
 function BfBot.Innate._HasInnate(sprite, resref)
     local ok, result = pcall(function()
-        local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
-        if not iter then return false end
-        while iter:hasNext() do
-            local spell = iter:next()
-            if spell.m_spellId:get() == resref then return true end
+        for _, _, r in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
+            if r == resref then return true end
         end
         return false
     end)
@@ -418,12 +419,8 @@ end
 -- duplicate copies. Drives lazy revoke so clean saves don't pay the 50-pass tax.
 function BfBot.Innate._MaxAccumulation(sprite)
     local ok, maxCount = pcall(function()
-        local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
-        if not iter then return 0 end
         local counts = {}
-        while iter:hasNext() do
-            local spell = iter:next()
-            local resref = spell.m_spellId:get()
+        for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
             if resref and resref:match("^BFBT[0-5][1-8]$") then
                 counts[resref] = (counts[resref] or 0) + 1
             end
