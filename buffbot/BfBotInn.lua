@@ -572,19 +572,41 @@ function BfBot.Innate.Revoke(slot)
 end
 
 --- Refresh innates for a specific character (e.g., after preset create/delete).
+-- Bifurcates on accumulation to avoid a race: when we queue a Revoke, the
+-- BFBTRM casts haven't fired yet at the point we'd check _HasInnate, so the
+-- innates would still report as present and the re-grant would be skipped.
+-- Instead:
+--   - accumulation > 1 (duplicates): queue Revoke, then unconditionally
+--     queue grants for all configured presets (revoke will clear by the
+--     time grants run).
+--   - accumulation <= 1 (clean or empty): no Revoke needed; check _HasInnate
+--     and grant only the missing ones.
 function BfBot.Innate.Refresh(slot)
     if BfBot._noIO then return end
-    BfBot.Innate.Revoke(slot)
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
-    for idx = 1, BfBot.MAX_PRESETS do
-        if config.presets[idx] then
-            local resref = string.format("BFBT%d%d", slot, idx)
-            if not BfBot.Innate._HasInnate(sprite, resref) then
+
+    local accumulation = BfBot.Innate._MaxAccumulation(sprite)
+
+    if accumulation > 1 then
+        BfBot.Innate.Revoke(slot)
+        for idx = 1, BfBot.MAX_PRESETS do
+            if config.presets[idx] then
+                local resref = string.format("BFBT%d%d", slot, idx)
                 EEex_Action_QueueResponseStringOnAIBase(
                     'AddSpecialAbility("' .. resref .. '")', sprite)
+            end
+        end
+    else
+        for idx = 1, BfBot.MAX_PRESETS do
+            if config.presets[idx] then
+                local resref = string.format("BFBT%d%d", slot, idx)
+                if not BfBot.Innate._HasInnate(sprite, resref) then
+                    EEex_Action_QueueResponseStringOnAIBase(
+                        'AddSpecialAbility("' .. resref .. '")', sprite)
+                end
             end
         end
     end
