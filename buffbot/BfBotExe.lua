@@ -691,6 +691,9 @@ function BfBot.Exec._SafetyTick()
 
     -- One-time startup cleanup: scrub accumulated innate duplicates from old saves.
     -- Runs once per session on first world screen tick (party is guaranteed loaded).
+    -- Lazy: BfBot.Innate.Revoke is now no-op when no BFBT accumulation is detected,
+    -- so clean saves pay near-zero cost here. Only legacy saves with v1.3.9
+    -- opcode-171 accumulation actually do work.
     if not BfBot.Exec._startupCleanupDone then
         BfBot.Exec._startupCleanupDone = true
         pcall(BfBot.Innate.RefreshAll)

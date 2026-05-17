@@ -844,7 +844,8 @@ function BfBot.Test.SpellLockPersist()
         opts = { skip = 1 }, ovr = {},
     }
     local migrated = BfBot.Persist._MigrateConfig(v5, v5.v)
-    _check(migrated.v == 6, "Migration bumps version to 6")
+    _check(migrated.v == BfBot.Persist._SCHEMA_VERSION,
+           "Migration bumps version to " .. BfBot.Persist._SCHEMA_VERSION)
     _check(migrated.presets[1].spells["TSTLEG"].lock == 0,
            "Migration adds lock=0 to legacy entries")
     _check(migrated.presets[1].spells["TSTLEG"].on == 1,
@@ -853,6 +854,65 @@ function BfBot.Test.SpellLockPersist()
            "Migration preserves 'pri' field")
 
     return _summary("SpellLockPersist")
+end
+
+-- ============================================================
+-- BfBot.Test.NameStrip — cdtweaks "Colorize NPC Names" escape stripping
+-- ============================================================
+
+function BfBot.Test.NameStrip()
+    P("=== NameStrip: ^0xAABBGGRR<name>^- escape stripping ===")
+    _reset()
+
+    -- ---- Direct _StripColorEscape behavior ----
+    _check(BfBot._StripColorEscape("^0xFF8E23FFIMOEN^-") == "IMOEN",
+           "Strips full prefix+suffix wrap")
+    _check(BfBot._StripColorEscape("^0xff406798KHALID") == "KHALID",
+           "Strips lowercase-hex prefix without suffix")
+    _check(BfBot._StripColorEscape("ABDEL") == "ABDEL",
+           "Leaves uncolored names unchanged")
+    _check(BfBot._StripColorEscape("") == "",
+           "Empty string passes through")
+    _check(BfBot._StripColorEscape("^0xFFAA00FFBranwen^- the Cleric") == "Branwen the Cleric",
+           "Strips mid-string + multi-word name")
+    _check(BfBot._StripColorEscape(nil) == nil,
+           "nil passes through (typeguard)")
+    _check(BfBot._StripColorEscape(42) == 42,
+           "non-string passes through (typeguard)")
+
+    -- ---- v6→v7 migration ----
+    local v6 = {
+        v = 6, ap = 1,
+        presets = {
+            [1] = {
+                name = "Test", cat = "custom",
+                spells = {
+                    ["TSTSTR"] = { on = 1, tgt = "^0xFF8E23FFIMOEN^-", pri = 1, lock = 0 },
+                    ["TSTTAB"] = { on = 1, tgt = {"^0xFF2763ADJAHEIRA^-", "ABDEL"}, pri = 2, lock = 0 },
+                    ["TSTCLR"] = { on = 1, tgt = "BRANWEN", pri = 3, lock = 0 },
+                    ["TSTSP"]  = { on = 1, tgt = "s", pri = 4, lock = 0 },
+                    ["TSTPA"]  = { on = 1, tgt = "p", pri = 5, lock = 0 },
+                },
+            },
+        },
+    }
+    local migrated = BfBot.Persist._MigrateConfig(v6, v6.v)
+    _check(migrated.v == BfBot.Persist._SCHEMA_VERSION,
+           "Migration bumps to current version")
+    _check(migrated.presets[1].spells["TSTSTR"].tgt == "IMOEN",
+           "Strips escape from single-name tgt string")
+    _check(type(migrated.presets[1].spells["TSTTAB"].tgt) == "table"
+           and migrated.presets[1].spells["TSTTAB"].tgt[1] == "JAHEIRA"
+           and migrated.presets[1].spells["TSTTAB"].tgt[2] == "ABDEL",
+           "Strips escapes from table-of-names tgt entries")
+    _check(migrated.presets[1].spells["TSTCLR"].tgt == "BRANWEN",
+           "Leaves clean names unchanged")
+    _check(migrated.presets[1].spells["TSTSP"].tgt == "s",
+           "Leaves 's' sentinel unchanged")
+    _check(migrated.presets[1].spells["TSTPA"].tgt == "p",
+           "Leaves 'p' sentinel unchanged")
+
+    return _summary("NameStrip")
 end
 
 -- ============================================================
@@ -2367,6 +2427,10 @@ function BfBot.Test.RunAll()
     local lockOk = BfBot.Test.SpellLockPersist()
     P("")
 
+    -- Phase: Name Strip (cdtweaks Colorize NPC Names compat)
+    local nameStripOk = BfBot.Test.NameStrip()
+    P("")
+
     -- Phase: Spell Lock Order
     local lockOrderOk = BfBot.Test.SpellLockOrder()
     P("")
@@ -2401,6 +2465,7 @@ function BfBot.Test.RunAll()
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
     P("  Spell Lock Persist: " .. (lockOk and "PASS" or "FAIL"))
+    P("  Name Strip:         " .. (nameStripOk and "PASS" or "FAIL"))
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
@@ -2410,7 +2475,7 @@ function BfBot.Test.RunAll()
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and themingOk and staleOk
 end
 
 -- ============================================================
@@ -3000,23 +3065,29 @@ function BfBot.Test.Innate()
             local bfbtInnates = {}
             local otherCount = 0
 
-            -- Iterate known innate spells
-            local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
-            if iter then
-                while iter:hasNext() do
-                    local spell = iter:next()
-                    local resref = spell.m_spellId:get()
+            -- Iterate known innate spells, tracking per-resref accumulation.
+            -- Uses for-style iterator (yields level, index, resref) per the EEex
+            -- API for plain GetKnownInnateSpellsIterator (the WithAbility variant
+            -- yields a 4th value). Wrapped in pcall to keep the diagnostic alive
+            -- even if a sprite returns a weird iterator state.
+            local bfbtCounts = {}
+            pcall(function()
+                for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
                     if resref and resref:sub(1, 4) == "BFBT" then
                         table.insert(bfbtInnates, resref)
-                    else
+                        bfbtCounts[resref] = (bfbtCounts[resref] or 0) + 1
+                    elseif resref then
                         otherCount = otherCount + 1
                     end
                 end
-            end
+            end)
+
+            local maxAcc = BfBot.Innate._MaxAccumulation(sprite)
+            local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""
 
             if #bfbtInnates > 0 then
-                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)",
-                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount))
+                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)%s",
+                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount, accNote))
             else
                 P(string.format("[BuffBot] Slot %d (%s): NO BuffBot innates  (%d other innates)",
                     slot, name, otherCount))

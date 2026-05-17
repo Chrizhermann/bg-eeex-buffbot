@@ -399,17 +399,39 @@ function BfBot.Innate._EnsureSPLFiles()
 end
 
 --- Check if a character already has a specific innate ability.
+-- Uses the for-style iterator (yields level, index, resref), NOT iter:hasNext()
+-- which is for userdata-style iterators on a different EEex API. The wrong
+-- pattern was silently swallowed by pcall, making this function always return
+-- false and causing Grant() to re-add innates every load.
 function BfBot.Innate._HasInnate(sprite, resref)
     local ok, result = pcall(function()
-        local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
-        if not iter then return false end
-        while iter:hasNext() do
-            local spell = iter:next()
-            if spell.m_spellId:get() == resref then return true end
+        for _, _, r in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
+            if r == resref then return true end
         end
         return false
     end)
     return ok and result
+end
+
+--- Count the maximum accumulation of any BuffBot innate on this sprite.
+-- Returns 0 if no BFBT{slot}{preset} innates exist, 1 for normal post-grant state,
+-- >1 only when legacy saves affected by the v1.3.9 opcode-171 bug have accumulated
+-- duplicate copies. Drives lazy revoke so clean saves don't pay the 50-pass tax.
+function BfBot.Innate._MaxAccumulation(sprite)
+    local ok, maxCount = pcall(function()
+        local counts = {}
+        for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
+            if resref and resref:match("^BFBT[0-5][1-8]$") then
+                counts[resref] = (counts[resref] or 0) + 1
+            end
+        end
+        local m = 0
+        for _, c in pairs(counts) do
+            if c > m then m = c end
+        end
+        return m
+    end)
+    return ok and maxCount or 0
 end
 
 --- Grant innate abilities to all party members based on their configured presets.
@@ -531,36 +553,60 @@ function BfBot.Innate._BuildRemoverSPL()
 end
 
 --- Remove all BuffBot innates from a specific character.
--- Uses BFBTRM.SPL (opcode 172) via ReallyForceSpellRES for reliable removal.
--- Multiple passes to clean up accumulated innates from saves affected by the
--- old RemoveSpellRES bug (which silently failed, causing unbounded accumulation).
+-- Uses BFBTRM.SPL (opcode 172) via ReallyForceSpellRES. Each cast removes
+-- one copy of each BFBT innate. Lazy-count: queue exactly as many passes as
+-- needed based on observed accumulation. Clean saves typically need 0, normal
+-- post-grant state needs 1, legacy saves with v1.3.9 opcode-171 accumulation
+-- need more. Capped at 50 as a safety ceiling for pathological cases.
 function BfBot.Innate.Revoke(slot)
     if BfBot._noIO then return end
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
-    -- Each pass removes one copy of each BFBT innate via opcode 172.
-    -- 50 passes handles heavy accumulation from old saves affected by
-    -- the opcode 171 bug. Extra passes are cheap no-ops.
-    for i = 1, 50 do
+    local accumulation = BfBot.Innate._MaxAccumulation(sprite)
+    if accumulation == 0 then return end
+    local passes = math.min(accumulation + 1, 50)
+    for i = 1, passes do
         EEex_Action_QueueResponseStringOnAIBase(
             'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
     end
 end
 
 --- Refresh innates for a specific character (e.g., after preset create/delete).
+-- Bifurcates on accumulation to avoid a race: when we queue a Revoke, the
+-- BFBTRM casts haven't fired yet at the point we'd check _HasInnate, so the
+-- innates would still report as present and the re-grant would be skipped.
+-- Instead:
+--   - accumulation > 1 (duplicates): queue Revoke, then unconditionally
+--     queue grants for all configured presets (revoke will clear by the
+--     time grants run).
+--   - accumulation <= 1 (clean or empty): no Revoke needed; check _HasInnate
+--     and grant only the missing ones.
 function BfBot.Innate.Refresh(slot)
     if BfBot._noIO then return end
-    BfBot.Innate.Revoke(slot)
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
-    for idx = 1, BfBot.MAX_PRESETS do
-        if config.presets[idx] then
-            local resref = string.format("BFBT%d%d", slot, idx)
-            if not BfBot.Innate._HasInnate(sprite, resref) then
+
+    local accumulation = BfBot.Innate._MaxAccumulation(sprite)
+
+    if accumulation > 1 then
+        BfBot.Innate.Revoke(slot)
+        for idx = 1, BfBot.MAX_PRESETS do
+            if config.presets[idx] then
+                local resref = string.format("BFBT%d%d", slot, idx)
                 EEex_Action_QueueResponseStringOnAIBase(
                     'AddSpecialAbility("' .. resref .. '")', sprite)
+            end
+        end
+    else
+        for idx = 1, BfBot.MAX_PRESETS do
+            if config.presets[idx] then
+                local resref = string.format("BFBT%d%d", slot, idx)
+                if not BfBot.Innate._HasInnate(sprite, resref) then
+                    EEex_Action_QueueResponseStringOnAIBase(
+                        'AddSpecialAbility("' .. resref .. '")', sprite)
+                end
             end
         end
     end

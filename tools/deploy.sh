@@ -8,8 +8,10 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/buffbot"
 
-# Source local config if present (gitignored — contains user's game path)
-[ -f "$SCRIPT_DIR/deploy.conf" ] && source "$SCRIPT_DIR/deploy.conf"
+# Precedence: $1 (positional arg) > $BGEE_DIR (env var) > deploy.conf (local default).
+# Source deploy.conf only if BGEE_DIR isn't already set in the environment, so env-var
+# overrides for test installs (e.g. BGEE_DIR=".../- Copy - Copy") aren't clobbered.
+[ -z "$BGEE_DIR" ] && [ -f "$SCRIPT_DIR/deploy.conf" ] && source "$SCRIPT_DIR/deploy.conf"
 
 GAME_DIR="${1:-${BGEE_DIR:?Set BGEE_DIR in tools/deploy.conf or pass game dir as argument}}"
 OVERRIDE_DIR="$GAME_DIR/override"

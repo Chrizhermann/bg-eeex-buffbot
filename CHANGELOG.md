@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.16-alpha (2026-05-17)
+
+### Fixed
+- **Character tabs and the Cast button showed raw `^0xRRGGBBAA<NAME>` text** when [Tweaks Anthology's "Colorize NPC Names and Tooltips"](https://gibberlings3.github.io/Documentation/readmes/readme-cdtweaks.html) component is installed. cdtweaks rewrites NPC name strrefs to wrap them in IE color escapes (`^0xAABBGGRR<name>^-`). The engine's main renderer parses the escape; `text lua "..."` bindings in `.menu` files do not, so the prefix leaked as literal text in BuffBot's tabs, buttons, and target picker. The protagonist was unaffected because player-typed names are not strref-based. `BfBot._GetName` now strips the escape unconditionally via a new `BfBot._StripColorEscape` helper (no-op on installs without cdtweaks). Schema migration v6 → v7 walks all `preset.spells[*].tgt` entries and strips the prefix from previously-saved target names too — existing configs self-heal on first load. 13 new test assertions in `BfBot.Test.NameStrip` cover full prefix+suffix wraps, lowercase-hex variants, mid-string, multi-word names, single tgt + table tgt + `'s'`/`'p'` sentinels.
+
+- **Save loads spammed "ability granted" toasts; preset create/delete froze the game for ~10 seconds, sometimes crashed.** All three symptoms shared a root cause: `BfBot.Innate.Revoke` queued **50 × `ReallyForceSpellRES("BFBTRM", Myself)`** per slot regardless of need (= 300 queued BCS actions per `RefreshAll`). The 50× was scaffolding from the v1.3.9-alpha legacy-migration cleanup and had become permanent overhead. Worse, `BfBot.Innate._HasInnate` was using the wrong EEex iterator pattern (`iter:hasNext()` instead of `for ... in iter`), the error was silently swallowed by `pcall`, and the function always returned `false` — so `Grant()` re-added every BFBT innate on every save load, accumulating duplicates that the 50× revoke then had to clean up. Two fixes:
+  - New `BfBot.Innate._MaxAccumulation(sprite)` counts actual BFBT duplicates via the correct for-style iterator; `Revoke` now queues only `count + 1` passes (capped at 50). On clean saves: 0 passes. Iterator pattern in `_HasInnate` and the `BfBot.Test.Innate` diagnostic corrected.
+  - `BfBot.Innate.Refresh` bifurcates: when accumulation > 1, queue revoke then **unconditionally** queue re-grants (revokes will clear before grants run); when accumulation ≤ 1, skip revoke and only grant the missing ones. Prevents the race where `_HasInnate` would be checked while revokes were still pending in the BCS queue (which would suppress the grant).
+
+### Internal
+- `tools/deploy.sh` now honors `BGEE_DIR` env var over `tools/deploy.conf`, so `BGEE_DIR=… bash tools/deploy.sh` targets a test install without editing the conf file.
+- `.gitattributes` pins `*.sh` to LF endings, preventing `core.autocrlf=true` on Windows from breaking `bash tools/deploy.sh` after fresh checkouts.
+- `tools/bump-version.sh` documents the `gh release create … --latest` flag and warns against `--prerelease` (every BuffBot release should be eligible for the GitHub "Latest" badge).
+
 ## v1.3.15-alpha (2026-04-30)
 
 ### Fixed
