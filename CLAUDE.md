@@ -18,7 +18,7 @@ Alpha — all MVP features implemented and verified in-game. See `CHANGELOG.md` 
 - `BfBotPer.lua` — persistence (UDAux marshal, presets, INI, export/import)
 - `BfBotInn.lua` — per-preset F12 innate abilities (runtime SPL generation)
 - `BfBotUI.lua` + `BuffBot.menu` — in-game config panel (movable, resizable, dynamic ~80% screen)
-- `BfBotTst.lua` — in-game test suite (`BfBot.Test.RunAll()` in EEex console)
+- `BfBotTst.lua` — in-game test suite (`BfBot.Test.RunAll()` in in-game console)
 - `setup-buffbot.tp2` — WeiDU installer (under `buffbot/`)
 - `tools/deploy.sh` — dev deploy (copies to `<game>/override/`, patches TLK)
 - `tools/patch_tlk.py` — appends BuffBot innate tooltip names to `dialog.tlk`
@@ -67,7 +67,7 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 
 - **Deploy**: `bash tools/deploy.sh` (reads `tools/deploy.conf` for game dir).
 - **Reload in running game**: `Infinity_DoFile("BfBotX")` for the changed module(s) — avoids a full restart.
-- **Tests**: `BfBot.Test.RunAll()` in the EEex console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
+- **Tests**: `BfBot.Test.RunAll()` in the in-game console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
 - **Remote console** (headless testing): `bash /c/src/private/eeex-remote-console/tools/eeex-remote.sh "<game>/override" "<lua>"`. Game must be on the world screen.
 - **Branch vs main**: small code change → main; bigger work → feature branch. Design in GitHub issues, not `docs/plans/`.
 

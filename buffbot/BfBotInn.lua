@@ -620,6 +620,25 @@ function BfBot.Innate.RefreshAll()
     end
 end
 
+--- Register the sprite-loaded listener so innates get granted/refreshed as
+-- party members are loaded (new game, save load, area transition, party join).
+-- The listener fires from EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled,
+-- i.e. AFTER marshal restoration — so EEex_GetUDAux has the user's saved
+-- config by the time Refresh queries it.
+-- Idempotent: subsequent calls no-op, so re-invoking Init from a hot reload
+-- doesn't double-register the listener.
+function BfBot.Innate.Init()
+    if BfBot._noIO then return end
+    if BfBot.Innate._initDone then return end
+    BfBot.Innate._initDone = true
+    EEex_Sprite_AddLoadedListener(function(sprite)
+        if not sprite then return end
+        local slot = EEex_Sprite_GetPortraitIndex(sprite)
+        if slot < 0 or slot > 5 then return end
+        pcall(BfBot.Innate.Refresh, slot)
+    end)
+end
+
 -- ============================================================
 -- Innate Ability Handler (Global Function for Opcode 402)
 -- Called by the engine when a BFBT*.SPL innate is activated.

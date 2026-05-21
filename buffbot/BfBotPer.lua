@@ -27,22 +27,6 @@ BfBot.Persist._INI_DEFAULTS = {
     FontSize      = 2,    -- 1=small, 2=medium, 3=large
 }
 
--- ---- Boolean sanitization ----
-
---- Recursively convert any boolean values to 1/0 in a table.
--- EEex marshal only supports number/string/table — booleans crash saves.
-function BfBot.Persist._SanitizeValues(tbl)
-    if type(tbl) ~= "table" then return end
-    for k, v in pairs(tbl) do
-        local vt = type(v)
-        if vt == "boolean" then
-            tbl[k] = v and 1 or 0
-        elseif vt == "table" then
-            BfBot.Persist._SanitizeValues(v)
-        end
-    end
-end
-
 -- ---- Default config ----
 
 --- Return a fresh empty config with correct schema.
@@ -263,9 +247,6 @@ function BfBot.Persist._ValidateConfig(config)
             end
         end
     end
-
-    -- Safety: convert any stray booleans
-    BfBot.Persist._SanitizeValues(config)
 
     return config
 end
@@ -829,9 +810,6 @@ function BfBot.Persist.ImportConfig(sprite, filename)
     if imported.v < BfBot.Persist._SCHEMA_VERSION then
         imported = BfBot.Persist._MigrateConfig(imported, imported.v)
     end
-
-    -- Sanitize any stray booleans
-    BfBot.Persist._SanitizeValues(imported)
 
     -- Get character's castable spells to filter imported config
     local castable = nil

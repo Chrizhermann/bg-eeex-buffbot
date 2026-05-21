@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.4.0-alpha (2026-05-21)
+
+### Changed
+- **EEex v1.0.0+ is now required.** BuffBot's tp2 fails fast on older EEex via a new `REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)` — v1.0.0 moved EEex's Lua scripts from `EEex/` to game-root `EEex_scripts/`, making that path a reliable version marker. Pre-v1.0.0 installs hit a clear error message instead of silently breaking at runtime against API changes (the old iterator pattern, `EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled` hook, etc.) Upgrade EEex from https://github.com/Bubb13/EEex/releases before installing.
+- **Innate grant migrated from polling to event-driven** — `BfBot.Innate.Init` now registers `EEex_Sprite_AddLoadedListener` so innates are granted/refreshed the moment each party sprite finishes loading (new game, save load, area transition, party join). The listener fires from `EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled` — i.e. after marshal restoration, so `EEex_GetUDAux` already has the user's saved config when `Refresh` queries it. Replaces the legacy one-shot `_startupCleanupDone` polling in `BfBot.Exec._SafetyTick` (which waited up to 2 seconds after world-screen entry before granting). Self-heals old accumulation via the existing `Refresh` bifurcation; new-joiner innates now grant on the next load tick instead of after the next safety-tick window.
+
+### Removed
+- **`BfBot.Persist._SanitizeValues`** — booleans-to-0/1 sanitizer that protected pre-v1.0.0 EEex marshal handlers from crashes. EEex v1.0.0 marshal handles booleans natively, so the sanitize call sites in `_ValidateConfig` and the export/import path are gone. BuffBot's schema continues to use integer 0/1 by design (consistency, avoids Lua's `0 == false` pitfalls), and `_hasBooleans` schema-consistency checks in the test suite stay in place.
+
+### Internal
+- README: Requirements section updated to "EEex v1.0.0+, any tier" with a collapsible explainer covering how BuffBot's installer activates LuaJIT on Minimal/Full tiers. Removed the stale v1.3.9 update banner.
+
 ## v1.3.16-alpha (2026-05-17)
 
 ### Fixed
