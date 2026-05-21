@@ -1,6 +1,6 @@
 -- ============================================================
 -- BfBotTst.lua — BuffBot In-Game Test Suite
--- Run from EEex Lua console: BfBot.Test.RunAll()
+-- Run from the in-game console: BfBot.Test.RunAll()
 -- ============================================================
 
 BfBot = BfBot or {}
@@ -1981,8 +1981,11 @@ function BfBot.Test.DurationRecursion()
     testSpell("SPPR203", 60, "Chant (parent op=176 regression)")
 
     -- Regression: Aid is non-hierarchical, direct timed opcodes only.
-    -- Ability 0 at base caster level — must still show >= 60s.
-    testSpell("SPPR201", 60, "Aid (non-hierarchical regression)")
+    -- Ability 0 reads the SPL's stored Duration field directly (12 in vanilla
+    -- BG2EE — the per-effect base; engine scales by caster level at cast time
+    -- but GetDuration does not). Threshold guards against the recursion fix
+    -- silently zeroing out non-hierarchical durations.
+    testSpell("SPPR201", 12, "Aid (non-hierarchical regression)")
 
     return _summary("DurationRecursion")
 end
@@ -2030,11 +2033,14 @@ function BfBot.Test.MovablePanel()
     _check(hy == 50,  "drag handle Y = panel Y (" .. tostring(hy) .. ")")
     _check(hw == 800, "drag handle W = panel W (" .. tostring(hw) .. ")")
 
-    -- Test 4: Resize handle at bottom-right
+    -- Test 4: Resize handle at bottom-right.
+    -- BfBotUI.lua:534 positions the handle at (px + pw - 80, py + ph - 48, 80, 48)
+    -- to give a generous grab target. .menu reserves a 80x48 box.
     local rx, ry, rw, rh = Infinity_GetArea("bbResizeHandle")
-    _check(rx == 100 + 800 - 20, "resize handle X = bottom-right (" .. tostring(rx) .. ")")
-    _check(ry == 50 + 600 - 20,  "resize handle Y = bottom-right (" .. tostring(ry) .. ")")
-    _check(rw == 20, "resize handle W = 20 (" .. tostring(rw) .. ")")
+    _check(rx == 100 + 800 - 80, "resize handle X = bottom-right (" .. tostring(rx) .. ")")
+    _check(ry == 50 + 600 - 48,  "resize handle Y = bottom-right (" .. tostring(ry) .. ")")
+    _check(rw == 80, "resize handle W = 80 (" .. tostring(rw) .. ")")
+    _check(rh == 48, "resize handle H = 48 (" .. tostring(rh) .. ")")
 
     -- Test 5: Reset clears stored values
     BfBot.UI._ResetLayout()
@@ -2799,14 +2805,6 @@ function BfBot.Test.Persist()
         _ok("Non-table input -> fresh default config")
     else _nok("Non-table input not handled") end
 
-    -- Corrupt config: booleans in values (should be sanitized)
-    local corrupt3 = BfBot.Persist.GetDefaultConfig()
-    corrupt3.opts.skip = true  -- boolean! should be sanitized
-    local repaired3 = BfBot.Persist._ValidateConfig(corrupt3)
-    hasBool, boolPath = _hasBooleans(repaired3)
-    if not hasBool then _ok("Boolean sanitization works")
-    else _nok("Boolean survived at " .. tostring(boolPath)) end
-
     -- Table-format target validation (ordered name list from target picker)
     local tblCfg = BfBot.Persist.GetDefaultConfig()
     tblCfg.presets[1].spells["TESTSPELL"] = {
@@ -3222,19 +3220,9 @@ function BfBot.Test.QuickCast()
     if repaired.presets[2].qc == 0 then _ok("qc=nil repaired to 0")
     else _nok("qc=nil not repaired: " .. tostring(repaired.presets[2].qc)) end
 
-    -- ---- Test 5: Boolean safety (qc should never be boolean) ----
+    -- ---- Test 5: SPL file generation ----
     P("")
-    P("  [5] Boolean safety for qc")
-
-    local boolConfig = BfBot.Persist.GetDefaultConfig()
-    boolConfig.presets[1].qc = true
-    BfBot.Persist._SanitizeValues(boolConfig)
-    if boolConfig.presets[1].qc == 1 then _ok("Boolean qc=true sanitized to 1")
-    else _nok("Boolean qc not sanitized: " .. tostring(boolConfig.presets[1].qc)) end
-
-    -- ---- Test 6: SPL file generation ----
-    P("")
-    P("  [6] Cheat SPL files")
+    P("  [5] Cheat SPL files")
 
     local cheatData = BfBot.Innate._BuildCheatSPL()
     if type(cheatData) == "string" and #cheatData == 250 then
@@ -3256,9 +3244,9 @@ function BfBot.Test.QuickCast()
     if removerData:sub(1, 4) == "SPL " then _ok("BFBTCR signature OK")
     else _nok("BFBTCR bad signature: " .. removerData:sub(1, 4)) end
 
-    -- ---- Test 7: Innate SPL structure (no opcode 171, has opcode 172 cleanup) ----
+    -- ---- Test 6: Innate SPL structure (no opcode 171, has opcode 172 cleanup) ----
     P("")
-    P("  [7] Innate SPL structure (opcode 172 cleanup)")
+    P("  [6] Innate SPL structure (opcode 172 cleanup)")
 
     local innateData = BfBot.Innate._BuildSPL(0, 1)
     -- Expected size: Header(114) + Ability(40) + 1*feat402(48) + N*feat172(48 each)

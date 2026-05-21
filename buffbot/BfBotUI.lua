@@ -58,8 +58,6 @@ end
 
 -- ============================================================
 -- Global Variables (read by .menu expressions every frame)
--- ALL values must be numbers/strings/tables — NO BOOLEANS.
--- EEex marshal crashes on booleans in UDAux.
 -- ============================================================
 
 -- Panel state

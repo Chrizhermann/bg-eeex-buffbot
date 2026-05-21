@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.3.16-alpha~
+VERSION ~v1.4.0-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0
@@ -11,7 +11,12 @@ REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
   ~BuffBot requires BG:EE, BG2:EE, or EET.~
 
 REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex~
+  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+
+// v1.0.0 moved EEex's Lua scripts from EEex/ to game-root EEex_scripts/.
+// Use this as the v1.0.0+ marker — earlier releases don't have this path.
+REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
+  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
 
 // ---- TLK strings for innate ability tooltips ----
 OUTER_SET bfbot_strref_1 = RESOLVE_STR_REF(~BuffBot 1~)
@@ -78,7 +83,10 @@ REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
   ~BuffBot requires BG:EE, BG2:EE, or EET.~
 
 REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex~
+  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+
+REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
+  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
 
 // Check if LuaJIT is already active
 OUTER_SET luajit_active = 0
