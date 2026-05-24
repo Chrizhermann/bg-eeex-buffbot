@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.1-alpha (2026-05-24)
+
+### Fixed
+- **Deleting a preset left an orphan F12 innate behind** (#47, reported by MrFishHead on Discord). `BfBot.Innate.Refresh`'s lightweight branch iterated only the **config's** preset list to add missing entries — it never iterated the **sprite's** known-innate list to remove BFBT entries whose preset had been deleted. After a `DeletePreset` call, `BFBT{slot}{deletedIdx}` stayed in the F12 menu indefinitely. Rather than patch the gap with another condition, the whole innate-grant subsystem was refactored: 3 helpers (`_HasInnate`, `_MaxAccumulation`, `_HasOrphans`), the heavy/light bifurcation, and the dead `Grant()` function are replaced by one pure planner `BfBot.Innate._PlanReconciliation(sprite, slot, config)` plus a thin `Refresh(slot)` orchestrator. One iterator walk diffs actual-vs-desired and either revokes-all+regrants on any mismatch (duplicate **or** orphan) or grants-missing-only on clean state. Also pulls an inline `AddSpecialAbility` loop out of `BfBotPer._CreateDefaultConfig` (was leaking innate-grant mechanics into the persistence layer) and guards against UDAux-write failure to prevent re-entry recursion. New `BfBot.Test.PlanReconciliation` suite has 9 cases including a synchronous end-to-end opcode-172 removal via `EEex_GameObject_ApplyEffect` that proves the cleanup mechanism actually removes orphans from the sprite's known-innate list (no manual integration test needed).
+- **Presets 6, 7, and 8 showed "Invalid: <number>" as their F12 innate name** (#48). When `MAX_PRESETS` went from 5 to 8 in `a51804e`, the WeiDU installer was not updated — only strrefs 1-5 were registered, and the Lua side used `_baseStrref + (preset - 1)` arithmetic that assumed contiguity. `setup-buffbot.tp2` now registers all 8 strrefs and writes each as its own line in `bfbot_strrefs.txt`; Lua reads them as an array indexed by preset. WeiDU does not guarantee contiguous strrefs across upgrades (existing strings keep their old strrefs while new ones get appended), so the array approach is more robust than the old arithmetic.
+
 ## v1.4.0-alpha (2026-05-21)
 
 ### Changed

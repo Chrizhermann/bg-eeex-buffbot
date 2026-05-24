@@ -1991,6 +1991,139 @@ function BfBot.Test.DurationRecursion()
 end
 
 -- ============================================================
+-- Orphan detection (issue #47 — preset-delete leaves stale BFBT innate)
+-- ============================================================
+
+function BfBot.Test.PlanReconciliation()
+    _reset()
+    local P = Infinity_DisplayString
+    P("== PlanReconciliation ==")
+
+    -- Pick any party slot with a sprite. We bootstrap our own BFBT state via
+    -- INSTANT.IDS AddSpecialAbility, so this test does NOT depend on prior
+    -- BuffBot panel use — works on a freshly-loaded save where the
+    -- AddLoadedListener hasn't fired yet.
+    local sprite, slotIdx
+    for s = 0, 5 do
+        local sp = EEex_Sprite_GetInPortrait(s)
+        if sp then sprite, slotIdx = sp, s; break end
+    end
+    if not sprite then
+        _warning("No party slot found — skipping (need at least one party member)")
+        return _summary("PlanReconciliation")
+    end
+
+    -- Inject a synthetic BFBT entry the planner can detect. Preset 7 is
+    -- intentional: default configs carry presets 1-2 and the user would have
+    -- to manually create up to preset 7 to collide. AddSpecialAbility IS in
+    -- INSTANT.IDS so the grant lands synchronously.
+    local syntheticPreset = 7
+    local syntheticResref = string.format("BFBT%d%d", slotIdx, syntheticPreset)
+    EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
+        'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
+
+    -- Verify the grant landed by running the planner against a config that
+    -- includes the preset — if the planner doesn't see the synthetic entry
+    -- in actual, the grant didn't take effect.
+    local verify = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } })
+    if not verify.actual[syntheticResref] then
+        _warning("INSTANT.IDS AddSpecialAbility didn't take effect — skipping")
+        return _summary("PlanReconciliation")
+    end
+
+    -- Case 1: nil config → empty plan, no mismatch.
+    local p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, nil)
+    _check(p.hasMismatch == false and next(p.desired) == nil,
+        "nil config → empty desired, no mismatch")
+
+    -- Case 2: config without presets table → empty plan, no mismatch.
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, {})
+    _check(p.hasMismatch == false and next(p.desired) == nil,
+        "config without presets → empty desired, no mismatch")
+
+    -- Case 3: config explicitly contains the synthetic preset → no mismatch,
+    -- synthetic entry is in both actual and desired.
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } })
+    _check(p.hasMismatch == false
+        and p.actual[syntheticResref] == 1
+        and p.desired[syntheticResref] == true,
+        "config contains preset " .. syntheticPreset .. " → no mismatch")
+
+    -- Case 4: config has different presets, missing the synthetic one
+    -- → mismatch (the orphan bug, issue #47).
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [1] = {}, [2] = {} } })
+    _check(p.hasMismatch == true and p.actual[syntheticResref] == 1,
+        "config {1,2} + sprite has preset " .. syntheticPreset .. " → mismatch (orphan)")
+
+    -- Case 5: config requires a preset the sprite doesn't have (preset 8)
+    -- → no mismatch (orphans are sprite-side, not desired-side), and
+    -- desired contains the missing entry so the orchestrator can grant it.
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {}, [8] = {} } })
+    local missingResref = string.format("BFBT%d8", slotIdx)
+    _check(p.hasMismatch == false
+        and p.desired[missingResref] == true
+        and p.actual[missingResref] == nil,
+        "config requires preset 8 not on sprite → no mismatch, desired has missing entry")
+
+    -- Case 6: foreign slot — querying a different slot must ignore the
+    -- synthetic entry (which belongs to slotIdx's namespace).
+    local foreignSlot = (slotIdx + 1) % 6
+    p = BfBot.Innate._PlanReconciliation(sprite, foreignSlot,
+        { presets = { [1] = {} } })
+    _check(p.actual[syntheticResref] == nil and p.hasMismatch == false,
+        "querying slot " .. foreignSlot .. " ignores slot-" .. slotIdx .. " BFBT entries")
+
+    -- Case 7: AddSpecialAbility dedup assumption.
+    -- The planner's `n > 1` branch only triggers in legacy v1.3.9-affected
+    -- saves (opcode 171 grants bypassed dedup). On a clean engine, every
+    -- AddSpecialAbility call dedupes — calling it twice yields count=1, not 2.
+    -- This case is a tripwire: if engine behavior ever changes, we want to
+    -- catch it because the rest of the codebase relies on this assumption
+    -- (BFBOTGO's re-grant after opcode 172 cleanup, for example).
+    EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
+        'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } })
+    _check(p.actual[syntheticResref] == 1,
+        "AddSpecialAbility dedupes — second grant keeps count=1 (tripwire)")
+
+    -- Case 8: end-to-end opcode 172 (Remove Innate) verification.
+    -- The previous cases verify the planner; this verifies the underlying
+    -- removal mechanism. Production Refresh queues a BFBTRM spell apply
+    -- (FIFO via action queue), and BFBTRM is itself just a container for
+    -- 48 opcode 172 effects (one per BFBT resref). The opcode-172 → known-
+    -- innate removal step is what actually fixes issue #47 — so testing it
+    -- in isolation, synchronously, is sufficient (and stronger: it doesn't
+    -- conflate planner correctness with engine spell-cast plumbing).
+    --
+    -- EEex_GameObject_ApplyEffect with immediateResolve=1 (the default)
+    -- applies the effect during the call, so we can assert state on the
+    -- very next line. This bypasses the BCS action queue entirely.
+    _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == 1,
+        "pre-revoke: synthetic " .. syntheticResref .. " present on sprite")
+
+    EEex_GameObject_ApplyEffect(sprite, {
+        effectID = 172,         -- Remove Innate
+        targetType = 1,         -- self
+        res = syntheticResref,  -- resref of innate to remove
+    })
+
+    _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == nil,
+        "post-revoke: opcode 172 removed " .. syntheticResref .. " end-to-end (issue #47 fix verified)")
+
+    -- No cleanup needed: opcode 172 only removed the synthetic entry; the
+    -- sprite's legitimately-configured BFBT innates (if any) are untouched.
+
+    return _summary("PlanReconciliation")
+end
+
+-- ============================================================
 -- Movable Panel tests
 -- ============================================================
 
@@ -2449,6 +2582,10 @@ function BfBot.Test.RunAll()
     local durRecOk = BfBot.Test.DurationRecursion()
     P("")
 
+    -- Phase: Reconciliation planner (covers orphan detection, issue #47)
+    local orphanOk = BfBot.Test.PlanReconciliation()
+    P("")
+
     -- Phase 14: Theming (issue #32)
     local themingOk = BfBot.Test.Theming()
     P("")
@@ -2475,13 +2612,14 @@ function BfBot.Test.RunAll()
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
+    P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk
 end
 
 -- ============================================================
@@ -3080,7 +3218,10 @@ function BfBot.Test.Innate()
                 end
             end)
 
-            local maxAcc = BfBot.Innate._MaxAccumulation(sprite)
+            local maxAcc = 0
+            for _, c in pairs(bfbtCounts) do
+                if c > maxAcc then maxAcc = c end
+            end
             local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""
 
             if #bfbtInnates > 0 then
@@ -3107,8 +3248,7 @@ function BfBot.Test.Innate()
     end
 
     P("")
-    P("[BuffBot] Granted flag: " .. tostring(BfBot.Innate._granted))
-    P("[BuffBot] To manually grant: BfBot.Innate.Grant()")
+    P("[BuffBot] To force reconciliation on a slot: BfBot.Innate.Refresh(slot)")
     P("[BuffBot] To re-generate SPLs: BfBot.Innate._EnsureSPLFiles()")
     P("")
 end

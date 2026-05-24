@@ -130,26 +130,25 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         config.presets[2].spells[buff.resref] = e2
     end
 
-    -- Store in UDAux
-    pcall(function()
+    -- Store in UDAux. Only call Refresh if the write succeeded — otherwise
+    -- Refresh → GetConfig → _CreateDefaultConfig re-enters recursively
+    -- (GetConfig's `if not config` gate sees the still-empty UDAux), which
+    -- recurses until stack overflow.
+    local setOk = pcall(function()
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
     end)
+    if not setOk then
+        BfBot._Warn("[Persist] Failed to store default config in UDAux; skipping innate reconciliation")
+        return config
+    end
 
-    -- Grant innate abilities for the new config's presets (with duplicate guard)
-    if BfBot.Innate and BfBot.Innate._HasInnate then
-        local slot = nil
+    -- Reconcile innates with the new config. UDAux is now populated, so
+    -- Refresh's call to GetConfig returns the stored config (no reentry).
+    if BfBot.Innate and BfBot.Innate.Refresh then
         for s = 0, 5 do
-            if EEex_Sprite_GetInPortrait(s) == sprite then slot = s; break end
-        end
-        if slot then
-            for idx = 1, BfBot.MAX_PRESETS do
-                if config.presets[idx] then
-                    local resref = string.format("BFBT%d%d", slot, idx)
-                    if not BfBot.Innate._HasInnate(sprite, resref) then
-                        EEex_Action_QueueResponseStringOnAIBase(
-                            'AddSpecialAbility("' .. resref .. '")', sprite)
-                    end
-                end
+            if EEex_Sprite_GetInPortrait(s) == sprite then
+                BfBot.Innate.Refresh(s)
+                break
             end
         end
     end

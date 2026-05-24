@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.4.0-alpha~
+VERSION ~v1.4.1-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0
@@ -19,11 +19,18 @@ REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
   ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
 
 // ---- TLK strings for innate ability tooltips ----
+// One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
+// contiguous strrefs across upgrades — existing strings keep their old
+// strrefs while new strings get appended at the end. So Lua reads all 8
+// as an array indexed by preset rather than computing from a base.
 OUTER_SET bfbot_strref_1 = RESOLVE_STR_REF(~BuffBot 1~)
 OUTER_SET bfbot_strref_2 = RESOLVE_STR_REF(~BuffBot 2~)
 OUTER_SET bfbot_strref_3 = RESOLVE_STR_REF(~BuffBot 3~)
 OUTER_SET bfbot_strref_4 = RESOLVE_STR_REF(~BuffBot 4~)
 OUTER_SET bfbot_strref_5 = RESOLVE_STR_REF(~BuffBot 5~)
+OUTER_SET bfbot_strref_6 = RESOLVE_STR_REF(~BuffBot 6~)
+OUTER_SET bfbot_strref_7 = RESOLVE_STR_REF(~BuffBot 7~)
+OUTER_SET bfbot_strref_8 = RESOLVE_STR_REF(~BuffBot 8~)
 
 // ---- Copy mod files to override ----
 COPY ~buffbot/M_BfBot.lua~   ~override~
@@ -65,9 +72,16 @@ COPY ~buffbot/BFBOTFR3.PVRZ~ ~override~
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~
 
-// ---- Write base strref for Lua innate tooltip lookup ----
+// ---- Write per-preset strrefs (one per line) for Lua tooltip lookup ----
 <<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt
 %bfbot_strref_1%
+%bfbot_strref_2%
+%bfbot_strref_3%
+%bfbot_strref_4%
+%bfbot_strref_5%
+%bfbot_strref_6%
+%bfbot_strref_7%
+%bfbot_strref_8%
 >>>>>>>>
 COPY ~.../buffbot-inlined/bfbot_strrefs.txt~ ~override/bfbot_strrefs.txt~
   EVALUATE_BUFFER
