@@ -38,7 +38,8 @@ local function _splPad(n) return string.rep("\0", n) end
 
 --- Number of opcode 172 (Remove Innate) cleanup effects per BFBT SPL.
 -- Each cast removes up to this many accumulated known+memorized duplicates.
--- Startup cleanup (Revoke with 50 passes of BFBTRM) handles heavier accumulation.
+-- Refresh's mismatch branch (up to 50 BFBTRM passes) handles heavier
+-- accumulation.
 BfBot.Innate._CLEANUP_PASSES = 5
 
 --- Build a minimal SPL binary for a BuffBot innate ability.
@@ -398,65 +399,6 @@ function BfBot.Innate._EnsureSPLFiles()
     return count
 end
 
---- Check if a character already has a specific innate ability.
--- Uses the for-style iterator (yields level, index, resref), NOT iter:hasNext()
--- which is for userdata-style iterators on a different EEex API. The wrong
--- pattern was silently swallowed by pcall, making this function always return
--- false and causing Grant() to re-add innates every load.
-function BfBot.Innate._HasInnate(sprite, resref)
-    local ok, result = pcall(function()
-        for _, _, r in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
-            if r == resref then return true end
-        end
-        return false
-    end)
-    return ok and result
-end
-
---- Count the maximum accumulation of any BuffBot innate on this sprite.
--- Returns 0 if no BFBT{slot}{preset} innates exist, 1 for normal post-grant state,
--- >1 only when legacy saves affected by the v1.3.9 opcode-171 bug have accumulated
--- duplicate copies. Drives lazy revoke so clean saves don't pay the 50-pass tax.
-function BfBot.Innate._MaxAccumulation(sprite)
-    local ok, maxCount = pcall(function()
-        local counts = {}
-        for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
-            if resref and resref:match("^BFBT[0-5][1-8]$") then
-                counts[resref] = (counts[resref] or 0) + 1
-            end
-        end
-        local m = 0
-        for _, c in pairs(counts) do
-            if c > m then m = c end
-        end
-        return m
-    end)
-    return ok and maxCount or 0
-end
-
---- Grant innate abilities to all party members based on their configured presets.
--- Skips innates the character already has (prevents duplicates across sessions).
-function BfBot.Innate.Grant()
-    if BfBot._noIO then return end
-    for slot = 0, 5 do
-        local sprite = EEex_Sprite_GetInPortrait(slot)
-        if sprite then
-            local config = BfBot.Persist.GetConfig(sprite)
-            if config then
-                for idx = 1, BfBot.MAX_PRESETS do
-                    if config.presets[idx] then
-                        local resref = string.format("BFBT%d%d", slot, idx)
-                        if not BfBot.Innate._HasInnate(sprite, resref) then
-                            EEex_Action_QueueResponseStringOnAIBase(
-                                'AddSpecialAbility("' .. resref .. '")', sprite)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
 --- Build a remover SPL (BFBTRM.SPL) that removes ALL possible BuffBot innates
 -- via opcode 172 (Remove Innate). One effect per BFBT{slot}{preset} resref.
 -- Applied via ReallyForceSpellRES — reliable, unlike RemoveSpellRES which
@@ -552,35 +494,68 @@ function BfBot.Innate._BuildRemoverSPL()
     return header .. ability .. table.concat(effects)
 end
 
---- Remove all BuffBot innates from a specific character.
--- Uses BFBTRM.SPL (opcode 172) via ReallyForceSpellRES. Each cast removes
--- one copy of each BFBT innate. Lazy-count: queue exactly as many passes as
--- needed based on observed accumulation. Clean saves typically need 0, normal
--- post-grant state needs 1, legacy saves with v1.3.9 opcode-171 accumulation
--- need more. Capped at 50 as a safety ceiling for pathological cases.
-function BfBot.Innate.Revoke(slot)
-    if BfBot._noIO then return end
-    local sprite = EEex_Sprite_GetInPortrait(slot)
-    if not sprite then return end
-    local accumulation = BfBot.Innate._MaxAccumulation(sprite)
-    if accumulation == 0 then return end
-    local passes = math.min(accumulation + 1, 50)
-    for i = 1, passes do
-        EEex_Action_QueueResponseStringOnAIBase(
-            'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
+--- Pure reconciliation planner. Examine the sprite's known-innate list once
+-- and produce a plan describing the diff between the sprite's actual BFBT
+-- entries (for this slot) and the desired set derived from config. No side
+-- effects — safe to call from tests with a stub config.
+--
+-- Return value:
+--   actual      [resref] = count of that BFBT{slot}{p} entry on sprite
+--   desired     [resref] = true for each preset configured at config.presets[p]
+--   maxCount    Highest count in actual (drives BFBTRM pass count when legacy
+--               accumulation is present — every apply of BFBTRM removes ONE
+--               copy of each BFBT entry, so N copies need N passes).
+--   hasMismatch True iff any actual entry is duplicated (count > 1) OR is not
+--               in desired (orphan from a previously-deleted preset).
+function BfBot.Innate._PlanReconciliation(sprite, slot, config)
+    local plan = { actual = {}, desired = {}, maxCount = 0, hasMismatch = false }
+    if not sprite or not config or not config.presets then return plan end
+
+    for idx = 1, BfBot.MAX_PRESETS do
+        if config.presets[idx] then
+            plan.desired[string.format("BFBT%d%d", slot, idx)] = true
+        end
     end
+
+    local ok = pcall(function()
+        for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
+            if type(resref) == "string" then
+                local s = resref:match("^BFBT(%d)%d$")
+                if s and tonumber(s) == slot then
+                    local n = (plan.actual[resref] or 0) + 1
+                    plan.actual[resref] = n
+                    if n > plan.maxCount then plan.maxCount = n end
+                    if n > 1 or not plan.desired[resref] then
+                        plan.hasMismatch = true
+                    end
+                end
+            end
+        end
+    end)
+    if not ok then
+        -- Iterator threw mid-walk. `actual` is now partial — if we leave it
+        -- and fall through to Refresh's clean branch, half-seen entries get
+        -- treated as already-granted and skipped silently. Clear `actual`
+        -- and `maxCount` so the orchestrator either grants everything
+        -- desired (clean branch with empty actual) or no-ops if desired is
+        -- empty. `hasMismatch` stays false so we don't unnecessarily revoke.
+        BfBot._Warn("[Innate] Known-innate iterator failed for slot " .. tostring(slot)
+            .. "; reconciliation may be incomplete")
+        plan.actual = {}
+        plan.maxCount = 0
+        plan.hasMismatch = false
+    end
+
+    return plan
 end
 
---- Refresh innates for a specific character (e.g., after preset create/delete).
--- Bifurcates on accumulation to avoid a race: when we queue a Revoke, the
--- BFBTRM casts haven't fired yet at the point we'd check _HasInnate, so the
--- innates would still report as present and the re-grant would be skipped.
--- Instead:
---   - accumulation > 1 (duplicates): queue Revoke, then unconditionally
---     queue grants for all configured presets (revoke will clear by the
---     time grants run).
---   - accumulation <= 1 (clean or empty): no Revoke needed; check _HasInnate
---     and grant only the missing ones.
+--- Reconcile sprite's BFBT innates with config in a single planner+apply pass.
+-- Plan via _PlanReconciliation, then queue actions:
+--   mismatch → (maxCount + 1) BFBTRM passes (revoke ALL BFBT) + grant every
+--              desired entry. BCS action queue is FIFO so revokes run first.
+--   clean    → grant only desired entries missing from actual.
+-- The mismatch branch also covers legacy v1.3.9 accumulation (duplicates) and
+-- orphans (issue #47) — same single reconciliation handles both.
 function BfBot.Innate.Refresh(slot)
     if BfBot._noIO then return end
     local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -588,25 +563,23 @@ function BfBot.Innate.Refresh(slot)
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
 
-    local accumulation = BfBot.Innate._MaxAccumulation(sprite)
+    local plan = BfBot.Innate._PlanReconciliation(sprite, slot, config)
 
-    if accumulation > 1 then
-        BfBot.Innate.Revoke(slot)
-        for idx = 1, BfBot.MAX_PRESETS do
-            if config.presets[idx] then
-                local resref = string.format("BFBT%d%d", slot, idx)
-                EEex_Action_QueueResponseStringOnAIBase(
-                    'AddSpecialAbility("' .. resref .. '")', sprite)
-            end
+    if plan.hasMismatch then
+        local passes = math.min(plan.maxCount + 1, 50)
+        for _ = 1, passes do
+            EEex_Action_QueueResponseStringOnAIBase(
+                'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
+        end
+        for resref in pairs(plan.desired) do
+            EEex_Action_QueueResponseStringOnAIBase(
+                'AddSpecialAbility("' .. resref .. '")', sprite)
         end
     else
-        for idx = 1, BfBot.MAX_PRESETS do
-            if config.presets[idx] then
-                local resref = string.format("BFBT%d%d", slot, idx)
-                if not BfBot.Innate._HasInnate(sprite, resref) then
-                    EEex_Action_QueueResponseStringOnAIBase(
-                        'AddSpecialAbility("' .. resref .. '")', sprite)
-                end
+        for resref in pairs(plan.desired) do
+            if not plan.actual[resref] then
+                EEex_Action_QueueResponseStringOnAIBase(
+                    'AddSpecialAbility("' .. resref .. '")', sprite)
             end
         end
     end
@@ -671,8 +644,8 @@ function BFBOTGO(param1, param2, special)
     -- Re-grant the innate BEFORE main logic (outside pcall — always runs).
     -- The SPL's opcode 172 effects remove the known+memorized entries as
     -- immediate spell effects. This AddSpecialAbility queues for next tick,
-    -- adding back exactly one clean copy. No _HasInnate check needed here
-    -- because opcode 172 already removed the entries.
+    -- adding back exactly one clean copy. No duplicate-check needed because
+    -- opcode 172 has already removed the entry by the time this fires.
     pcall(function()
         if slot >= 0 and slot <= 5 and presetIdx >= 1 and presetIdx <= BfBot.MAX_PRESETS then
             local sprite = EEex_Sprite_GetInPortrait(slot)
