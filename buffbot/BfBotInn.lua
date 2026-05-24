@@ -6,13 +6,20 @@
 
 BfBot.Innate = {}
 
--- Read base strref from file (written by tools/patch_tlk.py at deploy time).
--- If the file doesn't exist, innates will have no tooltip names.
-BfBot.Innate._baseStrref = nil
+-- Read per-preset strrefs from file (written by WeiDU at install time, or by
+-- tools/patch_tlk.py during dev deploy). One strref per line, indexed by
+-- preset (1..MAX_PRESETS). Empty array if the file is missing → innates show
+-- no tooltip name. We read each preset explicitly rather than relying on
+-- contiguous strref arithmetic, since WeiDU does not guarantee contiguity
+-- across upgrades.
+BfBot.Innate._strrefs = {}
 if io then
     local _sf = io.open("override/bfbot_strrefs.txt", "r")
     if _sf then
-        BfBot.Innate._baseStrref = tonumber(_sf:read("*l"))
+        for line in _sf:lines() do
+            local n = tonumber(line)
+            if n then table.insert(BfBot.Innate._strrefs, n) end
+        end
         _sf:close()
     end
 end
@@ -51,11 +58,9 @@ function BfBot.Innate._BuildSPL(slot, preset)
     local numCleanup = BfBot.Innate._CLEANUP_PASSES
     local numFeats = 1 + numCleanup  -- 1 opcode 402 + N opcode 172
 
-    -- Name strref: base + (preset-1) if TLK was patched, else -1 (no name)
-    local nameStrref = 0xFFFFFFFF
-    if BfBot.Innate._baseStrref then
-        nameStrref = BfBot.Innate._baseStrref + (preset - 1)
-    end
+    -- Name strref: look up by preset index, fall back to "no name" if the
+    -- TLK patcher didn't run or this preset's strref wasn't written.
+    local nameStrref = BfBot.Innate._strrefs[preset] or 0xFFFFFFFF
 
     local HEADER_SIZE = 0x72   -- 114 bytes
     local EXT_SIZE    = 0x28   -- 40 bytes

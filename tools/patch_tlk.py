@@ -87,9 +87,12 @@ def patch_tlk(tlk_path, strrefs_path):
 
     if is_already_patched(data, str_count, str_data_offset):
         base = find_existing_base_strref(data, str_count, str_data_offset)
-        print(f"  Already patched (base strref = {base}). Skipping.")
+        print(f"  Already patched (base strref = {base}). Skipping TLK write.")
+        # Write all 8 strrefs (one per line) — patch_tlk's append-only flow
+        # makes them contiguous starting at base.
         with open(strrefs_path, "w") as sf:
-            sf.write(str(base) + "\n")
+            for i in range(len(STRINGS)):
+                sf.write(str(base + i) + "\n")
         return
 
     # Backup original
@@ -144,10 +147,12 @@ def patch_tlk(tlk_path, strrefs_path):
     print(f"  Patched: added {len(STRINGS)} strings (strrefs {base_strref}-{base_strref + len(STRINGS) - 1})")
     print(f"  New total: {new_str_count} strings, {len(output)} bytes")
 
-    # Write base strref for Lua to read
+    # Write per-preset strrefs (one per line) for Lua to read as an array.
+    # patch_tlk appends all STRINGS in one batch, so they're contiguous.
     with open(strrefs_path, "w") as sf:
-        sf.write(str(base_strref) + "\n")
-    print(f"  Base strref written to {strrefs_path}")
+        for i in range(len(STRINGS)):
+            sf.write(str(base_strref + i) + "\n")
+    print(f"  Strrefs written to {strrefs_path}")
 
 
 if __name__ == "__main__":
