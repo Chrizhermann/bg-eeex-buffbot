@@ -1,0 +1,77 @@
+//setup-buffbot.tp2 BuffBot-Main
+@10 = ~BuffBot: In-Game Buff Automation~
+@11 = ~BuffBot requires BG:EE, BG2:EE, or EET.~
+@12 = ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+@13 = ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+
+//setup-buffbot.tp2 BuffBot-LuaJIT
+@20 = ~BuffBot: EEex LuaJIT Support (auto-detected)~
+@24 = ~Installing EEex LuaJIT component (normally installed by EEex setup).~
+@25 = ~Detected LuaVersionExternal: %lua_version%~
+@26 = ~LuaJIT installed successfully. BuffBot will have full functionality.~
+
+//BuffBot.menu
+@301 = ~"Reset"~ 
+@302 = ~"Rename"~
+@303 = ~"New"~
+@304 = ~"Add Spell"~
+@305 = ~"Remove"~
+@306 = ~"Export"~
+@307 = ~"Import"~
+@308 = ~"Up"~
+@309 = ~"Down"~
+@310 = ~"Sort"~
+@311 = ~"Delete Preset"~
+@312 = ~"Stop"~
+@313 = ~"Close"~
+@314 = ~"Self"~
+@315 = ~"All Party"~
+@316 = ~"Clear"~
+@317 = ~"Done"~
+@318 = ~"Unlock Targeting"~
+@319 = ~"Rename Preset"~
+@320 = ~"OK"~
+@321 = ~"Cancel"~
+@322 = ~"Add Spell to Buff List"~
+@323 = ~"Add to Buff List"~
+@324 = ~"Import Config"~
+@325 = ~"Select"~
+
+//BfBotUI.lua
+@401 = ~"BuffBot Configuration"~
+@402 = ~"Cast All"~
+@403 = ~"Cast Character"~
+@404 = ~"(Self-only)"~
+@405 = ~"(Party-wide)"~
+@406 = ~"BuffBot: No spells to cast in this preset"~
+@407 = ~"BuffBot: No spells to cast for this character"~
+@408 = ~"Cast "~
+@409 = ~"Cast Character"~
+@410 = ~"BuffBot: No additional spells to add"~
+@411 = ~"BuffBot: Exported config as '"~
+@412 = ~"BuffBot: Export failed — "~
+@413 = ~"BuffBot: No configs found in bfbot_presets/"~
+@414 = ~"BuffBot: Imported '"~
+@415 = ~" presets, "~
+@416 = ~" spells skipped)"~
+@417 = ~"BuffBot: Import failed — "~
+@418 = ~"Var: "~
+@419 = ~"Variant"~
+@420 = ~"Disable"~
+@421 = ~"Enable"~
+@422 = ~"Target: "~
+@423 = ~"Party"~
+@424 = ~"Target"~
+@425 = ~"Self"~
+@426 = ~"Casting (Quick: All)..."~
+@427 = ~"Casting (Quick: Long)..."~
+@428 = ~"Casting..."~
+@429 = ~"Done"~
+@430 = ~"Stopped"~
+@431 = ~"Quick Cast: Off"~
+@432 = ~"Quick Cast: Long"~
+@433 = ~"Quick Cast: All"~
+@434 = ~"Normal casting speed"~
+@435 = ~"Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle."~
+@436 = ~"Fast casting for ALL buffs regardless of duration (cheat). Click to cycle."~
+@437 = ~"Normal casting speed — spells respect aura cooldown. Click to cycle."~

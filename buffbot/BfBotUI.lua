@@ -64,7 +64,7 @@ end
 buffbot_isOpen = false
 buffbot_title = "BuffBot"
 buffbot_status = ""
-buffbot_btnTooltip = "BuffBot Configuration"
+buffbot_btnTooltip = "BFBOTUITRA_BuffBotConfiguration"
 buffbot_btnFrame = 0             -- 0=normal, 1=active/running
 
 -- Character tabs (1-indexed; nil entries = empty party slot)
@@ -79,8 +79,8 @@ buffbot_spellTable = {}
 buffbot_selectedRow = 0
 
 -- Cast button labels
-buffbot_castLabel = "Cast All"
-buffbot_castCharLabel = "Cast Character"
+buffbot_castLabel = "BFBOTUITRA_CastAll"
+buffbot_castCharLabel = "BFBOTUITRA_CastCharacter"
 
 -- Target picker state
 buffbot_targetRow = 0            -- which spell row opened the picker
@@ -683,8 +683,8 @@ function BfBot.UI._Refresh()
         buffbot_presetNames = {}
         buffbot_presetCount = 0
         buffbot_title = "BuffBot"
-        buffbot_castLabel = "Cast All"
-        buffbot_castCharLabel = "Cast Character"
+        buffbot_castLabel = "BFBOTUITRA_CastAll"
+        buffbot_castCharLabel = "BFBOTUITRA_CastCharacter"
         buffbot_status = ""
         return
     end
@@ -868,7 +868,7 @@ function BfBot.UI._Refresh()
 
     -- 7. Update title, cast labels, status
     buffbot_title = "BuffBot - " .. (preset.name or "Preset")
-    buffbot_castLabel = "Cast All"
+    buffbot_castLabel = "BFBOTUITRA_CastAll"
     buffbot_castCharLabel = BfBot.UI._CastCharLabel()
     buffbot_status = BfBot.UI._GetStatusText()
 end
@@ -950,10 +950,10 @@ function BfBot.UI.OpenTargets(row)
     if entry.tgtUnlock ~= 1 then
         if entry.isSelfOnly == 1 then
             isLocked = 1
-            lockText = "(Self-only)"
+            lockText = "BFBOTUITRA_SelfOnly"
         elseif entry.isAoE == 1 then
             isLocked = 1
-            lockText = "(Party-wide)"
+            lockText = "BFBOTUITRA_PartyWide"
         end
     end
     buffbot_targetLocked = isLocked
@@ -1210,7 +1210,7 @@ function BfBot.UI.Cast()
 
     local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        BfBot._Display("BuffBot: No spells to cast in this preset")
+        BfBot._Display("BFBOTUITRA_NoSpells2CastPreset")
         return
     end
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
@@ -1226,7 +1226,7 @@ function BfBot.UI.CastCharacter()
 
     local queue = BfBot.Persist.BuildQueueForCharacter(BfBot.UI._charSlot, BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        Infinity_DisplayString("BuffBot: No spells to cast for this character")
+        Infinity_DisplayString("BFBOTUITRA_NoSpells2CastChar")
         return
     end
     local qcMode = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
@@ -1236,8 +1236,8 @@ end
 
 function BfBot.UI._CastCharLabel()
     local name = buffbot_charNames[BfBot.UI._charSlot + 1]
-    if name then return "Cast " .. name end
-    return "Cast Character"
+    if name then return "BFBOTUITRA_Cast" .. name end
+    return "BFBOTUITRA_CastCharacter"
 end
 
 function BfBot.UI.Stop()
@@ -1500,7 +1500,7 @@ end
 function BfBot.UI.OpenSpellPicker()
     BfBot.UI._BuildPickerList()
     if #buffbot_pickerSpells == 0 then
-        BfBot._Display("BuffBot: No additional spells to add")
+        BfBot._Display("BFBOTUITRA_NoAdditionalSpells")
         return
     end
     Infinity_PushMenu("BUFFBOT_SPELLPICKER")
@@ -1570,9 +1570,9 @@ function BfBot.UI.ExportConfig()
 
     local ok, result = BfBot.Persist.ExportConfig(sprite)
     if ok then
-        BfBot._Display("BuffBot: Exported config as '" .. result .. "'")
+        BfBot._Display("BFBOTUITRA_ExportedConfigAs" .. result .. "'")
     else
-        BfBot._Display("BuffBot: Export failed — " .. tostring(result))
+        BfBot._Display("BFBOTUITRA_ExportFailed" .. tostring(result))
     end
 end
 
@@ -1593,7 +1593,7 @@ end
 function BfBot.UI.OpenImportPicker()
     BfBot.UI._BuildImportList()
     if #buffbot_importList == 0 then
-        BfBot._Display("BuffBot: No configs found in bfbot_presets/")
+        BfBot._Display("BFBOTUITRA_NoConfigsFound")
         return
     end
     Infinity_PushMenu("BUFFBOT_IMPORT")
@@ -1610,12 +1610,12 @@ function BfBot.UI.ImportSelected()
     Infinity_PopMenu("BUFFBOT_IMPORT")
 
     if ok then
-        BfBot._Display("BuffBot: Imported '" .. entry.name .. "' ("
-            .. presets .. " presets, " .. skipped .. " spells skipped)")
+        BfBot._Display("BFBOTUITRA_Imported" .. entry.name .. "' ("
+            .. presets .. "BFBOTUITRA_Rresets" .. skipped .. "BFBOTUITRA_SpellsSkipped")
         BfBot.Scan.Invalidate(sprite)
         BfBot.UI._Refresh()
     else
-        BfBot._Display("BuffBot: Import failed — " .. tostring(presets))
+        BfBot._Display("BFBOTUITRA_ImportFailed" .. tostring(presets))
     end
 end
 
@@ -1687,10 +1687,10 @@ function BfBot.UI._VariantBtnText()
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         local entry = buffbot_spellTable[buffbot_selectedRow]
         if entry and entry.variantName then
-            return "Var: " .. entry.variantName
+            return "BFBOTUITRA_Var" .. entry.variantName
         end
     end
-    return "Variant"
+    return "BFBOTUITRA_Variant"
 end
 
 --- Can we create more presets? (fewer than 5 exist)
@@ -1707,18 +1707,18 @@ end
 function BfBot.UI._ToggleBtnText()
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         local entry = buffbot_spellTable[buffbot_selectedRow]
-        if entry and entry.on == 1 then return "Disable" end
+        if entry and entry.on == 1 then return "BFBOTUITRA_Disable" end
     end
-    return "Enable"
+    return "BFBOTUITRA_Enable"
 end
 
 --- Target button text: shows current target of selected row.
 function BfBot.UI._TargetBtnText()
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         local entry = buffbot_spellTable[buffbot_selectedRow]
-        if entry then return "Target: " .. (entry.targetText or "Party") end
+        if entry then return "BFBOTUITRA_TargetC" .. (entry.targetText or "BFBOTUITRA_Party") end
     end
-    return "Target"
+    return "BFBOTUITRA_Target"
 end
 
 --- Format a duration in seconds to a human-readable string.
@@ -1788,8 +1788,8 @@ end
 -- tgt can be: "s", "p", a name string, or a table of name strings.
 -- Also handles legacy slot strings ("1"-"6") for backwards compatibility.
 function BfBot.UI._TargetToText(tgt)
-    if tgt == "s" then return "Self"
-    elseif tgt == "p" then return "Party"
+    if tgt == "s" then return "BFBOTUITRA_Self"
+    elseif tgt == "p" then return "BFBOTUITRA_Party"
     elseif type(tgt) == "table" then
         if #tgt == 0 then return "None" end
         -- First entry is always the display name (highest priority target)
@@ -1819,11 +1819,11 @@ function BfBot.UI._GetStatusText()
     local state = BfBot.Exec.GetState()
     if state == "running" then
         local qc = BfBot.Exec._qcMode or 0
-        if qc == 2 then return "Casting (Quick: All)..."
-        elseif qc == 1 then return "Casting (Quick: Long)..."
-        else return "Casting..." end
-    elseif state == "done" then return "Done"
-    elseif state == "stopped" then return "Stopped"
+        if qc == 2 then return "BFBOTUITRA_CastingQuickAll"
+        elseif qc == 1 then return "BFBOTUITRA_CastingQuickLong"
+        else return "BFBOTUITRA_Casting" end
+    elseif state == "done" then return "BFBOTUITRA_Done"
+    elseif state == "stopped" then return "BFBOTUITRA_Stopped"
     else return "" end
 end
 
@@ -1842,11 +1842,11 @@ end
 function BfBot.UI._QuickCastLabel()
     if not buffbot_isOpen then return "" end
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return "Quick Cast: Off" end
+    if not sprite then return "BFBOTUITRA_QuickCastOff" end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    if qc == 1 then return "Quick Cast: Long" end
-    if qc == 2 then return "Quick Cast: All" end
-    return "Quick Cast: Off"
+    if qc == 1 then return "BFBOTUITRA_QuickCastLong" end
+    if qc == 2 then return "BFBOTUITRA_QuickCastAll" end
+    return "BFBOTUITRA_QuickCastOff"
 end
 
 function BfBot.UI._QuickCastColor()
@@ -1860,11 +1860,11 @@ end
 
 function BfBot.UI._QuickCastTooltip()
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return "Normal casting speed" end
+    if not sprite then return "BFBOTUITRA_NormalCastingSpeed" end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    if qc == 1 then return "Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle." end
-    if qc == 2 then return "Fast casting for ALL buffs regardless of duration (cheat). Click to cycle." end
-    return "Normal casting speed — spells respect aura cooldown. Click to cycle."
+    if qc == 1 then return "BFBOTUITRA_FastCastingLongTips" end
+    if qc == 2 then return "BFBOTUITRA_FastCastingAllTips" end
+    return "BFBOTUITRA_NormalCastingSpeedTips"
 end
 
 -- ============================================================
