@@ -4,7 +4,7 @@
     {"id": 1, "subject": "Cut feature branch feat/items-and-potions", "status": "pending"},
     {"id": 2, "subject": "Probe — EEex inventory + quickitem field paths", "status": "pending", "blockedBy": [1]},
     {"id": 3, "subject": "Probe — UseItem BCS + Item:getAbility(i)", "status": "pending", "blockedBy": [1]},
-    {"id": 4, "subject": "Schema v7 — bump, migrate, validate", "status": "pending", "blockedBy": [1]},
+    {"id": 4, "subject": "Schema v8 — bump, migrate, validate", "status": "pending", "blockedBy": [1]},
     {"id": 5, "subject": "Rename _MakeDefaultSpellEntry → _MakeDefaultEntry", "status": "pending", "blockedBy": [4]},
     {"id": 6, "subject": "ImportConfig — kind-aware filtering", "status": "pending", "blockedBy": [5]},
     {"id": 7, "subject": "Classifier — collect leafResrefs in GetDuration", "status": "pending", "blockedBy": [1]},
@@ -19,8 +19,8 @@
     {"id": 16, "subject": "BfBotTst — Items() test phase", "status": "pending", "blockedBy": [12]},
     {"id": 17, "subject": "Manual QA on representative items", "status": "pending", "blockedBy": [14, 15, 16]},
     {"id": 18, "subject": "bg-modding-learn — capture verified knowledge", "status": "pending", "blockedBy": [17]},
-    {"id": 19, "subject": "Version bump v1.4.0-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
+    {"id": 19, "subject": "Version bump v1.4.2-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
     {"id": 20, "subject": "Push branch + open PR (#21 partial)", "status": "pending", "blockedBy": [19]}
   ],
-  "lastUpdated": "2026-04-30T00:00:00Z"
+  "lastUpdated": "2026-06-15T00:00:00Z"
 }

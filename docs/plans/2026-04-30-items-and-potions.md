@@ -4,7 +4,7 @@
 
 **Goal:** Add support for activated equipped-item abilities and inventory potions as buff sources alongside spells. Configure by resref (durable) — engine picks the slot at use time. Listed-but-disabled by default. Closes (a)+(b) of GitHub issue #21; defers (c) scrolls and (d) wands to follow-ups.
 
-**Architecture:** Extend `BfBotScn.lua` to walk inventory + 3 quickitems and merge `kind="itm"` entries into the existing spell catalog. Schema bump v6→v7 adds the `kind` field. Exec engine branches on `kind` to emit `UseItem("RESREF", target)` BCS for items, `SpellRES` for spells. Pre-flight already-active check uses an extended `leafResrefs` list (collected by recursing op=146 sub-spell chains in `BfBot.Class.GetDuration`) so wrapper potions are detected by the leaf SPL on the target's effect list. UI mixes both kinds in one priority-sortable list with a tinted `itemColor` palette key for item rows.
+**Architecture:** Extend `BfBotScn.lua` to walk inventory + 3 quickitems and merge `kind="itm"` entries into the existing spell catalog. Schema bump v7→v8 adds the `kind` field. Exec engine branches on `kind` to emit `UseItem("RESREF", target)` BCS for items, `SpellRES` for spells. Pre-flight already-active check uses an extended `leafResrefs` list (collected by recursing op=146 sub-spell chains in `BfBot.Class.GetDuration`) so wrapper potions are detected by the leaf SPL on the target's effect list. UI mixes both kinds in one priority-sortable list with a tinted `itemColor` palette key for item rows.
 
 **Tech Stack:** Lua 5.1 (EEex), `.menu` DSL, WeiDU installer (no build step — deploy via `bash tools/deploy.sh`). Tests run in-game via `BfBot.Test.<Name>()` in the EEex console. Field-path probes use the EEex remote console at `C:\src\private\eeex-remote-console`.
 
@@ -14,6 +14,17 @@
 - Prior schema migration pattern: `docs/plans/2026-04-18-spell-lock.md` (v5→v6)
 
 **Branch:** `feat/items-and-potions` (cut from `main`)
+
+---
+
+## Post-merge amendment note (2026-06-15)
+
+This plan was authored pre-merge. The `feat/items-and-potions` branch has since been merged with `main` (now at **v1.4.1-alpha, schema v7**). The plan has been re-pinned accordingly:
+
+- **Schema target is now v8** (current state is v7) and **release target is v1.4.2-alpha** (current is v1.4.1-alpha). All fixture literals and migration branches shifted up one (v6→v7 became v7→v8; "current" fixtures are now `v=7`, "new" fixtures `v=8`).
+- **Task 15 resolved to option (b):** items auto-merge into the main preset list *disabled by default* (the already-approved "listed but disabled" UX — items are NOT excluded from the `BfBotPer.lua` auto-merge). The picker's `[Items]` sub-section scopes to items the user has explicitly REMOVED/excluded (`ovr == -1`), mirroring the excluded-buff-spell re-add affordance (v1.3.10 picker).
+- **Probe / deploy target is the `…modded - Copy - Copy` test install** — never the active playthrough (probes mutate game state).
+- **Innate, scanner, and exec layers confirmed stable post-merge** — anchors in those tasks were audited and hold; GetDuration core, `bump-version.sh` form, and the PROBE CLI path also hold.
 
 ---
 
@@ -53,14 +64,33 @@ No commit yet — code starts in Task 2.
 
 **Goal:** discover the `CGameSprite` field path that exposes the per-slot inventory list. EEex has no Lua-side iterator; only `GetQuickButtons(2|4, false)` is wired (mage+priest, innate). We need direct field access.
 
-**Prerequisite:** game must be running on the world screen with a party. Test character should have at least 1 known potion in inventory and 1 ring/amulet equipped (e.g. give yourself `POTN15` Oil of Speed and `RING06` Ring of the Ram via `CreateItem` first).
+**Target install — IMPORTANT:** all probes and deploys in this plan run against the **`…modded - Copy - Copy` test install**, NEVER the active playthrough. Probes mutate game state (queue actions, drink potions, decrement stacks) — pointing them at the active install corrupts a real save.
+
+**Deploy before in-game work:**
+
+```bash
+BGEE_DIR="C:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy" bash tools/deploy.sh
+```
+
+(deploy.sh precedence: explicit arg > `BGEE_DIR` env > active `deploy.conf`.) Re-run this deploy before any `BfBot.*` probe once code changes start landing (Task 8 onward) so the running game has the latest Lua.
+
+**Prerequisite:** game must be running on the world screen with a party on the `- Copy - Copy` install. Set up the manual item fixtures on the test character via `CreateItem` (used across Tasks 2, 3, 17):
+
+- `POTN15` Oil of Speed (Haste wrapper, op=146)
+- `POTN14` Potion of Heroism
+- `POTN21` Potion of Fire Resistance
+- `RING06` Ring of the Ram (equipped activated, offensive)
+- `AMUL19` Amulet of Power (equipped passive)
+- `RING23` Ring of Wizardry (passive)
+- `BRAC09` (multi-ability item, for the `getAbility(i)` check)
+- `WAND09` Wand of Heavens (non-quickslot wand test)
 
 **Step 1: Probe candidate field names via remote console**
 
-Run, one at a time, and check which return non-nil with sensible content:
+Run, one at a time, and check which return non-nil with sensible content. (Each Bash snippet is a fresh shell — `GAME_DIR` and `PROBE` are re-declared at the top of every snippet below.)
 
 ```bash
-GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded/override'
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
 PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
 
 # Try each candidate field name on the party leader sprite
@@ -79,6 +109,9 @@ end
 If `m_aItems` (most likely) resolves, walk it:
 
 ```bash
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
+PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
+
 bash "$PROBE" "$GAME_DIR" '
 local sp = EEex_Sprite_GetInPortrait(0)
 local list = sp.m_aItems
@@ -112,6 +145,9 @@ QUICKITEM_FIELDS = (probe separately — see Step 4)
 3 quickitem slots are typically in a separate field:
 
 ```bash
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
+PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
+
 bash "$PROBE" "$GAME_DIR" '
 local sp = EEex_Sprite_GetInPortrait(0)
 local names = { "m_quickItems", "m_aQuickItems", "m_quickItemSlot", "m_quickItem" }
@@ -146,6 +182,9 @@ bg-modding/references/eeex-sprites.md in Task 18."
 **Step 1: Probe `getAbility(0)` on a single-ability potion**
 
 ```bash
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
+PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
+
 bash "$PROBE" "$GAME_DIR" '
 local h = EEex_Resource_Demand("POTN15", "ITM")
 print("abilityCount: " .. tostring(h.abilityCount))
@@ -163,6 +202,9 @@ Expected: abilityCount=1, target=5 (Self), featureBlockCount≥1.
 `BRAC09` (Bracers of Binding) has 2 abilities. Or use any ITM with `abilityCount > 1` — verify via Near Infinity if uncertain.
 
 ```bash
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
+PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
+
 bash "$PROBE" "$GAME_DIR" '
 local resref = "BRAC09"  -- adjust if not present in this install
 local h = EEex_Resource_Demand(resref, "ITM")
@@ -182,6 +224,9 @@ Expected if EEex typo is benign: distinct `startingEffect` values per ability. E
 **Step 3: Probe `UseItem` BCS verb**
 
 ```bash
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
+PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
+
 bash "$PROBE" "$GAME_DIR" '
 local sp = EEex_Sprite_GetInPortrait(0)
 EEex_Action_QueueResponseStringOnAIBase("UseItem(\"POTN15\",Myself)", sp)
@@ -197,6 +242,9 @@ User claimed "wands can only be used from quickslot". Verify against engine:
 ```bash
 # Move WAND09 (Wand of Heavens) to a regular inventory slot (not quickslot 1-3),
 # then attempt to use it
+GAME_DIR='c:/Games/Baldur'\''s Gate II Enhanced Edition modded - Copy - Copy/override'
+PROBE='/c/src/private/eeex-remote-console/tools/eeex-remote.sh'
+
 bash "$PROBE" "$GAME_DIR" '
 local sp = EEex_Sprite_GetInPortrait(0)
 EEex_Action_QueueResponseStringOnAIBase("UseItem(\"WAND09\",Myself)", sp)
@@ -226,27 +274,27 @@ git commit -m "research(items): verify UseItem BCS + Item:getAbility(i) behavior
 
 ---
 
-## Task 4: Schema v7 — bump version, migrate, validate
+## Task 4: Schema v8 — bump version, migrate, validate
 
 **Files:**
-- Modify: `buffbot/BfBotPer.lua` (line ~10 `_SCHEMA_VERSION`, line ~65 `_MakeDefaultSpellEntry`, validator block, migration block)
+- Modify: `buffbot/BfBotPer.lua` (line 10 `_SCHEMA_VERSION` — currently `7`; `GetDefaultConfig` stamps `v` at :35; validator per-entry loop at :199; migration block :286-311)
 
 **Step 1: Bump schema version**
 
-`buffbot/BfBotPer.lua:10`:
+`buffbot/BfBotPer.lua:10` is currently `= 7` (and `GetDefaultConfig` stamps the version at :35). Bump to 8 — the `kind` field is schema **v8**:
 
 ```lua
-BfBot.Persist._SCHEMA_VERSION = 7
+BfBot.Persist._SCHEMA_VERSION = 8
 ```
 
-**Step 2: Add v6→v7 migration branch**
+**Step 2: Add v7→v8 migration branch**
 
-In `_MigrateConfig`, after the `if fromVersion < 6 then ... end` block, add:
+In `_MigrateConfig`, the last existing branch is `if fromVersion < 7 then ... end` (BfBotPer.lua:286-309, the #40 color-escape strip; version stamp at :310, return at :311). Leave that `<7` block intact. Insert the new branch **after line 309, before the stamp at :310**:
 
 ```lua
-if fromVersion < 7 then
+if fromVersion < 8 then
     -- Add kind = "spl" to all existing spell entries.
-    -- Pre-v7 entries are all spells; items appear in v7+ only.
+    -- Pre-v8 entries are all spells; items appear in v8+ only.
     if config.presets then
         for _, preset in pairs(config.presets) do
             if type(preset) == "table" and type(preset.spells) == "table" then
@@ -263,7 +311,7 @@ end
 
 **Step 3: Add `kind` validator default**
 
-In `_ValidateConfig`'s per-spell-entry block (the `for resref, entry in pairs(preset.spells)` loop), add this near the other field defaults:
+In `_ValidateConfig`'s per-entry loop at BfBotPer.lua:199 (`for resref, entry in pairs(preset.spells)`), insert the kind default **after the lock default (after line 225, before :226)**, alongside the other field defaults:
 
 ```lua
 if type(entry.kind) ~= "string" or (entry.kind ~= "spl" and entry.kind ~= "itm") then
@@ -273,12 +321,12 @@ end
 
 **Step 4: Write migration test**
 
-In `buffbot/BfBotTst.lua`, find `BfBot.Test.PersistMigrate` (or similar). Add a sub-case:
+In `buffbot/BfBotTst.lua`, find `BfBot.Test.Persist()` (BfBotTst.lua:2730 — the consolidated persistence phase). Add a sub-case:
 
 ```lua
--- v6→v7: kind field added to all entries
-local v6 = {
-    v = 6, ap = 1,
+-- v7→v8: kind field added to all entries
+local v7 = {
+    v = 7, ap = 1,
     presets = {
         [1] = { name = "P1", cat = "long", qc = 0, spells = {
             ["SPWI304"] = { on = 1, tgt = "s", pri = 1, lock = 0 },
@@ -286,11 +334,11 @@ local v6 = {
     },
     opts = { skip = 1 }, ovr = {},
 }
-local migrated = BfBot.Persist._MigrateConfig(v6, 6)
-if migrated.v == 7 and migrated.presets[1].spells["SPWI304"].kind == "spl" then
-    _ok("v6→v7 migration sets kind=\"spl\"")
+local migrated = BfBot.Persist._MigrateConfig(v7, 7)
+if migrated.v == 8 and migrated.presets[1].spells["SPWI304"].kind == "spl" then
+    _ok("v7→v8 migration sets kind=\"spl\"")
 else
-    _nok("v6→v7 migration failed: " .. tostring(migrated.presets[1].spells["SPWI304"].kind))
+    _nok("v7→v8 migration failed: " .. tostring(migrated.presets[1].spells["SPWI304"].kind))
 end
 ```
 
@@ -299,18 +347,18 @@ end
 In EEex console:
 
 ```
-BfBot.Test.PersistMigrate()
+BfBot.Test.Persist()
 ```
 
-Expected: all checks pass including the new v7 case.
+Expected: all checks pass including the new v8 case.
 
 **Step 6: Commit**
 
 ```bash
 git add buffbot/BfBotPer.lua buffbot/BfBotTst.lua
-git commit -m "feat(persist): schema v7 adds kind field
+git commit -m "feat(persist): schema v8 adds kind field
 
-Migration sets kind=\"spl\" on all pre-v7 entries.
+Migration sets kind=\"spl\" on all pre-v8 entries.
 Validator defaults missing/invalid kind to \"spl\"."
 ```
 
@@ -319,11 +367,11 @@ Validator defaults missing/invalid kind to \"spl\"."
 ## Task 5: Rename `_MakeDefaultSpellEntry` → `_MakeDefaultEntry`
 
 **Files:**
-- Modify: `buffbot/BfBotPer.lua` (function definition at ~line 65; callers in same file + `BfBotUI.lua`)
+- Modify: `buffbot/BfBotPer.lua` (function definition at line 49; callers in same file + `BfBotUI.lua`)
 
 **Step 1: Update the definition**
 
-Replace the function around line 65:
+Replace the function at line 49:
 
 ```lua
 --- Create a default entry for a preset spell or item slot.
@@ -352,18 +400,17 @@ grep -rn "_MakeDefaultSpellEntry" C:/src/private/bg-eeex-buffbot/buffbot/
 
 Replace each `_MakeDefaultSpellEntry(args)` with `_MakeDefaultEntry(args)`. No backwards-compat alias — the rule in CLAUDE.md is no compat hacks.
 
-Five expected sites: `BfBotPer.lua:131`, `:140`, `:453`, `:494`, `:518`, plus `BfBotUI.lua:729`. Verify count.
+Five expected sites in `BfBotPer.lua`: `:115`, `:124`, `:457`, `:498`, `:522`, plus `BfBotUI.lua:727`. Verify count (6).
 
 **Step 3: Run validation**
 
-In-game:
+In-game (the persistence checks are consolidated into one phase):
 
 ```
-BfBot.Test.PersistDefault()
-BfBot.Test.PersistValidate()
+BfBot.Test.Persist()
 ```
 
-Both should pass.
+Should pass.
 
 **Step 4: Commit**
 
@@ -380,11 +427,11 @@ All 6 callers updated. No backwards-compat alias."
 ## Task 6: ImportConfig — kind-aware filtering
 
 **Files:**
-- Modify: `buffbot/BfBotPer.lua` `ImportConfig` function (around line 759)
+- Modify: `buffbot/BfBotPer.lua` `ImportConfig` function (line 763; strip loop at 828-832, inside the `if castable then` guard at :826, drained at 833-836)
 
 **Step 1: Find the spell-stripping block**
 
-In `ImportConfig`, the loop currently looks like:
+In `ImportConfig`, the loop at 828-832 currently looks like this (note the loop variable is `_` — it will become `entry` in Step 2 so we can read `entry.kind`):
 
 ```lua
 for resref, _ in pairs(preset.spells) do
@@ -411,12 +458,12 @@ end
 
 **Step 3: Test**
 
-Add to `BfBot.Test.PersistImport` (or create if absent):
+Add to `BfBot.Test.ExportImport()` (BfBotTst.lua:1040):
 
 ```lua
 -- Items kept even if not in inventory; spells stripped if not castable
 local imported = {
-    v = 7, ap = 1,
+    v = 8, ap = 1,
     presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
         ["POTN99"]  = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
         ["SPWI999"] = { kind = "spl", on = 1, tgt = "s", pri = 2, lock = 0 },
@@ -449,24 +496,21 @@ Items stay (inventory is fluid; catalog-driven UI hides absent items)."
 
 **Step 1: Extend GetDuration to collect leaf resrefs**
 
-`GetDuration` already recurses op=146 sub-spells (depth 2, cycle-guarded). Extend its return contract to also return a list of leaf resrefs:
+`GetDuration` (signature `(header, ability, _depth, _visited)` at :522) already recurses op=146 sub-spells (depth 2, cycle-guarded; recursion at :535-554, returns 2 values at :581-587). Add a `_leafs` accumulator that collects **ONLY** the op=146 `subRes` resrefs encountered during recursion, and thread it into the recursive self-call at :543. GetDuration has **no top-level resref of its own** — do NOT add the header's own resref:
 
 ```lua
 function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
     _depth = _depth or 0
     _visited = _visited or {}
-    _leafs = _leafs or {}  -- collected leaf resrefs (the SPLs whose effects carry the buff)
+    _leafs = _leafs or {}  -- collected op=146 sub-spell leaf resrefs
     -- ... existing code ...
-    -- when recursing op=146 sub-spell:
-    --   add subResref to _leafs at top level (or before recursing further)
-    -- when no op=146 found (this header's effects ARE the leaf):
-    --   add this header's resref to _leafs (caller passes it via _visited[1] or a new arg)
+    -- at the op=146 branch (:535-554), before/at the recursive self-call (:543):
+    --   table.insert(_leafs, subRes)   -- the op=146 sub-spell resref
+    --   BfBot.Class.GetDuration(subHeader, subAbility, _depth + 1, _visited, _leafs)
 end
 ```
 
-The exact placement depends on the existing structure — read lines 522-590 first. Aim for: `_leafs` collects every resref whose feature blocks contribute timed buff effects.
-
-Return signature changes from `(duration, durType)` to `(duration, durType, leafResrefs)`. Update callers in `BfBotScn.lua:59`, `BfBotTst.lua:1907`, `BfBotUI.lua:821`.
+Return signature changes from `(duration, durType)` to `(duration, durType, leafResrefs)`. Adding a 3rd return value is safe — every existing caller takes only the first value: `BfBotScn.lua:59`, `BfBotTst.lua:454` and `:1967`, `BfBotUI.lua:819`. **No caller change needed.**
 
 **Step 2: Test leaf collection**
 
@@ -488,23 +532,23 @@ else _nok("POTN15 leaf resrefs missing or only contain potion resref") end
 
 **Step 3: Attach leafResrefs to Classify result**
 
-In `BfBot.Class.Classify`, capture the leaf list and attach:
+`Classify` (BfBotCls.lua:656) does NOT currently call `GetDuration`, and it returns at **two** sites — the override early-return at :696 and the normal return at :776. Compute the leaf list **once** near the top of `Classify`, then set `result.leafResrefs` BEFORE **both** returns. (If you only set it before the normal return, overridden items get `nil` leafs and already-active detection breaks.)
 
 ```lua
-local duration, durType, leafResrefs = BfBot.Class.GetDuration(header, ability)
+-- near the top of Classify (Classify doesn't otherwise call GetDuration):
+local _, _, leafResrefs = BfBot.Class.GetDuration(header, ability)
 -- ... existing classification logic ...
-return {
-    isBuff = ...,
-    -- existing fields
-    leafResrefs = leafResrefs,  -- NEW
-}
+-- BEFORE the override early-return at :696:
+result.leafResrefs = leafResrefs
+-- AND BEFORE the normal return at :776:
+result.leafResrefs = leafResrefs
 ```
 
 **Step 4: Run tests**
 
 ```
 BfBot.Test.DurationRecursion()
-BfBot.Test.Classifier()
+BfBot.Test.VerifyKnownSpells()
 ```
 
 Existing assertions should still pass (we only added a return value + field).
@@ -527,6 +571,8 @@ will be detected by the leaf SPL on the target's effect list."
 
 **Files:**
 - Modify: `buffbot/BfBotScn.lua` (add new helper, called from `GetCastableSpells`)
+
+> Scanner anchors verified stable post-merge (audit 2026-06-15).
 
 **Step 1: Add the helper**
 
@@ -667,7 +713,7 @@ leafResrefs collected for pre-flight already-active checks."
 
 **Step 1: Tag spell entries with `kind = "spl"`**
 
-In `_buildCatalogEntry` (around line 22), the returned table currently has:
+In `_buildCatalogEntry` (function at line 23; the return table is at lines 71-85, with the doc comment at line 22), the returned table currently has:
 
 ```lua
 return {
@@ -679,7 +725,7 @@ return {
 }
 ```
 
-Add `kind = "spl"`:
+Add `kind = "spl",` right after `resref = resref,` (:72):
 
 ```lua
 return {
@@ -740,6 +786,8 @@ hypothetical resref collisions."
 **Files:**
 - Modify: `buffbot/BfBotExe.lua` `_BuildQueue` (line 175)
 
+> Exec anchors verified stable post-merge (audit 2026-06-15).
+
 **Step 1: Plumb `kind` through the per-entry build**
 
 In the loop that builds `byCaster[casterSlot]` entries (around line 240), add `kind = spellData.kind` and `leafResrefs = spellData.leafResrefs` to the inserted table:
@@ -776,7 +824,7 @@ end
 
 **Step 3: Plumb `kind` and `leafResrefs` through `BuildQueueFromPreset` / `BuildQueueForCharacter`**
 
-In `BfBotPer.lua` `BuildQueueFromPreset` (~line 952) and `BuildQueueForCharacter` (~line 1222), the queue entries appended at the end need `kind` and `leafResrefs`:
+In `BfBotPer.lua` `BuildQueueFromPreset` (function at line 952; insert window 994-1000) and `BuildQueueForCharacter` (function at line 1223; insert window 1265-1271) — `scanData` is in scope in both — the queue entries appended at the end need `kind` and `leafResrefs`:
 
 ```lua
 table.insert(queue, {
@@ -816,7 +864,7 @@ in _ProcessCasterEntry (next task)."
 ## Task 11: Exec — pre-flight uses `leafResrefs`
 
 **Files:**
-- Modify: `buffbot/BfBotExe.lua` `_CheckEntry` (line 273 area, look for the `_HasActiveEffect` call around line 332)
+- Modify: `buffbot/BfBotExe.lua` `_CheckEntry` (decl of `checkResref` at :331; `_HasActiveEffect` call at :332; splstate-false-positive INFO log at :340, inside block :338-341)
 
 **Step 1: Replace single-resref check with list check**
 
@@ -850,6 +898,8 @@ if foundActive then
     return false
 end
 ```
+
+**Also fix the second use of the old variable.** `checkResref` was referenced not only at :332 but also at :340 — the splstate-false-positive INFO log inside the block at :338-341. Renaming the local to `checkResrefs` (a list) leaves :340 referencing a now-undefined single resref. Update :340 to log `table.concat(checkResrefs, ",")` instead. Without this, the SCS shared-SPLSTATE path hits a concat-on-`nil` crash (uncaught, surfaced from :372).
 
 **Step 2: Test with a known wrapper potion**
 
@@ -936,20 +986,22 @@ EEex_LuaAction _Advance chaining preserves parallel execution."
 
 **Step 1: Add `itemColor` to each of the 6 themes**
 
-Open `BfBotThm.lua`, find each theme palette table (`bg2_light`, `bg2_dark`, `sod_light`, `sod_dark`, `bg1_light`, `bg1_dark`). For each, add an `itemColor` entry — a muted bronze tint that contrasts with the theme's `nameColor` (or whatever the spell-name color key is) but still readable.
+Palette colors in `BfBotThm.lua` are `"{R, G, B}"` strings (0-255), **not** hex — `_parseColor` (BfBotUI.lua:1748-1752) parses the brace form and won't accept hex. The spell-name color key is **`text`**; the locked-row key is **`spellLocked`** (there is no `nameColor` / `lockedNameColor`).
 
-Suggested defaults (adjust per theme palette aesthetics):
+For each of the 6 palette tables (`bg2_light`, `bg2_dark`, `sod_light`, `sod_dark`, `bg1_light`, `bg1_dark`), insert an `itemColor` entry **immediately after that palette's `lockInactive` key** (lines 70, 92, 114, 136, 158, 180 respectively) — a muted bronze/copper/sienna tint that contrasts with `text` but stays readable:
 
-| Theme | itemColor (RGB hex) |
+| Theme | `itemColor` |
 |---|---|
-| bg2_light | `0xCD7F32` (bronze) |
-| bg2_dark | `0xD9A063` (light bronze) |
-| sod_light | `0xB87333` (copper) |
-| sod_dark | `0xCC8C49` (light copper) |
-| bg1_light | `0xA0522D` (sienna) |
-| bg1_dark | `0xC68E5F` (light sienna) |
+| bg2_light | `"{205, 127, 50}"` (bronze) |
+| bg2_dark | `"{217, 160, 99}"` (light bronze) |
+| sod_light | `"{184, 115, 51}"` (copper) |
+| sod_dark | `"{204, 140, 73}"` (light copper) |
+| bg1_light | `"{160, 82, 45}"` (sienna) |
+| bg1_dark | `"{198, 142, 95}"` (light sienna) |
 
 Exact tints can be tweaked in QA — these are starting values.
+
+**Also document the key** in the Palette Key Glossary (BfBotThm.lua:6-40) — add an `itemColor — spell-name tint for item (kind="itm") rows` line near the other generic text-color entries.
 
 **Step 2: Commit**
 
@@ -964,48 +1016,36 @@ on each theme background; refine in QA."
 
 ---
 
-## Task 14: UI — mixed list rendering (`itemColor` + variant column hidden)
+## Task 14: UI — mixed list rendering (`itemColor` for item rows)
 
 **Files:**
-- Modify: `buffbot/BfBotUI.lua` (list row rendering — search for the list cell that renders `entry.name` with the spell-name color key)
+- Modify: `buffbot/BfBotUI.lua` `BfBot.UI._SpellNameColor` (BfBotUI.lua:1746-1753)
 
 **Step 1: Find the row render path**
 
-Look for where the spell list row text gets its color. Likely a lua-keyword on the list element in `BuffBot.menu` calling back into `BfBotUI` to compute `text color lua`.
+Row color is computed in `BfBot.UI._SpellNameColor(row)` (BfBotUI.lua:1746-1753). It reads palette keys via `BfBot.UI._T(key)` (which looks up `BfBot.Theme._active[key]`, BfBotThm.lua:195-199) and converts with `_parseColor`. There is **no** `BfBot.Theme.GetActive()` and **no** `theme.nameColor` — do not reference those.
 
-```bash
-grep -nE "nameColor|spellName.*color|text color lua" C:/src/private/bg-eeex-buffbot/buffbot/BfBotUI.lua C:/src/private/bg-eeex-buffbot/buffbot/BuffBot.menu
-```
+**Step 2: Branch on `entry.kind` in `_SpellNameColor`**
 
-**Step 2: Branch on `entry.kind`**
-
-In the row color callback:
+Insert an item branch **before** the existing lock check at :1751, guarded on `entry.lock ~= 1` so a locked item still falls through to `spellLocked` (lock precedence):
 
 ```lua
-local theme = BfBot.Theme.GetActive()
-local color
-if entry.kind == "itm" then
-    color = theme.itemColor or theme.nameColor  -- fallback if theme didn't get the key
-else
-    if entry.lock == 1 then
-        color = theme.lockedNameColor  -- or whatever the existing locked tint is
-    else
-        color = theme.nameColor
+function BfBot.UI._SpellNameColor(row)
+    local entry = buffbot_spellTable[row]
+    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
+    if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if entry.kind == "itm" and entry.lock ~= 1 then        -- NEW: item tint
+        return _parseColor(BfBot.UI._T("itemColor"))
     end
+    if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
+    return _parseColor(BfBot.UI._T("text"))
 end
-return color
 ```
 
-If items get locked, lock takes precedence — choose either the locked-color or a `lockedItemColor` hybrid. Simplest: lock-color always wins regardless of kind.
+**Step 3: Verify items auto-hide the variant buttons (there is NO variant column)**
 
-**Step 3: Hide the variant column for items**
-
-In the variant cell render:
-
-```lua
-if entry.kind == "itm" then return "" end  -- items have no variants
--- existing variant cell code
-```
+The spell list (BuffBot.menu:374-478) has 7 columns, **none** for variants — so there is nothing to hide in the row render. Variants are surfaced as swapped action **buttons** (BuffBot.menu:620-708) gated on `buffbot_selectedHasVariants`. Verify that item entries carry `hasVariants = 0` (set in Task 8's `_BuildItemCatalog`) — that makes the variant button layout auto-collapse for item rows. No code change here beyond that confirmation.
 
 **Step 4: Manual QA — reload + open panel**
 
@@ -1013,63 +1053,89 @@ if entry.kind == "itm" then return "" end  -- items have no variants
 Infinity_DoFile("BfBotUI")
 ```
 
-Open the BuffBot panel, switch to a character with items. Items should render in the bronze tint; variant column blank for those rows.
+Open the BuffBot panel, switch to a character with items. Items should render in the bronze tint; selecting an item row shows no variant swap buttons.
 
 **Step 5: Commit**
 
 ```bash
 git add buffbot/BfBotUI.lua
-git commit -m "feat(ui): mixed list — itemColor for items, hide variant column
+git commit -m "feat(ui): mixed list — itemColor tint for item rows
 
-Lock color takes precedence over item/spell color.
-Variant column renders empty for kind=itm rows."
+_SpellNameColor returns itemColor for unlocked kind=itm rows.
+Lock color still takes precedence (spellLocked). Items carry
+hasVariants=0 so the variant buttons auto-hide."
 ```
 
 ---
 
-## Task 15: UI — picker sub-sections
+## Task 15: UI — picker sub-sections (re-add removed spells / items)
 
 **Files:**
-- Modify: `buffbot/BfBotUI.lua` (the Add Spell picker — search for the list-population callback)
+- Modify: `buffbot/BfBotUI.lua` (`_BuildPickerList` at :1460, `AddPickedSpell` at :1510)
+- Modify: `buffbot/BuffBot.menu` (`BUFFBOT_SPELLPICKER` at :1277, name column at :1296)
+
+**Scoping (locked decision — option b):** Items auto-merge into the main preset list *disabled by default* (the approved "listed but disabled" UX). Items are **not** excluded from the `BfBotPer.lua` auto-merge — they appear in the main list like any buff. Therefore the picker's `[Items]` sub-section scopes **only to items the user has explicitly REMOVED/excluded** (`ovr == -1`), exactly mirroring how removed buff *spells* are re-added via the picker (the v1.3.10 affordance). The picker already implements this for spells: at `_BuildPickerList` :1479 it does `goto nextSpell` on `scan.class.isBuff` **except** when `ovr == -1`. Items (kind="itm", classified as buffs) ride the **same** path — they only surface in the picker after the user removes them. Verify/mirror this existing path; do **not** add a parallel one.
 
 **Step 1: Find the picker row builder**
 
-```bash
-grep -nE "_pickerList|AddSpellPicker|_pickerEntries|picker.*spells" C:/src/private/bg-eeex-buffbot/buffbot/BfBotUI.lua
+`BfBot.UI._BuildPickerList` (BfBotUI.lua:1460) populates `buffbot_pickerSpells`; `BfBot.UI.OpenSpellPicker` (:1500) pushes `BUFFBOT_SPELLPICKER`; `BfBot.UI.AddPickedSpell` (:1510) adds the selected row. (The plan's old `_pickerList` / `AddSpellPicker` / `_pickerEntries` names do not exist.)
+
+**Step 2: Tag picker entries with `kind`**
+
+In the `table.insert(buffbot_pickerSpells, {...})` at :1481, add `kind = scan.kind` so the renderer and sort can distinguish item rows from spell rows:
+
+```lua
+table.insert(buffbot_pickerSpells, {
+    resref   = resref,
+    kind     = scan.kind,                 -- NEW: "spl" | "itm"
+    name     = scan.name or resref,
+    icon     = scan.icon or "",
+    durCat   = scan.durCat or "?",
+    count    = scan.count or 0,
+    excluded = (ovr == -1) and 1 or 0,
+})
 ```
 
-**Step 2: Group entries by kind with section headers**
+**Step 3: Group with section headers + sort**
 
-Build the picker rows as:
+After the existing population loop, inject sentinel header rows and re-sort so removed spells and removed items land under labeled sections:
 
 ```
-[Spells]                     ← header row, non-clickable
-SPWI103 Identify             ← spell row
-SPWI304 Fireball             ← spell row
+[Spells]                     ← header row (isHeader=1), non-clickable
+SPWI304 Fireball             ← removed spell row
 ...
-[Items]                      ← header row, non-clickable
-POTN15 Oil of Speed          ← item row
-RING06 Ring of the Ram       ← item row
+[Items]                      ← header row (isHeader=1), non-clickable
+POTN15 Oil of Speed          ← removed item row
 ```
 
-Implementation: insert a sentinel entry at the top of each group, e.g. `{ resref = "__HEADER_SPL__", name = "[Spells]", isHeader = 1 }`. The row renderer checks `isHeader` and renders the label without click affordances.
+Implementation: insert sentinels like `{ resref = "__HEADER_SPL__", name = "[Spells]", isHeader = 1 }` / `{ ... name = "[Items]", isHeader = 1 }` at the top of each group. Sort key: spells before items (`kind == "itm" and 1 or 0`), then the existing within-group order (excluded → top, alphabetical), keeping each header immediately above its group. Only emit a header if its group is non-empty.
 
-**Step 3: Sort within groups**
+**Step 4: Render + click-guard the header rows**
 
-Existing sort (excluded → top, then by name) stays per-group. New sort key: `(kind == "itm" and 1 or 0, isExcluded ? 0 : 1, name)` — spells before items, excluded before included within each kind, alphabetical within.
+- **Color the header rows.** Add a `text color lua` callback to the `BUFFBOT_SPELLPICKER` name column (BuffBot.menu:1296) that returns the `headerSub` palette tint for `isHeader` rows and the normal tint otherwise — so section labels read as headers, not selectable spells.
+- **No-op clicks on headers.** Guard `AddPickedSpell` (BfBotUI.lua:1511) at the top:
 
-**Step 4: Manual QA**
+```lua
+function BfBot.UI.AddPickedSpell()
+    local entry = buffbot_pickerSpells[buffbot_pickerSelected]
+    if not entry or entry.isHeader then return end   -- NEW: ignore header rows
+    -- ... existing body ...
+```
 
-Open BuffBot panel → Add Spell. Picker should now have two labeled sections.
+**Step 5: Manual QA**
 
-**Step 5: Commit**
+Open BuffBot panel → remove a buff spell and an item from the list → Add Spell. The picker should show a `[Spells]` section with the removed spell and an `[Items]` section with the removed item; clicking a header does nothing; clicking a row re-adds it.
+
+**Step 6: Commit**
 
 ```bash
-git add buffbot/BfBotUI.lua
-git commit -m "feat(ui): picker sub-sections — Spells / Items
+git add buffbot/BfBotUI.lua buffbot/BuffBot.menu
+git commit -m "feat(ui): picker sub-sections — re-add removed spells / items
 
-Header rows separate the two kinds. Within each section:
-excluded (re-add) entries stay at top, then alphabetical."
+Items auto-merge into the main list (disabled by default); the
+picker [Items] section scopes to user-removed items (ovr==-1),
+mirroring the excluded-buff re-add path. Picker entries carry
+kind; header rows are tinted (headerSub) and ignore clicks."
 ```
 
 ---
@@ -1081,13 +1147,14 @@ excluded (re-add) entries stay at top, then alphabetical."
 
 **Step 1: Add the Items test phase**
 
-Append at the end of the file's test phase definitions:
+Use the **real** harness helpers (BfBotTst.lua:26-49): `_ok` / `_nok` / `_warning` / `_check` / `_summary` / `_reset`. There is **no** `_phase` and **no** `_info`. Every phase opens with `_reset()` (so the pass/fail counters don't bleed from the prior phase) and ends **each** exit path with `return _summary("Items")` — see the pattern at :2742. Append at the end of the file's test phase definitions:
 
 ```lua
 function BfBot.Test.Items()
-    _phase("Items + potions support")
+    _reset()
+    P("=== Items + potions support ===")
     local sprite = EEex_Sprite_GetInPortrait(0)
-    if not sprite then _nok("no party member in slot 0"); return end
+    if not sprite then _nok("no party member in slot 0"); return _summary("Items") end
 
     -- 1. Scan finds at least one item if test character has any
     BfBot.Scan.Invalidate(sprite)
@@ -1098,7 +1165,7 @@ function BfBot.Test.Items()
         if e.kind == "itm" then itemCount = itemCount + 1; sampleItem = e end
     end
     if itemCount > 0 then _ok("scan found " .. itemCount .. " item entries")
-    else _info("no items in inventory — populate test character to exercise scan path") end
+    else _warning("no items in inventory — populate test character to exercise scan path") end
 
     -- 2. If we found one, validate the entry shape
     if sampleItem then
@@ -1111,9 +1178,9 @@ function BfBot.Test.Items()
         else _nok("not classified as buff") end
     end
 
-    -- 3. Schema v7 round-trip with item entries
+    -- 3. Schema v8 round-trip with item entries
     local cfg = {
-        v = 7, ap = 1,
+        v = 8, ap = 1,
         presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
             ["POTN15"] = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
         }}},
@@ -1126,12 +1193,25 @@ function BfBot.Test.Items()
 
     -- 4. Build queue from a preset that contains an item entry
     -- (requires a real preset to be set up; skip if no test fixture)
+
+    return _summary("Items")
 end
 ```
 
-**Step 2: Register in RunAll**
+**Step 2: Wire into RunAll**
 
-Find the `BfBot.Test.RunAll` function and add `BfBot.Test.Items()` to the call list.
+`BfBot.Test.RunAll` is **not** a simple call-list — it threads a per-phase boolean through a return chain (block :2507-2623). Make three edits:
+
+1. **Run the phase** — alongside the other `local <x>Ok = BfBot.Test.<X>()` calls, add:
+   ```lua
+   local itemsOk = BfBot.Test.Items()
+   P("")
+   ```
+2. **Summary line** — in the summary block (:2598-2618), add:
+   ```lua
+   P("  Items: "..(itemsOk and "PASS" or "FAIL"))
+   ```
+3. **Return chain** — append `and itemsOk` to the aggregate return at :2622.
 
 **Step 3: Run the suite**
 
@@ -1252,8 +1332,10 @@ git commit -m "chore: remove temp probe notes — knowledge in bg-modding refs"
 
 **Step 1: Run the bump tool**
 
+Current state: `BfBotCor.lua:9` is `"1.4.1-alpha"`, `setup-buffbot.tp2:3` is `v1.4.1-alpha`, and the CHANGELOG top is v1.4.1 (2026-05-24). The `bump-version.sh` arg form is unchanged, and CI `version-check` is still enforced (tp2 `VERSION` must equal `v` + `BfBot.VERSION`).
+
 ```bash
-bash tools/bump-version.sh 1.4.0-alpha
+bash tools/bump-version.sh 1.4.2-alpha
 ```
 
 Verify it updated both:
@@ -1264,19 +1346,19 @@ grep -E "VERSION|BfBot.VERSION" buffbot/BfBotCor.lua buffbot/setup-buffbot.tp2
 
 **Step 2: CHANGELOG entry**
 
-Prepend to `CHANGELOG.md` under a new `## v1.4.0-alpha (2026-04-30)` heading:
+Prepend to `CHANGELOG.md` under a new `## v1.4.2-alpha (2026-06-15)` heading:
 
 ```markdown
-## v1.4.0-alpha (2026-04-30)
+## v1.4.2-alpha (2026-06-15)
 
 ### Added
 - **Items + potions as buff sources** (#21 partial — covers (a) activated equipped-item abilities + (b) inventory potions; (c) scrolls and (d) wands deferred to follow-up issues). Buff potions like Oil of Speed and Potion of Heroism, plus activated abilities on equipped rings/amulets/cloaks/etc., now appear alongside spells in each character's preset list (kind="itm", listed but disabled by default). Engine `UseItem("RESREF", target)` BCS verb does the slot lookup at use time — configure by resref, stack multiple of the same potion in inventory freely. Pre-flight already-active detection follows op=146 wrapper SPL chains so a potion's leaf SPL is checked on the target's effect list.
-- **Schema v7** — `kind` field on every preset entry. Auto-migrates v6 saves on load (sets `kind = "spl"`). Items in imported preset configs are kept regardless of current inventory (catalog-driven UI naturally hides absent items).
-- **Theme — `itemColor` palette key** — bronze/copper/sienna tints for item rows in the mixed buff list. Variant column hidden for items.
-- **Picker sub-sections** — Add Spell picker now groups entries under "Spells" and "Items" headers.
+- **Schema v8** — `kind` field on every preset entry. Auto-migrates v7 saves on load (sets `kind = "spl"`). Items in imported preset configs are kept regardless of current inventory (catalog-driven UI naturally hides absent items).
+- **Theme — `itemColor` palette key** — bronze/copper/sienna tints for item rows in the mixed buff list. Variant swap buttons auto-hide for item rows (`hasVariants = 0`).
+- **Picker sub-sections** — the Add Spell picker groups *removed* spells and *removed* items under "Spells" and "Items" headers, for re-adding.
 
 ### Changed
-- `BfBot.Class.GetDuration` returns a third value (`leafResrefs` — list of SPL resrefs collected through op=146 sub-spell recursion). Pre-flight skip-if-active uses this list.
+- `BfBot.Class.GetDuration` returns a third value (`leafResrefs` — list of op=146 sub-spell leaf resrefs collected during recursion). Pre-flight skip-if-active uses this list.
 - `BfBot.Persist._MakeDefaultSpellEntry` renamed to `_MakeDefaultEntry` with new `kind` parameter (default `"spl"`).
 ```
 
@@ -1284,11 +1366,11 @@ Prepend to `CHANGELOG.md` under a new `## v1.4.0-alpha (2026-04-30)` heading:
 
 ```bash
 git add buffbot/BfBotCor.lua buffbot/setup-buffbot.tp2 CHANGELOG.md
-git commit -m "release: v1.4.0-alpha — items + potions as buff sources
+git commit -m "release: v1.4.2-alpha — items + potions as buff sources
 
 Closes #21 partial: (a) activated equipped items + (b) inventory potions.
 Scrolls + wands deferred to follow-up issues.
-Schema v7 (auto-migrates v6 saves)."
+Schema v8 (auto-migrates v7 saves)."
 ```
 
 ---
@@ -1321,7 +1403,7 @@ Closes (a)+(b) of #21. Scrolls + wands deferred to follow-up issues.
 - New buff sources: activated equipped-item abilities (rings/amulets/etc.) and buff potions from anywhere in inventory.
 - Configure by resref, not slot — engine `UseItem(resref, target)` BCS verb does the lookup at use time. Stack multiples freely.
 - Listed but disabled by default in new presets.
-- Schema bump v6→v7 auto-migrates existing saves.
+- Schema bump v7→v8 auto-migrates existing saves.
 
 ## Design
 Full design: [#21 comment](https://github.com/Chrizhermann/bg-eeex-buffbot/issues/21#issuecomment-4351690202)
