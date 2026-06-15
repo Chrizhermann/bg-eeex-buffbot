@@ -6,7 +6,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 
 > **Alpha Release** — fully functional but rough around the edges. [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
 
-> **IMPORTANT: Update to v1.3.9+** — Versions before v1.3.9 have a bug where F12 innate abilities (BuffBot 1, BuffBot 2, etc.) accumulate duplicate copies over time. This can cause dozens of duplicate entries in your special abilities and may crash the game on rest. **v1.3.9 fixes this and automatically cleans up existing saves.** If you see multiple copies of BuffBot abilities, update to the latest release — they will be cleaned up on first load.
+> **BuffBot v1.4.0+ requires EEex v1.0.0 or later.** If you're upgrading from an older BuffBot version on EEex v0.x, [upgrade EEex first](https://github.com/Bubb13/EEex/releases). The BuffBot installer will refuse to run against pre-v1.0.0 EEex.
 
 [![BuffBot Showcase](https://img.youtube.com/vi/9fjnUKG1tfQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=9fjnUKG1tfQ)
 
@@ -27,9 +27,16 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ## Requirements
 
 - **BG:EE**, **BG2:EE**, or **EET**
-- **[EEex](https://github.com/Bubb13/EEex)** v0.10.0-alpha or later (with LuaJIT component recommended)
+- **[EEex](https://github.com/Bubb13/EEex)** v1.0.0 or later
 
-EEex is required for Lua access to engine internals (spell data, character state, save game persistence). The BuffBot installer automatically detects and installs the EEex LuaJIT component if it's not already active. Without LuaJIT, BuffBot runs in reduced mode (no F12 innates, Quick Cast, export/import, or log files).
+Any EEex install tier works — Minimal, Full, or Experimental. BuffBot's WeiDU installer detects whether EEex's LuaJIT support is active, and turns it on automatically if it isn't. You don't have to pick the "right" EEex tier; pick whatever you want.
+
+<details>
+<summary><strong>For the curious: how EEex tiers and LuaJIT interact</strong></summary>
+
+EEex ships several install tiers. Minimal and Full leave LuaJIT off by default; only Experimental enables it. **EEex's Lua scripting needs LuaJIT to work** — without it, the game silently fails to launch (no error, just no window). BuffBot's installer flips the LuaJIT switch on your behalf regardless of which EEex tier you picked, so all three tiers end up equivalent for BuffBot. The "EEex LuaJIT Support" component is auto-skipped when EEex already has LuaJIT active.
+
+</details>
 
 ## Installation
 
@@ -38,7 +45,7 @@ EEex is required for Lua access to engine internals (spell data, character state
 1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases) and extract it into your game directory
 2. Run `setup-buffbot.exe` (or use your preferred WeiDU launcher)
 3. Select "BuffBot: In-Game Buff Automation" when prompted
-4. Accept the "EEex LuaJIT Support" component if prompted (auto-skipped if already installed)
+4. Accept the "EEex LuaJIT Support" component if prompted (auto-skipped if EEex already has LuaJIT active)
 
 **Uninstall:** re-run the setup and choose uninstall. WeiDU removes all mod files and restores the TLK automatically.
 
@@ -89,7 +96,7 @@ This is an alpha release. Everything works, but some things are unfinished:
 
 ## Testing & Bug Reports
 
-BuffBot includes a built-in test suite. In the EEex Lua console:
+BuffBot includes a built-in test suite. In the in-game console (the BG:EE / BG2:EE console — toggle with Ctrl-Space when `CLUAConsole=1` is set in `baldur.ini`):
 
 ```
 BfBot.Test.RunAll()         -- full test suite (200+ tests)

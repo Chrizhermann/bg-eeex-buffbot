@@ -18,7 +18,7 @@ Alpha — all MVP features implemented and verified in-game. See `CHANGELOG.md` 
 - `BfBotPer.lua` — persistence (UDAux marshal, presets, INI, export/import)
 - `BfBotInn.lua` — per-preset F12 innate abilities (runtime SPL generation)
 - `BfBotUI.lua` + `BuffBot.menu` — in-game config panel (movable, resizable, dynamic ~80% screen)
-- `BfBotTst.lua` — in-game test suite (`BfBot.Test.RunAll()` in EEex console)
+- `BfBotTst.lua` — in-game test suite (`BfBot.Test.RunAll()` in in-game console)
 - `setup-buffbot.tp2` — WeiDU installer (under `buffbot/`)
 - `tools/deploy.sh` — dev deploy (copies to `<game>/override/`, patches TLK)
 - `tools/patch_tlk.py` — appends BuffBot innate tooltip names to `dialog.tlk`
@@ -42,7 +42,7 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 - **Config schema v6**: `{v=6, ap, presets=[{name,cat,qc,spells={[resref]={on,tgt,pri,tgtUnlock,lock}}}], opts={skip}, ovr={[resref]=1|-1}}`. `tgt` = `"s"` / `"p"` / character name / ordered table of names. Legacy slot strings (`"1"`-`"6"`) lazily convert to names in `_Refresh`.
 - **BuffBot-generated resrefs**: `BFBT{slot}{preset}` (6 × 8 = 48 innates), `BFBTCH` / `BFBTCR` (quick-cast buff/remover), `BFBTRM` (innate remover). `BfBot.Scan.GetCastableSpells` filters the `BFBT` prefix so the mod never scans its own SPLs.
 - **Up to 8 presets** via `BfBot.MAX_PRESETS`.
-- **Innate re-grant pattern**: opcode 172 cleanup via runtime `BFBTRM.SPL` + Lua-side `AddSpecialAbility` with `_HasInnate` guard. Do NOT add opcode 171 back — that caused the rest-crash accumulation bug (see `CHANGELOG.md` v1.3.9-alpha).
+- **Innate re-grant pattern**: opcode 172 cleanup via runtime `BFBTRM.SPL` + Lua-side `AddSpecialAbility`. Reconciliation in a single pass via `BfBot.Innate._PlanReconciliation` + `BfBot.Innate.Refresh` — one iterator walk diffs actual-vs-desired and either revokes-all+regrants on any mismatch or grants-missing-only. Do NOT add opcode 171 back (caused the rest-crash accumulation bug, `CHANGELOG.md` v1.3.9-alpha). Do NOT reintroduce per-helper iterator walks (`_HasInnate`, `_MaxAccumulation`, `_HasOrphans`) — those were folded into the planner in v1.4.1-alpha.
 - **Sub-spell duration**: `BfBot.Class.GetDuration` recurses through op=146 `res` with depth limit 2 + cycle guard, so hierarchical spells (Prayer, Chaos of Battle, Chant, SR Barkskin) report real durations instead of `Inst` (#33).
 - **SPLSTATE is fast-negative only**: positive SPLSTATE → fall through to `_HasActiveEffect` (effect-list match on resref). Modded spells share SPLSTATEs (SCS), so positive matches aren't trustworthy for skip.
 - **Scan cache invalidation** on panel open + sprite listeners (`QuickListsChecked`, `QuickListCountsReset`, `QuickListNotifyRemoved`). Tab switches reuse the cache.
@@ -67,7 +67,7 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 
 - **Deploy**: `bash tools/deploy.sh` (reads `tools/deploy.conf` for game dir).
 - **Reload in running game**: `Infinity_DoFile("BfBotX")` for the changed module(s) — avoids a full restart.
-- **Tests**: `BfBot.Test.RunAll()` in the EEex console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
+- **Tests**: `BfBot.Test.RunAll()` in the in-game console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
 - **Remote console** (headless testing): `bash /c/src/private/eeex-remote-console/tools/eeex-remote.sh "<game>/override" "<lua>"`. Game must be on the world screen.
 - **Branch vs main**: small code change → main; bigger work → feature branch. Design in GitHub issues, not `docs/plans/`.
 

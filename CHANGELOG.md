@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.4.1-alpha (2026-05-24)
+
+### Fixed
+- **Deleting a preset left an orphan F12 innate behind** (#47, reported by MrFishHead on Discord). `BfBot.Innate.Refresh`'s lightweight branch iterated only the **config's** preset list to add missing entries — it never iterated the **sprite's** known-innate list to remove BFBT entries whose preset had been deleted. After a `DeletePreset` call, `BFBT{slot}{deletedIdx}` stayed in the F12 menu indefinitely. Rather than patch the gap with another condition, the whole innate-grant subsystem was refactored: 3 helpers (`_HasInnate`, `_MaxAccumulation`, `_HasOrphans`), the heavy/light bifurcation, and the dead `Grant()` function are replaced by one pure planner `BfBot.Innate._PlanReconciliation(sprite, slot, config)` plus a thin `Refresh(slot)` orchestrator. One iterator walk diffs actual-vs-desired and either revokes-all+regrants on any mismatch (duplicate **or** orphan) or grants-missing-only on clean state. Also pulls an inline `AddSpecialAbility` loop out of `BfBotPer._CreateDefaultConfig` (was leaking innate-grant mechanics into the persistence layer) and guards against UDAux-write failure to prevent re-entry recursion. New `BfBot.Test.PlanReconciliation` suite has 9 cases including a synchronous end-to-end opcode-172 removal via `EEex_GameObject_ApplyEffect` that proves the cleanup mechanism actually removes orphans from the sprite's known-innate list (no manual integration test needed).
+- **Presets 6, 7, and 8 showed "Invalid: <number>" as their F12 innate name** (#48). When `MAX_PRESETS` went from 5 to 8 in `a51804e`, the WeiDU installer was not updated — only strrefs 1-5 were registered, and the Lua side used `_baseStrref + (preset - 1)` arithmetic that assumed contiguity. `setup-buffbot.tp2` now registers all 8 strrefs and writes each as its own line in `bfbot_strrefs.txt`; Lua reads them as an array indexed by preset. WeiDU does not guarantee contiguous strrefs across upgrades (existing strings keep their old strrefs while new ones get appended), so the array approach is more robust than the old arithmetic.
+
+## v1.4.0-alpha (2026-05-21)
+
+### Changed
+- **EEex v1.0.0+ is now required.** BuffBot's tp2 fails fast on older EEex via a new `REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)` — v1.0.0 moved EEex's Lua scripts from `EEex/` to game-root `EEex_scripts/`, making that path a reliable version marker. Pre-v1.0.0 installs hit a clear error message instead of silently breaking at runtime against API changes (the old iterator pattern, `EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled` hook, etc.) Upgrade EEex from https://github.com/Bubb13/EEex/releases before installing.
+- **Innate grant migrated from polling to event-driven** — `BfBot.Innate.Init` now registers `EEex_Sprite_AddLoadedListener` so innates are granted/refreshed the moment each party sprite finishes loading (new game, save load, area transition, party join). The listener fires from `EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled` — i.e. after marshal restoration, so `EEex_GetUDAux` already has the user's saved config when `Refresh` queries it. Replaces the legacy one-shot `_startupCleanupDone` polling in `BfBot.Exec._SafetyTick` (which waited up to 2 seconds after world-screen entry before granting). Self-heals old accumulation via the existing `Refresh` bifurcation; new-joiner innates now grant on the next load tick instead of after the next safety-tick window.
+
+### Removed
+- **`BfBot.Persist._SanitizeValues`** — booleans-to-0/1 sanitizer that protected pre-v1.0.0 EEex marshal handlers from crashes. EEex v1.0.0 marshal handles booleans natively, so the sanitize call sites in `_ValidateConfig` and the export/import path are gone. BuffBot's schema continues to use integer 0/1 by design (consistency, avoids Lua's `0 == false` pitfalls), and `_hasBooleans` schema-consistency checks in the test suite stay in place.
+
+### Internal
+- README: Requirements section updated to "EEex v1.0.0+, any tier" with a collapsible explainer covering how BuffBot's installer activates LuaJIT on Minimal/Full tiers. Removed the stale v1.3.9 update banner.
+
+## v1.3.16-alpha (2026-05-17)
+
+### Fixed
+- **Character tabs and the Cast button showed raw `^0xRRGGBBAA<NAME>` text** when [Tweaks Anthology's "Colorize NPC Names and Tooltips"](https://gibberlings3.github.io/Documentation/readmes/readme-cdtweaks.html) component is installed. cdtweaks rewrites NPC name strrefs to wrap them in IE color escapes (`^0xAABBGGRR<name>^-`). The engine's main renderer parses the escape; `text lua "..."` bindings in `.menu` files do not, so the prefix leaked as literal text in BuffBot's tabs, buttons, and target picker. The protagonist was unaffected because player-typed names are not strref-based. `BfBot._GetName` now strips the escape unconditionally via a new `BfBot._StripColorEscape` helper (no-op on installs without cdtweaks). Schema migration v6 → v7 walks all `preset.spells[*].tgt` entries and strips the prefix from previously-saved target names too — existing configs self-heal on first load. 13 new test assertions in `BfBot.Test.NameStrip` cover full prefix+suffix wraps, lowercase-hex variants, mid-string, multi-word names, single tgt + table tgt + `'s'`/`'p'` sentinels.
+
+- **Save loads spammed "ability granted" toasts; preset create/delete froze the game for ~10 seconds, sometimes crashed.** All three symptoms shared a root cause: `BfBot.Innate.Revoke` queued **50 × `ReallyForceSpellRES("BFBTRM", Myself)`** per slot regardless of need (= 300 queued BCS actions per `RefreshAll`). The 50× was scaffolding from the v1.3.9-alpha legacy-migration cleanup and had become permanent overhead. Worse, `BfBot.Innate._HasInnate` was using the wrong EEex iterator pattern (`iter:hasNext()` instead of `for ... in iter`), the error was silently swallowed by `pcall`, and the function always returned `false` — so `Grant()` re-added every BFBT innate on every save load, accumulating duplicates that the 50× revoke then had to clean up. Two fixes:
+  - New `BfBot.Innate._MaxAccumulation(sprite)` counts actual BFBT duplicates via the correct for-style iterator; `Revoke` now queues only `count + 1` passes (capped at 50). On clean saves: 0 passes. Iterator pattern in `_HasInnate` and the `BfBot.Test.Innate` diagnostic corrected.
+  - `BfBot.Innate.Refresh` bifurcates: when accumulation > 1, queue revoke then **unconditionally** queue re-grants (revokes will clear before grants run); when accumulation ≤ 1, skip revoke and only grant the missing ones. Prevents the race where `_HasInnate` would be checked while revokes were still pending in the BCS queue (which would suppress the grant).
+
+### Internal
+- `tools/deploy.sh` now honors `BGEE_DIR` env var over `tools/deploy.conf`, so `BGEE_DIR=… bash tools/deploy.sh` targets a test install without editing the conf file.
+- `.gitattributes` pins `*.sh` to LF endings, preventing `core.autocrlf=true` on Windows from breaking `bash tools/deploy.sh` after fresh checkouts.
+- `tools/bump-version.sh` documents the `gh release create … --latest` flag and warns against `--prerelease` (every BuffBot release should be eligible for the GitHub "Latest" badge).
+
 ## v1.3.15-alpha (2026-04-30)
 
 ### Fixed

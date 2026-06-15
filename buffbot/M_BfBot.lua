@@ -20,6 +20,7 @@ Infinity_DoFile("BfBotPer")  -- Persistence (depends on Scan, Class)
 Infinity_DoFile("BfBotInn")  -- Innate abilities (depends on Persist, Exec)
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
 BfBot.Innate._EnsureSPLFiles()  -- Write innate SPL files to override (if missing)
+BfBot.Innate.Init()          -- Register sprite-loaded listener for innate grants
 Infinity_DoFile("BfBotUI")   -- UI logic (state, callbacks, .menu integration)
 Infinity_DoFile("BfBotTst")  -- Test suite (remove for release)
 

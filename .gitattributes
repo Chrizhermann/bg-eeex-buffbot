@@ -1,0 +1,6 @@
+# Shell scripts must use LF so bash on Windows (git-bash, WSL) can execute them.
+# Without this, git core.autocrlf=true rewrites .sh files with CRLF on checkout,
+# producing `$'\r': command not found` errors when bash interprets the script.
+# Other text files (.lua, .menu, .tp2, .py) are left alone — Lua, WeiDU, and
+# Python all tolerate CRLF, and forcing normalization here would churn the diff.
+*.sh text eol=lf

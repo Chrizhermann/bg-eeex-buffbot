@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 6
+BfBot.Persist._SCHEMA_VERSION = 7
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -26,22 +26,6 @@ BfBot.Persist._INI_DEFAULTS = {
     Theme         = "bg2_light",  -- palette key (string)
     FontSize      = 2,    -- 1=small, 2=medium, 3=large
 }
-
--- ---- Boolean sanitization ----
-
---- Recursively convert any boolean values to 1/0 in a table.
--- EEex marshal only supports number/string/table — booleans crash saves.
-function BfBot.Persist._SanitizeValues(tbl)
-    if type(tbl) ~= "table" then return end
-    for k, v in pairs(tbl) do
-        local vt = type(v)
-        if vt == "boolean" then
-            tbl[k] = v and 1 or 0
-        elseif vt == "table" then
-            BfBot.Persist._SanitizeValues(v)
-        end
-    end
-end
 
 -- ---- Default config ----
 
@@ -146,26 +130,25 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         config.presets[2].spells[buff.resref] = e2
     end
 
-    -- Store in UDAux
-    pcall(function()
+    -- Store in UDAux. Only call Refresh if the write succeeded — otherwise
+    -- Refresh → GetConfig → _CreateDefaultConfig re-enters recursively
+    -- (GetConfig's `if not config` gate sees the still-empty UDAux), which
+    -- recurses until stack overflow.
+    local setOk = pcall(function()
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
     end)
+    if not setOk then
+        BfBot._Warn("[Persist] Failed to store default config in UDAux; skipping innate reconciliation")
+        return config
+    end
 
-    -- Grant innate abilities for the new config's presets (with duplicate guard)
-    if BfBot.Innate and BfBot.Innate._HasInnate then
-        local slot = nil
+    -- Reconcile innates with the new config. UDAux is now populated, so
+    -- Refresh's call to GetConfig returns the stored config (no reentry).
+    if BfBot.Innate and BfBot.Innate.Refresh then
         for s = 0, 5 do
-            if EEex_Sprite_GetInPortrait(s) == sprite then slot = s; break end
-        end
-        if slot then
-            for idx = 1, BfBot.MAX_PRESETS do
-                if config.presets[idx] then
-                    local resref = string.format("BFBT%d%d", slot, idx)
-                    if not BfBot.Innate._HasInnate(sprite, resref) then
-                        EEex_Action_QueueResponseStringOnAIBase(
-                            'AddSpecialAbility("' .. resref .. '")', sprite)
-                    end
-                end
+            if EEex_Sprite_GetInPortrait(s) == sprite then
+                BfBot.Innate.Refresh(s)
+                break
             end
         end
     end
@@ -264,9 +247,6 @@ function BfBot.Persist._ValidateConfig(config)
         end
     end
 
-    -- Safety: convert any stray booleans
-    BfBot.Persist._SanitizeValues(config)
-
     return config
 end
 
@@ -297,6 +277,30 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
                     for _, entry in pairs(preset.spells) do
                         if type(entry) == "table" and entry.lock == nil then
                             entry.lock = 0
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if fromVersion < 7 then
+        -- Strip Tweaks Anthology "Colorize NPC Names" color escapes (^0xAABBGGRR<name>^-)
+        -- from persisted target names. Pre-v7 configs may have prefixed names baked in,
+        -- which would never match a stripped _GetName(sprite) result post-fix. See #40.
+        if config.presets then
+            for _, preset in pairs(config.presets) do
+                if type(preset) == "table" and type(preset.spells) == "table" then
+                    for _, entry in pairs(preset.spells) do
+                        if type(entry) == "table" then
+                            if type(entry.tgt) == "string" then
+                                entry.tgt = BfBot._StripColorEscape(entry.tgt)
+                            elseif type(entry.tgt) == "table" then
+                                for i, v in ipairs(entry.tgt) do
+                                    if type(v) == "string" then
+                                        entry.tgt[i] = BfBot._StripColorEscape(v)
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -805,9 +809,6 @@ function BfBot.Persist.ImportConfig(sprite, filename)
     if imported.v < BfBot.Persist._SCHEMA_VERSION then
         imported = BfBot.Persist._MigrateConfig(imported, imported.v)
     end
-
-    -- Sanitize any stray booleans
-    BfBot.Persist._SanitizeValues(imported)
 
     -- Get character's castable spells to filter imported config
     local castable = nil

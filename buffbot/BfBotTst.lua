@@ -1,6 +1,6 @@
 -- ============================================================
 -- BfBotTst.lua — BuffBot In-Game Test Suite
--- Run from EEex Lua console: BfBot.Test.RunAll()
+-- Run from the in-game console: BfBot.Test.RunAll()
 -- ============================================================
 
 BfBot = BfBot or {}
@@ -844,7 +844,8 @@ function BfBot.Test.SpellLockPersist()
         opts = { skip = 1 }, ovr = {},
     }
     local migrated = BfBot.Persist._MigrateConfig(v5, v5.v)
-    _check(migrated.v == 6, "Migration bumps version to 6")
+    _check(migrated.v == BfBot.Persist._SCHEMA_VERSION,
+           "Migration bumps version to " .. BfBot.Persist._SCHEMA_VERSION)
     _check(migrated.presets[1].spells["TSTLEG"].lock == 0,
            "Migration adds lock=0 to legacy entries")
     _check(migrated.presets[1].spells["TSTLEG"].on == 1,
@@ -853,6 +854,65 @@ function BfBot.Test.SpellLockPersist()
            "Migration preserves 'pri' field")
 
     return _summary("SpellLockPersist")
+end
+
+-- ============================================================
+-- BfBot.Test.NameStrip — cdtweaks "Colorize NPC Names" escape stripping
+-- ============================================================
+
+function BfBot.Test.NameStrip()
+    P("=== NameStrip: ^0xAABBGGRR<name>^- escape stripping ===")
+    _reset()
+
+    -- ---- Direct _StripColorEscape behavior ----
+    _check(BfBot._StripColorEscape("^0xFF8E23FFIMOEN^-") == "IMOEN",
+           "Strips full prefix+suffix wrap")
+    _check(BfBot._StripColorEscape("^0xff406798KHALID") == "KHALID",
+           "Strips lowercase-hex prefix without suffix")
+    _check(BfBot._StripColorEscape("ABDEL") == "ABDEL",
+           "Leaves uncolored names unchanged")
+    _check(BfBot._StripColorEscape("") == "",
+           "Empty string passes through")
+    _check(BfBot._StripColorEscape("^0xFFAA00FFBranwen^- the Cleric") == "Branwen the Cleric",
+           "Strips mid-string + multi-word name")
+    _check(BfBot._StripColorEscape(nil) == nil,
+           "nil passes through (typeguard)")
+    _check(BfBot._StripColorEscape(42) == 42,
+           "non-string passes through (typeguard)")
+
+    -- ---- v6→v7 migration ----
+    local v6 = {
+        v = 6, ap = 1,
+        presets = {
+            [1] = {
+                name = "Test", cat = "custom",
+                spells = {
+                    ["TSTSTR"] = { on = 1, tgt = "^0xFF8E23FFIMOEN^-", pri = 1, lock = 0 },
+                    ["TSTTAB"] = { on = 1, tgt = {"^0xFF2763ADJAHEIRA^-", "ABDEL"}, pri = 2, lock = 0 },
+                    ["TSTCLR"] = { on = 1, tgt = "BRANWEN", pri = 3, lock = 0 },
+                    ["TSTSP"]  = { on = 1, tgt = "s", pri = 4, lock = 0 },
+                    ["TSTPA"]  = { on = 1, tgt = "p", pri = 5, lock = 0 },
+                },
+            },
+        },
+    }
+    local migrated = BfBot.Persist._MigrateConfig(v6, v6.v)
+    _check(migrated.v == BfBot.Persist._SCHEMA_VERSION,
+           "Migration bumps to current version")
+    _check(migrated.presets[1].spells["TSTSTR"].tgt == "IMOEN",
+           "Strips escape from single-name tgt string")
+    _check(type(migrated.presets[1].spells["TSTTAB"].tgt) == "table"
+           and migrated.presets[1].spells["TSTTAB"].tgt[1] == "JAHEIRA"
+           and migrated.presets[1].spells["TSTTAB"].tgt[2] == "ABDEL",
+           "Strips escapes from table-of-names tgt entries")
+    _check(migrated.presets[1].spells["TSTCLR"].tgt == "BRANWEN",
+           "Leaves clean names unchanged")
+    _check(migrated.presets[1].spells["TSTSP"].tgt == "s",
+           "Leaves 's' sentinel unchanged")
+    _check(migrated.presets[1].spells["TSTPA"].tgt == "p",
+           "Leaves 'p' sentinel unchanged")
+
+    return _summary("NameStrip")
 end
 
 -- ============================================================
@@ -1921,10 +1981,146 @@ function BfBot.Test.DurationRecursion()
     testSpell("SPPR203", 60, "Chant (parent op=176 regression)")
 
     -- Regression: Aid is non-hierarchical, direct timed opcodes only.
-    -- Ability 0 at base caster level — must still show >= 60s.
-    testSpell("SPPR201", 60, "Aid (non-hierarchical regression)")
+    -- Ability 0 reads the SPL's stored Duration field directly (12 in vanilla
+    -- BG2EE — the per-effect base; engine scales by caster level at cast time
+    -- but GetDuration does not). Threshold guards against the recursion fix
+    -- silently zeroing out non-hierarchical durations.
+    testSpell("SPPR201", 12, "Aid (non-hierarchical regression)")
 
     return _summary("DurationRecursion")
+end
+
+-- ============================================================
+-- Orphan detection (issue #47 — preset-delete leaves stale BFBT innate)
+-- ============================================================
+
+function BfBot.Test.PlanReconciliation()
+    _reset()
+    local P = Infinity_DisplayString
+    P("== PlanReconciliation ==")
+
+    -- Pick any party slot with a sprite. We bootstrap our own BFBT state via
+    -- INSTANT.IDS AddSpecialAbility, so this test does NOT depend on prior
+    -- BuffBot panel use — works on a freshly-loaded save where the
+    -- AddLoadedListener hasn't fired yet.
+    local sprite, slotIdx
+    for s = 0, 5 do
+        local sp = EEex_Sprite_GetInPortrait(s)
+        if sp then sprite, slotIdx = sp, s; break end
+    end
+    if not sprite then
+        _warning("No party slot found — skipping (need at least one party member)")
+        return _summary("PlanReconciliation")
+    end
+
+    -- Inject a synthetic BFBT entry the planner can detect. Preset 7 is
+    -- intentional: default configs carry presets 1-2 and the user would have
+    -- to manually create up to preset 7 to collide. AddSpecialAbility IS in
+    -- INSTANT.IDS so the grant lands synchronously.
+    local syntheticPreset = 7
+    local syntheticResref = string.format("BFBT%d%d", slotIdx, syntheticPreset)
+    EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
+        'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
+
+    -- Verify the grant landed by running the planner against a config that
+    -- includes the preset — if the planner doesn't see the synthetic entry
+    -- in actual, the grant didn't take effect.
+    local verify = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } })
+    if not verify.actual[syntheticResref] then
+        _warning("INSTANT.IDS AddSpecialAbility didn't take effect — skipping")
+        return _summary("PlanReconciliation")
+    end
+
+    -- Case 1: nil config → empty plan, no mismatch.
+    local p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, nil)
+    _check(p.hasMismatch == false and next(p.desired) == nil,
+        "nil config → empty desired, no mismatch")
+
+    -- Case 2: config without presets table → empty plan, no mismatch.
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, {})
+    _check(p.hasMismatch == false and next(p.desired) == nil,
+        "config without presets → empty desired, no mismatch")
+
+    -- Case 3: config explicitly contains the synthetic preset → no mismatch,
+    -- synthetic entry is in both actual and desired.
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } })
+    _check(p.hasMismatch == false
+        and p.actual[syntheticResref] == 1
+        and p.desired[syntheticResref] == true,
+        "config contains preset " .. syntheticPreset .. " → no mismatch")
+
+    -- Case 4: config has different presets, missing the synthetic one
+    -- → mismatch (the orphan bug, issue #47).
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [1] = {}, [2] = {} } })
+    _check(p.hasMismatch == true and p.actual[syntheticResref] == 1,
+        "config {1,2} + sprite has preset " .. syntheticPreset .. " → mismatch (orphan)")
+
+    -- Case 5: config requires a preset the sprite doesn't have (preset 8)
+    -- → no mismatch (orphans are sprite-side, not desired-side), and
+    -- desired contains the missing entry so the orchestrator can grant it.
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {}, [8] = {} } })
+    local missingResref = string.format("BFBT%d8", slotIdx)
+    _check(p.hasMismatch == false
+        and p.desired[missingResref] == true
+        and p.actual[missingResref] == nil,
+        "config requires preset 8 not on sprite → no mismatch, desired has missing entry")
+
+    -- Case 6: foreign slot — querying a different slot must ignore the
+    -- synthetic entry (which belongs to slotIdx's namespace).
+    local foreignSlot = (slotIdx + 1) % 6
+    p = BfBot.Innate._PlanReconciliation(sprite, foreignSlot,
+        { presets = { [1] = {} } })
+    _check(p.actual[syntheticResref] == nil and p.hasMismatch == false,
+        "querying slot " .. foreignSlot .. " ignores slot-" .. slotIdx .. " BFBT entries")
+
+    -- Case 7: AddSpecialAbility dedup assumption.
+    -- The planner's `n > 1` branch only triggers in legacy v1.3.9-affected
+    -- saves (opcode 171 grants bypassed dedup). On a clean engine, every
+    -- AddSpecialAbility call dedupes — calling it twice yields count=1, not 2.
+    -- This case is a tripwire: if engine behavior ever changes, we want to
+    -- catch it because the rest of the codebase relies on this assumption
+    -- (BFBOTGO's re-grant after opcode 172 cleanup, for example).
+    EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
+        'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } })
+    _check(p.actual[syntheticResref] == 1,
+        "AddSpecialAbility dedupes — second grant keeps count=1 (tripwire)")
+
+    -- Case 8: end-to-end opcode 172 (Remove Innate) verification.
+    -- The previous cases verify the planner; this verifies the underlying
+    -- removal mechanism. Production Refresh queues a BFBTRM spell apply
+    -- (FIFO via action queue), and BFBTRM is itself just a container for
+    -- 48 opcode 172 effects (one per BFBT resref). The opcode-172 → known-
+    -- innate removal step is what actually fixes issue #47 — so testing it
+    -- in isolation, synchronously, is sufficient (and stronger: it doesn't
+    -- conflate planner correctness with engine spell-cast plumbing).
+    --
+    -- EEex_GameObject_ApplyEffect with immediateResolve=1 (the default)
+    -- applies the effect during the call, so we can assert state on the
+    -- very next line. This bypasses the BCS action queue entirely.
+    _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == 1,
+        "pre-revoke: synthetic " .. syntheticResref .. " present on sprite")
+
+    EEex_GameObject_ApplyEffect(sprite, {
+        effectID = 172,         -- Remove Innate
+        targetType = 1,         -- self
+        res = syntheticResref,  -- resref of innate to remove
+    })
+
+    _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == nil,
+        "post-revoke: opcode 172 removed " .. syntheticResref .. " end-to-end (issue #47 fix verified)")
+
+    -- No cleanup needed: opcode 172 only removed the synthetic entry; the
+    -- sprite's legitimately-configured BFBT innates (if any) are untouched.
+
+    return _summary("PlanReconciliation")
 end
 
 -- ============================================================
@@ -1970,11 +2166,14 @@ function BfBot.Test.MovablePanel()
     _check(hy == 50,  "drag handle Y = panel Y (" .. tostring(hy) .. ")")
     _check(hw == 800, "drag handle W = panel W (" .. tostring(hw) .. ")")
 
-    -- Test 4: Resize handle at bottom-right
+    -- Test 4: Resize handle at bottom-right.
+    -- BfBotUI.lua:534 positions the handle at (px + pw - 80, py + ph - 48, 80, 48)
+    -- to give a generous grab target. .menu reserves a 80x48 box.
     local rx, ry, rw, rh = Infinity_GetArea("bbResizeHandle")
-    _check(rx == 100 + 800 - 20, "resize handle X = bottom-right (" .. tostring(rx) .. ")")
-    _check(ry == 50 + 600 - 20,  "resize handle Y = bottom-right (" .. tostring(ry) .. ")")
-    _check(rw == 20, "resize handle W = 20 (" .. tostring(rw) .. ")")
+    _check(rx == 100 + 800 - 80, "resize handle X = bottom-right (" .. tostring(rx) .. ")")
+    _check(ry == 50 + 600 - 48,  "resize handle Y = bottom-right (" .. tostring(ry) .. ")")
+    _check(rw == 80, "resize handle W = 80 (" .. tostring(rw) .. ")")
+    _check(rh == 48, "resize handle H = 48 (" .. tostring(rh) .. ")")
 
     -- Test 5: Reset clears stored values
     BfBot.UI._ResetLayout()
@@ -2367,6 +2566,10 @@ function BfBot.Test.RunAll()
     local lockOk = BfBot.Test.SpellLockPersist()
     P("")
 
+    -- Phase: Name Strip (cdtweaks Colorize NPC Names compat)
+    local nameStripOk = BfBot.Test.NameStrip()
+    P("")
+
     -- Phase: Spell Lock Order
     local lockOrderOk = BfBot.Test.SpellLockOrder()
     P("")
@@ -2377,6 +2580,10 @@ function BfBot.Test.RunAll()
 
     -- Phase 13: Duration Recursion (issue #33)
     local durRecOk = BfBot.Test.DurationRecursion()
+    P("")
+
+    -- Phase: Reconciliation planner (covers orphan detection, issue #47)
+    local orphanOk = BfBot.Test.PlanReconciliation()
     P("")
 
     -- Phase 14: Theming (issue #32)
@@ -2401,16 +2608,18 @@ function BfBot.Test.RunAll()
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
     P("  Spell Lock Persist: " .. (lockOk and "PASS" or "FAIL"))
+    P("  Name Strip:         " .. (nameStripOk and "PASS" or "FAIL"))
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
+    P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and lockOrderOk and movPanelOk and durRecOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk
 end
 
 -- ============================================================
@@ -2734,14 +2943,6 @@ function BfBot.Test.Persist()
         _ok("Non-table input -> fresh default config")
     else _nok("Non-table input not handled") end
 
-    -- Corrupt config: booleans in values (should be sanitized)
-    local corrupt3 = BfBot.Persist.GetDefaultConfig()
-    corrupt3.opts.skip = true  -- boolean! should be sanitized
-    local repaired3 = BfBot.Persist._ValidateConfig(corrupt3)
-    hasBool, boolPath = _hasBooleans(repaired3)
-    if not hasBool then _ok("Boolean sanitization works")
-    else _nok("Boolean survived at " .. tostring(boolPath)) end
-
     -- Table-format target validation (ordered name list from target picker)
     local tblCfg = BfBot.Persist.GetDefaultConfig()
     tblCfg.presets[1].spells["TESTSPELL"] = {
@@ -3000,23 +3201,32 @@ function BfBot.Test.Innate()
             local bfbtInnates = {}
             local otherCount = 0
 
-            -- Iterate known innate spells
-            local iter = EEex_Sprite_GetKnownInnateSpellsIterator(sprite)
-            if iter then
-                while iter:hasNext() do
-                    local spell = iter:next()
-                    local resref = spell.m_spellId:get()
+            -- Iterate known innate spells, tracking per-resref accumulation.
+            -- Uses for-style iterator (yields level, index, resref) per the EEex
+            -- API for plain GetKnownInnateSpellsIterator (the WithAbility variant
+            -- yields a 4th value). Wrapped in pcall to keep the diagnostic alive
+            -- even if a sprite returns a weird iterator state.
+            local bfbtCounts = {}
+            pcall(function()
+                for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
                     if resref and resref:sub(1, 4) == "BFBT" then
                         table.insert(bfbtInnates, resref)
-                    else
+                        bfbtCounts[resref] = (bfbtCounts[resref] or 0) + 1
+                    elseif resref then
                         otherCount = otherCount + 1
                     end
                 end
+            end)
+
+            local maxAcc = 0
+            for _, c in pairs(bfbtCounts) do
+                if c > maxAcc then maxAcc = c end
             end
+            local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""
 
             if #bfbtInnates > 0 then
-                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)",
-                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount))
+                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)%s",
+                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount, accNote))
             else
                 P(string.format("[BuffBot] Slot %d (%s): NO BuffBot innates  (%d other innates)",
                     slot, name, otherCount))
@@ -3038,8 +3248,7 @@ function BfBot.Test.Innate()
     end
 
     P("")
-    P("[BuffBot] Granted flag: " .. tostring(BfBot.Innate._granted))
-    P("[BuffBot] To manually grant: BfBot.Innate.Grant()")
+    P("[BuffBot] To force reconciliation on a slot: BfBot.Innate.Refresh(slot)")
     P("[BuffBot] To re-generate SPLs: BfBot.Innate._EnsureSPLFiles()")
     P("")
 end
@@ -3151,19 +3360,9 @@ function BfBot.Test.QuickCast()
     if repaired.presets[2].qc == 0 then _ok("qc=nil repaired to 0")
     else _nok("qc=nil not repaired: " .. tostring(repaired.presets[2].qc)) end
 
-    -- ---- Test 5: Boolean safety (qc should never be boolean) ----
+    -- ---- Test 5: SPL file generation ----
     P("")
-    P("  [5] Boolean safety for qc")
-
-    local boolConfig = BfBot.Persist.GetDefaultConfig()
-    boolConfig.presets[1].qc = true
-    BfBot.Persist._SanitizeValues(boolConfig)
-    if boolConfig.presets[1].qc == 1 then _ok("Boolean qc=true sanitized to 1")
-    else _nok("Boolean qc not sanitized: " .. tostring(boolConfig.presets[1].qc)) end
-
-    -- ---- Test 6: SPL file generation ----
-    P("")
-    P("  [6] Cheat SPL files")
+    P("  [5] Cheat SPL files")
 
     local cheatData = BfBot.Innate._BuildCheatSPL()
     if type(cheatData) == "string" and #cheatData == 250 then
@@ -3185,9 +3384,9 @@ function BfBot.Test.QuickCast()
     if removerData:sub(1, 4) == "SPL " then _ok("BFBTCR signature OK")
     else _nok("BFBTCR bad signature: " .. removerData:sub(1, 4)) end
 
-    -- ---- Test 7: Innate SPL structure (no opcode 171, has opcode 172 cleanup) ----
+    -- ---- Test 6: Innate SPL structure (no opcode 171, has opcode 172 cleanup) ----
     P("")
-    P("  [7] Innate SPL structure (opcode 172 cleanup)")
+    P("  [6] Innate SPL structure (opcode 172 cleanup)")
 
     local innateData = BfBot.Innate._BuildSPL(0, 1)
     -- Expected size: Header(114) + Ability(40) + 1*feat402(48) + N*feat172(48 each)
