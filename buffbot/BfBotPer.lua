@@ -868,10 +868,26 @@ end
 -- @return number|nil: slot (0-5) or nil if not in party
 function BfBot.Persist._ResolveNameToSlot(name)
     if not name or name == "" then return nil end
+    -- Primary: exact current display-name match (unchanged behavior).
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if sprite and BfBot._GetName(sprite) == name then
             return slot
+        end
+    end
+    -- Fallback: stable death variable. Survives engine renames such as the
+    -- Anomen -> Sir Anomen knighthood, where the stored display name goes stale
+    -- but the DV ("Anomen") does not. Only reached when no current display name
+    -- matched, so it can never override a working name match. Case-insensitive;
+    -- skip empty / "none" DVs (the protagonist's).
+    local lname = name:lower()
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local dv = BfBot._GetDeathVar(sprite):lower()
+            if dv ~= "" and dv ~= "none" and dv == lname then
+                return slot
+            end
         end
     end
     return nil
@@ -913,7 +929,8 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
                         pri    = pri + subPri / 1000,
                     })
                 end
-                -- Unresolved names silently skipped
+                -- Unresolved names skipped here; a spell whose targets ALL fail
+                -- to resolve is surfaced by the queue builder via _WarnNoTargets.
             end
         end
     else
@@ -928,23 +945,52 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
                 -- Legacy slot string
                 target = num
             else
-                -- Name-based: resolve to slot
+                -- Name-based: resolve to slot (display name, then DV fallback).
                 local resolved = BfBot.Persist._ResolveNameToSlot(tgt)
-                if resolved then
-                    target = resolved + 1
-                else
-                    target = "all"  -- fallback for unresolved
-                end
+                if resolved then target = resolved + 1 end
+                -- Unresolved single name: leave target nil so the entry is
+                -- skipped. Do NOT fall back to "all" — silently casting a
+                -- single-target buff on the whole party because a name went
+                -- stale was a bug. A fully-unresolved spell is surfaced by the
+                -- queue builder via _WarnNoTargets.
             end
         end
-        table.insert(results, {
-            caster = slot,
-            spell  = resref,
-            target = target,
-            pri    = pri,
-        })
+        if target ~= nil then
+            table.insert(results, {
+                caster = slot,
+                spell  = resref,
+                target = target,
+                pri    = pri,
+            })
+        end
     end
     return results
+end
+
+--- Surface enabled spells that resolved to ZERO valid targets during queue
+--- building (e.g. every configured target was renamed beyond DV recognition or
+--- has left the party). Without this such spells are skipped with no feedback.
+--- Writes to the exec log even though queue-building runs before Exec opens it
+--- (mirrors BfBot.Exec._SafetyTick's brief open/close). Log-only by design, so
+--- intentionally-kept departed targets don't nag on screen every cast.
+function BfBot.Persist._WarnNoTargets(casterName, spellNames)
+    if not spellNames or #spellNames == 0 then return end
+    pcall(function()
+        -- Respect an already-open log (e.g. the test suite holds one open across
+        -- phases) — opening our own would clobber that handle via _CloseLog and
+        -- swallow the caller's subsequent output. Only open/close when none is.
+        local alreadyOpen = BfBot._logHandle ~= nil
+        if not alreadyOpen then
+            local logFile = (BfBot.Exec and BfBot.Exec._logFile) or "buffbot_exec.log"
+            BfBot._OpenLogAppend(logFile)
+        end
+        for _, sn in ipairs(spellNames) do
+            BfBot._Print(string.format(
+                "[BuffBot] NO-TARGET: %s -> %s skipped (all targets renamed or left party)",
+                tostring(casterName), tostring(sn)))
+        end
+        if not alreadyOpen then BfBot._CloseLog() end
+    end)
 end
 
 --- Build an execution queue from a preset across all party members.
@@ -971,18 +1017,23 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
 
         -- Collect enabled, castable spells with priority
         local entries = {}
+        local noTargets = {}
         for resref, spellCfg in pairs(preset.spells) do
             if spellCfg.on == 1 then
                 local scanData = castable[resref]
                 if scanData and scanData.count > 0 then
                     local resolved = BfBot.Persist._ResolveConfigTarget(
                         spellCfg.tgt, slot, resref, spellCfg.pri or 999)
+                    if #resolved == 0 then
+                        noTargets[#noTargets + 1] = scanData.name or resref
+                    end
                     for _, e in ipairs(resolved) do
                         table.insert(entries, e)
                     end
                 end
             end
         end
+        BfBot.Persist._WarnNoTargets(BfBot._GetName(sprite), noTargets)
 
         -- Sort by priority (ascending: lower = cast first)
         table.sort(entries, function(a, b) return a.pri < b.pri end)
@@ -1241,18 +1292,23 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
 
     -- Collect enabled, castable spells with priority
     local entries = {}
+    local noTargets = {}
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
             if scanData and scanData.count > 0 then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, slot, resref, spellCfg.pri or 999)
+                if #resolved == 0 then
+                    noTargets[#noTargets + 1] = scanData.name or resref
+                end
                 for _, e in ipairs(resolved) do
                     table.insert(entries, e)
                 end
             end
         end
     end
+    BfBot.Persist._WarnNoTargets(BfBot._GetName(sprite), noTargets)
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(entries, function(a, b) return a.pri < b.pri end)

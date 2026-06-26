@@ -116,6 +116,24 @@ function BfBot._GetName(sprite)
     return "?"
 end
 
+--- Get a character's death variable / script name (the engine's stable identity).
+-- Unlike the display name, this is NOT changed by in-game renames such as
+-- Anomen's knighthood (Anomen -> Sir Anomen), so it is the reliable key for
+-- resolving stored targets. The protagonist/CHARNAME typically has an empty DV,
+-- so callers must keep a display-name fallback.
+-- @param sprite userdata: a party member sprite
+-- @return string: the death variable, or "" if unavailable
+function BfBot._GetDeathVar(sprite)
+    if not sprite then return "" end
+    local ok, dv = pcall(function() return sprite.m_scriptName end)
+    if not ok or dv == nil then return "" end
+    if type(dv) ~= "string" then
+        local gok, g = pcall(function() return dv:get() end)
+        dv = (gok and g) or ""
+    end
+    return type(dv) == "string" and dv or ""
+end
+
 -- ============================================================
 -- Field Name Resolution
 -- Uncertain field names on EEex userdata types are resolved

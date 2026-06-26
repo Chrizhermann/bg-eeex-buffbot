@@ -2504,6 +2504,96 @@ end
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
+--- Phase: Target resolution by death variable (issue #51).
+--- Verifies that stored targets resolve via the stable DV when the display name
+--- no longer matches (the Anomen -> Sir Anomen rename class of bug), that bogus
+--- names fail cleanly, and that an unresolved single name no longer falls back
+--- to the whole party. Derives expectations from the live party so it is
+--- portable across installs.
+function BfBot.Test.TargetResolution()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Phase: Target Resolution (DV fallback, issue #51)")
+    P("========================================")
+    P("")
+
+    -- Find a party member with a usable DV whose DV differs from its display
+    -- name (so passing the DV string actually exercises the fallback path).
+    local pick
+    for slot = 0, 5 do
+        local sp = EEex_Sprite_GetInPortrait(slot)
+        if sp then
+            local nm = BfBot._GetName(sp)
+            local dv = BfBot._GetDeathVar(sp)
+            if dv and dv ~= "" and dv:lower() ~= "none" then
+                if not pick then pick = { slot = slot, name = nm, dv = dv } end
+                if nm and nm ~= dv then
+                    pick = { slot = slot, name = nm, dv = dv }
+                    break
+                end
+            end
+        end
+    end
+
+    if not pick then
+        _nok("No party member with a usable death variable found")
+        return _summary("Target Resolution")
+    end
+    P(string.format("  Using slot %d: name=[%s] DV=[%s]", pick.slot, tostring(pick.name), tostring(pick.dv)))
+
+    -- 1. _GetDeathVar returns a non-empty DV
+    if pick.dv and pick.dv ~= "" then _ok("_GetDeathVar returned non-empty DV")
+    else _nok("_GetDeathVar returned empty") end
+
+    -- 2. Primary path: display name resolves to its slot
+    if BfBot.Persist._ResolveNameToSlot(pick.name) == pick.slot then
+        _ok("display name resolves to slot " .. pick.slot)
+    else _nok("display name did not resolve to slot " .. pick.slot) end
+
+    -- 3. DV fallback: the death variable resolves to its slot, case-insensitively
+    if BfBot.Persist._ResolveNameToSlot(pick.dv) == pick.slot then
+        _ok("death variable resolves to slot " .. pick.slot)
+    else _nok("death variable [" .. tostring(pick.dv) .. "] did not resolve") end
+
+    if BfBot.Persist._ResolveNameToSlot(pick.dv:upper()) == pick.slot then
+        _ok("DV upper-case resolves (case-insensitive)")
+    else _nok("DV upper-case did not resolve") end
+
+    if BfBot.Persist._ResolveNameToSlot(pick.dv:lower()) == pick.slot then
+        _ok("DV lower-case resolves (case-insensitive)")
+    else _nok("DV lower-case did not resolve") end
+
+    -- 4. Bogus name resolves to nil (no false positive)
+    if BfBot.Persist._ResolveNameToSlot("__NoSuchMember__") == nil then
+        _ok("bogus name resolves to nil")
+    else _nok("bogus name unexpectedly resolved") end
+
+    -- 5. _ResolveConfigTarget: a table holding a DV token yields exactly one
+    --    entry pointing at that member (Player = slot + 1)
+    local rTbl = BfBot.Persist._ResolveConfigTarget({ pick.dv }, 0, "TESTSPL", 1)
+    if #rTbl == 1 and rTbl[1].target == pick.slot + 1 then
+        _ok("table target {DV} resolves to one entry, Player" .. (pick.slot + 1))
+    else _nok("table target {DV} resolved to " .. #rTbl .. " entries") end
+
+    -- 6. _ResolveConfigTarget: an unresolved single name yields ZERO entries
+    --    (regression guard — it must NOT fall back to the whole party)
+    local rBogus = BfBot.Persist._ResolveConfigTarget("__NoSuchMember__", 0, "TESTSPL", 1)
+    if #rBogus == 0 then
+        _ok("unresolved single name yields zero entries (no party-wide fallback)")
+    else _nok("unresolved single name yielded " .. #rBogus .. " entries (expected 0)") end
+
+    -- 7. Sanity: "s" and "p" still resolve as before
+    local rSelf = BfBot.Persist._ResolveConfigTarget("s", 0, "TESTSPL", 1)
+    if #rSelf == 1 and rSelf[1].target == "self" then _ok('"s" still resolves to self')
+    else _nok('"s" did not resolve to self') end
+    local rParty = BfBot.Persist._ResolveConfigTarget("p", 0, "TESTSPL", 1)
+    if #rParty == 1 and rParty[1].target == "all" then _ok('"p" still resolves to all')
+    else _nok('"p" did not resolve to all') end
+
+    return _summary("Target Resolution")
+end
+
 function BfBot.Test.RunAll()
     -- Open log file so output is captured
     BfBot._OpenLog()
@@ -2594,6 +2684,10 @@ function BfBot.Test.RunAll()
     local staleOk = BfBot.Test.StaleState()
     P("")
 
+    -- Phase: Target Resolution (DV fallback, issue #51)
+    local tgtResOk = BfBot.Test.TargetResolution()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2615,11 +2709,12 @@ function BfBot.Test.RunAll()
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
+    P("  Target Resolution:  " .. (tgtResOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and tgtResOk
 end
 
 -- ============================================================
