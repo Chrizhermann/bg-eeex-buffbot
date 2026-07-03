@@ -2040,6 +2040,80 @@ function BfBot.Test.DurationRecursion()
     -- silently zeroing out non-hierarchical durations.
     testSpell("SPPR201", 12, "Aid (non-hierarchical regression)")
 
+    -- Leaf collection (items-and-potions Task 7): GetDuration's third
+    -- return value lists the op=146 sub-spell resrefs met during recursion.
+    local function loadSpell(resref, label)
+        local ok, hdr = pcall(EEex_Resource_Demand, resref, "SPL")
+        if not ok or not hdr then
+            _warning(label .. " (" .. resref .. "): SPL not loadable - skipping")
+            return nil
+        end
+        local ability = hdr:getAbility(0)
+        if not ability then
+            _warning(label .. " (" .. resref .. "): no ability 0 - skipping")
+            return nil
+        end
+        return hdr, ability
+    end
+
+    -- Wrapper spell: Prayer delivers via op=146 -> #PRAYERG/#PRAYERB.
+    -- Leafs must be a non-empty table and must not contain the parent.
+    do
+        local hdr, ability = loadSpell("SPPR327", "Prayer leafs")
+        if hdr then
+            local _, _, leafs = BfBot.Class.GetDuration(hdr, ability)
+            if type(leafs) ~= "table" then
+                _nok("Prayer (SPPR327): third return is " .. type(leafs)
+                    .. " (want table)")
+            else
+                _check(#leafs >= 1, string.format(
+                    "Prayer (SPPR327): %d leaf resref(s) collected [%s] (want >=1)",
+                    #leafs, table.concat(leafs, ",")))
+                local hasParent = false
+                for _, r in ipairs(leafs) do
+                    if r == "SPPR327" then
+                        hasParent = true
+                        break
+                    end
+                end
+                _check(not hasParent,
+                    "Prayer (SPPR327): leafs exclude the parent resref")
+            end
+        end
+    end
+
+    -- Direct-effect spell: Aid has no op=146 chain, so leafs must be EMPTY.
+    -- (The `or {resref}` self-fallback is the CALLER's job, not GetDuration's.)
+    do
+        local hdr, ability = loadSpell("SPPR201", "Aid leafs")
+        if hdr then
+            local _, _, leafs = BfBot.Class.GetDuration(hdr, ability)
+            _check(type(leafs) == "table" and #leafs == 0, string.format(
+                "Aid (SPPR201): empty leafs for direct-effect spell (got %s len=%s)",
+                type(leafs),
+                type(leafs) == "table" and tostring(#leafs) or "n/a"))
+        end
+    end
+
+    -- Classify smoke: result carries leafResrefs as a table (may be empty
+    -- for direct spells; non-empty for Prayer). Clear the cache entry first
+    -- so a stale pre-upgrade cached result (hot-reload of BfBotCls only —
+    -- the cache lives in BfBotCor) cannot mask the new field.
+    do
+        local hdr, ability = loadSpell("SPPR327", "Classify leafResrefs")
+        if hdr then
+            BfBot._cache.class["SPPR327"] = nil
+            local cls = BfBot.Class.Classify("SPPR327", hdr, ability)
+            if type(cls.leafResrefs) == "table" then
+                _ok("Classify(SPPR327).leafResrefs is a table (len="
+                    .. #cls.leafResrefs .. ")")
+            else
+                _nok("Classify(SPPR327).leafResrefs is "
+                    .. type(cls.leafResrefs) .. " (want table)")
+            end
+        end
+    end
+
     return _summary("DurationRecursion")
 end
 
