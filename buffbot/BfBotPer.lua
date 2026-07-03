@@ -847,8 +847,13 @@ function BfBot.Persist.ImportConfig(sprite, filename)
             presetCount = presetCount + 1
             if castable then
                 local toRemove = {}
-                for resref, _ in pairs(preset.spells) do
-                    if not castable[resref] then
+                for resref, entry in pairs(preset.spells) do
+                    if entry.kind == "itm" then
+                        -- Keep item entries regardless of current inventory.
+                        -- Inventory is fluid: player may pick up the item later.
+                        -- The catalog-driven UI naturally hides item rows when the
+                        -- resref isn't in inventory now.
+                    elseif not castable[resref] then
                         table.insert(toRemove, resref)
                     end
                 end

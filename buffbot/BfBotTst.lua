@@ -1133,6 +1133,59 @@ function BfBot.Test.ExportImport()
         _nok("ImportConfig should have failed for missing file")
     end
 
+    -- Test 6: Items kept even if not in inventory; spells stripped if not castable
+    local fakeName = "BFBT_TEST_KIND"
+    local fakePath = BfBot.Persist._PRESETS_DIR .. "/" .. fakeName .. ".lua"
+    local fakeConfig = {
+        v = 8, ap = 1,
+        presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
+            ["POTN99"]  = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
+            ["SPWI999"] = { kind = "spl", on = 1, tgt = "s", pri = 2, lock = 0 },
+        }}},
+        opts = { skip = 1 }, ovr = {},
+    }
+    local ff = io.open(fakePath, "w")
+    if ff then
+        ff:write("BfBot._import = " .. BfBot.Persist._Serialize(fakeConfig) .. "\n")
+        ff:close()
+
+        -- Preserve the character's real config; the fake import replaces it
+        local savedCfg = nil
+        pcall(function() savedCfg = EEex_GetUDAux(sprite0)[BfBot.Persist._KEY] end)
+
+        local kindOk, kindPresets, kindSkipped = BfBot.Persist.ImportConfig(
+            sprite0, fakeName .. ".lua")
+        if kindOk then
+            local cfg = BfBot.Persist.GetConfig(sprite0)
+            local spells = cfg and cfg.presets and cfg.presets[1] and cfg.presets[1].spells
+            if spells and spells["POTN99"] and spells["POTN99"].kind == "itm" then
+                _ok("Item entry POTN99 kept despite not being in inventory")
+            else
+                _nok("Item entry POTN99 was stripped (items must survive the castable filter)")
+            end
+            if spells and spells["SPWI999"] == nil then
+                _ok("Uncastable spell entry SPWI999 stripped")
+            else
+                _nok("Uncastable spell entry SPWI999 survived the filter")
+            end
+            if kindSkipped == 1 then
+                _ok("Skip count is 1 (spell only, item not counted)")
+            else
+                _nok("Skip count expected 1, got " .. tostring(kindSkipped))
+            end
+        else
+            _nok("Kind-filter import failed: " .. tostring(kindPresets))
+        end
+
+        -- Restore the character's original config
+        pcall(function() EEex_GetUDAux(sprite0)[BfBot.Persist._KEY] = savedCfg end)
+    else
+        _nok("Could not write kind-filter test file: " .. tostring(fakePath))
+    end
+
+    -- Cleanup: remove kind-filter test file
+    pcall(function() os.remove(fakePath) end)
+
     -- Cleanup: remove test export file
     pcall(function()
         os.remove(BfBot.Persist._PRESETS_DIR .. "/" .. exportName .. ".lua")
