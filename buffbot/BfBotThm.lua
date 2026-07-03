@@ -16,6 +16,7 @@ BfBot.Theme = BfBot.Theme or {}
 --   text         — default body text (spell names, inputs)
 --   textMuted    — disabled/unavailable text
 --   textAccent   — emphasized text (user-added spell override)
+--   itemColor    — spell-name tint for item (kind="itm") rows
 --
 -- Menu-region specific:
 --   grip         — resize grip in bottom-right corner
@@ -68,6 +69,7 @@ BfBot.Theme._palettes = {
         -- Lock column
         lockActive   = "{230, 200, 60}",
         lockInactive = "{120, 100, 80}",
+        itemColor    = "{205, 127, 50}",
     },
     bg2_dark = {
         overlay      = 160,
@@ -90,6 +92,7 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 120, 70}",
         lockActive   = "{250, 220, 90}",
         lockInactive = "{150, 135, 115}",
+        itemColor    = "{217, 160, 99}",
     },
     sod_light = {
         overlay      = 60,
@@ -112,6 +115,7 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 130, 80}",
         lockActive   = "{240, 220, 110}",
         lockInactive = "{130, 140, 160}",
+        itemColor    = "{184, 115, 51}",
     },
     sod_dark = {
         overlay      = 180,
@@ -134,6 +138,7 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 120, 70}",
         lockActive   = "{240, 220, 110}",
         lockInactive = "{130, 145, 165}",
+        itemColor    = "{204, 140, 73}",
     },
     bg1_light = {
         overlay      = 60,
@@ -156,6 +161,7 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 130, 80}",
         lockActive   = "{250, 220, 100}",
         lockInactive = "{160, 140, 120}",
+        itemColor    = "{160, 82, 45}",
     },
     bg1_dark = {
         overlay      = 180,
@@ -178,6 +184,7 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 120, 65}",
         lockActive   = "{255, 220, 95}",
         lockInactive = "{150, 135, 115}",
+        itemColor    = "{198, 142, 95}",
     },
 }
 
