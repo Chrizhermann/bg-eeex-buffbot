@@ -1,13 +1,13 @@
 {
   "planPath": "docs/plans/2026-04-30-items-and-potions.md",
   "tasks": [
-    {"id": 1, "subject": "Cut feature branch feat/items-and-potions", "status": "pending"},
-    {"id": 2, "subject": "Probe — EEex inventory + quickitem field paths", "status": "pending", "blockedBy": [1]},
-    {"id": 3, "subject": "Probe — UseItem BCS + Item:getAbility(i)", "status": "pending", "blockedBy": [1]},
-    {"id": 4, "subject": "Schema v8 — bump, migrate, validate", "status": "pending", "blockedBy": [1]},
-    {"id": 5, "subject": "Rename _MakeDefaultSpellEntry → _MakeDefaultEntry", "status": "pending", "blockedBy": [4]},
-    {"id": 6, "subject": "ImportConfig — kind-aware filtering", "status": "pending", "blockedBy": [5]},
-    {"id": 7, "subject": "Classifier — collect leafResrefs in GetDuration", "status": "pending", "blockedBy": [1]},
+    {"id": 1, "subject": "Cut feature branch feat/items-and-potions", "status": "completed"},
+    {"id": 2, "subject": "Probe — EEex inventory + quickitem field paths", "status": "completed", "blockedBy": [1]},
+    {"id": 3, "subject": "Probe — UseItem BCS + Item:getAbility(i)", "status": "completed", "blockedBy": [1]},
+    {"id": 4, "subject": "Schema v8 — bump, migrate, validate", "status": "completed", "blockedBy": [1]},
+    {"id": 5, "subject": "Rename _MakeDefaultSpellEntry → _MakeDefaultEntry", "status": "completed", "blockedBy": [4]},
+    {"id": 6, "subject": "ImportConfig — kind-aware filtering", "status": "completed", "blockedBy": [5]},
+    {"id": 7, "subject": "Classifier — collect leafResrefs in GetDuration", "status": "completed", "blockedBy": [1]},
     {"id": 8, "subject": "Scanner — _BuildItemCatalog helper", "status": "pending", "blockedBy": [2, 3, 7]},
     {"id": 9, "subject": "Scanner — merge items + add kind to spells", "status": "pending", "blockedBy": [8]},
     {"id": 10, "subject": "Exec — _BuildQueue carries kind + leafResrefs", "status": "pending", "blockedBy": [9, 6]},
@@ -22,5 +22,5 @@
     {"id": 19, "subject": "Version bump v1.4.2-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
     {"id": 20, "subject": "Push branch + open PR (#21 partial)", "status": "pending", "blockedBy": [19]}
   ],
-  "lastUpdated": "2026-06-15T00:00:00Z"
+  "lastUpdated": "2026-07-03T00:00:00Z"
 }
