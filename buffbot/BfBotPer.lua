@@ -43,15 +43,19 @@ function BfBot.Persist.GetDefaultConfig()
     }
 end
 
---- Create a default spell entry from classification data.
+--- Create a default entry for a preset spell or item slot.
 -- @param classResult  classification table (may be nil)
 -- @param enabled      optional 0 or 1 (default 1)
-function BfBot.Persist._MakeDefaultSpellEntry(classResult, enabled)
+-- @param kind         "spl" (default) or "itm"
+function BfBot.Persist._MakeDefaultEntry(classResult, enabled, kind)
+    kind = kind or "spl"
     local tgt = "p"
     if classResult and classResult.defaultTarget == "s" then
         tgt = "s"
+    elseif kind == "itm" then
+        tgt = "s"  -- items default to self (most are self-drink potions)
     end
-    return { on = (enabled == 0) and 0 or 1, tgt = tgt, pri = 999, lock = 0 }
+    return { kind = kind, on = (enabled == 0) and 0 or 1, tgt = tgt, pri = 999, lock = 0 }
 end
 
 --- Scan a character's spells and create a populated default config.
@@ -112,7 +116,7 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         local isShort = (buff.durCat == "short")
 
         -- Preset 1: long/permanent enabled, everything else disabled
-        local e1 = BfBot.Persist._MakeDefaultSpellEntry(buff.classData, isLong and 1 or 0)
+        local e1 = BfBot.Persist._MakeDefaultEntry(buff.classData, isLong and 1 or 0)
         if isLong then
             e1.pri = p1en;  p1en = p1en + 1
         else
@@ -121,7 +125,7 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         config.presets[1].spells[buff.resref] = e1
 
         -- Preset 2: short enabled, everything else disabled
-        local e2 = BfBot.Persist._MakeDefaultSpellEntry(buff.classData, isShort and 1 or 0)
+        local e2 = BfBot.Persist._MakeDefaultEntry(buff.classData, isShort and 1 or 0)
         if isShort then
             e2.pri = p2en;  p2en = p2en + 1
         else
@@ -472,7 +476,7 @@ function BfBot.Persist.SetSpellEnabled(sprite, presetIndex, resref, enabled)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil)
     end
     preset.spells[resref].on = (enabled == 1) and 1 or 0
 end
@@ -513,7 +517,7 @@ function BfBot.Persist.SetSpellVariant(sprite, presetIndex, resref, variantResre
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil)
     end
     preset.spells[resref].var = variantResref  -- string or nil to clear
 end
@@ -537,7 +541,7 @@ function BfBot.Persist.SetSpellLock(sprite, presetIndex, resref, locked)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil)
     end
     preset.spells[resref].lock = (locked == 1) and 1 or 0
 end

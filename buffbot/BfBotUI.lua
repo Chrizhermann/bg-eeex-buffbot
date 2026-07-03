@@ -724,7 +724,7 @@ function BfBot.UI._Refresh()
         if not preset.spells[resref] and scan.class and scan.class.isBuff
            and scan.count > 0 and ovr ~= -1 then
             maxPri = maxPri + 1
-            local entry = BfBot.Persist._MakeDefaultSpellEntry(scan.class, 0)
+            local entry = BfBot.Persist._MakeDefaultEntry(scan.class, 0)
             entry.pri = maxPri
             preset.spells[resref] = entry
         end
