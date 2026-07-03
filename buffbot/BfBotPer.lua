@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 7
+BfBot.Persist._SCHEMA_VERSION = 8
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -223,6 +223,9 @@ function BfBot.Persist._ValidateConfig(config)
                         if type(entry.lock) ~= "number" or (entry.lock ~= 0 and entry.lock ~= 1) then
                             entry.lock = 0
                         end
+                        if type(entry.kind) ~= "string" or (entry.kind ~= "spl" and entry.kind ~= "itm") then
+                            entry.kind = "spl"
+                        end
                     end
                 end
             end
@@ -301,6 +304,21 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
                                     end
                                 end
                             end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if fromVersion < 8 then
+        -- Add kind = "spl" to all existing spell entries.
+        -- Pre-v8 entries are all spells; items appear in v8+ only.
+        if config.presets then
+            for _, preset in pairs(config.presets) do
+                if type(preset) == "table" and type(preset.spells) == "table" then
+                    for _, entry in pairs(preset.spells) do
+                        if type(entry) == "table" and entry.kind == nil then
+                            entry.kind = "spl"
                         end
                     end
                 end

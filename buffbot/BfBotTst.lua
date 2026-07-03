@@ -3075,6 +3075,38 @@ function BfBot.Test.Persist()
     -- Clean up test key
     if iniOk then pcall(BfBot.Persist.SetPref, "BB_TestKey", 0) end
 
+    -- ---- Test 11: Schema v8 migration (kind field) ----
+    P("")
+    P("  [11] Schema v8 migration (kind field)")
+
+    -- v7→v8: kind field added to all entries
+    local v7 = {
+        v = 7, ap = 1,
+        presets = {
+            [1] = { name = "P1", cat = "long", qc = 0, spells = {
+                ["SPWI304"] = { on = 1, tgt = "s", pri = 1, lock = 0 },
+            }},
+        },
+        opts = { skip = 1 }, ovr = {},
+    }
+    local migrated = BfBot.Persist._MigrateConfig(v7, 7)
+    if migrated.v == 8 and migrated.presets[1].spells["SPWI304"].kind == "spl" then
+        _ok("v7→v8 migration sets kind=\"spl\"")
+    else
+        _nok("v7→v8 migration failed: " .. tostring(migrated.presets[1].spells["SPWI304"].kind))
+    end
+
+    -- Validator repairs missing/invalid kind to "spl"
+    local kindCfg = BfBot.Persist.GetDefaultConfig()
+    kindCfg.presets[1].spells["TSTKND"] = { on = 1, tgt = "s", pri = 1, lock = 0, kind = "bogus" }
+    local repairedKind = BfBot.Persist._ValidateConfig(kindCfg)
+    if repairedKind.presets[1].spells["TSTKND"].kind == "spl" then
+        _ok("Validator repairs invalid kind to \"spl\"")
+    else
+        _nok("Validator kind repair failed: " ..
+             tostring(repairedKind.presets[1].spells["TSTKND"].kind))
+    end
+
     -- ---- Summary ----
     P("")
 
