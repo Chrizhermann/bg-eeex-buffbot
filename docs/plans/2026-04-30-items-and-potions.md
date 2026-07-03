@@ -574,51 +574,91 @@ will be detected by the leaf SPL on the target's effect list."
 
 > Scanner anchors verified stable post-merge (audit 2026-06-15).
 
-**Step 1: Add the helper**
+> **Probe-verified 2026-07-03** (see `tools/items_probe_findings.md`): there is NO separate
+> quickitem field — one array `sprite.m_equipment.m_items`, slot ranges decide the category.
+> Count/charges and ability-target have no named fields (raw offsets below). EEex's
+> `Item_Header_st:getAbility(i)` has a confirmed stride bug for i ≥ 1 — use manual arithmetic.
 
-Use the verified field path from Task 2 (placeholder `INVENTORY_FIELD` below — replace with actual). Insert after `_buildCountMap`:
+**Step 1: Add the constants + ability helper at the top of the module**
+
+Below the `BfBot.Scan = {}` line (line 9):
 
 ```lua
---- Walk a sprite's inventory + 3 quickitems, classify each item ability
--- with at least one buff opcode, and return a {[resref] = entry} table.
+-- Inventory access — all verified 2026-07-03 via remote console on BG2EE.
+-- See tools/items_probe_findings.md (folded into bg-modding refs in Task 18).
+BfBot.Scan._SLOT_EQUIP_MAX = 17   -- 0-17 equipped body slots (10 = FIST pseudo-item)
+BfBot.Scan._SLOT_QUICK_MIN = 18   -- 18-20 quickitem slots 1-3
+BfBot.Scan._SLOT_QUICK_MAX = 20
+BfBot.Scan._SLOT_PACK_MAX  = 36   -- 21-36 backpack
+BfBot.Scan._ITEM_COUNT_OFF = 0x1C -- CItem: count/charges u16 (no named field)
+BfBot.Scan._ABIL_TARGET_OFF = 0xC -- Item_ability_st: target byte (no named field)
+BfBot.Scan._CAT_POTION = 9        -- Item_Header_st.itemType
+
+--- Get item ability i via manual pointer arithmetic.
+-- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header sizeof=114
+-- instead of ability sizeof=56) — garbage for i >= 1. Verified 2026-07-03 on STAF11.
+function BfBot.Scan._GetItemAbility(header, i)
+    return EEex_PtrToUD(
+        EEex_UDToPtr(header) + header.abilityOffset + Item_ability_st.sizeof * i,
+        "Item_ability_st")
+end
+```
+
+**Step 2: Add the catalog helper**
+
+Insert after `_buildCountMap`:
+
+```lua
+--- Walk a sprite's inventory (one array: equipped 0-17, quickitems 18-20,
+-- backpack 21-36), classify item abilities, return {[resref] = entry}.
+-- Slot rules: equipped/quickitem slots admit any usable category; backpack
+-- admits ONLY potions (cat 9). The engine would happily UseItem an unequipped
+-- ring from the backpack (verified!), so this filter is the game-balance
+-- enforcement, not just cosmetics.
 local function _BuildItemCatalog(sprite)
     local items = {}
     local seen = {}
 
-    local function _consider(resref, count)
+    local function _consider(resref, count, allowAnyCat)
         if not resref or resref == "" then return end
         if seen[resref] then return end
         if count <= 0 then return end
         seen[resref] = true
 
-        -- Skip BuffBot's own generated SPLs masquerading as items (defensive)
+        -- Skip BuffBot's own generated resrefs (defensive)
         if resref:sub(1, 4) == "BFBT" then return end
 
         local hdrOk, header = pcall(EEex_Resource_Demand, resref, "ITM")
         if not hdrOk or not header then return end
         if (header.abilityCount or 0) == 0 then return end  -- passive-only
+        if not allowAnyCat and (header.itemType or 0) ~= BfBot.Scan._CAT_POTION then
+            return  -- backpack: potions only
+        end
 
         for i = 0, header.abilityCount - 1 do
-            local aOk, ability = pcall(function() return header:getAbility(i) end)
+            local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, i)
             if aOk and ability then
-                local target = ability.target or 0
+                -- target byte has no named field on Item_ability_st
+                local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
                 if target == 1 or target == 5 or target == 7 then
                     local cOk, classResult = pcall(BfBot.Class.Classify, resref, header, ability)
                     if cOk and classResult and classResult.isBuff then
-                        -- Only the FIRST buff ability per item appears (most items
-                        -- have one). Multi-ability items: the first qualifying
-                        -- ability wins; document the limitation, future work
-                        -- if it bites.
+                        -- First buff ability per item wins (RING39-style multi-
+                        -- ability items: document limitation, revisit if it bites).
                         local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
+                        -- ITM naming: identifiedName FIRST (genericName is the
+                        -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
+                        local name = _tryStrref(header.identifiedName)
+                                     or _tryStrref(header.genericName)
+                                     or resref
+                        local icon = ""
+                        pcall(function() icon = ability.quickSlotIcon:get() end)
                         items[resref] = {
                             resref = resref,
                             kind = "itm",
                             abilityIdx = i,
-                            name = _tryStrref(header.spellName) or resref,
-                            icon = (function()
-                                local ok, ic = pcall(function() return ability.quickSlotIcon:get() end)
-                                return (ok and ic) or ""
-                            end)(),
+                            name = name,
+                            icon = icon,
                             count = count,
                             level = 0,
                             spellType = 0,
@@ -638,70 +678,65 @@ local function _BuildItemCatalog(sprite)
         end
     end
 
-    -- Walk inventory slots
-    local invList = sprite[BfBot.Scan._INVENTORY_FIELD]  -- e.g. sprite.m_aItems
-    if invList then
-        pcall(function()
-            EEex_Utility_IterateCPtrList(invList, function(slot)
-                local r = slot.m_pRes and slot.m_pRes:get() or nil
-                local c = slot.m_count or 1
-                _consider(r, c)
-            end)
-        end)
-    end
-
-    -- Walk 3 quickitem slots
-    local qList = sprite[BfBot.Scan._QUICKITEM_FIELD]
-    if qList then
-        pcall(function()
-            EEex_Utility_IterateCPtrList(qList, function(slot)
-                local r = slot.m_pRes and slot.m_pRes:get() or nil
-                local c = slot.m_count or 1
-                _consider(r, c)
-            end)
-        end)
+    -- Single walk over the one real inventory array. items:get(i) → CItem|nil.
+    local ok = pcall(function()
+        local arr = sprite.m_equipment.m_items
+        for slot = 0, BfBot.Scan._SLOT_PACK_MAX do
+            local it = arr:get(slot)
+            if it then
+                local resref = nil
+                pcall(function() resref = it.pRes.resref:get() end)
+                if resref and resref ~= "FIST" then
+                    local count = EEex_ReadU16(EEex_UDToPtr(it) + BfBot.Scan._ITEM_COUNT_OFF)
+                    -- equipped (0-17) + quickitems (18-20): any category;
+                    -- backpack (21-36): potions only
+                    local allowAnyCat = slot <= BfBot.Scan._SLOT_QUICK_MAX
+                    _consider(resref, count, allowAnyCat)
+                end
+            end
+        end
+    end)
+    if not ok then
+        BfBot._Warn("Item catalog walk failed")
     end
 
     return items
 end
 ```
 
-**Important:** `BfBot.Scan._INVENTORY_FIELD` and `BfBot.Scan._QUICKITEM_FIELD` are constants set at the top of the module from Task 2's findings. If iteration via `EEex_Utility_IterateCPtrList` doesn't apply, swap for array indexing using the verified pattern.
-
-**Step 2: Add the constants at the top of the file**
-
-Below the `BfBot.Scan = {}` line (line 9):
-
-```lua
--- Verified 2026-04-30 via remote console. See tools/items_probe_findings.md
--- and ~/.claude/skills/bg-modding/references/eeex-sprites.md (Task 18 update).
-BfBot.Scan._INVENTORY_FIELD = "m_aItems"      -- replace with verified name
-BfBot.Scan._QUICKITEM_FIELD = "m_aQuickItems" -- replace with verified name
-```
+**Classifier caveat to verify while here:** `BfBot.Class.Classify` was written for SPL headers — it may read SPL-only header fields (e.g. `secondaryType` for the MSECTYPE fast path, `spellLevel`). On `Item_Header_st` those can be nil; a nil-arithmetic error inside the pcall would silently skip the item. When the probe-test below shows a missing expected item, check classify errors first (temporarily replace pcall with direct call to surface the error) and guard the SPL-only reads with `or 0` / nil-checks in `BfBotCls.lua` as needed.
 
 **Step 3: Probe-test the helper before integrating**
 
-In EEex console:
+Deploy (`BGEE_DIR="C:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy" bash tools/deploy.sh`), reload with `Infinity_DoFile("BfBotScn")`, then via remote console:
 
 ```lua
 local sp = EEex_Sprite_GetInPortrait(0)
-local items = BfBot.Scan._BuildItemCatalog and BfBot.Scan._BuildItemCatalog(sp)  -- only works after exposing
--- Or test the local fn by temporarily promoting to BfBot.Scan._BuildItemCatalog
-for r, e in pairs(items or {}) do print(r, e.name, e.count, e.durCat) end
+-- temporarily expose: BfBot.Scan._BuildItemCatalog = _BuildItemCatalog (or test inline)
+local items = BfBot.Scan._BuildItemCatalog(sp)
+local out = {}
+for r, e in pairs(items or {}) do table.insert(out, r .. ":" .. e.name .. " x" .. e.count .. " " .. e.durCat) end
+return table.concat(out, " | ")
 ```
 
-Expected: at least the test items (POTN15, RING06) appear with sensible names + durCat.
+Expected on the prepared test save (leader has quickslot potions + backpack rings):
+- Buff potions in quickslots 18-20 appear with identified names and correct counts
+- `RING05` (Sandthief's Ring, backpack) does NOT appear — backpack non-potions filtered
+- `WAND09`/`WAND10` (backpack wands) do NOT appear — backpack filter again
+- After manually equipping RING05 (ring slot) + re-scan: RING05 appears (op20 invisibility → isBuff)
 
 **Step 4: Commit**
 
 ```bash
 git add buffbot/BfBotScn.lua
-git commit -m "feat(scan): add _BuildItemCatalog walking inventory + quickitems
+git commit -m "feat(scan): add _BuildItemCatalog — single m_equipment.m_items walk
 
-Uses verified m_aItems / m_aQuickItems field paths (Task 2).
-Each item with abilityCount > 0 gets its first buff-classified
-ability into the catalog with kind=\"itm\", abilityIdx,
-leafResrefs collected for pre-flight already-active checks."
+Slot rules: equipped 0-17 + quickitems 18-20 any category,
+backpack 21-36 potions only (engine allows UseItem on unequipped
+backpack rings — verified — so the scanner filter IS the enforcement).
+Raw offsets for count (+0x1C) and ability target (+0xC); manual
+getAbility arithmetic (EEex stride bug, see items_probe_findings.md).
+Entries carry kind=itm, abilityIdx, leafResrefs."
 ```
 
 ---
