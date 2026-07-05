@@ -1024,6 +1024,8 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                 target = e.target,
                 durCat = scanData and scanData.durCat or "short",
                 var    = spellCfg and spellCfg.var or nil,
+                kind   = scanData and scanData.kind or "spl",
+                leafResrefs = scanData and scanData.leafResrefs,
             })
         end
 
@@ -1295,6 +1297,8 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             target = e.target,
             durCat = scanData and scanData.durCat or "short",
             var    = spellCfg and spellCfg.var or nil,
+            kind   = scanData and scanData.kind or "spl",
+            leafResrefs = scanData and scanData.leafResrefs,
         })
     end
 

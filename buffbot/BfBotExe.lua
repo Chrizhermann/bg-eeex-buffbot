@@ -213,6 +213,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         local isAoE = classResult and classResult.isAoE or false
         local splstates = classResult and classResult.splstates or {}
         local spellName = spellData.name or resref
+        local kind = spellData.kind or "spl"
 
         -- Resolve targets
         local targets = BfBot.Exec._ResolveTargets(
@@ -235,6 +236,9 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             local durCat = entry.durCat or "short"
             isCheat = (durCat == "permanent" or durCat == "long")
         end
+        if kind == "itm" then
+            isCheat = false  -- Quick Cast / IA wrapper doesn't apply to UseItem
+        end
 
         for _, tgt in ipairs(targets) do
             table.insert(byCaster[casterSlot], {
@@ -242,6 +246,8 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                 casterSprite = casterSprite,
                 casterName = casterName,
                 resref = resref,
+                kind = kind,
+                leafResrefs = spellData.leafResrefs,
                 spellName = spellName,
                 targetObj = tgt.targetObj,
                 targetSlot = tgt.targetSlot,
