@@ -2169,32 +2169,66 @@ function BfBot.Test.PlanReconciliation()
     _check(p.hasMismatch == false and next(p.desired) == nil,
         "config without presets → empty desired, no mismatch")
 
-    -- Case 3: config explicitly contains the synthetic preset → no mismatch,
-    -- synthetic entry is in both actual and desired.
+    -- Baseline: on a save where the panel has been used, the sprite
+    -- legitimately carries BFBT innates for its REAL config. Cases 3-5 must
+    -- build their configs from what is actually on the sprite (baseline +
+    -- synthetic) instead of assuming a virgin sprite — otherwise the real
+    -- innates read as orphans and the no-mismatch cases fail. `actual` is
+    -- config-independent (pure iterator walk), so any config works here.
+    local basePresets = {}   -- config-shaped: one entry per preset on sprite
+    local freePreset = nil   -- a preset index with no innate on the sprite
+    do
+        local allPresets = {}
+        for pi = 1, BfBot.MAX_PRESETS do allPresets[pi] = {} end
+        local baseline = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+            { presets = allPresets })
+        for pi = 1, BfBot.MAX_PRESETS do
+            if baseline.actual[string.format("BFBT%d%d", slotIdx, pi)] then
+                basePresets[pi] = {}
+            elseif not freePreset then
+                freePreset = pi
+            end
+        end
+    end
+
+    -- Case 3: config matches the sprite exactly (baseline + synthetic)
+    -- → no mismatch, synthetic entry is in both actual and desired.
     p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {} } })
+        { presets = basePresets })
     _check(p.hasMismatch == false
         and p.actual[syntheticResref] == 1
         and p.desired[syntheticResref] == true,
         "config contains preset " .. syntheticPreset .. " → no mismatch")
 
-    -- Case 4: config has different presets, missing the synthetic one
+    -- Case 4: config has the baseline presets but NOT the synthetic one
     -- → mismatch (the orphan bug, issue #47).
+    local minusSynthetic = {}
+    for pi in pairs(basePresets) do
+        if pi ~= syntheticPreset then minusSynthetic[pi] = {} end
+    end
     p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [1] = {}, [2] = {} } })
+        { presets = minusSynthetic })
     _check(p.hasMismatch == true and p.actual[syntheticResref] == 1,
-        "config {1,2} + sprite has preset " .. syntheticPreset .. " → mismatch (orphan)")
+        "config minus preset " .. syntheticPreset .. " + sprite has it → mismatch (orphan)")
 
-    -- Case 5: config requires a preset the sprite doesn't have (preset 8)
+    -- Case 5: config additionally requires a preset the sprite doesn't have
     -- → no mismatch (orphans are sprite-side, not desired-side), and
     -- desired contains the missing entry so the orchestrator can grant it.
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {}, [8] = {} } })
-    local missingResref = string.format("BFBT%d8", slotIdx)
-    _check(p.hasMismatch == false
-        and p.desired[missingResref] == true
-        and p.actual[missingResref] == nil,
-        "config requires preset 8 not on sprite → no mismatch, desired has missing entry")
+    if freePreset then
+        local plusFree = {}
+        for pi in pairs(basePresets) do plusFree[pi] = {} end
+        plusFree[freePreset] = {}
+        p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+            { presets = plusFree })
+        local missingResref = string.format("BFBT%d%d", slotIdx, freePreset)
+        _check(p.hasMismatch == false
+            and p.desired[missingResref] == true
+            and p.actual[missingResref] == nil,
+            "config requires preset " .. freePreset
+            .. " not on sprite → no mismatch, desired has missing entry")
+    else
+        _warning("sprite carries innates for all presets — skipping missing-desired case")
+    end
 
     -- Case 6: foreign slot — querying a different slot must ignore the
     -- synthetic entry (which belongs to slotIdx's namespace).
