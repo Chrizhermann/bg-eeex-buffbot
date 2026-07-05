@@ -333,17 +333,29 @@ function BfBot.Exec._CheckEntry(entry)
     end
 
     -- Effect list check (authoritative — runs when SPLSTATEs ambiguous or spell has none)
-    -- For variant spells, the variant resref produces the actual buff effects
-    local checkResref = entry.var or entry.resref
-    if BfBot.Exec._HasActiveEffect(targetSprite, checkResref) then
-        BfBot.Exec._LogEntry("SKIP", label .. " (already active)")
+    -- Catalog entries always carry non-empty leafResrefs (see BfBotScn.lua);
+    -- the fallback covers hand-built queues from direct Exec.Start callers.
+    local checkResrefs = entry.leafResrefs or { entry.var or entry.resref }
+    -- Variants always override: the variant resref produces the actual buff effects
+    if entry.var then checkResrefs = { entry.var } end
+
+    local foundActive = nil
+    for _, r in ipairs(checkResrefs) do
+        if BfBot.Exec._HasActiveEffect(targetSprite, r) then
+            foundActive = r
+            break
+        end
+    end
+
+    if foundActive then
+        BfBot.Exec._LogEntry("SKIP", label .. " (already active: " .. foundActive .. ")")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
         return false
     end
 
     -- SPLSTATE said active but effect list disagrees — old logic would have falsely skipped
     if splstatePositive then
-        BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught, checked " .. checkResref .. ")")
+        BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught, checked " .. table.concat(checkResrefs, ",") .. ")")
     end
 
     return true
