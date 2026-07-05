@@ -16,6 +16,9 @@ This file is temporary: folded into `~/.claude/skills/bg-modding/references/` in
   - `18-20` quickitem slots 1-3 (CreateItem auto-fills these for potions before backpack)
   - `21-36` backpack (16 slots)
   - `37+` magic-weapon etc. — skip
+  - Body-slot sub-mapping differs from classic IESDP CRE docs: **rings land at 7-8**
+    (verified 2026-07-05 by equipping via UI), not the documented 4-5. Only the three
+    RANGES above matter for BuffBot; don't rely on classic per-slot indices within 0-17.
 - **CItem named fields**: `pRes` (CResItem → `pRes.resref:get()` = resref, `pRes.pHeader` = Item_Header_st),
   `m_wear` (+0x18), `m_flags` (+0x20; 1 = identified).
 - **Count/charges have NO named field.** Raw read:

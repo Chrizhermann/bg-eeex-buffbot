@@ -8,7 +8,7 @@
     {"id": 5, "subject": "Rename _MakeDefaultSpellEntry → _MakeDefaultEntry", "status": "completed", "blockedBy": [4]},
     {"id": 6, "subject": "ImportConfig — kind-aware filtering", "status": "completed", "blockedBy": [5]},
     {"id": 7, "subject": "Classifier — collect leafResrefs in GetDuration", "status": "completed", "blockedBy": [1]},
-    {"id": 8, "subject": "Scanner — _BuildItemCatalog helper", "status": "pending", "blockedBy": [2, 3, 7]},
+    {"id": 8, "subject": "Scanner — _BuildItemCatalog helper", "status": "completed", "blockedBy": [2, 3, 7]},
     {"id": 9, "subject": "Scanner — merge items + add kind to spells", "status": "pending", "blockedBy": [8]},
     {"id": 10, "subject": "Exec — _BuildQueue carries kind + leafResrefs", "status": "pending", "blockedBy": [9, 6]},
     {"id": 11, "subject": "Exec — pre-flight uses leafResrefs list", "status": "pending", "blockedBy": [10]},
