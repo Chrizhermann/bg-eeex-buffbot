@@ -2628,6 +2628,208 @@ function BfBot.Test.StaleState()
 end
 
 -- ============================================================
+-- BfBot.Test.Items — Items + potions support (Task 16)
+-- ============================================================
+function BfBot.Test.Items()
+    _reset()
+    P("=== Items + potions support ===")
+
+    -- ---- [1] Inventory slot layout constants ----
+    -- Locks the verified layout (equip 0-17, quickitem 18-20, backpack
+    -- 21-34, weapons 35-38) against accidental edits in BfBotScn.
+    P("  [1] Inventory slot layout constants")
+    local slotChecks = {
+        { "_SLOT_EQUIP_MAX",  17 },
+        { "_SLOT_QUICK_MIN",  18 },
+        { "_SLOT_QUICK_MAX",  20 },
+        { "_SLOT_PACK_MAX",   34 },
+        { "_SLOT_WEAPON_MIN", 35 },
+        { "_SLOT_WEAPON_MAX", 38 },
+    }
+    for _, sc in ipairs(slotChecks) do
+        _check(BfBot.Scan[sc[1]] == sc[2],
+            "Scan." .. sc[1] .. " == " .. sc[2]
+            .. " (got " .. tostring(BfBot.Scan[sc[1]]) .. ")")
+    end
+
+    -- ---- [2] _GetItemAbility manual stride ----
+    -- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header
+    -- sizeof, garbage for i >= 1); _GetItemAbility walks pointers manually.
+    -- STAF11 (Staff of Curing, BG2EE) is multi-ability: a0 melee, buff at a2.
+    P("")
+    P("  [2] _GetItemAbility on a multi-ability ITM (STAF11)")
+    local hdrOk, itmHdr = pcall(EEex_Resource_Demand, "STAF11", "ITM")
+    if not hdrOk or not itmHdr then
+        _warning("STAF11.ITM not demandable on this install - skipping")
+    else
+        local nAbil = itmHdr.abilityCount or 0
+        if nAbil < 2 then
+            _warning("STAF11 has " .. nAbil
+                .. " abilities on this install (want >= 2) - skipping")
+        else
+            local aOk, a0 = pcall(BfBot.Scan._GetItemAbility, itmHdr, 0)
+            local bOk, aN = pcall(BfBot.Scan._GetItemAbility, itmHdr, nAbil - 1)
+            _check(aOk and a0 ~= nil and bOk and aN ~= nil, string.format(
+                "_GetItemAbility returns abilities 0 and %d (of %d)",
+                nAbil - 1, nAbil))
+            if aOk and a0 and bOk and aN then
+                local stride = EEex_UDToPtr(aN) - EEex_UDToPtr(a0)
+                _check(stride == Item_ability_st.sizeof * (nAbil - 1),
+                    "ability stride uses Item_ability_st.sizeof"
+                    .. " (EEex getAbility bug workaround)")
+            end
+        end
+    end
+
+    -- ---- [3] Persistence: item kind ----
+    P("")
+    P("  [3] Persistence handles kind=\"itm\"")
+    -- Validator round-trip: a valid v8 item entry passes through unchanged.
+    -- (Repair of invalid kinds is covered in Persist [11].)
+    local cfg = {
+        v = 8, ap = 1,
+        presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
+            ["POTN15"] = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
+        } } },
+        opts = { skip = 1 }, ovr = {},
+    }
+    local validated = BfBot.Persist._ValidateConfig(cfg)
+    local vEntry = validated and validated.presets and validated.presets[1]
+                   and validated.presets[1].spells
+                   and validated.presets[1].spells["POTN15"]
+    _check(vEntry ~= nil and vEntry.kind == "itm",
+        "_ValidateConfig preserves kind=\"itm\" (v8 round-trip)")
+
+    -- One focused defaults assertion for phase self-containment;
+    -- full _MakeDefaultEntry coverage lives in Persist [12].
+    local defEntry = BfBot.Persist._MakeDefaultEntry(nil, nil, "itm")
+    _check(defEntry.kind == "itm" and defEntry.tgt == "s",
+        "_MakeDefaultEntry(nil, nil, \"itm\") -> kind=\"itm\", tgt=\"s\"")
+
+    -- Everything below needs a live party sprite.
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _warning("no party member in slot 0 - skipping catalog/queue checks")
+        return _summary("Items")
+    end
+
+    -- ---- [4] _BuildItemCatalog entry invariants ----
+    -- Runs against whatever the leader carries: every admitted entry must
+    -- honor the catalog contract. An empty inventory passes vacuously.
+    P("")
+    P("  [4] _BuildItemCatalog entry invariants (leader)")
+    local catOk, itemCat = pcall(BfBot.Scan._BuildItemCatalog, sprite)
+    if not (catOk and type(itemCat) == "table") then
+        _nok("_BuildItemCatalog failed: " .. tostring(itemCat))
+    else
+        _ok("_BuildItemCatalog returned a table")
+        local nItems, bad = 0, {}
+        for r, e in pairs(itemCat) do
+            nItems = nItems + 1
+            if e.kind ~= "itm" then
+                table.insert(bad, r .. " kind=" .. tostring(e.kind))
+            end
+            if e.abilityIdx ~= 0 then
+                table.insert(bad, r .. " abilityIdx=" .. tostring(e.abilityIdx))
+            end
+            if type(e.leafResrefs) ~= "table" or #e.leafResrefs == 0 then
+                table.insert(bad, r .. " leafResrefs empty")
+            end
+            if type(e.count) ~= "number" or e.count <= 0 then
+                table.insert(bad, r .. " count=" .. tostring(e.count))
+            end
+            if e.hasVariants ~= 0 then
+                table.insert(bad, r .. " hasVariants=" .. tostring(e.hasVariants))
+            end
+            if not (e.class and e.class.isBuff) then
+                table.insert(bad, r .. " class.isBuff falsy")
+            end
+        end
+        if nItems == 0 then
+            _warning("no items in inventory - catalog invariants vacuously true")
+        elseif #bad == 0 then
+            _ok(nItems .. " item entr"
+                .. (nItems == 1 and "y satisfies" or "ies satisfy")
+                .. " all invariants"
+                .. " (kind/abilityIdx/leafResrefs/count/variants/class)")
+        else
+            _nok("catalog invariant violations: " .. table.concat(bad, "; "))
+        end
+    end
+
+    -- ---- [5] Catalog merge rule ----
+    -- GetCastableSpells merges the item catalog under the spell catalog
+    -- (spells win on resref collision, e.g. staf11.SPL vs STAF11.ITM).
+    -- Every merged entry carries a valid kind; itm entries never carry
+    -- variants (hasVariants stays 0 by construction).
+    P("")
+    P("  [5] Catalog merge (spells win on resref collision)")
+    BfBot.Scan.Invalidate(sprite)
+    local merged = BfBot.Scan.GetCastableSpells(sprite)
+    local nSpl, nItm, mergeBad = 0, 0, {}
+    local sampleItem = nil
+    for r, e in pairs(merged) do
+        if e.kind == "spl" then
+            nSpl = nSpl + 1
+        elseif e.kind == "itm" then
+            nItm = nItm + 1
+            -- Deterministic pick for [6]: lowest resref
+            if sampleItem == nil or r < sampleItem then sampleItem = r end
+            if e.variants ~= nil then
+                table.insert(mergeBad, r .. " itm entry carries variants")
+            end
+        else
+            table.insert(mergeBad, r .. " kind=" .. tostring(e.kind))
+        end
+    end
+    local mergeMsg = string.format(
+        "merged catalog: %d spl + %d itm, every kind valid, no itm variants",
+        nSpl, nItm)
+    if #mergeBad > 0 then
+        mergeMsg = mergeMsg .. " [" .. table.concat(mergeBad, "; ") .. "]"
+    end
+    _check(#mergeBad == 0, mergeMsg)
+
+    -- ---- [6] _BuildQueue item plumbing (fixture-guarded) ----
+    P("")
+    P("  [6] _BuildQueue item entry (fixture-guarded)")
+    if not sampleItem then
+        _warning("no item entries in merged catalog - skipping queue check"
+            .. " (put a buff potion in the leader's pack to exercise it)")
+        return _summary("Items")
+    end
+    -- _BuildQueue only appends to Exec._log on error paths; swap in a
+    -- scratch log so test noise never lands in the real exec log
+    -- (cf. StaleState's save/restore discipline).
+    local savedLog = BfBot.Exec._log
+    BfBot.Exec._log = {}
+    local qOk, byCaster, totalOrErr = pcall(BfBot.Exec._BuildQueue,
+        { { caster = 0, spell = sampleItem, target = "self" } }, 2)
+    BfBot.Exec._log = savedLog
+    if not qOk then
+        _nok("_BuildQueue errored: " .. tostring(byCaster))
+    elseif not byCaster then
+        _nok("_BuildQueue rejected the item entry: " .. tostring(totalOrErr))
+    else
+        local entry = byCaster[0] and byCaster[0][1]
+        if not entry then
+            _nok("_BuildQueue returned no entry for caster slot 0")
+        else
+            _check(entry.kind == "itm",
+                sampleItem .. ": queue entry kind == \"itm\"")
+            _check(entry.cheat == false, sampleItem
+                .. ": cheat == false under qcMode=2 (Quick Cast bypasses items)")
+            _check(type(entry.leafResrefs) == "table" and #entry.leafResrefs > 0,
+                sampleItem .. ": non-empty leafResrefs on queue entry")
+            _check(entry.targetObj == "Myself",
+                sampleItem .. ": target \"self\" -> targetObj \"Myself\"")
+        end
+    end
+
+    return _summary("Items")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2721,6 +2923,10 @@ function BfBot.Test.RunAll()
     local staleOk = BfBot.Test.StaleState()
     P("")
 
+    -- Phase 16: Items + potions
+    local itemsOk = BfBot.Test.Items()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2742,11 +2948,12 @@ function BfBot.Test.RunAll()
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
+    P("  Items: " .. (itemsOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk
 end
 
 -- ============================================================
