@@ -845,6 +845,7 @@ function BfBot.UI._Refresh()
 
         table.insert(rows, {
             resref   = resref,
+            kind     = (scan and scan.kind) or spellCfg.kind or "spl",
             name     = name,
             icon     = icon,
             dur      = dur,
@@ -1790,12 +1791,15 @@ function BfBot.UI._FormatDuration(seconds)
 end
 
 --- Spell name color: grey for unavailable, dark blue for manual include,
---- gold-tinted for locked, dark brown for normal.
+--- bronze tint for item rows, gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
     if not entry then return _parseColor(BfBot.UI._T("text")) end
     if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
     if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if entry.kind == "itm" and entry.lock ~= 1 then
+        return _parseColor(BfBot.UI._T("itemColor"))
+    end
     if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
     return _parseColor(BfBot.UI._T("text"))
 end
