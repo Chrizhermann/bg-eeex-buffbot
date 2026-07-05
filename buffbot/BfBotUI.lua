@@ -731,7 +731,7 @@ function BfBot.UI._Refresh()
         if not preset.spells[resref] and scan.class and scan.class.isBuff
            and scan.count > 0 and ovr ~= -1 then
             maxPri = maxPri + 1
-            local entry = BfBot.Persist._MakeDefaultEntry(scan.class, 0)
+            local entry = BfBot.Persist._MakeDefaultEntry(scan.class, 0, scan.kind)
             entry.pri = maxPri
             preset.spells[resref] = entry
         end
@@ -928,7 +928,7 @@ function BfBot.UI.ToggleSpell(row)
     if not sprite then return end
     -- Integer toggle: 1 -> 0, 0 -> 1. NEVER pass boolean to Persist.
     local newState = (entry.on == 1) and 0 or 1
-    BfBot.Persist.SetSpellEnabled(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+    BfBot.Persist.SetSpellEnabled(sprite, BfBot.UI._presetIdx, entry.resref, newState, entry.kind)
     entry.on = newState  -- immediate visual update
 end
 
@@ -1724,7 +1724,7 @@ function BfBot.UI.SelectVariant(row)
     end
 
     -- Store the variant
-    BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref)
+    BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref, entry.kind)
     entry.var = vEntry.resref
     entry.variantName = vEntry.name
 
@@ -1833,7 +1833,7 @@ function BfBot.UI.ToggleLock(row)
     if not sprite then return end
     local newState = (entry.lock == 1) and 0 or 1
     entry.lock = newState  -- immediate visual update
-    BfBot.Persist.SetSpellLock(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+    BfBot.Persist.SetSpellLock(sprite, BfBot.UI._presetIdx, entry.resref, newState, entry.kind)
 end
 
 --- Convert target config value to display text.

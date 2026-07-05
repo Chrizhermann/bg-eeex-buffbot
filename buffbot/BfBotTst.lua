@@ -3234,6 +3234,77 @@ function BfBot.Test.Persist()
              tostring(repairedKind.presets[1].spells["TSTKND"].kind))
     end
 
+    -- ---- Test 12: Item kind through entry-creation paths ----
+    P("")
+    P("  [12] Item kind through entry-creation paths")
+
+    -- _MakeDefaultEntry(kind="itm"): kind + tgt + on semantics
+    local itmDef = BfBot.Persist._MakeDefaultEntry(nil, nil, "itm")
+    if itmDef.kind == "itm" then _ok("_MakeDefaultEntry(nil, nil, \"itm\") -> kind=\"itm\"")
+    else _nok("Item entry kind wrong: " .. tostring(itmDef.kind)) end
+
+    if itmDef.tgt == "s" then _ok("Item entry defaults tgt=\"s\"")
+    else _nok("Item entry tgt wrong: " .. tostring(itmDef.tgt)) end
+
+    if itmDef.on == 1 then _ok("Item entry on=1 when enabled arg omitted")
+    else _nok("Item entry default-on wrong: " .. tostring(itmDef.on)) end
+
+    local itmOff = BfBot.Persist._MakeDefaultEntry(nil, 0, "itm")
+    if itmOff.on == 0 then _ok("_MakeDefaultEntry(nil, 0, \"itm\") -> on=0")
+    else _nok("Item entry enabled=0 not honored: " .. tostring(itmOff.on)) end
+
+    -- Omitted kind still yields the spell defaults (regression guard)
+    local splDef = BfBot.Persist._MakeDefaultEntry(nil)
+    if splDef.kind == "spl" and splDef.tgt == "p" then
+        _ok("_MakeDefaultEntry(nil) -> kind=\"spl\", tgt=\"p\" (unchanged)")
+    else
+        _nok("Spell default entry changed: kind=" .. tostring(splDef.kind) ..
+             " tgt=" .. tostring(splDef.tgt))
+    end
+
+    -- CreatePreset union copy preserves item kind. CreatePreset reads config
+    -- from the sprite's UDAux (no pure-table entry point), so this follows the
+    -- ZZTST01 pattern: inject a synthetic entry, act, assert, clean up fully.
+    do
+        local p1 = BfBot.Persist.GetPreset(sprite, 1)
+        if not p1 or not p1.spells then
+            _warning("No preset 1 — skipping CreatePreset kind test")
+        else
+            p1.spells["ZZITM01"] = BfBot.Persist._MakeDefaultEntry(nil, 0, "itm")
+            local newIdx = BfBot.Persist.CreatePreset(sprite, "ZZKindTest")
+            if not newIdx then
+                _warning("CreatePreset returned nil (all preset slots taken?) — skipping")
+            else
+                local newPreset = BfBot.Persist.GetPreset(sprite, newIdx)
+                local copied = newPreset and newPreset.spells
+                               and newPreset.spells["ZZITM01"] or nil
+                if copied and copied.kind == "itm" then
+                    _ok("CreatePreset union copy preserves kind=\"itm\"")
+                else
+                    _nok("CreatePreset dropped item kind: " ..
+                         tostring(copied and copied.kind))
+                end
+                if copied and copied.on == 0 then
+                    _ok("CreatePreset item copy is disabled (on=0)")
+                else
+                    _nok("CreatePreset item copy on wrong: " ..
+                         tostring(copied and copied.on))
+                end
+                if copied and copied.tgt == "s" then
+                    _ok("CreatePreset item copy keeps tgt=\"s\" (no SPL re-classify)")
+                else
+                    _nok("CreatePreset item copy tgt wrong: " ..
+                         tostring(copied and copied.tgt))
+                end
+                BfBot.Persist.DeletePreset(sprite, newIdx)
+            end
+            p1.spells["ZZITM01"] = nil
+        end
+    end
+    -- NOTE: _CreateDefaultConfig's listed-but-disabled item handling is not
+    -- exercised here — it requires a live sprite scan (inventory-dependent)
+    -- and triggers Innate.Refresh side effects. Covered by in-game QA.
+
     -- ---- Summary ----
     P("")
 
