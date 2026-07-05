@@ -1503,9 +1503,13 @@ end
 -- Spell Override (Add / Remove)
 -- ============================================================
 
---- Build the picker list: castable spells the user can add to the preset.
+--- Build the picker list: castable entries the user can add to the preset.
 --- Includes non-buff spells (manual inclusion) and previously-excluded buffs
---- (recovery from accidental Remove). Excluded spells sort to the top.
+--- (recovery from accidental Remove). Items ride the same excluded-buff path:
+--- they auto-merge into presets as buffs, so they only surface here after the
+--- user removed them (ovr == -1). The list is sectioned by kind — a [Spells]
+--- header row, spell rows, an [Items] header row, item rows; a section with
+--- no rows is omitted. Excluded entries sort to the top of their section.
 function BfBot.UI._BuildPickerList()
     buffbot_pickerSpells = {}
     buffbot_pickerSelected = 0
@@ -1516,19 +1520,21 @@ function BfBot.UI._BuildPickerList()
     local preset = config.presets[BfBot.UI._presetIdx]
     if not preset then return end
 
+    local spells, items = {}, {}
     local castable = BfBot.Scan.GetCastableSpells(sprite)
     for resref, scan in pairs(castable) do
-        -- Skip spells already in the preset
+        -- Skip entries already in the preset
         if preset.spells[resref] then goto nextSpell end
-        -- Skip spells with no classification
+        -- Skip entries with no classification
         if not scan.class then goto nextSpell end
         local ovr = config.ovr and config.ovr[resref]
-        -- Skip spells classified as buffs, unless they were excluded by the user
+        -- Skip entries classified as buffs, unless they were excluded by the user
         -- (excluded buffs must remain addable so accidental Remove can be undone).
         if scan.class.isBuff and ovr ~= -1 then goto nextSpell end
 
-        table.insert(buffbot_pickerSpells, {
+        table.insert(scan.kind == "itm" and items or spells, {
             resref   = resref,
+            kind     = scan.kind,
             name     = scan.name or resref,
             icon     = scan.icon or "",
             durCat   = scan.durCat or "?",
@@ -1537,12 +1543,26 @@ function BfBot.UI._BuildPickerList()
         })
         ::nextSpell::
     end
-    -- Sort excluded spells first (recently-removed → prominent for undo),
+    -- Sort excluded entries first (recently-removed → prominent for undo),
     -- then alphabetical within each group.
-    table.sort(buffbot_pickerSpells, function(a, b)
+    local function cmp(a, b)
         if a.excluded ~= b.excluded then return a.excluded > b.excluded end
         return a.name < b.name
-    end)
+    end
+    table.sort(spells, cmp)
+    table.sort(items, cmp)
+    -- Assemble sections. Header rows are non-clickable sentinels (isHeader=1);
+    -- AddPickedSpell ignores them and _PickerHasSelection treats them as no
+    -- selection. Empty sections (and their headers) are omitted, so an empty
+    -- picker keeps the existing "nothing to add" behavior.
+    if #spells > 0 then
+        table.insert(buffbot_pickerSpells, { resref = "__HEADER_SPL__", name = "[Spells]", isHeader = 1 })
+        for _, entry in ipairs(spells) do table.insert(buffbot_pickerSpells, entry) end
+    end
+    if #items > 0 then
+        table.insert(buffbot_pickerSpells, { resref = "__HEADER_ITM__", name = "[Items]", isHeader = 1 })
+        for _, entry in ipairs(items) do table.insert(buffbot_pickerSpells, entry) end
+    end
 end
 
 --- Open the spell picker sub-menu.
@@ -1558,7 +1578,7 @@ end
 --- Add the selected spell from the picker (include override).
 function BfBot.UI.AddPickedSpell()
     local entry = buffbot_pickerSpells[buffbot_pickerSelected]
-    if not entry then return end
+    if not entry or entry.isHeader then return end  -- ignore section-header rows
     local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
     if not sprite then return end
 
@@ -1604,8 +1624,10 @@ function BfBot.UI.ExcludeSelected()
 end
 
 --- Picker display helpers
+--- Section-header rows count as no selection (keeps the Add button hidden).
 function BfBot.UI._PickerHasSelection()
-    return buffbot_pickerSelected > 0 and buffbot_pickerSelected <= #buffbot_pickerSpells
+    local entry = buffbot_pickerSelected > 0 and buffbot_pickerSpells[buffbot_pickerSelected] or nil
+    return entry ~= nil and not entry.isHeader
 end
 
 -- ============================================================
@@ -1801,6 +1823,16 @@ function BfBot.UI._SpellNameColor(row)
         return _parseColor(BfBot.UI._T("itemColor"))
     end
     if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
+    return _parseColor(BfBot.UI._T("text"))
+end
+
+--- Picker name color: section-header tint for header rows, bronze tint for
+--- item rows, normal text tint for spell rows.
+function BfBot.UI._PickerNameColor(row)
+    local entry = buffbot_pickerSpells[row]
+    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if entry.isHeader then return _parseColor(BfBot.UI._T("headerSub")) end
+    if entry.kind == "itm" then return _parseColor(BfBot.UI._T("itemColor")) end
     return _parseColor(BfBot.UI._T("text"))
 end
 
