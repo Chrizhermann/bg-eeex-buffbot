@@ -16,7 +16,7 @@
     {"id": 13, "subject": "Theme — itemColor palette key for 6 themes", "status": "completed", "blockedBy": [1]},
     {"id": 14, "subject": "UI — mixed list rendering (itemColor + variant hidden)", "status": "completed", "blockedBy": [9, 13]},
     {"id": 15, "subject": "UI — picker sub-sections (Spells / Items)", "status": "pending", "blockedBy": [9]},
-    {"id": 16, "subject": "BfBotTst — Items() test phase", "status": "pending", "blockedBy": [12]},
+    {"id": 16, "subject": "BfBotTst — Items() test phase", "status": "completed", "blockedBy": [12]},
     {"id": 17, "subject": "Manual QA on representative items", "status": "pending", "blockedBy": [14, 15, 16]},
     {"id": 18, "subject": "bg-modding-learn — capture verified knowledge", "status": "pending", "blockedBy": [17]},
     {"id": 19, "subject": "Version bump v1.4.2-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
