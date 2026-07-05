@@ -1205,6 +1205,96 @@ menu
 	}
 }
 
+-- ==========================================================
+-- Preset delete confirmation sub-menu
+-- ==========================================================
+menu
+{
+	name    "BUFFBOT_CONFIRM"
+	ignoreesc
+
+	-- Dark overlay background (click to cancel)
+	text
+	{
+		action  "BfBot.UI.CancelConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
+		area    0 0 99999 99999
+		rectangle 1
+		rectangle opacity 50
+		on escape
+	}
+
+	-- Border frame (renders behind parchment)
+	label
+	{
+		name    "bbConfFrame"
+		area 426 256 308 138
+	}
+
+	-- Small panel background (parchment) — one label per theme, only active theme enabled
+	label
+	{
+		name    "bbConfBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
+		area 450 280 260 90
+		mosaic "BFBOTBG"
+	}
+	label
+	{
+		name    "bbConfBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		area 450 280 260 90
+		mosaic "BFBOTBG2"
+	}
+	label
+	{
+		name    "bbConfBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		area 450 280 260 90
+		mosaic "BFBOTBG3"
+	}
+
+	-- Dark mode overlay (theme-driven opacity)
+	label
+	{
+		name    "bbDarkOverlayConf"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 450 280 260 90
+	}
+
+	-- Message (set by BfBot.UI.OpenConfirm)
+	label
+	{
+		text lua "BfBot.UI._confirmMsg"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('title')"
+		text align left center
+		area 460 285 240 48
+	}
+
+	-- Confirm button (runs the pending action)
+	button
+	{
+		action  "BfBot.UI.RunConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
+		text    "Delete"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 460 338 80 24
+	}
+
+	-- Cancel button
+	button
+	{
+		action  "BfBot.UI.CancelConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
+		text    "Cancel"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 550 338 80 24
+	}
+}
+
 -- ============================================================
 -- Spell Picker (Add non-buff spells to buff list)
 -- ============================================================

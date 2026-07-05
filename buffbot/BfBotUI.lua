@@ -23,6 +23,12 @@ BfBot.UI._charSlot = 0        -- selected character slot (0-5)
 BfBot.UI._presetIdx = 1       -- selected preset index (1-5)
 BfBot.UI._initialized = false
 
+-- Confirm dialog state (BUFFBOT_CONFIRM). _confirmMsg is read every frame
+-- by the dialog's message label; _confirmFn holds the pending action and
+-- runs only via RunConfirm. Runtime-only — never reaches the marshal layer.
+BfBot.UI._confirmMsg = ""
+BfBot.UI._confirmFn = nil
+
 -- Panel geometry (nil = use default 80%-centered)
 BfBot.UI._panelX = nil
 BfBot.UI._panelY = nil
@@ -330,6 +336,7 @@ function BfBot.UI._OnMenusLoaded()
         EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame",  borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbTgtFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbRenFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbConfFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbPickFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbImpFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbVarFrame", borderHook)
@@ -1154,6 +1161,39 @@ function BfBot.UI.PickerUnlock()
 end
 
 -- ============================================================
+-- Generic Confirm Dialog (BUFFBOT_CONFIRM)
+-- ============================================================
+
+--- Open the confirmation dialog showing `msg`. `fn` runs only if the
+-- user clicks the confirm button (see RunConfirm).
+function BfBot.UI.OpenConfirm(msg, fn)
+    BfBot.UI._confirmMsg = tostring(msg or "")
+    BfBot.UI._confirmFn = fn
+    Infinity_PushMenu("BUFFBOT_CONFIRM")
+end
+
+--- Confirm-button handler: run the pending action, then clear the holders.
+-- The .menu confirm action pops BUFFBOT_CONFIRM right after this call.
+function BfBot.UI.RunConfirm()
+    local fn = BfBot.UI._confirmFn
+    BfBot.UI._confirmMsg = ""
+    BfBot.UI._confirmFn = nil
+    if fn then
+        local ok, err = pcall(fn)
+        if not ok then
+            BfBot._Error("Confirm action failed: " .. tostring(err))
+        end
+    end
+end
+
+--- Cancel/dismiss handler: clear the holders without running the action.
+-- Wired to the Cancel button, the click-outside overlay, and Escape.
+function BfBot.UI.CancelConfirm()
+    BfBot.UI._confirmMsg = ""
+    BfBot.UI._confirmFn = nil
+end
+
+-- ============================================================
 -- Preset Management (Rename, Create, Delete)
 -- ============================================================
 
@@ -1182,18 +1222,26 @@ function BfBot.UI.CreateNewPreset()
 end
 
 --- Delete the current preset for all party members and switch to nearest.
+-- Destructive — routed through the confirm dialog (accidental clicks on
+-- the Delete Preset button kept nuking presets). The index is captured at
+-- open time so the delete targets the preset named in the message; the
+-- original delete + clamp + refresh sequence runs only on confirm.
 function BfBot.UI.DeleteCurrentPreset()
-    local result = BfBot.Persist.DeletePresetAll(BfBot.UI._presetIdx)
-    if result then
-        -- Clamp to first valid preset for the current character
-        local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-        if sprite then
-            local config = BfBot.Persist.GetConfig(sprite)
-            BfBot.UI._ClampPresetIdx(config)
+    local idx = BfBot.UI._presetIdx
+    local name = buffbot_presetNames[idx] or ("Preset " .. idx)
+    BfBot.UI.OpenConfirm('Delete preset "' .. name .. '" for ALL party members?', function()
+        local result = BfBot.Persist.DeletePresetAll(idx)
+        if result then
+            -- Clamp to first valid preset for the current character
+            local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+            if sprite then
+                local config = BfBot.Persist.GetConfig(sprite)
+                BfBot.UI._ClampPresetIdx(config)
+            end
+            BfBot.Innate.RefreshAll()
+            BfBot.UI._Refresh()
         end
-        BfBot.Innate.RefreshAll()
-        BfBot.UI._Refresh()
-    end
+    end)
 end
 
 -- ============================================================
