@@ -89,6 +89,7 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
 
     return {
         resref = resref,
+        kind = "spl",
         name = name,
         icon = icon,
         count = 0,          -- filled in by count overlay
@@ -101,6 +102,7 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
         hasVariants = hasVariants,
         variants = variants,
         class = classResult,
+        leafResrefs = (classResult and classResult.leafResrefs) or { resref },
     }
 end
 
@@ -325,6 +327,21 @@ function BfBot.Scan.GetCastableSpells(sprite)
         end
         -- Spells in countMap but NOT in known iterators are engine-internal
         -- or temporary — silently ignored (not part of the character's spellbook).
+    end
+
+    -- Phase 3: Merge item catalog. Spells take precedence on resref collision
+    -- (real case: staf11.SPL vs STAF11.ITM). pcall-guarded so an item-scan
+    -- failure never breaks the spell scan.
+    local itemsOk, itemCatalog = pcall(BfBot.Scan._BuildItemCatalog, sprite)
+    if itemsOk and itemCatalog then
+        for r, entry in pairs(itemCatalog) do
+            if not spells[r] then
+                spells[r] = entry
+                count = count + 1
+            end
+        end
+    else
+        BfBot._Warn("Item catalog merge failed: " .. tostring(itemCatalog))
     end
 
     -- Cache results
