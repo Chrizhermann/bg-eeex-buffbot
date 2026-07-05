@@ -422,10 +422,20 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
         end
     end
 
-    -- Cast the spell
+    -- Cast the spell or use the item
     local advanceAction = string.format('EEex_LuaAction("BfBot.Exec._Advance(%d)")', slot)
 
-    if entry.var then
+    if entry.kind == "itm" then
+        -- Items: queue UseItem(resref, target). Engine handles slot lookup,
+        -- destruction (potions), and charge decrement (wand-like items).
+        local useAction = string.format('UseItem("%s",%s)', entry.resref, entry.targetObj)
+        EEex_Action_QueueResponseStringOnAIBase(useAction, entry.casterSprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, entry.casterSprite)
+        BfBot.Exec._LogEntry("CAST",
+            entry.casterName .. " -> " .. entry.spellName .. " (item) -> " .. entry.targetName)
+        BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+
+    elseif entry.var then
         -- Variant spell path: consume parent spell slot, then cast the variant
         -- directly via ReallyForceSpellRES (variant SPL is not in the spellbook)
         if not BfBot.Exec._ConsumeSpellSlot(entry.casterSprite, entry.resref) then
