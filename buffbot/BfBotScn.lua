@@ -10,10 +10,13 @@ BfBot.Scan = {}
 
 -- Inventory access — all verified 2026-07-03 via remote console on BG2EE.
 -- See tools/items_probe_findings.md (folded into bg-modding refs in Task 18).
-BfBot.Scan._SLOT_EQUIP_MAX = 17   -- 0-17 equipped body slots (10 = FIST pseudo-item)
-BfBot.Scan._SLOT_QUICK_MIN = 18   -- 18-20 quickitem slots 1-3
+BfBot.Scan._SLOT_EQUIP_MAX = 17   -- 0-17 equipped body slots (10 = FIST pseudo-item;
+                                  --   UI quickitems observed at 15-17)
+BfBot.Scan._SLOT_QUICK_MIN = 18   -- 18-20 console/CreateItem fill slots; UseItem-verified
 BfBot.Scan._SLOT_QUICK_MAX = 20
-BfBot.Scan._SLOT_PACK_MAX  = 36   -- 21-36 backpack
+BfBot.Scan._SLOT_PACK_MAX  = 34   -- 21-34 backpack
+BfBot.Scan._SLOT_WEAPON_MIN = 35  -- 35-38 equipped weapon slots (m_selectedWeapon
+BfBot.Scan._SLOT_WEAPON_MAX = 38  --   indexes m_items directly; verified: STAF11@35)
 BfBot.Scan._ITEM_COUNT_OFF = 0x1C -- CItem: count/charges u16 (no named field)
 BfBot.Scan._ABIL_TARGET_OFF = 0xC -- Item_ability_st: target byte (== ability.actionType)
 BfBot.Scan._CAT_POTION = 9        -- Item_Header_st.itemType
@@ -153,11 +156,11 @@ local function _buildCountMap(sprite)
 end
 
 --- Walk a sprite's inventory (one array: equipped 0-17, quickitems 18-20,
--- backpack 21-36), classify item abilities, return {[resref] = entry}.
--- Slot rules: equipped/quickitem slots admit any usable category; backpack
--- admits ONLY potions (cat 9). The engine would happily UseItem an unequipped
--- ring from the backpack (verified!), so this filter is the game-balance
--- enforcement, not just cosmetics.
+-- backpack 21-34, equipped weapons 35-38), classify item abilities, return
+-- {[resref] = entry}. Slot rules: equipped/quickitem/weapon slots admit any
+-- usable category; backpack admits ONLY potions (cat 9). The engine would
+-- happily UseItem an unequipped ring from the backpack (verified!), so this
+-- filter is the game-balance enforcement, not just cosmetics.
 function BfBot.Scan._BuildItemCatalog(sprite)
     local items = {}
     local seen = {}
@@ -178,62 +181,63 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             return  -- backpack: potions only
         end
 
-        for i = 0, header.abilityCount - 1 do
-            local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, i)
-            if aOk and ability then
-                -- target byte (== ability.actionType; raw read verified in-game)
-                local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
-                if target == 1 or target == 5 or target == 7 then
-                    local cOk, classResult = pcall(BfBot.Class.Classify, resref, header, ability)
-                    if cOk and classResult and classResult.isBuff then
-                        -- First buff ability per item wins (RING39-style multi-
-                        -- ability items: document limitation, revisit if it bites).
-                        local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
-                        -- ITM naming: identifiedName FIRST (genericName is the
-                        -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
-                        local name = _tryStrref(header.identifiedName)
-                                     or _tryStrref(header.genericName)
-                                     or resref
-                        local icon = ""
-                        pcall(function() icon = ability.quickSlotIcon:get() end)
-                        items[resref] = {
-                            resref = resref,
-                            kind = "itm",
-                            abilityIdx = i,
-                            name = name,
-                            icon = icon,
-                            count = count,
-                            level = 0,
-                            spellType = 0,
-                            duration = duration or 0,
-                            durCat = BfBot.Class.GetDurationCategory(duration or 0),
-                            isAoE = (classResult.isAoE) and 1 or 0,
-                            isSelfOnly = (classResult.isSelfOnly) and 1 or 0,
-                            hasVariants = 0,
-                            variants = nil,
-                            class = classResult,
-                            leafResrefs = (leafs and #leafs > 0) and leafs or { resref },
-                        }
-                        break  -- first buff ability wins
-                    end
-                end
-            end
-        end
+        -- UseItem(resref, target) ALWAYS fires ability 0 — BCS has no ability
+        -- selector (verified 2026-07-05: RING39 a0=op20 invis, a1=op16 haste;
+        -- after UseItem only op20 landed). An item is therefore listable ONLY
+        -- if ability 0 classifies as the buff. Items with the buff buried at
+        -- index >= 1 (e.g. STAF11: a0 melee, buff wrapper at a2) are excluded
+        -- for safety — firing them would trigger the wrong ability. Issue #53
+        -- tracks ability-index selection.
+        local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, 0)
+        if not (aOk and ability) then return end
+        -- target byte (== ability.actionType; raw read verified in-game)
+        local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
+        if target ~= 1 and target ~= 5 and target ~= 7 then return end
+        local cOk, classResult = pcall(BfBot.Class.Classify, resref, header, ability)
+        if not (cOk and classResult and classResult.isBuff) then return end
+
+        local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
+        -- ITM naming: identifiedName FIRST (genericName is the
+        -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
+        local name = _tryStrref(header.identifiedName)
+                     or _tryStrref(header.genericName)
+                     or resref
+        local icon = ""
+        pcall(function() icon = ability.quickSlotIcon:get() end)
+        items[resref] = {
+            resref = resref,
+            kind = "itm",
+            abilityIdx = 0,
+            name = name,
+            icon = icon,
+            count = count,
+            level = 0,
+            spellType = 0,
+            duration = duration or 0,
+            durCat = BfBot.Class.GetDurationCategory(duration or 0),
+            isAoE = (classResult.isAoE) and 1 or 0,
+            isSelfOnly = (classResult.isSelfOnly) and 1 or 0,
+            hasVariants = 0,
+            variants = nil,
+            class = classResult,
+            leafResrefs = (leafs and #leafs > 0) and leafs or { resref },
+        }
     end
 
     -- Single walk over the one real inventory array. items:get(i) → CItem|nil.
     local ok = pcall(function()
         local arr = sprite.m_equipment.m_items
-        for slot = 0, BfBot.Scan._SLOT_PACK_MAX do
+        for slot = 0, BfBot.Scan._SLOT_WEAPON_MAX do
             local it = arr:get(slot)
             if it then
                 local resref = nil
                 pcall(function() resref = it.pRes.resref:get() end)
                 if resref and resref ~= "FIST" then
                     local count = EEex_ReadU16(EEex_UDToPtr(it) + BfBot.Scan._ITEM_COUNT_OFF)
-                    -- equipped (0-17) + quickitems (18-20): any category;
-                    -- backpack (21-36): potions only
+                    -- equipped (0-17) + quickitems (18-20) + weapons (35-38):
+                    -- any category; backpack (21-34): potions only
                     local allowAnyCat = slot <= BfBot.Scan._SLOT_QUICK_MAX
+                                        or slot >= BfBot.Scan._SLOT_WEAPON_MIN
                     _consider(resref, count, allowAnyCat)
                 end
             end

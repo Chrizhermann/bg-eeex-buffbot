@@ -11,13 +11,18 @@ This file is temporary: folded into `~/.claude/skills/bg-modding/references/` in
   `m_quickItems`, `m_aQuickItems` all nil on CGameSprite.)
 - `m_items` is a fixed-array usertype: **`items:get(i)` → CItem | nil** (nil = empty slot).
   `items:getReference(i)` returns the slot address (always non-nil) — not what we want.
-- **Slot layout** (empirically confirmed on BG2EE):
-  - `0-17` equipped body slots (slot 10 = FIST pseudo-item; `m_equipment.m_selectedWeapon == 10` when unarmed)
-  - `18-20` quickitem slots 1-3 (CreateItem auto-fills these for potions before backpack)
-  - `21-36` backpack (16 slots)
-  - `37+` magic-weapon etc. — skip
+- **Slot layout** (empirically confirmed on BG2EE; updated 2026-07-05):
+  - `0-17` equipped body slots (slot 10 = FIST pseudo-item; `m_equipment.m_selectedWeapon == 10` when unarmed).
+    UI quickitem slots 1-3 observed at **15-17** (player-placed potions land there).
+  - `18-20` console/`CreateItem` fill slots (auto-filled for potions before backpack);
+    UseItem-verified castable from here — treated as curated slots.
+  - `21-34` backpack
+  - `35-38` **equipped weapon slots** — `m_selectedWeapon` indexes `m_items` DIRECTLY
+    (verified: Imoen with equipped Staff of the Magi → `m_selectedWeapon == 35`,
+    STAF11 at `m_items:get(35)`). The earlier "21-36 backpack / 37+ magic weapon"
+    note was wrong at the top end.
   - Body-slot sub-mapping differs from classic IESDP CRE docs: **rings land at 7-8**
-    (verified 2026-07-05 by equipping via UI), not the documented 4-5. Only the three
+    (verified 2026-07-05 by equipping via UI), not the documented 4-5. Only the
     RANGES above matter for BuffBot; don't rely on classic per-slot indices within 0-17.
 - **CItem named fields**: `pRes` (CResItem → `pRes.resref:get()` = resref, `pRes.pHeader` = Item_Header_st),
   `m_wear` (+0x18), `m_flags` (+0x20; 1 = identified).
@@ -79,6 +84,15 @@ This file is temporary: folded into `~/.claude/skills/bg-modding/references/` in
   op146 wrappers additionally need leafResrefs (sub-spell effects carry the sub-spell resref).
 - `UseItem` is **NOT in INSTANT.IDS** → action-queue only (matches the planned exec path with
   `EEex_LuaAction` advance chaining).
+- **`UseItem` ALWAYS fires ability 0** — no BCS ability selector (verified 2026-07-05:
+  RING39 Ring of Gaxx a0=op20 invisibility, a1=op16 haste; after `UseItem("RING39",Myself)`
+  only the op20 effect landed, charge decremented). Catalog admission therefore requires
+  ability 0 to BE the buff; buried-buff items (STAF11: a0 melee, buff at a2) are excluded.
+  GitHub issue #53 tracks ability-index selection approaches.
+- **Player commands during a buff run clear the actor's action queue** — queued
+  `UseItem` + `EEex_LuaAction` advance both wiped → chain stalls in `running` until
+  Stop/safety-tick. Pre-existing accepted limitation (same for spells), but item runs
+  made it visible in testing (2026-07-05).
 - Remote-console quirk: return strings containing `"` break the result JSON (returnValue silently
   dropped) — sanitize probe output.
 
