@@ -102,7 +102,13 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
         hasVariants = hasVariants,
         variants = variants,
         class = classResult,
-        leafResrefs = (classResult and classResult.leafResrefs) or { resref },
+        -- Invariant: catalog entries ALWAYS carry a non-empty leafResrefs.
+        -- GetDuration returns an EMPTY list for direct-effect spells (the
+        -- self-fallback is the caller's job) — an empty list here would make
+        -- the exec pre-flight loop check nothing and never skip active buffs.
+        leafResrefs = (classResult and classResult.leafResrefs
+                       and #classResult.leafResrefs > 0)
+                      and classResult.leafResrefs or { resref },
     }
 end
 
