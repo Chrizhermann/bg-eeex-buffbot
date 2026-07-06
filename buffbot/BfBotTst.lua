@@ -2640,6 +2640,72 @@ function BfBot.Test.Watchdog()
 end
 
 -- ============================================================
+-- BfBot.Test.Mp — Multiplayer caster filter
+-- ============================================================
+-- BfBot.Mp.IsLocallyControlled gates which casters BuffBot may queue casts on.
+-- In single-player (and MP host over its own party) everyone is controllable;
+-- in MP a character owned by another player must be excluded. These tests cover
+-- the contract (boolean, nil-safe), the SP/host live result, the control-mode
+-- switch, and that the queue builder actually drops filtered casters.
+function BfBot.Test.Mp()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Multiplayer Caster Filter")
+    P("========================================")
+    P("")
+
+    -- ---- Test 1: contract ----
+    P("  [1] BfBot.Mp.IsLocallyControlled present + returns boolean")
+    _check(type(BfBot.Mp) == "table", "BfBot.Mp namespace exists")
+    _check(type(BfBot.Mp.IsLocallyControlled) == "function", "IsLocallyControlled is a function")
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if sprite then
+        local ok, res = pcall(BfBot.Mp.IsLocallyControlled, sprite)
+        _check(ok and type(res) == "boolean",
+            "IsLocallyControlled(portrait[0]) returned a boolean (" .. tostring(res) .. ")")
+        -- SP, or host over its own party → local player controls portrait[0].
+        _check(ok and res == true, "local player controls portrait[0] (SP/host) → true")
+    else
+        _warning("No sprite in portrait 0; skipping live control check")
+    end
+
+    -- ---- Test 2: nil-safe ----
+    P("")
+    P("  [2] nil sprite → false")
+    _check(BfBot.Mp.IsLocallyControlled(nil) == false, "nil sprite is not controllable")
+
+    -- ---- Test 3: 'all' mode disables filtering ----
+    P("")
+    P("  [3] MpControlMode='all' → everyone controllable")
+    if sprite then
+        local savedMode = BfBot.Persist.GetPref("MpControlMode")
+        BfBot.Persist.SetPref("MpControlMode", "all")
+        local resAll = BfBot.Mp.IsLocallyControlled(sprite)
+        BfBot.Persist.SetPref("MpControlMode", savedMode or "auto")
+        _check(resAll == true, "'all' mode returns controllable")
+    else
+        _warning("No sprite; skipping 'all' mode test")
+    end
+
+    -- ---- Test 4: filter integration — non-controlled casters are dropped ----
+    P("")
+    P("  [4] BuildQueueFromPreset excludes non-controlled casters")
+    local realFn = BfBot.Mp.IsLocallyControlled
+    BfBot.Mp.IsLocallyControlled = function() return false end
+    local presetIdx = (BfBot.UI and BfBot.UI._presetIdx) or 1
+    local okq, q = pcall(BfBot.Persist.BuildQueueFromPreset, presetIdx)
+    BfBot.Mp.IsLocallyControlled = realFn  -- restore before asserting
+    _check(okq and (q == nil or #q == 0),
+        "all casters filtered → empty queue (ok=" .. tostring(okq)
+        .. " n=" .. tostring(q and #q or "nil") .. ")")
+
+    P("")
+    return _summary("Multiplayer")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2737,6 +2803,10 @@ function BfBot.Test.RunAll()
     local watchdogOk = BfBot.Test.Watchdog()
     P("")
 
+    -- Phase 17: Multiplayer caster filter
+    local mpOk = BfBot.Test.Mp()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2759,11 +2829,12 @@ function BfBot.Test.RunAll()
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
     P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
+    P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk
 end
 
 -- ============================================================

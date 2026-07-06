@@ -203,6 +203,16 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             goto continue
         end
 
+        -- Multiplayer: never queue casts on a caster this machine doesn't
+        -- control. This is the last line of defense — the persistence queue
+        -- builders filter too, but any caller of Exec.Start is guarded here.
+        if BfBot.Mp and BfBot.Mp.IsLocallyControlled
+            and not BfBot.Mp.IsLocallyControlled(casterSprite) then
+            BfBot.Exec._LogEntry("SKIP", "Entry " .. i .. ": caster in slot "
+                .. casterSlot .. " not locally controlled (multiplayer)")
+            goto continue
+        end
+
         local casterName = BfBot._GetName(casterSprite)
         local resref = entry.spell
         if type(resref) ~= "string" or resref == "" then

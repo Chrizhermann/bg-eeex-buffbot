@@ -44,6 +44,86 @@ local function _getChitin()
     return nil
 end
 
+-- ============================================================
+-- Local-control detection (caster filter)
+-- ============================================================
+-- BuffBot may only issue casts to characters the LOCAL machine controls; a cast
+-- queued on a character owned by another player never runs (the action chain is
+-- local-only and non-networked), which hangs the run until the watchdog trips.
+--
+-- CONTROL MODE (baldur.ini [BuffBot], per-machine):
+--   MpControlMode = "auto"   (default) — engine ownership detection
+--                 | "manual"           — use MpControlNames (comma-separated)
+--                 | "all"              — no filtering (every caster; watchdog backstops)
+--
+-- AUTO rule, verified live in SP + MP host (2026-07-05): a character is locally
+-- controlled iff its entry in m_pnCharacterControlledByPlayer (indexed by join
+-- order) equals CNetwork.m_idLocalPlayer — the DirectPlay player ID, NOT
+-- m_nLocalPlayer (the player number). SP short-circuits on
+-- m_bConnectionEstablished == 0. All engine reads are pcall-guarded; on ANY
+-- failure we DEGRADE TO controllable so a reflection hiccup never silently stops
+-- buffing (the BfBot.Exec watchdog still backstops any resulting hang).
+
+--- Read the control mode from baldur.ini (default "auto").
+function BfBot.Mp._GetControlMode()
+    if BfBot.Persist and BfBot.Persist.GetPref then
+        local m = BfBot.Persist.GetPref("MpControlMode")
+        if type(m) == "string" and m ~= "" then return m end
+    end
+    return "auto"
+end
+
+--- Manual mode: is `sprite`'s name in the local player's MpControlNames list?
+function BfBot.Mp._NameInManualList(sprite)
+    if not (BfBot.Persist and BfBot.Persist.GetPref) then return false end
+    local list = BfBot.Persist.GetPref("MpControlNames")
+    if type(list) ~= "string" or list == "" then return false end
+    local myName = BfBot._GetName(sprite)
+    for token in list:gmatch("[^,]+") do
+        local trimmed = token:gsub("^%s+", ""):gsub("%s+$", "")
+        if trimmed == myName then return true end
+    end
+    return false
+end
+
+--- Does the local machine control `sprite` (so BuffBot may cast to it)?
+--- @param sprite userdata: a portrait party member
+--- @return boolean
+function BfBot.Mp.IsLocallyControlled(sprite)
+    if not sprite then return false end
+
+    local mode = BfBot.Mp._GetControlMode()
+    if mode == "all" then return true end  -- filtering disabled
+
+    local chitin = _getChitin()
+    if not chitin then return true end     -- can't tell → don't block buffing
+
+    -- Single-player: connection not established → local machine controls all,
+    -- regardless of mode (never break the single-player path).
+    local okConn, conn = pcall(function() return chitin.cNetwork.m_bConnectionEstablished end)
+    if not okConn then return true end
+    if conn == 0 then return true end
+
+    if mode == "manual" then
+        return BfBot.Mp._NameInManualList(sprite)
+    end
+
+    -- Auto-detect (multiplayer): compare the character's controlling-player ID
+    -- against this machine's local player ID.
+    local okIdx, idx = pcall(EEex_Sprite_GetCharacterIndex, sprite)
+    if not okIdx or type(idx) ~= "number" or idx < 0 then return true end
+
+    local okOwner, owner = pcall(function()
+        return chitin.m_pObjectGame.m_multiPlayerSettings.m_pnCharacterControlledByPlayer:get(idx)
+    end)
+    if not okOwner or owner == nil then return true end
+
+    local okMe, myId = pcall(function() return chitin.cNetwork.m_idLocalPlayer end)
+    if not okMe or myId == nil then return true end
+
+    return owner == myId
+end
+
 --- MP ownership probe. Run on EACH machine in a live multiplayer session
 --- (world screen), then diff the two buffbot_mp_probe.log files. The field whose
 --- value tracks the local machine is the per-client discriminator (expected:
