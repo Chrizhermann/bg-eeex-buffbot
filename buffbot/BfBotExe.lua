@@ -16,11 +16,37 @@ BfBot.Exec._totalEntries = 0     -- total entries across all casters
 BfBot.Exec._logFile = "buffbot_exec.log"
 BfBot.Exec._qcMode = 0              -- quick cast mode (0=off, 1=long, 2=all)
 BfBot.Exec._lastSafetyTick = 0  -- clock ticks of last safety check
+BfBot.Exec._lastProgressGameTime = nil  -- game-time of last forward progress (watchdog; nil until armed)
+-- Watchdog timeout in GAME-TIME ticks (m_gameTime), NOT wall-clock. Game time
+-- freezes while the game is paused, so a paused-but-healthy buff run is never
+-- force-killed. ~450 ticks ≈ 30s at the engine's default rate (~15 game-ticks/s);
+-- this is a safety-net threshold, so the exact real-time it maps to is non-critical.
+BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS = 450
 
 --- Log an execution event.
 function BfBot.Exec._LogEntry(type, msg)
     table.insert(BfBot.Exec._log, { type = type, msg = msg })
     BfBot._Print("[BuffBot] " .. type .. ": " .. msg)
+end
+
+--- Current engine game-time in ticks, or nil if unavailable. Game time freezes
+--- while the game is paused, so measuring watchdog progress against it (instead
+--- of wall-clock Infinity_GetClockTicks) means a paused run is never mistaken for
+--- a wedged one. pcall-guarded raw reflection.
+function BfBot.Exec._GetGameTime()
+    local chitin = rawget(_G, "EEex_EngineGlobal_CBaldurChitin")
+        or (rawget(_G, "EngineGlobals") and EngineGlobals.g_pBaldurChitin)
+    if not chitin then return nil end
+    local ok, gt = pcall(function() return chitin.m_pObjectGame.m_worldTime.m_gameTime end)
+    if ok and type(gt) == "number" then return gt end
+    return nil
+end
+
+--- Mark forward progress for the watchdog. Called whenever a cast is queued or a
+--- caster advances, so a healthy (even slow) run never trips the stuck-caster
+--- timeout. Records GAME time (frozen on pause). See _SafetyTick for the watchdog.
+function BfBot.Exec._NoteProgress()
+    BfBot.Exec._lastProgressGameTime = BfBot.Exec._GetGameTime()
 end
 
 --- Check if a sprite is alive (not dead/petrified/etc).
@@ -179,6 +205,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
 
     local byCaster = {}
     local totalEntries = 0
+    local controlCache = {}  -- casterSlot -> boolean; MP control is invariant per build
 
     for i, entry in ipairs(userQueue) do
         local casterSlot = entry.caster
@@ -191,6 +218,23 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         if not casterSprite then
             BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": no character in slot " .. casterSlot)
             goto continue
+        end
+
+        -- Multiplayer: never queue casts on a caster this machine doesn't
+        -- control (last line of defense; the persistence builders filter too).
+        -- Memoize per slot — control is invariant within one build, so the
+        -- pcall-guarded reflection runs once per caster, not once per entry.
+        if BfBot.Mp and BfBot.Mp.IsLocallyControlled then
+            local controlled = controlCache[casterSlot]
+            if controlled == nil then
+                controlled = BfBot.Mp.IsLocallyControlled(casterSprite) and true or false
+                controlCache[casterSlot] = controlled
+            end
+            if not controlled then
+                BfBot.Exec._LogEntry("SKIP", "Entry " .. i .. ": caster in slot "
+                    .. casterSlot .. " not locally controlled (multiplayer)")
+                goto continue
+            end
         end
 
         local casterName = BfBot._GetName(casterSprite)
@@ -349,6 +393,9 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
     local caster = BfBot.Exec._casters[slot]
     if not caster then return end
 
+    -- Watchdog: any caster stepping through its queue counts as forward progress.
+    BfBot.Exec._NoteProgress()
+
     -- This caster's queue exhausted
     if index > #caster.queue then
         caster.done = true
@@ -476,6 +523,7 @@ function BfBot.Exec._HardReset()
     BfBot.Exec._skipCount     = 0
     BfBot.Exec._totalEntries  = 0
     BfBot.Exec._qcMode        = 0
+    BfBot.Exec._lastProgressGameTime = nil
 end
 
 --- Detect stale execution state from a save reload mid-cast.
@@ -511,17 +559,13 @@ function BfBot.Exec._IsStateStale()
     return false
 end
 
---- Log execution summary and transition to "done" state.
-function BfBot.Exec._Complete()
-    -- Fast-path recovery from save-reload (issue #38) — see Stop().
-    if BfBot.Exec._IsStateStale() then
-        BfBot.Exec._HardReset()
-        BfBot._CloseLog()
-        return
-    end
-
-    -- Clean up lingering cheat buffs — re-resolve sprite from portrait,
-    -- never dereference cached caster.sprite (see Stop() rationale).
+--- Strip lingering quick-cast (BFBTCH) buffs from every caster. Re-resolves each
+--- sprite from its portrait slot rather than dereferencing cached caster.sprite —
+--- that userdata wraps a freed CGameSprite after a save reload (issue #38), and
+--- pcall does NOT catch the engine-level access violation. BFBTCR is a no-op on a
+--- target without an active BFBTCH, so this is safe even if the slot now holds a
+--- different character. Shared by _Complete, Stop, and _ForceComplete.
+function BfBot.Exec._StripCheatBuffs()
     for slot, caster in pairs(BfBot.Exec._casters) do
         if caster.cheatApplied then
             local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -534,6 +578,20 @@ function BfBot.Exec._Complete()
             caster.cheatApplied = false
         end
     end
+end
+
+--- Log execution summary and transition to "done" state.
+function BfBot.Exec._Complete()
+    -- Fast-path recovery from save-reload (issue #38) — see Stop().
+    if BfBot.Exec._IsStateStale() then
+        BfBot.Exec._HardReset()
+        BfBot._CloseLog()
+        return
+    end
+
+    -- Clean up lingering cheat buffs — re-resolve sprite from portrait,
+    -- never dereference cached caster.sprite (see Stop() rationale).
+    BfBot.Exec._StripCheatBuffs()
 
     BfBot.Exec._state = "done"
     local cast = BfBot.Exec._castCount
@@ -542,6 +600,33 @@ function BfBot.Exec._Complete()
     BfBot.Exec._LogEntry("DONE",
         string.format("Total: %d | Cast: %d | Skipped: %d", total, cast, skip))
     BfBot._Print("[BuffBot] === Execution Complete ===")
+    BfBot._CloseLog()
+end
+
+--- Force-complete a stuck run (watchdog). Strips lingering cheat buffs the
+--- same way _Complete/Stop do — re-resolving each sprite from its portrait slot,
+--- never dereferencing cached caster.sprite (it may wrap a freed CGameSprite
+--- after a save reload; pcall does not catch that access violation).
+---
+--- Invoked when a caster's _Advance chain never fires. The motivating case is
+--- multiplayer: BuffBot queues SpellRES + EEex_LuaAction onto the LOCAL copy of
+--- a creature's action list (EEex_Action_QueueResponseStringOnAIBase ->
+--- virtual_InsertAction, which is not networked), so a character controlled by
+--- another player never executes that chain, _Advance never runs, _activeCasters
+--- never reaches 0, and the status would stay stuck on "casting" forever. The
+--- proper MP fix is to not queue non-local casters at all; this is the
+--- unconditional safety net so the UI can never lock regardless of cause.
+--- @param reason string: logged WARN explaining why the run was force-completed
+function BfBot.Exec._ForceComplete(reason)
+    -- Clean up lingering cheat buffs (see _Complete/Stop for the re-resolve rationale).
+    BfBot.Exec._StripCheatBuffs()
+
+    BfBot.Exec._state = "done"
+    BfBot.Exec._LogEntry("WARN", reason)
+    BfBot.Exec._LogEntry("DONE", string.format(
+        "Force-completed | Cast: %d | Skipped: %d",
+        BfBot.Exec._castCount, BfBot.Exec._skipCount))
+    BfBot._Print("[BuffBot] === Execution Force-Completed ===")
     BfBot._CloseLog()
 end
 
@@ -566,6 +651,7 @@ function BfBot.Exec.Start(queue, qcMode)
     BfBot.Exec._skipCount = 0
     BfBot.Exec._totalEntries = 0
     BfBot.Exec._qcMode = qcMode or 0
+    BfBot.Exec._lastProgressGameTime = nil
 
     -- Build per-caster queues
     local byCaster, totalEntries = BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
@@ -625,6 +711,7 @@ function BfBot.Exec.Start(queue, qcMode)
 
     -- Go — start ALL casters simultaneously
     BfBot.Exec._state = "running"
+    BfBot.Exec._NoteProgress()  -- arm the watchdog timer
     for _, slot in ipairs(slots) do
         BfBot.Exec._ProcessCasterEntry(slot, 1)
     end
@@ -658,18 +745,7 @@ function BfBot.Exec.Stop()
     -- violation that engine calls would trigger on the freed pointer.
     -- This re-resolution is safe even when _IsStateStale missed a same-
     -- party reload: BFBTCR is a no-op on targets without an active BFBTCH.
-    for slot, caster in pairs(BfBot.Exec._casters) do
-        if caster.cheatApplied then
-            local sprite = EEex_Sprite_GetInPortrait(slot)
-            if sprite then
-                pcall(function()
-                    EEex_Action_QueueResponseStringOnAIBase(
-                        'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
-                end)
-            end
-            caster.cheatApplied = false
-        end
-    end
+    BfBot.Exec._StripCheatBuffs()
 
     BfBot.Exec._LogEntry("INFO", "Stopped by user")
     BfBot._Print("[BuffBot] === Execution Stopped ===")
@@ -697,8 +773,40 @@ function BfBot.Exec._SafetyTick()
         BfBot.Exec._HardReset()
     end
 
-    -- If exec engine is actively running, it owns cheat management — don't interfere
-    if BfBot.Exec._state == "running" then return end
+    -- Watchdog: force-complete a run that has stopped making progress. In
+    -- multiplayer, casters controlled by another player never fire their
+    -- _Advance callback (the queued SpellRES + EEex_LuaAction live only in this
+    -- machine's local action list and are not networked), so _activeCasters
+    -- never reaches 0 and the status would stay stuck on "casting" forever.
+    -- This also covers any other cause of a wedged caster chain. _NoteProgress()
+    -- bumps the timer on every queued cast and every advance, so a healthy run
+    -- never trips it; only a genuine stall (no progress anywhere for the whole
+    -- timeout) force-completes. The real MP fix is filtering casters to
+    -- locally-controlled characters — this is the hard safety net underneath it.
+    if BfBot.Exec._state == "running" then
+        -- Measure progress in GAME time (frozen while paused) so a paused-but-
+        -- healthy buff run is never force-killed. Only trip when the game has
+        -- actually advanced _WATCHDOG_TIMEOUT_GAMETICKS with no forward progress.
+        local gtNow = BfBot.Exec._GetGameTime()
+        local gtLast = BfBot.Exec._lastProgressGameTime
+        if gtNow and gtLast and (gtNow - gtLast) >= BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS then
+            BfBot.Exec._ForceComplete(string.format(
+                "Watchdog: no cast progress for %d game-ticks — force-completing. A "
+                .. "caster's chain never advanced (e.g. a multiplayer character "
+                .. "controlled by another player). Cast again if buffing is incomplete.",
+                gtNow - gtLast))
+            pcall(function()
+                local leader = EEex_Sprite_GetInPortrait(0)
+                if leader then
+                    EEex_Sprite_DisplayStringHead(leader,
+                        "BuffBot: casting timed out - stopped")
+                end
+            end)
+        end
+        -- Whether or not it tripped, exec (or the force-complete) owns cheat
+        -- management this tick — don't fall through to the orphan cleanup.
+        return
+    end
 
     -- Check all party members for orphaned BFBTCH effects
     for i = 0, 5 do

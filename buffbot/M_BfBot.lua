@@ -16,6 +16,7 @@ Infinity_DoFile("BfBotThm")  -- Theme palettes (must load before UI reads colors
 Infinity_DoFile("BfBotCls")  -- Classifier (standalone, uses BfBot._Print/_Log only)
 Infinity_DoFile("BfBotScn")  -- Scanner (depends on Class)
 Infinity_DoFile("BfBotExe")  -- Execution engine (depends on Scan, _GetName)
+Infinity_DoFile("BfBotMp")   -- Multiplayer support / ownership probe (depends on _GetName)
 Infinity_DoFile("BfBotPer")  -- Persistence (depends on Scan, Class)
 Infinity_DoFile("BfBotInn")  -- Innate abilities (depends on Persist, Exec)
 BfBot.Persist.Init()         -- Register marshal handlers for save/load

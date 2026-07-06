@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.4.1-alpha~
+VERSION ~v1.5.0-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0
@@ -38,6 +38,7 @@ COPY ~buffbot/BfBotCor.lua~  ~override~
 COPY ~buffbot/BfBotCls.lua~  ~override~
 COPY ~buffbot/BfBotScn.lua~  ~override~
 COPY ~buffbot/BfBotExe.lua~  ~override~
+COPY ~buffbot/BfBotMp.lua~   ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~
 COPY ~buffbot/BfBotInn.lua~  ~override~
 COPY ~buffbot/BfBotUI.lua~   ~override~

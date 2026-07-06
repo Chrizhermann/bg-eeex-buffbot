@@ -2501,6 +2501,226 @@ function BfBot.Test.StaleState()
 end
 
 -- ============================================================
+-- BfBot.Test.Watchdog — Stuck-caster recovery (multiplayer hang)
+-- ============================================================
+-- In multiplayer a caster controlled by another player never fires its
+-- _Advance callback, so _activeCasters never reaches 0 and the UI would stay
+-- stuck on "casting" forever. _SafetyTick's watchdog force-completes a run that
+-- has made no forward progress for _WATCHDOG_TIMEOUT_GAMETICKS of GAME time
+-- (frozen while paused, so a paused-but-healthy run is never killed). These tests
+-- verify the watchdog trips on a stall, leaves a healthy run alone, and never
+-- dereferences cached caster.sprite pointers.
+function BfBot.Test.Watchdog()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Watchdog / Stuck-Caster Recovery")
+    P("========================================")
+    P("")
+
+    if BfBot.Exec.GetState() == "running" then
+        _warning("Skipping: exec currently running")
+        return _summary("Watchdog")
+    end
+
+    -- Save state to restore on exit
+    local saved = {
+        state        = BfBot.Exec._state,
+        casters      = BfBot.Exec._casters,
+        active       = BfBot.Exec._activeCasters,
+        lastSafety   = BfBot.Exec._lastSafetyTick,
+        lastProgress = BfBot.Exec._lastProgressGameTime,
+        castCount    = BfBot.Exec._castCount,
+        skipCount    = BfBot.Exec._skipCount,
+    }
+    local function _restore()
+        BfBot.Exec._state                = saved.state
+        BfBot.Exec._casters              = saved.casters
+        BfBot.Exec._activeCasters        = saved.active
+        BfBot.Exec._lastSafetyTick       = saved.lastSafety
+        BfBot.Exec._lastProgressGameTime = saved.lastProgress
+        BfBot.Exec._castCount            = saved.castCount
+        BfBot.Exec._skipCount            = saved.skipCount
+    end
+    -- _ForceComplete closes the exec log; reopen so the runner can keep logging.
+    local function _reopenLog()
+        if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+    end
+
+    local TIMEOUT = BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS or 450
+    local gt0 = BfBot.Exec._GetGameTime()  -- nil if game-time reflection unavailable
+
+    -- ---- Test 1: watchdog state + helpers present ----
+    P("  [1] watchdog state + helpers present")
+    _check(BfBot.Exec._lastProgressGameTime == nil or type(BfBot.Exec._lastProgressGameTime) == "number",
+        "_lastProgressGameTime is nil or a number")
+    _check(type(BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS) == "number" and BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS > 0,
+        "_WATCHDOG_TIMEOUT_GAMETICKS is a positive number (" .. tostring(BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS) .. ")")
+    _check(type(BfBot.Exec._NoteProgress) == "function", "_NoteProgress is a function")
+    _check(type(BfBot.Exec._GetGameTime) == "function", "_GetGameTime is a function")
+    _check(type(BfBot.Exec._ForceComplete) == "function", "_ForceComplete is a function")
+    _check(type(BfBot.Exec._StripCheatBuffs) == "function", "_StripCheatBuffs is a function")
+
+    -- ---- Test 2: _NoteProgress records game-time ----
+    P("")
+    P("  [2] _NoteProgress records game-time")
+    if gt0 == nil then
+        _warning("game-time unavailable (reflection); skipping progress-record test")
+    else
+        BfBot.Exec._lastProgressGameTime = nil
+        pcall(BfBot.Exec._NoteProgress)
+        _check(type(BfBot.Exec._lastProgressGameTime) == "number",
+            "_NoteProgress set _lastProgressGameTime to a number ("
+            .. tostring(BfBot.Exec._lastProgressGameTime) .. ")")
+    end
+
+    -- A real portrait sprite + name so _IsStateStale returns false and the
+    -- WATCHDOG path (not the stale-reset path) is what we actually exercise.
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    local realName = sprite and BfBot._GetName(sprite) or nil
+
+    -- ---- Test 3: _ForceComplete terminates a run without dereferencing sprites ----
+    -- Poison caster.sprite with a string sentinel; with cheatApplied=true the
+    -- cleanup loop MUST re-resolve the sprite from the portrait slot (never the
+    -- cached sentinel) — same safety property as Stop()/_Complete (issue #38).
+    P("")
+    P("  [3] _ForceComplete terminates run + re-resolves sprite from portrait")
+    BfBot.Exec._state = "running"
+    BfBot.Exec._casters = {
+        [0] = { sprite = "STALE_SENTINEL", name = realName or "wd-test",
+                cheatApplied = (sprite ~= nil),  -- engage cleanup loop when a real sprite exists
+                queue = {}, index = 0, done = false, cheatBoundary = 0 },
+    }
+    BfBot.Exec._activeCasters = 1
+    local fcOk, fcErr = pcall(function() BfBot.Exec._ForceComplete("test force-complete") end)
+    _reopenLog()
+    local entry3 = BfBot.Exec._casters[0]
+    _check(fcOk and BfBot.Exec._state == "done" and entry3 and entry3.cheatApplied == false,
+        string.format("_ForceComplete -> done, cleanup ran on fresh portrait sprite (ok=%s err=%s state=%s cheatApplied=%s)",
+            tostring(fcOk), tostring(fcErr), tostring(BfBot.Exec._state),
+            tostring(entry3 and entry3.cheatApplied)))
+
+    -- ---- Test 4: _SafetyTick force-completes a stalled run ----
+    P("")
+    P("  [4] _SafetyTick force-completes a stalled run")
+    if not sprite then
+        _warning("No sprite in portrait 0; skipping live watchdog trip test")
+    elseif gt0 == nil then
+        _warning("game-time unavailable; skipping watchdog trip test")
+    else
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            [0] = { sprite = sprite, name = realName, cheatApplied = false,
+                    queue = {}, index = 0, done = false, cheatBoundary = 0 },
+        }
+        BfBot.Exec._activeCasters = 1
+        -- Progress "made" TIMEOUT+100 game-ticks ago → stalled (pure game-tick math).
+        BfBot.Exec._lastProgressGameTime = BfBot.Exec._GetGameTime() - (TIMEOUT + 100)
+        BfBot.Exec._lastSafetyTick = 0  -- bypass 2s rate limit
+        local stOk, stErr = pcall(BfBot.Exec._SafetyTick)
+        _reopenLog()
+        _check(stOk and BfBot.Exec._state ~= "running",
+            string.format("stalled run no longer 'running' after _SafetyTick (state=%s ok=%s err=%s)",
+                tostring(BfBot.Exec._state), tostring(stOk), tostring(stErr)))
+    end
+
+    -- ---- Test 5: _SafetyTick leaves a healthy run alone ----
+    P("")
+    P("  [5] _SafetyTick leaves a healthy (recently-progressing) run alone")
+    if not sprite then
+        _warning("No sprite in portrait 0; skipping healthy-run test")
+    elseif gt0 == nil then
+        _warning("game-time unavailable; skipping healthy-run test")
+    else
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            [0] = { sprite = sprite, name = realName, cheatApplied = false,
+                    queue = {}, index = 0, done = false, cheatBoundary = 0 },
+        }
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._lastProgressGameTime = BfBot.Exec._GetGameTime()  -- fresh progress
+        BfBot.Exec._lastSafetyTick = 0
+        local stOk2 = pcall(BfBot.Exec._SafetyTick)
+        _check(stOk2 and BfBot.Exec._state == "running",
+            "healthy run still 'running' after _SafetyTick (state=" .. tostring(BfBot.Exec._state) .. ")")
+        -- Leave exec clean for restore
+        BfBot.Exec._state = "idle"
+        BfBot.Exec._casters = {}
+        BfBot.Exec._activeCasters = 0
+    end
+
+    _restore()
+    P("")
+    return _summary("Watchdog")
+end
+
+-- ============================================================
+-- BfBot.Test.Mp — Multiplayer caster filter
+-- ============================================================
+-- BfBot.Mp.IsLocallyControlled gates which casters BuffBot may queue casts on.
+-- In single-player (and MP host over its own party) everyone is controllable;
+-- in MP a character owned by another player must be excluded. These tests cover
+-- the contract (boolean, nil-safe), the SP/host live result, the control-mode
+-- switch, and that the queue builder actually drops filtered casters.
+function BfBot.Test.Mp()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Multiplayer Caster Filter")
+    P("========================================")
+    P("")
+
+    -- ---- Test 1: contract ----
+    P("  [1] BfBot.Mp.IsLocallyControlled present + returns boolean")
+    _check(type(BfBot.Mp) == "table", "BfBot.Mp namespace exists")
+    _check(type(BfBot.Mp.IsLocallyControlled) == "function", "IsLocallyControlled is a function")
+
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if sprite then
+        local ok, res = pcall(BfBot.Mp.IsLocallyControlled, sprite)
+        _check(ok and type(res) == "boolean",
+            "IsLocallyControlled(portrait[0]) returned a boolean (" .. tostring(res) .. ")")
+        -- SP, or host over its own party → local player controls portrait[0].
+        _check(ok and res == true, "local player controls portrait[0] (SP/host) → true")
+    else
+        _warning("No sprite in portrait 0; skipping live control check")
+    end
+
+    -- ---- Test 2: nil-safe ----
+    P("")
+    P("  [2] nil sprite → false")
+    _check(BfBot.Mp.IsLocallyControlled(nil) == false, "nil sprite is not controllable")
+
+    -- ---- Test 3: 'all' mode disables filtering ----
+    P("")
+    P("  [3] MpControlMode='all' → everyone controllable")
+    if sprite then
+        local savedMode = BfBot.Persist.GetPref("MpControlMode")
+        BfBot.Persist.SetPref("MpControlMode", "all")
+        local resAll = BfBot.Mp.IsLocallyControlled(sprite)
+        BfBot.Persist.SetPref("MpControlMode", savedMode or "auto")
+        _check(resAll == true, "'all' mode returns controllable")
+    else
+        _warning("No sprite; skipping 'all' mode test")
+    end
+
+    -- ---- Test 4: filter integration — non-controlled casters are dropped ----
+    P("")
+    P("  [4] BuildQueueFromPreset excludes non-controlled casters")
+    local realFn = BfBot.Mp.IsLocallyControlled
+    BfBot.Mp.IsLocallyControlled = function() return false end
+    local presetIdx = (BfBot.UI and BfBot.UI._presetIdx) or 1
+    local okq, q = pcall(BfBot.Persist.BuildQueueFromPreset, presetIdx)
+    BfBot.Mp.IsLocallyControlled = realFn  -- restore before asserting
+    _check(okq and (q == nil or #q == 0),
+        "all casters filtered → empty queue (ok=" .. tostring(okq)
+        .. " n=" .. tostring(q and #q or "nil") .. ")")
+
+    P("")
+    return _summary("Multiplayer")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2594,6 +2814,14 @@ function BfBot.Test.RunAll()
     local staleOk = BfBot.Test.StaleState()
     P("")
 
+    -- Phase 16: Watchdog / stuck-caster recovery (multiplayer hang)
+    local watchdogOk = BfBot.Test.Watchdog()
+    P("")
+
+    -- Phase 17: Multiplayer caster filter
+    local mpOk = BfBot.Test.Mp()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2615,11 +2843,13 @@ function BfBot.Test.RunAll()
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
+    P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
+    P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk
 end
 
 -- ============================================================
