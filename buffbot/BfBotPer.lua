@@ -25,6 +25,8 @@ BfBot.Persist._INI_DEFAULTS = {
     PanelH        = -1,
     Theme         = "bg2_light",  -- palette key (string)
     FontSize      = 2,    -- 1=small, 2=medium, 3=large
+    MpControlMode = "auto",  -- multiplayer caster filter: "auto" | "manual" | "all"
+    MpControlNames = "",     -- manual mode: comma-separated names the local player controls
 }
 
 -- ---- Default config ----
@@ -999,6 +1001,13 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if not sprite then goto nextSlot end
 
+        -- Multiplayer: skip casters the local machine doesn't control — queuing
+        -- casts on another player's character never runs locally and would hang.
+        if BfBot.Mp and BfBot.Mp.IsLocallyControlled
+            and not BfBot.Mp.IsLocallyControlled(sprite) then
+            goto nextSlot
+        end
+
         local config = BfBot.Persist.GetConfig(sprite)
         if not config then goto nextSlot end
 
@@ -1277,6 +1286,13 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
 
     local sprite = EEex_Sprite_GetInPortrait(slot)
     if not sprite then return nil, "no sprite in slot " .. slot end
+
+    -- Multiplayer: refuse to build a queue for a caster this machine doesn't
+    -- control (the cast would never run locally and would hang the engine).
+    if BfBot.Mp and BfBot.Mp.IsLocallyControlled
+        and not BfBot.Mp.IsLocallyControlled(sprite) then
+        return nil, "not locally controlled"
+    end
 
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return nil, "no config for slot " .. slot end

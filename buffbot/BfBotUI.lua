@@ -1273,9 +1273,14 @@ function BfBot.UI.CastCharacter()
     local config = BfBot.Persist.GetConfig(sprite)
     BfBot.UI._ClampPresetIdx(config)
 
-    local queue = BfBot.Persist.BuildQueueForCharacter(BfBot.UI._charSlot, BfBot.UI._presetIdx)
+    local queue, reason = BfBot.Persist.BuildQueueForCharacter(BfBot.UI._charSlot, BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        Infinity_DisplayString("BuffBot: No spells to cast for this character")
+        if reason == "not locally controlled" then
+            Infinity_DisplayString("BuffBot: " .. BfBot._GetName(sprite)
+                .. " is controlled by another player")
+        else
+            Infinity_DisplayString("BuffBot: No spells to cast for this character")
+        end
         return
     end
     local qcMode = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
