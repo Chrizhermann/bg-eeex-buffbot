@@ -2506,9 +2506,10 @@ end
 -- In multiplayer a caster controlled by another player never fires its
 -- _Advance callback, so _activeCasters never reaches 0 and the UI would stay
 -- stuck on "casting" forever. _SafetyTick's watchdog force-completes a run that
--- has made no forward progress for _WATCHDOG_TIMEOUT_MS. These tests verify the
--- watchdog trips on a stall, leaves a healthy run alone, and never dereferences
--- cached caster.sprite pointers.
+-- has made no forward progress for _WATCHDOG_TIMEOUT_GAMETICKS of GAME time
+-- (frozen while paused, so a paused-but-healthy run is never killed). These tests
+-- verify the watchdog trips on a stall, leaves a healthy run alone, and never
+-- dereferences cached caster.sprite pointers.
 function BfBot.Test.Watchdog()
     _reset()
     P("")
@@ -2528,40 +2529,50 @@ function BfBot.Test.Watchdog()
         casters      = BfBot.Exec._casters,
         active       = BfBot.Exec._activeCasters,
         lastSafety   = BfBot.Exec._lastSafetyTick,
-        lastProgress = BfBot.Exec._lastProgressTick,
+        lastProgress = BfBot.Exec._lastProgressGameTime,
         castCount    = BfBot.Exec._castCount,
         skipCount    = BfBot.Exec._skipCount,
     }
     local function _restore()
-        BfBot.Exec._state            = saved.state
-        BfBot.Exec._casters          = saved.casters
-        BfBot.Exec._activeCasters    = saved.active
-        BfBot.Exec._lastSafetyTick   = saved.lastSafety
-        BfBot.Exec._lastProgressTick = saved.lastProgress
-        BfBot.Exec._castCount        = saved.castCount
-        BfBot.Exec._skipCount        = saved.skipCount
+        BfBot.Exec._state                = saved.state
+        BfBot.Exec._casters              = saved.casters
+        BfBot.Exec._activeCasters        = saved.active
+        BfBot.Exec._lastSafetyTick       = saved.lastSafety
+        BfBot.Exec._lastProgressGameTime = saved.lastProgress
+        BfBot.Exec._castCount            = saved.castCount
+        BfBot.Exec._skipCount            = saved.skipCount
     end
     -- _ForceComplete closes the exec log; reopen so the runner can keep logging.
     local function _reopenLog()
         if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
     end
 
-    local TIMEOUT = BfBot.Exec._WATCHDOG_TIMEOUT_MS or 30000
+    local TIMEOUT = BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS or 450
+    local gt0 = BfBot.Exec._GetGameTime()  -- nil if game-time reflection unavailable
 
     -- ---- Test 1: watchdog state + helpers present ----
     P("  [1] watchdog state + helpers present")
-    _check(type(BfBot.Exec._lastProgressTick) == "number", "_lastProgressTick is a number")
-    _check(type(BfBot.Exec._WATCHDOG_TIMEOUT_MS) == "number" and BfBot.Exec._WATCHDOG_TIMEOUT_MS > 0,
-        "_WATCHDOG_TIMEOUT_MS is a positive number (" .. tostring(BfBot.Exec._WATCHDOG_TIMEOUT_MS) .. ")")
+    _check(BfBot.Exec._lastProgressGameTime == nil or type(BfBot.Exec._lastProgressGameTime) == "number",
+        "_lastProgressGameTime is nil or a number")
+    _check(type(BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS) == "number" and BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS > 0,
+        "_WATCHDOG_TIMEOUT_GAMETICKS is a positive number (" .. tostring(BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS) .. ")")
     _check(type(BfBot.Exec._NoteProgress) == "function", "_NoteProgress is a function")
+    _check(type(BfBot.Exec._GetGameTime) == "function", "_GetGameTime is a function")
     _check(type(BfBot.Exec._ForceComplete) == "function", "_ForceComplete is a function")
+    _check(type(BfBot.Exec._StripCheatBuffs) == "function", "_StripCheatBuffs is a function")
 
-    -- ---- Test 2: _NoteProgress bumps the tick ----
+    -- ---- Test 2: _NoteProgress records game-time ----
     P("")
-    P("  [2] _NoteProgress updates _lastProgressTick")
-    BfBot.Exec._lastProgressTick = 0
-    pcall(BfBot.Exec._NoteProgress)
-    _check(BfBot.Exec._lastProgressTick > 0, "_NoteProgress set _lastProgressTick > 0")
+    P("  [2] _NoteProgress records game-time")
+    if gt0 == nil then
+        _warning("game-time unavailable (reflection); skipping progress-record test")
+    else
+        BfBot.Exec._lastProgressGameTime = nil
+        pcall(BfBot.Exec._NoteProgress)
+        _check(type(BfBot.Exec._lastProgressGameTime) == "number",
+            "_NoteProgress set _lastProgressGameTime to a number ("
+            .. tostring(BfBot.Exec._lastProgressGameTime) .. ")")
+    end
 
     -- A real portrait sprite + name so _IsStateStale returns false and the
     -- WATCHDOG path (not the stale-reset path) is what we actually exercise.
@@ -2594,6 +2605,8 @@ function BfBot.Test.Watchdog()
     P("  [4] _SafetyTick force-completes a stalled run")
     if not sprite then
         _warning("No sprite in portrait 0; skipping live watchdog trip test")
+    elseif gt0 == nil then
+        _warning("game-time unavailable; skipping watchdog trip test")
     else
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
@@ -2601,9 +2614,9 @@ function BfBot.Test.Watchdog()
                     queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 1
-        local now = Infinity_GetClockTicks()
-        BfBot.Exec._lastProgressTick = now - (TIMEOUT + 5000)  -- ancient → stalled
-        BfBot.Exec._lastSafetyTick = 0                         -- bypass 2s rate limit
+        -- Progress "made" TIMEOUT+100 game-ticks ago → stalled (pure game-tick math).
+        BfBot.Exec._lastProgressGameTime = BfBot.Exec._GetGameTime() - (TIMEOUT + 100)
+        BfBot.Exec._lastSafetyTick = 0  -- bypass 2s rate limit
         local stOk, stErr = pcall(BfBot.Exec._SafetyTick)
         _reopenLog()
         _check(stOk and BfBot.Exec._state ~= "running",
@@ -2616,6 +2629,8 @@ function BfBot.Test.Watchdog()
     P("  [5] _SafetyTick leaves a healthy (recently-progressing) run alone")
     if not sprite then
         _warning("No sprite in portrait 0; skipping healthy-run test")
+    elseif gt0 == nil then
+        _warning("game-time unavailable; skipping healthy-run test")
     else
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
@@ -2623,7 +2638,7 @@ function BfBot.Test.Watchdog()
                     queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 1
-        BfBot.Exec._lastProgressTick = Infinity_GetClockTicks()  -- fresh progress
+        BfBot.Exec._lastProgressGameTime = BfBot.Exec._GetGameTime()  -- fresh progress
         BfBot.Exec._lastSafetyTick = 0
         local stOk2 = pcall(BfBot.Exec._SafetyTick)
         _check(stOk2 and BfBot.Exec._state == "running",

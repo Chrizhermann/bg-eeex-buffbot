@@ -15,17 +15,15 @@
 --   CNetwork.m_nLocalPlayer  -- per-machine: this client's player number
 --   => a character is locally controllable when those two values match.
 --
--- The exact CONVENTIONS can only be confirmed on two live machines:
---   * Does the array store a player NUMBER (compare m_nLocalPlayer) or a
---     DirectPlay ID (compare m_idLocalPlayer)? Base 0 or 1?
---   * Is it indexed by join order (EEex_Sprite_GetCharacterIndex) or portrait
---     order (the slot)?
---   * What are the single-player default values (so the SP short-circuit is safe)?
---
--- BfBot.Mp.Probe() dumps every candidate field so a host+client diff resolves
--- them. Until confirmed, NO automatic caster filtering ships — this module
--- currently provides the probe only. The caster filter + manual override land
--- in a follow-up once the probe output is in hand.
+-- CONVENTIONS — verified in-engine 2026-07-05 (single-player + MP host):
+--   * The array stores the DirectPlay player ID (compare m_idLocalPlayer), NOT
+--     the player number (m_nLocalPlayer). Live host read: array=1, m_idLocalPlayer=1.
+--   * Indexed by join order (EEex_Sprite_GetCharacterIndex).
+--   * Single-player: m_bConnectionEstablished=0 (short-circuit), array/id both 0.
+--   NOT yet confirmed on a second machine: that a CLIENT reports a distinct
+--   m_idLocalPlayer and the array splits host-vs-client by id. Auto mode ships
+--   ON by default (backstopped by the exec watchdog + the manual/all override);
+--   BfBot.Mp.Probe() remains for a host+client diff to close that last gap.
 
 BfBot = BfBot or {}
 BfBot.Mp = {}
@@ -53,7 +51,10 @@ end
 --
 -- CONTROL MODE (baldur.ini [BuffBot], per-machine):
 --   MpControlMode = "auto"   (default) — engine ownership detection
---                 | "manual"           — use MpControlNames (comma-separated)
+--                 | "manual"           — use MpControlNames (comma-separated).
+--                     Matches on DISPLAY NAME, so an in-game rename (e.g. Anomen
+--                     -> "Sir Anomen" on knighthood) breaks the match — update
+--                     MpControlNames after a rename, or use "auto".
 --                 | "all"              — no filtering (every caster; watchdog backstops)
 --
 -- AUTO rule, verified live in SP + MP host (2026-07-05): a character is locally
@@ -102,7 +103,8 @@ function BfBot.Mp.IsLocallyControlled(sprite)
     -- regardless of mode (never break the single-player path).
     local okConn, conn = pcall(function() return chitin.cNetwork.m_bConnectionEstablished end)
     if not okConn then return true end
-    if conn == 0 then return true end
+    -- `not conn` covers a BOOL reflected as Lua false; `conn == 0` covers it as int 0.
+    if not conn or conn == 0 then return true end
 
     if mode == "manual" then
         return BfBot.Mp._NameInManualList(sprite)
@@ -126,10 +128,11 @@ end
 
 --- MP ownership probe. Run on EACH machine in a live multiplayer session
 --- (world screen), then diff the two buffbot_mp_probe.log files. The field whose
---- value tracks the local machine is the per-client discriminator (expected:
---- m_nLocalPlayer differs between host and client, while the
---- m_pnCharacterControlledByPlayer array is identical on both — its entries
---- should equal the controlling machine's m_nLocalPlayer). Fully pcall-guarded;
+--- value tracks the local machine is the per-client discriminator (verified for
+--- SP + host: m_idLocalPlayer is the discriminator, while the
+--- m_pnCharacterControlledByPlayer array is identical on both machines — its
+--- entries equal the controlling machine's m_idLocalPlayer, the DirectPlay ID,
+--- NOT m_nLocalPlayer the player number). Fully pcall-guarded;
 --- touches no area lists and never calls EEex_PtrToUD.
 --- @return string the full report (also written to buffbot_mp_probe.log)
 function BfBot.Mp.Probe()
