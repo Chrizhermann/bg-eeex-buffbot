@@ -38,6 +38,7 @@ COPY ~buffbot/BfBotCor.lua~  ~override~
 COPY ~buffbot/BfBotCls.lua~  ~override~
 COPY ~buffbot/BfBotScn.lua~  ~override~
 COPY ~buffbot/BfBotExe.lua~  ~override~
+COPY ~buffbot/BfBotMp.lua~   ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~
 COPY ~buffbot/BfBotInn.lua~  ~override~
 COPY ~buffbot/BfBotUI.lua~   ~override~

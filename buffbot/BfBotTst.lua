@@ -2501,6 +2501,145 @@ function BfBot.Test.StaleState()
 end
 
 -- ============================================================
+-- BfBot.Test.Watchdog — Stuck-caster recovery (multiplayer hang)
+-- ============================================================
+-- In multiplayer a caster controlled by another player never fires its
+-- _Advance callback, so _activeCasters never reaches 0 and the UI would stay
+-- stuck on "casting" forever. _SafetyTick's watchdog force-completes a run that
+-- has made no forward progress for _WATCHDOG_TIMEOUT_MS. These tests verify the
+-- watchdog trips on a stall, leaves a healthy run alone, and never dereferences
+-- cached caster.sprite pointers.
+function BfBot.Test.Watchdog()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Watchdog / Stuck-Caster Recovery")
+    P("========================================")
+    P("")
+
+    if BfBot.Exec.GetState() == "running" then
+        _warning("Skipping: exec currently running")
+        return _summary("Watchdog")
+    end
+
+    -- Save state to restore on exit
+    local saved = {
+        state        = BfBot.Exec._state,
+        casters      = BfBot.Exec._casters,
+        active       = BfBot.Exec._activeCasters,
+        lastSafety   = BfBot.Exec._lastSafetyTick,
+        lastProgress = BfBot.Exec._lastProgressTick,
+        castCount    = BfBot.Exec._castCount,
+        skipCount    = BfBot.Exec._skipCount,
+    }
+    local function _restore()
+        BfBot.Exec._state            = saved.state
+        BfBot.Exec._casters          = saved.casters
+        BfBot.Exec._activeCasters    = saved.active
+        BfBot.Exec._lastSafetyTick   = saved.lastSafety
+        BfBot.Exec._lastProgressTick = saved.lastProgress
+        BfBot.Exec._castCount        = saved.castCount
+        BfBot.Exec._skipCount        = saved.skipCount
+    end
+    -- _ForceComplete closes the exec log; reopen so the runner can keep logging.
+    local function _reopenLog()
+        if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+    end
+
+    local TIMEOUT = BfBot.Exec._WATCHDOG_TIMEOUT_MS or 30000
+
+    -- ---- Test 1: watchdog state + helpers present ----
+    P("  [1] watchdog state + helpers present")
+    _check(type(BfBot.Exec._lastProgressTick) == "number", "_lastProgressTick is a number")
+    _check(type(BfBot.Exec._WATCHDOG_TIMEOUT_MS) == "number" and BfBot.Exec._WATCHDOG_TIMEOUT_MS > 0,
+        "_WATCHDOG_TIMEOUT_MS is a positive number (" .. tostring(BfBot.Exec._WATCHDOG_TIMEOUT_MS) .. ")")
+    _check(type(BfBot.Exec._NoteProgress) == "function", "_NoteProgress is a function")
+    _check(type(BfBot.Exec._ForceComplete) == "function", "_ForceComplete is a function")
+
+    -- ---- Test 2: _NoteProgress bumps the tick ----
+    P("")
+    P("  [2] _NoteProgress updates _lastProgressTick")
+    BfBot.Exec._lastProgressTick = 0
+    pcall(BfBot.Exec._NoteProgress)
+    _check(BfBot.Exec._lastProgressTick > 0, "_NoteProgress set _lastProgressTick > 0")
+
+    -- A real portrait sprite + name so _IsStateStale returns false and the
+    -- WATCHDOG path (not the stale-reset path) is what we actually exercise.
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    local realName = sprite and BfBot._GetName(sprite) or nil
+
+    -- ---- Test 3: _ForceComplete terminates a run without dereferencing sprites ----
+    -- Poison caster.sprite with a string sentinel; with cheatApplied=true the
+    -- cleanup loop MUST re-resolve the sprite from the portrait slot (never the
+    -- cached sentinel) — same safety property as Stop()/_Complete (issue #38).
+    P("")
+    P("  [3] _ForceComplete terminates run + re-resolves sprite from portrait")
+    BfBot.Exec._state = "running"
+    BfBot.Exec._casters = {
+        [0] = { sprite = "STALE_SENTINEL", name = realName or "wd-test",
+                cheatApplied = (sprite ~= nil),  -- engage cleanup loop when a real sprite exists
+                queue = {}, index = 0, done = false, cheatBoundary = 0 },
+    }
+    BfBot.Exec._activeCasters = 1
+    local fcOk, fcErr = pcall(function() BfBot.Exec._ForceComplete("test force-complete") end)
+    _reopenLog()
+    local entry3 = BfBot.Exec._casters[0]
+    _check(fcOk and BfBot.Exec._state == "done" and entry3 and entry3.cheatApplied == false,
+        string.format("_ForceComplete -> done, cleanup ran on fresh portrait sprite (ok=%s err=%s state=%s cheatApplied=%s)",
+            tostring(fcOk), tostring(fcErr), tostring(BfBot.Exec._state),
+            tostring(entry3 and entry3.cheatApplied)))
+
+    -- ---- Test 4: _SafetyTick force-completes a stalled run ----
+    P("")
+    P("  [4] _SafetyTick force-completes a stalled run")
+    if not sprite then
+        _warning("No sprite in portrait 0; skipping live watchdog trip test")
+    else
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            [0] = { sprite = sprite, name = realName, cheatApplied = false,
+                    queue = {}, index = 0, done = false, cheatBoundary = 0 },
+        }
+        BfBot.Exec._activeCasters = 1
+        local now = Infinity_GetClockTicks()
+        BfBot.Exec._lastProgressTick = now - (TIMEOUT + 5000)  -- ancient → stalled
+        BfBot.Exec._lastSafetyTick = 0                         -- bypass 2s rate limit
+        local stOk, stErr = pcall(BfBot.Exec._SafetyTick)
+        _reopenLog()
+        _check(stOk and BfBot.Exec._state ~= "running",
+            string.format("stalled run no longer 'running' after _SafetyTick (state=%s ok=%s err=%s)",
+                tostring(BfBot.Exec._state), tostring(stOk), tostring(stErr)))
+    end
+
+    -- ---- Test 5: _SafetyTick leaves a healthy run alone ----
+    P("")
+    P("  [5] _SafetyTick leaves a healthy (recently-progressing) run alone")
+    if not sprite then
+        _warning("No sprite in portrait 0; skipping healthy-run test")
+    else
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            [0] = { sprite = sprite, name = realName, cheatApplied = false,
+                    queue = {}, index = 0, done = false, cheatBoundary = 0 },
+        }
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._lastProgressTick = Infinity_GetClockTicks()  -- fresh progress
+        BfBot.Exec._lastSafetyTick = 0
+        local stOk2 = pcall(BfBot.Exec._SafetyTick)
+        _check(stOk2 and BfBot.Exec._state == "running",
+            "healthy run still 'running' after _SafetyTick (state=" .. tostring(BfBot.Exec._state) .. ")")
+        -- Leave exec clean for restore
+        BfBot.Exec._state = "idle"
+        BfBot.Exec._casters = {}
+        BfBot.Exec._activeCasters = 0
+    end
+
+    _restore()
+    P("")
+    return _summary("Watchdog")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2594,6 +2733,10 @@ function BfBot.Test.RunAll()
     local staleOk = BfBot.Test.StaleState()
     P("")
 
+    -- Phase 16: Watchdog / stuck-caster recovery (multiplayer hang)
+    local watchdogOk = BfBot.Test.Watchdog()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -2615,11 +2758,12 @@ function BfBot.Test.RunAll()
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
+    P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk
 end
 
 -- ============================================================
