@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.5.0-alpha (2026-07-05)
+
+### Added
+- **Multiplayer support — BuffBot no longer hangs on "casting" and only buffs the characters you control** (reported by Jester on Discord). In multiplayer each player controls a subset of the party. BuffBot queues each cast as `SpellRES(...)` + `EEex_LuaAction("BfBot.Exec._Advance(slot)")` on the caster's action list — but `EEex_Action_QueueResponseStringOnAIBase` inserts into the **local, non-networked** copy of that list (`virtual_InsertAction`). A character controlled by another player never runs that chain, so its `_Advance` callback never fires, `_activeCasters` never reaches 0, and the status stayed stuck on "casting" forever. Two-part fix:
+  - **Caster filter (`BfBot.Mp.IsLocallyControlled`)**: BuffBot now only issues casts to characters the local machine controls. A character is locally controlled iff its entry in the engine control map (`CInfGame.m_multiPlayerSettings.m_pnCharacterControlledByPlayer`, indexed by join order) equals this machine's `CNetwork.m_idLocalPlayer` — the DirectPlay player **ID**, verified in-game (the player *number* `m_nLocalPlayer` does **not** match). Single-player short-circuits on `m_bConnectionEstablished == 0`, so single-player behavior is unchanged. All engine reads are `pcall`-guarded and degrade to "controllable" on any failure. Applied at all three caster-enumeration sites (`BuildQueueFromPreset`, `BuildQueueForCharacter`, and the exec engine's `_BuildQueue` as a final guard); buff **targets** stay full-party, so you can still buff a teammate's character. Pressing "Cast <name>" on a character another player controls now shows a clear message instead of doing nothing.
+  - **Control mode override** (`baldur.ini [BuffBot]`, per-machine): `MpControlMode = auto` (default, engine detection) | `manual` (`MpControlNames`, a comma-separated list of the characters you control) | `all` (disable filtering). The manual fallback covers any edge case where auto-detection misbehaves.
+
+### Fixed
+- **Watchdog: a stuck buff run can no longer lock the UI on "casting" forever.** `BfBot.Exec` now tracks forward progress in **game time** (`_lastProgressGameTime` from `m_worldTime.m_gameTime`, bumped on every queued cast and every advance); `_SafetyTick` force-completes a run that has made no progress across `_WATCHDOG_TIMEOUT_GAMETICKS` (~30s of game time) via a new `_ForceComplete`, which strips orphaned `BFBTCH` cheat buffs and resets to idle — re-resolving each sprite from its portrait slot so it never dereferences a freed `CGameSprite` (same safety discipline as the #38 stale-state recovery). Game time (not wall-clock) is deliberate: it **freezes while the game is paused**, so pausing mid-buff never trips the watchdog and kills a healthy run. This is the unconditional safety net beneath the multiplayer caster filter: even if a caster chain wedges for any reason, the UI recovers instead of stranding the player on the Stop button.
+
+### Internal
+- New module `BfBotMp.lua` (`BfBot.Mp`) hosts multiplayer control detection and `BfBot.Mp.Probe()`, a `pcall`-guarded diagnostic that dumps the engine's multiplayer ownership fields for host+client comparison. Registered in `M_BfBot`, `setup-buffbot.tp2`, and `tools/deploy.sh`.
+- New in-game tests: `BfBot.Test.Watchdog()` (8 assertions) and `BfBot.Test.Mp()` (7 assertions), wired into `BfBot.Test.RunAll()`. Verified in a live BG2:EE multiplayer host session: auto-detection keeps the host's own party, and manual-mode simulation confirms the filter correctly splits a party by ownership.
+
 ## v1.4.1-alpha (2026-05-24)
 
 ### Fixed
