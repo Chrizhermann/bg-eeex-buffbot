@@ -2,21 +2,27 @@ BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
 VERSION ~v1.5.0-alpha~
 
-BEGIN ~BuffBot: In-Game Buff Automation~
+LANGUAGE
+  ~English~ ~english~ ~buffbot/lang/english/setup.tra~
+LANGUAGE
+  ~Simplified Chinese~ ~schinese~ ~buffbot/lang/schinese/setup.tra~
+
+
+BEGIN @10
 DESIGNATED 0
 LABEL ~BuffBot-Main~
 
 // ---- Prerequisites ----
 REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
-  ~BuffBot requires BG:EE, BG2:EE, or EET.~
+  @11
 
 REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+  @12
 
 // v1.0.0 moved EEex's Lua scripts from EEex/ to game-root EEex_scripts/.
 // Use this as the v1.0.0+ marker — earlier releases don't have this path.
 REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
-  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+  @13
 
 // ---- TLK strings for innate ability tooltips ----
 // One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
@@ -41,10 +47,17 @@ COPY ~buffbot/BfBotExe.lua~  ~override~
 COPY ~buffbot/BfBotMp.lua~   ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~
 COPY ~buffbot/BfBotInn.lua~  ~override~
-COPY ~buffbot/BfBotUI.lua~   ~override~
 COPY ~buffbot/BfBotThm.lua~  ~override~
 COPY ~buffbot/BfBotTst.lua~  ~override~
+
+// ---- Copy and replace translations
+INCLUDE ~buffbot/TraMapping.tpa~
+COPY ~buffbot/BfBotUI.lua~   ~override~
+  LAUNCH_PATCH_MACRO bfbot_ui_replace
+
 COPY ~buffbot/BuffBot.menu~  ~override~
+  LAUNCH_PATCH_MACRO bfbot_menu_replace
+
 
 // ---- Copy visual assets (parchment background, border texture, icons) ----
 COPY ~buffbot/BFBOTIB.BAM~  ~override~
@@ -90,18 +103,18 @@ COPY ~.../buffbot-inlined/bfbot_strrefs.txt~ ~override/bfbot_strrefs.txt~
 // ============================================================
 // Component 1: EEex LuaJIT (required for full functionality)
 // ============================================================
-BEGIN ~BuffBot: EEex LuaJIT Support (auto-detected)~
+BEGIN @20
 DESIGNATED 1
 LABEL ~BuffBot-LuaJIT~
 
 REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
-  ~BuffBot requires BG:EE, BG2:EE, or EET.~
+  @11
 
 REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+  @12
 
 REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
-  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+  @13
 
 // Check if LuaJIT is already active
 OUTER_SET luajit_active = 0
@@ -132,8 +145,8 @@ END ELSE BEGIN
     BUT_ONLY
   END
 
-  PRINT ~Installing EEex LuaJIT component (normally installed by EEex setup).~
-  PRINT ~Detected LuaVersionExternal: %lua_version%~
+  PRINT @24
+  PRINT @25
 
   // Copy DLLs from EEex's own install folder
   COPY ~EEex/loader/LuaJIT/lua51.dll~        ~lua51.dll~
@@ -146,5 +159,5 @@ END ELSE BEGIN
     REPLACE_TEXTUALLY ~^\(LuaVersionExternal=\).*~ ~\1%lua_version%~
   BUT_ONLY
 
-  PRINT ~LuaJIT installed successfully. BuffBot will have full functionality.~
+  PRINT @26
 END
