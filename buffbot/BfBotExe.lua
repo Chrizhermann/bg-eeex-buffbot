@@ -269,11 +269,16 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             -- Accept any ref that produces a well-formed caster key. Party
             -- refs must additionally satisfy the same 0-5 slot constraint as
             -- the legacy slot path (the party resolver is not pcall-guarded).
+            -- Summon refs must carry a name: it is the resolver's anti-recycle
+            -- guard — a name-less ref would resolve ANY sprite occupying a
+            -- recycled object ID.
             local okKey, key = pcall(BfBot.Exec._CasterKey, casterRef)
             if not okKey or BfBot.Exec._ParseCasterKey(key) == nil
                 or (casterRef.kind == "party"
                     and not (type(casterRef.slot) == "number"
-                        and casterRef.slot >= 0 and casterRef.slot <= 5)) then
+                        and casterRef.slot >= 0 and casterRef.slot <= 5))
+                or (casterRef.kind == "summon"
+                    and type(casterRef.name) ~= "string") then
                 BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": malformed casterRef")
                 goto continue
             end
@@ -502,9 +507,14 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
 
     -- Fresh-resolve the caster EVERY step — records/entries carry no sprite
     -- userdata (issues #38/#19). A caster that no longer resolves finishes
-    -- its chain cleanly instead of dereferencing a stale pointer.
+    -- its chain cleanly instead of dereferencing a stale pointer. For party
+    -- refs the resolved sprite's name must still match the record: a mid-run
+    -- portrait reshuffle must never route a cast through the wrong character
+    -- (a rename-mid-run also ends the chain early — benign; the stale tick
+    -- still whole-run-resets).
     local sprite = BfBot.Exec._ResolveCaster(caster.ref)
-    if not sprite then
+    if not sprite or (caster.ref.kind == "party"
+            and caster.name and BfBot._GetName(sprite) ~= caster.name) then
         BfBot.Exec._FinishGoneCaster(caster)
         return
     end
@@ -613,9 +623,14 @@ function BfBot.Exec._Advance(key)
     local caster = BfBot.Exec._casters[key]
     if not caster or caster.done then return end
 
-    -- Caster vanished between steps (summon expired/killed, slot emptied):
-    -- finish its chain cleanly before touching anything sprite-related.
-    if not BfBot.Exec._ResolveCaster(caster.ref) then
+    -- Caster vanished between steps (summon expired/killed, slot emptied),
+    -- or a party slot changed occupant (portrait reshuffle — never route the
+    -- chain through the wrong character; a rename ends the chain early,
+    -- benign; the stale tick still whole-run-resets): finish cleanly before
+    -- touching anything sprite-related.
+    local sprite = BfBot.Exec._ResolveCaster(caster.ref)
+    if not sprite or (caster.ref.kind == "party"
+            and caster.name and BfBot._GetName(sprite) ~= caster.name) then
         BfBot.Exec._FinishGoneCaster(caster)
         return
     end
@@ -720,6 +735,9 @@ end
 --- Log execution summary and transition to "done" state.
 function BfBot.Exec._Complete()
     -- Fast-path recovery from save-reload (issue #38) — see Stop().
+    -- Also legitimately reached when a gone PARTY caster (emptied/reshuffled
+    -- portrait slot) finished last: no DONE summary then — benign; the orphan
+    -- sweep still strips any lingering BFBTCH within ~2-4s.
     if BfBot.Exec._IsStateStale() then
         BfBot.Exec._HardReset()
         BfBot._CloseLog()
@@ -974,14 +992,22 @@ end
 --- and the summon-caster sweep share the exact same cleanup.
 function BfBot.Exec._SweepOrphanCheat(sprite)
     if not BfBot.Exec._HasActiveEffect(sprite, "BFBTCH") then return end
-    pcall(function()
+    -- Log honesty: only claim removal when the queue call actually succeeded;
+    -- a swallowed pcall failure here would hide a stuck Improved Alacrity.
+    local ok, err = pcall(function()
         EEex_Action_QueueResponseStringOnAIBase(
             'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
     end)
     -- Open exec log briefly to persist the warning to disk
     BfBot._OpenLogAppend(BfBot.Exec._logFile)
-    BfBot.Exec._LogEntry("WARN",
-        "Safety net: removed orphaned BFBTCH from " .. BfBot._GetName(sprite))
+    if ok then
+        BfBot.Exec._LogEntry("WARN",
+            "Safety net: removed orphaned BFBTCH from " .. BfBot._GetName(sprite))
+    else
+        BfBot.Exec._LogEntry("WARN",
+            "Safety net: FAILED to queue BFBTCR on " .. BfBot._GetName(sprite)
+            .. " (orphaned BFBTCH persists): " .. tostring(err))
+    end
     BfBot._CloseLog()
 end
 

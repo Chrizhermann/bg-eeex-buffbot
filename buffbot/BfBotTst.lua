@@ -2928,6 +2928,14 @@ function BfBot.Test.SummonCasters()
                 { { casterRef = { kind = "summon" }, spell = anyRes, target = "self" } }, 0)
             _check(badBy == nil,
                 "malformed casterRef rejected (" .. tostring(badErr) .. ")")
+
+            -- A summon ref WITHOUT a name is malformed too: the name is the
+            -- resolver's anti-recycle guard — a name-less ref would resolve
+            -- ANY sprite occupying a recycled object ID.
+            local nnBy = BfBot.Exec._BuildQueue(
+                { { casterRef = { kind = "summon", oid = leader.m_id },
+                    spell = anyRes, target = "self" } }, 0)
+            _check(nnBy == nil, "name-less summon casterRef rejected")
         end
     else
         _nok("no leader sprite in slot 0 for _BuildQueue re-key checks")
@@ -2955,6 +2963,74 @@ function BfBot.Test.SummonCasters()
         BfBot.Exec._activeCasters = savedActive
         _check(stale == false,
             "_IsStateStale ignores summon refs (gone summon is per-step, not whole-run)")
+    end
+
+    -- ---- Task 4 review: gone-caster path (_Advance on a dead summon) ----
+    -- A summon whose oid no longer resolves must finish ITS chain: record
+    -- marked done, _activeCasters decremented exactly once (idempotent on
+    -- repeat advances), run continues for the others; when it was the last
+    -- active caster the run completes.
+    if leader then
+        local savedState   = BfBot.Exec._state
+        local savedCasters = BfBot.Exec._casters
+        local savedActive  = BfBot.Exec._activeCasters
+        local function _restoreExec()
+            BfBot.Exec._state         = savedState
+            BfBot.Exec._casters       = savedCasters
+            BfBot.Exec._activeCasters = savedActive
+        end
+        -- _Complete (last-caster case) closes the suite's log — reopen after
+        -- (same pattern as the StaleState/Watchdog phases).
+        local function _reopenLog()
+            if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+        end
+
+        -- Real portrait-0 name on the party record keeps _IsStateStale quiet.
+        local leaderName = BfBot._GetName(leader)
+        local goneRef = { kind = "summon", oid = 999999999, name = "ZZZ" }
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            ["p0"] = { ref = { kind = "party", slot = 0 }, name = leaderName,
+                       cheatApplied = false,
+                       queue = {}, index = 0, done = false, cheatBoundary = 0 },
+            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false,
+                               queue = {}, index = 0, done = false, cheatBoundary = 0 },
+        }
+        BfBot.Exec._activeCasters = 2
+
+        local advOk = pcall(BfBot.Exec._Advance, "s999999999")
+        local rec = BfBot.Exec._casters["s999999999"]
+        _check(advOk and rec ~= nil and rec.done == true,
+            "gone summon: _Advance marks the record done")
+        _check(BfBot.Exec._activeCasters == 1,
+            "gone summon: _activeCasters decremented to 1")
+        _check(BfBot.Exec._state == "running",
+            "gone summon: run continues for the remaining caster")
+
+        -- Idempotent: advancing the already-done caster must not decrement again
+        local advOk2 = pcall(BfBot.Exec._Advance, "s999999999")
+        _check(advOk2 and BfBot.Exec._activeCasters == 1,
+            "gone summon: repeat _Advance does not double-decrement")
+
+        -- Last-caster variant: the sole active caster is the gone summon →
+        -- the run must complete (summon-only _casters keeps _IsStateStale
+        -- out of the way; landing in _Complete's stale branch would equally
+        -- leave "running" — assert only that it did).
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false,
+                               queue = {}, index = 0, done = false, cheatBoundary = 0 },
+        }
+        BfBot.Exec._activeCasters = 1
+        local advOk3 = pcall(BfBot.Exec._Advance, "s999999999")
+        _reopenLog()  -- _Complete closed the suite's log
+        _check(advOk3 and BfBot.Exec._state ~= "running",
+            "gone summon as last caster completes the run (state="
+            .. tostring(BfBot.Exec._state) .. ")")
+
+        _restoreExec()
+    else
+        _nok("no leader sprite in slot 0 for gone-caster path checks")
     end
 
     return _summary("SummonCasters")
