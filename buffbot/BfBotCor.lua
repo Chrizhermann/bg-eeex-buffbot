@@ -155,6 +155,11 @@ BfBot._cache = {
     -- Scan cache: spriteID -> { spells = {...}, timestamp = number }
     -- Invalidated per-sprite on spell list change events
     scan = {},
+
+    -- Allied-summon sweep cache: { at = clockTicks, list = {entries} } | nil
+    -- nil until the first BfBot.Scan.GetAlliedSummons() call; TTL-checked
+    -- there (~2s). Cleared by BfBot.Scan.InvalidateSummons().
+    summons = nil,
 }
 
 -- User override table: resref -> boolean|nil

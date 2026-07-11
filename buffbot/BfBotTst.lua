@@ -3033,6 +3033,66 @@ function BfBot.Test.SummonCasters()
         _nok("no leader sprite in slot 0 for gone-caster path checks")
     end
 
+    -- ---- Task 5: _SummonIdentity — pure derivation, no live summons needed ----
+    _check(BfBot.Scan._SummonIdentity({ kind = "clone", ownerName = "Edwin",
+            scriptName = "COPY" }) == "clone:Edwin",
+        "identity: clone prefix wins over scriptname COPY")
+    _check(BfBot.Scan._SummonIdentity({ kind = "summon", scriptName = "PLANGOOD" })
+        == "plangood", "identity: scriptname lowered")
+    _check(BfBot.Scan._SummonIdentity({ kind = "summon", scriptName = "",
+            creResref = "DEVAGO" }) == "cre:devago", "identity: cre resref fallback")
+    _check(BfBot.Scan._SummonIdentity({ kind = "summon", scriptName = "",
+            creResref = "*MOEN1", name = "Imoen" }) == "name:imoen",
+        "identity: star-prefixed save-instance resref rejected -> name")
+    -- Ownerless clone: scriptname "COPY" is useless for clones and the CRE
+    -- resref of a save-baked clone is star-prefixed — falls through to name.
+    _check(BfBot.Scan._SummonIdentity({ kind = "clone", scriptName = "COPY",
+            creResref = "*MOEN1", name = "Imoen" }) == "name:imoen",
+        "identity: ownerless clone falls through to name (never scriptname)")
+
+    -- ---- Task 5: GetAlliedSummons shape + party exclusion + cache ----
+    local summons = BfBot.Scan.GetAlliedSummons()
+    _check(type(summons) == "table",
+        "GetAlliedSummons returns a table (n=" .. tostring(type(summons) == "table" and #summons or "?") .. ")")
+    local shapeOk = true
+    if type(summons) == "table" then
+        for _, e in ipairs(summons) do
+            if not (type(e.oid) == "number" and type(e.identity) == "string"
+                    and type(e.name) == "string"
+                    and (e.kind == "clone" or e.kind == "summon")) then
+                shapeOk = false
+            end
+        end
+    end
+    _check(shapeOk, "every summon entry has numeric oid, string identity/name, valid kind")
+    _check(BfBot._cache.summons ~= nil, "sweep result was cached")
+
+    if leader then
+        _check(BfBot.Scan.ClassifySummonSprite(leader) == nil,
+            "ClassifySummonSprite(party leader) == nil (party excluded)")
+    else
+        _nok("no leader sprite in slot 0 for ClassifySummonSprite exclusion check")
+    end
+
+    -- Cache behavior: a second call within the TTL (hit path: re-resolve by
+    -- oid+name, drop gone) and a post-invalidate fresh sweep must both agree
+    -- with the first result — nothing spawns/dies inside one synchronous run.
+    local function _sameOids(a, b)
+        if type(a) ~= "table" or type(b) ~= "table" or #a ~= #b then return false end
+        local set = {}
+        for _, e in ipairs(b) do set[e.oid] = true end
+        for _, e in ipairs(a) do
+            if not set[e.oid] then return false end
+        end
+        return true
+    end
+    local again = BfBot.Scan.GetAlliedSummons()
+    _check(_sameOids(summons, again), "cache hit returns consistent oid set")
+    BfBot.Scan.InvalidateSummons()
+    _check(BfBot._cache.summons == nil, "InvalidateSummons clears the cache")
+    local fresh = BfBot.Scan.GetAlliedSummons()
+    _check(_sameOids(again, fresh), "post-invalidate fresh sweep still consistent")
+
     return _summary("SummonCasters")
 end
 
