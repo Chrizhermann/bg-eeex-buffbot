@@ -299,6 +299,11 @@ end
 --- NOTE: `sprite` is for immediate build-time use by the CALLER only — never
 --- cache it across frames (issue-#38 freed-pointer discipline). Anything that
 --- holds an entry re-resolves via oid+name (BfBot.Exec._ResolveCaster).
+--- NOTE: the entry reflects allegiance AS OF classification time — EA and
+--- alive-ness can change afterwards (charm, dominate, death). Consumers
+--- acting on an entry later must re-validate by re-classifying the freshly
+--- resolved sprite, not trust a stored entry (Task 7 queue builders rely on
+--- this contract).
 function BfBot.Scan.ClassifySummonSprite(sprite)
     if not sprite then return nil end
 
@@ -442,6 +447,10 @@ end
 --- oid+name via BfBot.Exec._ResolveCaster and drops entries that no longer
 --- resolve — so a returned `sprite` field is always live-this-call and the
 --- cache can never hand out freed userdata (issue-#38 discipline).
+--- NOTE: the returned array AND its entry tables are cache-owned — treat
+--- them as READ-ONLY; copy before mutating/sorting (Task 7/10 consumers).
+--- NOTE: entries reflect allegiance at sweep time — consumers acting later
+--- must re-validate EA / re-classify (see ClassifySummonSprite).
 function BfBot.Scan.GetAlliedSummons()
     local now = Infinity_GetClockTicks()
     local cached = BfBot._cache.summons
@@ -454,6 +463,11 @@ function BfBot.Scan.GetAlliedSummons()
             if sprite then
                 e.sprite = sprite
                 live[#live + 1] = e
+            else
+                -- Gone summon: its spellbook scan is dead weight now — evict
+                -- immediately instead of leaking KB-scale scan entries until
+                -- the next panel-open InvalidateAll.
+                BfBot._cache.scan[e.oid] = nil
             end
         end
         cached.list = live

@@ -3093,6 +3093,27 @@ function BfBot.Test.SummonCasters()
     local fresh = BfBot.Scan.GetAlliedSummons()
     _check(_sameOids(again, fresh), "post-invalidate fresh sweep still consistent")
 
+    -- Hit-path eviction: a warm-cached entry whose oid no longer resolves is
+    -- dropped from the result AND its (dead) spellbook scan-cache entry is
+    -- evicted immediately — not left leaking until the next panel open.
+    do
+        local deadOid = 999999999
+        BfBot._cache.scan[deadOid] = { spells = {}, count = 0 }
+        BfBot._cache.summons = {
+            at = Infinity_GetClockTicks(),
+            list = { { oid = deadOid, name = "ZZZ", kind = "summon",
+                       identity = "name:zzz" } },
+        }
+        local swept = BfBot.Scan.GetAlliedSummons()
+        local deadReturned = false
+        for _, e in ipairs(swept) do
+            if e.oid == deadOid then deadReturned = true end
+        end
+        _check(deadReturned == false and BfBot._cache.scan[deadOid] == nil,
+            "gone cached summon: dropped from result + scan cache evicted")
+        BfBot.Scan.InvalidateSummons()  -- leave no synthetic cache behind
+    end
+
     return _summary("SummonCasters")
 end
 
