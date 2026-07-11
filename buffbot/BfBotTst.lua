@@ -1497,14 +1497,32 @@ function BfBot.Test.CombatSafety()
     P("")
     P("  [6] _SafetyTick skips when exec running")
 
-    local origState = BfBot.Exec._state
+    -- Isolate ALL watchdog inputs, not just _state: leftover _casters and a
+    -- stale _lastProgressGameTime from a real earlier run would make the
+    -- watchdog legitimately trip _ForceComplete here — which also closes the
+    -- suite's log handle mid-run, silently dropping every later phase's
+    -- output from buffbot_test.log (observed live 2026-07-11).
+    local origState    = BfBot.Exec._state
+    local origCasters  = BfBot.Exec._casters
+    local origActive   = BfBot.Exec._activeCasters
+    local origProgress = BfBot.Exec._lastProgressGameTime
     BfBot.Exec._state = "running"
+    BfBot.Exec._casters = {}
+    BfBot.Exec._activeCasters = 0
+    -- Fresh progress → the synthetic run is "healthy"; the watchdog must
+    -- leave it alone (the trip case is covered by the Watchdog phase).
+    BfBot.Exec._lastProgressGameTime = BfBot.Exec._GetGameTime()
     BfBot.Exec._lastSafetyTick = 0  -- reset to allow tick
-    pcall(BfBot.Exec._SafetyTick)
+    local srOk = pcall(BfBot.Exec._SafetyTick)
     -- When running, _SafetyTick should update the tick counter
     -- (rate limit runs first) but should NOT remove any effects
-    BfBot.Exec._state = origState
-    _ok("_SafetyTick did not crash when state=running")
+    local stillRunning = BfBot.Exec._state == "running"
+    BfBot.Exec._state                = origState
+    BfBot.Exec._casters              = origCasters
+    BfBot.Exec._activeCasters        = origActive
+    BfBot.Exec._lastProgressGameTime = origProgress
+    _check(srOk and stillRunning,
+        "_SafetyTick left healthy running state alone (no crash, still running)")
 
     -- ---- Summary ----
     P("")
@@ -2391,16 +2409,20 @@ function BfBot.Test.StaleState()
         BfBot.Exec._lastSafetyTick  = savedLastTick
     end
 
-    -- A non-userdata sentinel for the "freed pointer" simulation. The
-    -- "stale-test" name is what _IsStateStale compares against the live
+    -- A non-userdata sentinel for the "freed pointer" simulation. Caster
+    -- records no longer carry a sprite field at all (exec resolves fresh
+    -- from caster.ref every step); planting the sentinel as a stray field
+    -- guards against any regression that reintroduces a caster.sprite read.
+    -- The "stale-test" name is what _IsStateStale compares against the live
     -- portrait sprite's name — guaranteed not to match a real character.
     local STALE = "STALE_TEST_SENTINEL"
 
     local function _poison(cheatApplied)
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
-            [0] = {
-                sprite = STALE,
+            ["p0"] = {
+                ref = { kind = "party", slot = 0 },
+                sprite = STALE,  -- stray field: nothing may ever read it
                 cheatApplied = cheatApplied and true or false,
                 queue = {},
                 index = 0,
@@ -2461,7 +2483,8 @@ function BfBot.Test.StaleState()
     if sprite then
         local realName = BfBot._GetName(sprite)
         BfBot.Exec._state = "running"
-        BfBot.Exec._casters = { [0] = { sprite = sprite, name = realName, cheatApplied = false } }
+        BfBot.Exec._casters = { ["p0"] = {
+            ref = { kind = "party", slot = 0 }, name = realName, cheatApplied = false } }
         BfBot.Exec._activeCasters = 1
         _check(BfBot.Exec._IsStateStale() == false,
             "running with cached name matching portrait[0] is not stale")
@@ -2526,22 +2549,23 @@ function BfBot.Test.StaleState()
             tostring(next(BfBot.Exec._casters) == nil)))
     end
 
-    -- ---- Test 6: Stop() with name-match (same-save reload) re-resolves
-    --      sprite from portrait instead of dereferencing cached pointer.
+    -- ---- Test 6: Stop() with name-match (same-save reload) resolves the
+    --      sprite fresh from the ref instead of any cached pointer.
     -- This is the critical safety property: even when _IsStateStale misses
-    -- the case (party composition unchanged), Stop must not pass the cached
-    -- caster.sprite to engine functions. We poison caster.sprite with a
-    -- string sentinel and set caster.name to match the current portrait;
-    -- _IsStateStale returns false, the cleanup loop runs, and it must
-    -- re-resolve from EEex_Sprite_GetInPortrait(slot) without crashing.
+    -- the case (party composition unchanged), Stop must never pass cached
+    -- sprite userdata to engine functions. Records carry no sprite field;
+    -- we plant a stray sentinel one and set caster.name to match the
+    -- current portrait; _IsStateStale returns false, the cleanup loop runs,
+    -- and it must resolve via _ResolveCaster(ref) without crashing.
     P("")
-    P("  [6] Stop() with same-party reload re-resolves sprite from portrait")
+    P("  [6] Stop() with same-party reload resolves sprite fresh from ref")
     if sprite then  -- captured in Test 2b
         local realName = BfBot._GetName(sprite)
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
-            [0] = {
-                sprite = STALE,         -- simulated freed pointer
+            ["p0"] = {
+                ref = { kind = "party", slot = 0 },
+                sprite = STALE,         -- stray field simulating a freed pointer
                 name = realName,        -- matches portrait → not detected as stale
                 cheatApplied = true,    -- forces cleanup loop to engage
                 queue = {}, index = 0, done = false, cheatBoundary = 0,
@@ -2550,7 +2574,7 @@ function BfBot.Test.StaleState()
         BfBot.Exec._activeCasters = 1
         local rrOk, rrErr = pcall(BfBot.Exec.Stop)
         _reopenLog()  -- Stop's normal exit closed the log
-        local entry = BfBot.Exec._casters[0]
+        local entry = BfBot.Exec._casters["p0"]
         if rrOk
             and BfBot.Exec._state == "stopped"
             and entry and entry.cheatApplied == false
@@ -2581,7 +2605,7 @@ end
 -- has made no forward progress for _WATCHDOG_TIMEOUT_GAMETICKS of GAME time
 -- (frozen while paused, so a paused-but-healthy run is never killed). These tests
 -- verify the watchdog trips on a stall, leaves a healthy run alone, and never
--- dereferences cached caster.sprite pointers.
+-- dereferences cached sprite userdata (records hold plain caster refs only).
 function BfBot.Test.Watchdog()
     _reset()
     P("")
@@ -2652,21 +2676,24 @@ function BfBot.Test.Watchdog()
     local realName = sprite and BfBot._GetName(sprite) or nil
 
     -- ---- Test 3: _ForceComplete terminates a run without dereferencing sprites ----
-    -- Poison caster.sprite with a string sentinel; with cheatApplied=true the
-    -- cleanup loop MUST re-resolve the sprite from the portrait slot (never the
-    -- cached sentinel) — same safety property as Stop()/_Complete (issue #38).
+    -- Records carry no sprite field; plant a stray sentinel one anyway. With
+    -- cheatApplied=true the cleanup loop MUST resolve the sprite fresh via
+    -- _ResolveCaster(ref) (never a cached field) — same safety property as
+    -- Stop()/_Complete (issue #38).
     P("")
-    P("  [3] _ForceComplete terminates run + re-resolves sprite from portrait")
+    P("  [3] _ForceComplete terminates run + resolves sprite fresh from ref")
     BfBot.Exec._state = "running"
     BfBot.Exec._casters = {
-        [0] = { sprite = "STALE_SENTINEL", name = realName or "wd-test",
+        ["p0"] = { ref = { kind = "party", slot = 0 },
+                sprite = "STALE_SENTINEL",  -- stray field: nothing may ever read it
+                name = realName or "wd-test",
                 cheatApplied = (sprite ~= nil),  -- engage cleanup loop when a real sprite exists
                 queue = {}, index = 0, done = false, cheatBoundary = 0 },
     }
     BfBot.Exec._activeCasters = 1
     local fcOk, fcErr = pcall(function() BfBot.Exec._ForceComplete("test force-complete") end)
     _reopenLog()
-    local entry3 = BfBot.Exec._casters[0]
+    local entry3 = BfBot.Exec._casters["p0"]
     _check(fcOk and BfBot.Exec._state == "done" and entry3 and entry3.cheatApplied == false,
         string.format("_ForceComplete -> done, cleanup ran on fresh portrait sprite (ok=%s err=%s state=%s cheatApplied=%s)",
             tostring(fcOk), tostring(fcErr), tostring(BfBot.Exec._state),
@@ -2682,7 +2709,8 @@ function BfBot.Test.Watchdog()
     else
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
-            [0] = { sprite = sprite, name = realName, cheatApplied = false,
+            ["p0"] = { ref = { kind = "party", slot = 0 }, name = realName,
+                    cheatApplied = false,
                     queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 1
@@ -2706,7 +2734,8 @@ function BfBot.Test.Watchdog()
     else
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
-            [0] = { sprite = sprite, name = realName, cheatApplied = false,
+            ["p0"] = { ref = { kind = "party", slot = 0 }, name = realName,
+                    cheatApplied = false,
                     queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 1
@@ -2838,6 +2867,94 @@ function BfBot.Test.SummonCasters()
             "summon name mismatch rejected")
     else
         _nok("no leader sprite in slot 0 for summon-branch tests")
+    end
+
+    -- ---- Task 4: _BuildQueue keyed by caster refs (synthetic queue — no
+    --      preset config assumed) ----
+    if leader then
+        local spells = BfBot.Scan.GetCastableSpells(leader)
+        local anyRes
+        if spells then
+            for resref, data in pairs(spells) do
+                if type(data) == "table" and data.count and data.count > 0 then
+                    anyRes = resref
+                    break
+                end
+            end
+        end
+        if not anyRes then
+            _warning("leader has no castable spell; skipping _BuildQueue re-key checks")
+        else
+            -- Party-slot input: the Persist builders' entry contract, unchanged
+            local byCaster, total = BfBot.Exec._BuildQueue(
+                { { caster = 0, spell = anyRes, target = "self" } }, 0)
+            _check(byCaster ~= nil,
+                "_BuildQueue non-nil for party entry (total=" .. tostring(total) .. ")")
+            local keyCount, keysOk, refsOk = 0, true, true
+            if byCaster then
+                for key, entries in pairs(byCaster) do
+                    keyCount = keyCount + 1
+                    if not (type(key) == "string" and key:match("^p%d$")) then
+                        keysOk = false
+                    end
+                    for _, e in ipairs(entries) do
+                        if not (e.casterRef and e.casterRef.kind == "party"
+                                and ("p" .. e.casterRef.slot) == key) then
+                            refsOk = false
+                        end
+                    end
+                end
+            end
+            _check(byCaster ~= nil and keyCount > 0 and keysOk,
+                "party queue keys all match ^p%d$")
+            _check(byCaster ~= nil and refsOk,
+                "entries carry casterRef {kind=party, slot} matching their key")
+
+            -- Forward-compat seam (Task 7): an entry with a pre-built summon
+            -- ref and NO caster slot groups under "s<oid>". The leader's own
+            -- oid doubles as the summon — a party sprite is a valid game
+            -- object for the resolver and scan checks.
+            local sQueue = { { casterRef = { kind = "summon", oid = leader.m_id,
+                                             name = BfBot._GetName(leader) },
+                               spell = anyRes, target = "self" } }
+            local sByCaster = BfBot.Exec._BuildQueue(sQueue, 0)
+            local sKey = "s" .. leader.m_id
+            _check(sByCaster ~= nil and sByCaster[sKey] ~= nil
+                and sByCaster[sKey][1].casterRef.kind == "summon",
+                "summon-ref entry groups under " .. sKey)
+
+            -- Malformed casterRef is rejected, not crashed on
+            local badBy, badErr = BfBot.Exec._BuildQueue(
+                { { casterRef = { kind = "summon" }, spell = anyRes, target = "self" } }, 0)
+            _check(badBy == nil,
+                "malformed casterRef rejected (" .. tostring(badErr) .. ")")
+        end
+    else
+        _nok("no leader sprite in slot 0 for _BuildQueue re-key checks")
+    end
+
+    -- ---- Task 4: _IsStateStale ignores summon refs ----
+    -- A summon that stops resolving finishes its OWN chain per-step
+    -- (_FinishGoneCaster); it must never flag the whole run stale.
+    do
+        local savedState   = BfBot.Exec._state
+        local savedCasters = BfBot.Exec._casters
+        local savedActive  = BfBot.Exec._activeCasters
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {
+            ["s999999999"] = {
+                ref = { kind = "summon", oid = 999999999, name = "ZZZ" },
+                name = "ZZZ", cheatApplied = false,
+                queue = {}, index = 0, done = false, cheatBoundary = 0,
+            },
+        }
+        BfBot.Exec._activeCasters = 1
+        local stale = BfBot.Exec._IsStateStale()
+        BfBot.Exec._state         = savedState
+        BfBot.Exec._casters       = savedCasters
+        BfBot.Exec._activeCasters = savedActive
+        _check(stale == false,
+            "_IsStateStale ignores summon refs (gone summon is per-step, not whole-run)")
     end
 
     return _summary("SummonCasters")

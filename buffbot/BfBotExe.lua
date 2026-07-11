@@ -7,7 +7,9 @@ BfBot.Exec = {}
 
 -- State
 BfBot.Exec._state = "idle"       -- "idle" | "running" | "done" | "stopped"
-BfBot.Exec._casters = {}         -- {[slot] = {queue={}, index=0, done=false, sprite=s, name=n}}
+BfBot.Exec._casters = {}         -- {[casterKey] = {ref=..., queue={}, index=0, done=false, name=n, cheatBoundary=0, cheatApplied=false}}
+                                 -- Keyed by _CasterKey(ref) ("p<slot>" / "s<oid>"). Records hold NO
+                                 -- sprite userdata — every step resolves fresh via _ResolveCaster (#19/#38).
 BfBot.Exec._activeCasters = 0    -- casters still processing (0 = all done)
 BfBot.Exec._log = {}             -- log entries: {type=str, msg=str}
 BfBot.Exec._castCount = 0        -- casts issued across all casters
@@ -245,8 +247,11 @@ function BfBot.Exec._ResolveTargets(target, casterSprite, casterSlot, isAoE)
 end
 
 --- Build per-caster execution queues from user input.
--- userQueue: array of {caster=0-5, spell="RESREF", target="self"|"all"|1-6}
--- Returns: {[slot] = {entries}} grouped by caster, or nil + error
+-- userQueue: array of {caster=0-5, spell="RESREF", target="self"|"all"|1-6}.
+-- Entries may alternatively carry a pre-built caster ref instead of a slot:
+-- {casterRef={kind="party",slot=N} | {kind="summon",oid=N,name=S}, ...} —
+-- the seam the summon queue builders use (issue #19).
+-- Returns: {[casterKey] = {entries}} grouped by _CasterKey, or nil + error
 function BfBot.Exec._BuildQueue(userQueue, qcMode)
     if not userQueue or #userQueue == 0 then
         return nil, "empty queue"
@@ -254,34 +259,62 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
 
     local byCaster = {}
     local totalEntries = 0
-    local controlCache = {}  -- casterSlot -> boolean; MP control is invariant per build
+    local controlCache = {}  -- casterKey -> boolean; MP control is invariant per build
 
     for i, entry in ipairs(userQueue) do
-        local casterSlot = entry.caster
-        if type(casterSlot) ~= "number" or casterSlot < 0 or casterSlot > 5 then
-            BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": invalid caster slot " .. tostring(casterSlot))
-            goto continue
+        -- Resolve the caster reference: either supplied directly (summon
+        -- seam) or built from the legacy party-slot field.
+        local casterRef = entry.casterRef
+        if casterRef ~= nil then
+            -- Accept any ref that produces a well-formed caster key. Party
+            -- refs must additionally satisfy the same 0-5 slot constraint as
+            -- the legacy slot path (the party resolver is not pcall-guarded).
+            local okKey, key = pcall(BfBot.Exec._CasterKey, casterRef)
+            if not okKey or BfBot.Exec._ParseCasterKey(key) == nil
+                or (casterRef.kind == "party"
+                    and not (type(casterRef.slot) == "number"
+                        and casterRef.slot >= 0 and casterRef.slot <= 5)) then
+                BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": malformed casterRef")
+                goto continue
+            end
+        else
+            local casterSlot = entry.caster
+            if type(casterSlot) ~= "number" or casterSlot < 0 or casterSlot > 5 then
+                BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": invalid caster slot " .. tostring(casterSlot))
+                goto continue
+            end
+            casterRef = { kind = "party", slot = casterSlot }
         end
 
-        local casterSprite = EEex_Sprite_GetInPortrait(casterSlot)
+        local casterKey = BfBot.Exec._CasterKey(casterRef)
+
+        -- Build-time resolution for the scan/spell checks below. Exec-time
+        -- code re-resolves fresh each step — never through this userdata.
+        local casterSprite = BfBot.Exec._ResolveCaster(casterRef)
         if not casterSprite then
-            BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": no character in slot " .. casterSlot)
+            if casterRef.kind == "party" then
+                BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": no character in slot " .. casterRef.slot)
+            else
+                BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": caster gone (" .. casterKey .. ")")
+            end
             goto continue
         end
 
         -- Multiplayer: never queue casts on a caster this machine doesn't
         -- control (last line of defense; the persistence builders filter too).
-        -- Memoize per slot — control is invariant within one build, so the
-        -- pcall-guarded reflection runs once per caster, not once per entry.
+        -- Memoize per caster key — control is invariant within one build, so
+        -- the pcall-guarded reflection runs once per caster, not once per entry.
         if BfBot.Mp and BfBot.Mp.IsLocallyControlled then
-            local controlled = controlCache[casterSlot]
+            local controlled = controlCache[casterKey]
             if controlled == nil then
                 controlled = BfBot.Mp.IsLocallyControlled(casterSprite) and true or false
-                controlCache[casterSlot] = controlled
+                controlCache[casterKey] = controlled
             end
             if not controlled then
-                BfBot.Exec._LogEntry("SKIP", "Entry " .. i .. ": caster in slot "
-                    .. casterSlot .. " not locally controlled (multiplayer)")
+                local where = casterRef.kind == "party"
+                    and ("in slot " .. casterRef.slot) or casterKey
+                BfBot.Exec._LogEntry("SKIP", "Entry " .. i .. ": caster "
+                    .. where .. " not locally controlled (multiplayer)")
                 goto continue
             end
         end
@@ -307,9 +340,12 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         local splstates = classResult and classResult.splstates or {}
         local spellName = spellData.name or resref
 
-        -- Resolve targets
+        -- Resolve targets (self-targets record the caster's party slot when
+        -- there is one; summon casters have no slot — Lua 0-truthy makes the
+        -- `and slot` form safe for slot 0)
         local targets = BfBot.Exec._ResolveTargets(
-            entry.target, casterSprite, casterSlot, isAoE
+            entry.target, casterSprite,
+            casterRef.kind == "party" and casterRef.slot or nil, isAoE
         )
 
         if #targets == 0 then
@@ -317,8 +353,8 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             goto continue
         end
 
-        -- Group by caster slot
-        byCaster[casterSlot] = byCaster[casterSlot] or {}
+        -- Group by caster key
+        byCaster[casterKey] = byCaster[casterKey] or {}
 
         -- Determine cheat tagging for quick cast mode
         local isCheat = false
@@ -330,9 +366,10 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         end
 
         for _, tgt in ipairs(targets) do
-            table.insert(byCaster[casterSlot], {
-                casterSlot = casterSlot,
-                casterSprite = casterSprite,
+            -- No casterSprite on the entry: exec-time code must resolve fresh
+            -- via _ResolveCaster every step, never through build-time userdata.
+            table.insert(byCaster[casterKey], {
+                casterRef = casterRef,
                 casterName = casterName,
                 resref = resref,
                 spellName = spellName,
@@ -362,7 +399,12 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
 end
 
 --- Pre-flight checks for a single queue entry.
-function BfBot.Exec._CheckEntry(entry)
+-- @param entry table: the queue entry
+-- @param casterSprite userdata: the caster, freshly resolved by the caller
+--     this step (_ProcessCasterEntry) — entries carry no caster userdata.
+--     Target-side checks stay on entry.targetSprite (party targets; stale
+--     detection covers them).
+function BfBot.Exec._CheckEntry(entry, casterSprite)
     if BfBot.Exec._state ~= "running" then
         return false
     end
@@ -370,15 +412,15 @@ function BfBot.Exec._CheckEntry(entry)
     local label = entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
 
     -- Caster alive
-    if not BfBot.Exec._IsAlive(entry.casterSprite) then
+    if not BfBot.Exec._IsAlive(casterSprite) then
         BfBot.Exec._LogEntry("SKIP", label .. " (caster dead)")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
         return false
     end
 
     -- Spell slot available (invalidate cache to get fresh count)
-    BfBot.Scan.Invalidate(entry.casterSprite)
-    local spells = BfBot.Scan.GetCastableSpells(entry.casterSprite)
+    BfBot.Scan.Invalidate(casterSprite)
+    local spells = BfBot.Scan.GetCastableSpells(casterSprite)
     local spellData = spells and spells[entry.resref]
     if not spellData or spellData.count <= 0 then
         BfBot.Exec._LogEntry("SKIP", label .. " (no slot)")
@@ -436,11 +478,36 @@ function BfBot.Exec._CheckEntry(entry)
     return true
 end
 
+--- Finish the chain of a caster whose ref no longer resolves to a live
+--- sprite (dead/expired summon, emptied portrait slot). Marks it done,
+--- decrements the active count, completes the run when it was the last one.
+--- Per-caster and clean by design: a gone summon must never reset or stall
+--- the whole run (issue #19).
+function BfBot.Exec._FinishGoneCaster(caster)
+    if caster.done then return end
+    caster.done = true
+    BfBot.Exec._activeCasters = BfBot.Exec._activeCasters - 1
+    BfBot.Exec._LogEntry("INFO", caster.name .. " gone — finishing chain")
+    if BfBot.Exec._activeCasters <= 0 then
+        BfBot.Exec._Complete()
+    end
+end
+
 --- Process a caster's queue entry at the given index.
 -- Each caster runs their own chain independently.
-function BfBot.Exec._ProcessCasterEntry(slot, index)
-    local caster = BfBot.Exec._casters[slot]
+-- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
+function BfBot.Exec._ProcessCasterEntry(key, index)
+    local caster = BfBot.Exec._casters[key]
     if not caster then return end
+
+    -- Fresh-resolve the caster EVERY step — records/entries carry no sprite
+    -- userdata (issues #38/#19). A caster that no longer resolves finishes
+    -- its chain cleanly instead of dereferencing a stale pointer.
+    local sprite = BfBot.Exec._ResolveCaster(caster.ref)
+    if not sprite then
+        BfBot.Exec._FinishGoneCaster(caster)
+        return
+    end
 
     -- Watchdog: any caster stepping through its queue counts as forward progress.
     BfBot.Exec._NoteProgress()
@@ -465,21 +532,21 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
     local entry = caster.queue[index]
 
     -- Pre-flight checks — skip immediately recurses to next
-    if not BfBot.Exec._CheckEntry(entry) then
-        BfBot.Exec._ProcessCasterEntry(slot, index + 1)
+    if not BfBot.Exec._CheckEntry(entry, sprite) then
+        BfBot.Exec._ProcessCasterEntry(key, index + 1)
         return
     end
 
     -- Safety: variant spell with no variant configured — skip
     if not entry.var then
-        local scanSpells = BfBot.Scan.GetCastableSpells(entry.casterSprite)
+        local scanSpells = BfBot.Scan.GetCastableSpells(sprite)
         local spellScan = scanSpells and scanSpells[entry.resref]
         if spellScan and spellScan.hasVariants == 1 then
             BfBot.Exec._LogEntry("SKIP",
                 entry.casterName .. " -> " .. entry.spellName
                 .. " (variant spell — no variant configured)")
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
-            BfBot.Exec._ProcessCasterEntry(slot, index + 1)
+            BfBot.Exec._ProcessCasterEntry(key, index + 1)
             return
         end
     end
@@ -489,42 +556,50 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
     if caster.cheatBoundary > 0 then
         if entry.cheat and not caster.cheatApplied then
             EEex_Action_QueueResponseStringOnAIBase(
-                'ReallyForceSpellRES("BFBTCH",Myself)', entry.casterSprite)
+                'ReallyForceSpellRES("BFBTCH",Myself)', sprite)
             caster.cheatApplied = true
             BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast ON")
         elseif not entry.cheat and caster.cheatApplied then
             EEex_Action_QueueResponseStringOnAIBase(
-                'ReallyForceSpellRES("BFBTCR",Myself)', entry.casterSprite)
+                'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
             caster.cheatApplied = false
             BfBot.Exec._LogEntry("INFO", entry.casterName .. " Quick Cast OFF")
         end
     end
 
-    -- Cast the spell
-    local advanceAction = string.format('EEex_LuaAction("BfBot.Exec._Advance(%d)")', slot)
+    -- Cast the spell. The advance callback embeds the caster key as a Lua
+    -- LONG-BRACKET string literal:
+    --   EEex_LuaAction("BfBot.Exec._Advance([[p0]])")
+    -- NOT single quotes: the BCS tokenizer strips single quotes inside a
+    -- double-quoted action argument (verified live 2026-07-11 — 'p0' arrives
+    -- as the nil global p0). Caster keys are alphanumeric by construction
+    -- ("^p%d$" / "^s%d+$"), so "]]" can never appear in a key; long brackets
+    -- are therefore always safe here.
+    local advanceAction = string.format(
+        "EEex_LuaAction(\"BfBot.Exec._Advance([[%s]])\")", key)
 
     if entry.var then
         -- Variant spell path: consume parent spell slot, then cast the variant
         -- directly via ReallyForceSpellRES (variant SPL is not in the spellbook)
-        if not BfBot.Exec._ConsumeSpellSlot(entry.casterSprite, entry.resref) then
+        if not BfBot.Exec._ConsumeSpellSlot(sprite, entry.resref) then
             BfBot.Exec._LogEntry("SKIP",
                 entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
                 .. " (no slot for variant)")
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
-            BfBot.Exec._ProcessCasterEntry(slot, index + 1)
+            BfBot.Exec._ProcessCasterEntry(key, index + 1)
             return
         end
         local varAction = string.format('ReallyForceSpellRES("%s",%s)', entry.var, entry.targetObj)
-        EEex_Action_QueueResponseStringOnAIBase(varAction, entry.casterSprite)
-        EEex_Action_QueueResponseStringOnAIBase(advanceAction, entry.casterSprite)
+        EEex_Action_QueueResponseStringOnAIBase(varAction, sprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
         BfBot.Exec._LogEntry("CAST",
             entry.casterName .. " -> " .. entry.spellName .. " [" .. entry.var .. "] -> " .. entry.targetName)
         BfBot.Exec._castCount = BfBot.Exec._castCount + 1
     else
         -- Normal path: queue SpellRES action (engine handles slot consumption)
         local spellAction = string.format('SpellRES("%s",%s)', entry.resref, entry.targetObj)
-        EEex_Action_QueueResponseStringOnAIBase(spellAction, entry.casterSprite)
-        EEex_Action_QueueResponseStringOnAIBase(advanceAction, entry.casterSprite)
+        EEex_Action_QueueResponseStringOnAIBase(spellAction, sprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
         BfBot.Exec._LogEntry("CAST",
             entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName)
         BfBot.Exec._castCount = BfBot.Exec._castCount + 1
@@ -532,11 +607,18 @@ function BfBot.Exec._ProcessCasterEntry(slot, index)
 end
 
 --- Called by the engine via EEex_LuaAction after a caster's spell completes.
--- @param slot number: the caster's party slot (0-5)
-function BfBot.Exec._Advance(slot)
+-- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
+function BfBot.Exec._Advance(key)
     if BfBot.Exec._state ~= "running" then return end
-    local caster = BfBot.Exec._casters[slot]
+    local caster = BfBot.Exec._casters[key]
     if not caster or caster.done then return end
+
+    -- Caster vanished between steps (summon expired/killed, slot emptied):
+    -- finish its chain cleanly before touching anything sprite-related.
+    if not BfBot.Exec._ResolveCaster(caster.ref) then
+        BfBot.Exec._FinishGoneCaster(caster)
+        return
+    end
 
     -- Combat detection: abort all casters if hostiles detected
     if BfBot.Exec._DetectCombat() then
@@ -553,17 +635,16 @@ function BfBot.Exec._Advance(slot)
         return
     end
 
-    BfBot.Exec._ProcessCasterEntry(slot, caster.index + 1)
+    BfBot.Exec._ProcessCasterEntry(key, caster.index + 1)
 end
 
---- Reset all execution state without dereferencing cached sprites.
---- Used to recover from save-reload mid-cast (issue #38), where _casters
---- holds freed CGameSprite pointers from the pre-reload party. Calling
---- into the engine on those pointers would segfault — clear the table
---- first, never touch caster.sprite. Caller is responsible for closing
---- the exec log (see Stop / _Complete recovery branches); this keeps the
---- function side-effect free so the in-game test suite can capture its
---- own output to the log around each subtest.
+--- Reset all execution state without touching engine memory.
+--- Used to recover from save-reload mid-cast (issue #38). Caster records
+--- hold plain refs (never sprite userdata), so clearing the table is pure
+--- Lua — no engine pointer is ever dereferenced here. Caller is responsible
+--- for closing the exec log (see Stop / _Complete recovery branches); this
+--- keeps the function side-effect free so the in-game test suite can capture
+--- its own output to the log around each subtest.
 function BfBot.Exec._HardReset()
     BfBot.Exec._state         = "idle"
     BfBot.Exec._casters       = {}
@@ -576,9 +657,9 @@ function BfBot.Exec._HardReset()
 end
 
 --- Detect stale execution state from a save reload mid-cast.
---- After loading a save while casting, _casters[].sprite still holds
---- freed CGameSprite pointers from the pre-reload party. We can't safely
---- compare sprite identity directly — EEex returns a fresh userdata
+--- After loading a save while casting, the EEex_LuaAction chains driving
+--- _Advance are gone, so _state would stay "running" forever. Sprite
+--- identity can't be compared directly — EEex returns a fresh userdata
 --- wrapper per call to EEex_Sprite_GetInPortrait, and `==` falls through
 --- to a __eq metamethod that does NOT pointer-compare the wrapped
 --- CGameSprite (verified empirically with two consecutive calls returning
@@ -590,16 +671,21 @@ end
 --- references engine memory. This catches the "different-party-composition
 --- reload" case (e.g. user reloads to before recruiting an NPC). It does
 --- NOT catch the "same-save reload" case where party composition is
---- unchanged — Stop's cleanup loop must independently re-resolve sprites
---- from the portrait so it doesn't dereference cached caster.sprite.
---- @return boolean: true if state is "running" but at least one caster's
----     cached name no longer matches the current portrait at that slot.
+--- unchanged — cleanup loops always resolve fresh via _ResolveCaster and
+--- never hold sprite userdata across steps.
+---
+--- Only PARTY refs participate: a summon caster's staleness is per-step
+--- (_ResolveCaster returning nil finishes that one chain cleanly, see
+--- _FinishGoneCaster) and must never reset the whole run.
+--- @return boolean: true if state is "running" but at least one party
+---     caster's cached name no longer matches the portrait at its slot.
 function BfBot.Exec._IsStateStale()
     if BfBot.Exec._state ~= "running" then return false end
 
-    for slot, caster in pairs(BfBot.Exec._casters) do
-        if caster.name then
-            local fresh = EEex_Sprite_GetInPortrait(slot)
+    for _, caster in pairs(BfBot.Exec._casters) do
+        local ref = caster.ref
+        if ref and ref.kind == "party" and caster.name then
+            local fresh = EEex_Sprite_GetInPortrait(ref.slot)
             local freshName = fresh and BfBot._GetName(fresh) or nil
             if freshName ~= caster.name then return true end
         end
@@ -608,16 +694,18 @@ function BfBot.Exec._IsStateStale()
     return false
 end
 
---- Strip lingering quick-cast (BFBTCH) buffs from every caster. Re-resolves each
---- sprite from its portrait slot rather than dereferencing cached caster.sprite —
---- that userdata wraps a freed CGameSprite after a save reload (issue #38), and
---- pcall does NOT catch the engine-level access violation. BFBTCR is a no-op on a
---- target without an active BFBTCH, so this is safe even if the slot now holds a
---- different character. Shared by _Complete, Stop, and _ForceComplete.
+--- Strip lingering quick-cast (BFBTCH) buffs from every caster. Resolves each
+--- sprite fresh via _ResolveCaster rather than holding userdata on the record —
+--- cached userdata wraps a freed CGameSprite after a save reload (issue #38),
+--- and pcall does NOT catch the engine-level access violation. BFBTCR is a
+--- no-op on a target without an active BFBTCH, so this is safe even if a
+--- party slot now holds a different character; a summon caster that no longer
+--- resolves needs no cleanup (its effects died with it). Shared by _Complete,
+--- Stop, and _ForceComplete.
 function BfBot.Exec._StripCheatBuffs()
-    for slot, caster in pairs(BfBot.Exec._casters) do
+    for _, caster in pairs(BfBot.Exec._casters) do
         if caster.cheatApplied then
-            local sprite = EEex_Sprite_GetInPortrait(slot)
+            local sprite = BfBot.Exec._ResolveCaster(caster.ref)
             if sprite then
                 pcall(function()
                     EEex_Action_QueueResponseStringOnAIBase(
@@ -638,8 +726,8 @@ function BfBot.Exec._Complete()
         return
     end
 
-    -- Clean up lingering cheat buffs — re-resolve sprite from portrait,
-    -- never dereference cached caster.sprite (see Stop() rationale).
+    -- Clean up lingering cheat buffs — resolves each caster fresh,
+    -- never through cached userdata (see Stop() rationale).
     BfBot.Exec._StripCheatBuffs()
 
     BfBot.Exec._state = "done"
@@ -653,8 +741,8 @@ function BfBot.Exec._Complete()
 end
 
 --- Force-complete a stuck run (watchdog). Strips lingering cheat buffs the
---- same way _Complete/Stop do — re-resolving each sprite from its portrait slot,
---- never dereferencing cached caster.sprite (it may wrap a freed CGameSprite
+--- same way _Complete/Stop do — resolving each caster fresh via its ref,
+--- never through cached sprite userdata (that would wrap a freed CGameSprite
 --- after a save reload; pcall does not catch that access violation).
 ---
 --- Invoked when a caster's _Advance chain never fires. The motivating case is
@@ -718,14 +806,14 @@ function BfBot.Exec.Start(queue, qcMode)
         or BfBot.Exec._qcMode == 1 and " (Quick Cast: Long)" or ""
     BfBot._Print("[BuffBot] === Starting Execution: " .. totalEntries .. " entries" .. qcLabel .. " ===")
 
-    -- Sort caster slots for deterministic display order
-    local slots = {}
-    for slot, _ in pairs(byCaster) do table.insert(slots, slot) end
-    table.sort(slots)
+    -- Sort caster keys for deterministic display order ("p0".."p5" sort
+    -- ahead of "s<oid>" lexicographically — party first, then summons)
+    local keys = {}
+    for key, _ in pairs(byCaster) do table.insert(keys, key) end
+    table.sort(keys)
 
-    for _, slot in ipairs(slots) do
-        local entries = byCaster[slot]
-        local sprite = entries[1].casterSprite
+    for _, key in ipairs(keys) do
+        local entries = byCaster[key]
         local name = entries[1].casterName
 
         -- Quick Cast: cheatBoundary > 0 means this caster has cheat entries.
@@ -737,11 +825,13 @@ function BfBot.Exec.Start(queue, qcMode)
             end
         end
 
-        BfBot.Exec._casters[slot] = {
+        -- No sprite userdata on the record: every exec step resolves fresh
+        -- from the ref (issues #38/#19).
+        BfBot.Exec._casters[key] = {
+            ref = entries[1].casterRef,
             queue = entries,
             index = 0,
             done = false,
-            sprite = sprite,
             name = name,
             cheatBoundary = cheatBoundary,
             cheatApplied = false,
@@ -761,8 +851,8 @@ function BfBot.Exec.Start(queue, qcMode)
     -- Go — start ALL casters simultaneously
     BfBot.Exec._state = "running"
     BfBot.Exec._NoteProgress()  -- arm the watchdog timer
-    for _, slot in ipairs(slots) do
-        BfBot.Exec._ProcessCasterEntry(slot, 1)
+    for _, key in ipairs(keys) do
+        BfBot.Exec._ProcessCasterEntry(key, 1)
     end
 
     return true
@@ -787,12 +877,11 @@ function BfBot.Exec.Stop()
     end
     BfBot.Exec._state = "stopped"
 
-    -- Clean up lingering cheat buffs. Re-resolve the sprite from the
-    -- current portrait slot rather than using cached caster.sprite — that
-    -- userdata wraps a freed CGameSprite pointer if the user reloaded a
-    -- save mid-cast (issue #38), and pcall does NOT catch the access
-    -- violation that engine calls would trigger on the freed pointer.
-    -- This re-resolution is safe even when _IsStateStale missed a same-
+    -- Clean up lingering cheat buffs. Casters are resolved fresh from their
+    -- refs — records hold no sprite userdata, which after a save reload
+    -- mid-cast would wrap a freed CGameSprite pointer (issue #38); pcall
+    -- does NOT catch the access violation engine calls would trigger on it.
+    -- This fresh resolution is safe even when _IsStateStale missed a same-
     -- party reload: BFBTCR is a no-op on targets without an active BFBTCH.
     BfBot.Exec._StripCheatBuffs()
 
@@ -803,7 +892,8 @@ function BfBot.Exec.Stop()
     BfBot._CloseLog()
 end
 
---- Paranoid safety net: remove orphaned BFBTCH effects from any party member.
+--- Paranoid safety net: remove orphaned BFBTCH effects from any party member
+-- (baseline sweep) plus any summon casters of the current/last run.
 -- Called every frame by .menu enabled tick, rate-limited to ~2 seconds.
 -- NOT toggleable — this is the hard safety guarantee.
 function BfBot.Exec._SafetyTick()
@@ -861,20 +951,38 @@ function BfBot.Exec._SafetyTick()
     for i = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(i)
         if sprite then
-            local hasCheat = BfBot.Exec._HasActiveEffect(sprite, "BFBTCH")
-            if hasCheat then
-                pcall(function()
-                    EEex_Action_QueueResponseStringOnAIBase(
-                        'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
-                end)
-                -- Open exec log briefly to persist the warning to disk
-                BfBot._OpenLogAppend(BfBot.Exec._logFile)
-                BfBot.Exec._LogEntry("WARN",
-                    "Safety net: removed orphaned BFBTCH from " .. BfBot._GetName(sprite))
-                BfBot._CloseLog()
+            BfBot.Exec._SweepOrphanCheat(sprite)
+        end
+    end
+
+    -- Also sweep summon casters from the current/last run — they are not
+    -- covered by the portrait loop above. Fresh-resolve via the ref; a
+    -- summon that no longer resolves needs no cleanup (its effects died
+    -- with it). Party refs are skipped here (portrait loop covers them).
+    for _, caster in pairs(BfBot.Exec._casters) do
+        if caster.ref and caster.ref.kind == "summon" then
+            local sprite = BfBot.Exec._ResolveCaster(caster.ref)
+            if sprite then
+                BfBot.Exec._SweepOrphanCheat(sprite)
             end
         end
     end
+end
+
+--- Remove an orphaned BFBTCH effect from one sprite, logging a WARN when
+--- one was found. Factored out of _SafetyTick so the party-portrait sweep
+--- and the summon-caster sweep share the exact same cleanup.
+function BfBot.Exec._SweepOrphanCheat(sprite)
+    if not BfBot.Exec._HasActiveEffect(sprite, "BFBTCH") then return end
+    pcall(function()
+        EEex_Action_QueueResponseStringOnAIBase(
+            'ReallyForceSpellRES("BFBTCR",Myself)', sprite)
+    end)
+    -- Open exec log briefly to persist the warning to disk
+    BfBot._OpenLogAppend(BfBot.Exec._logFile)
+    BfBot.Exec._LogEntry("WARN",
+        "Safety net: removed orphaned BFBTCH from " .. BfBot._GetName(sprite))
+    BfBot._CloseLog()
 end
 
 --- Get current execution state.
