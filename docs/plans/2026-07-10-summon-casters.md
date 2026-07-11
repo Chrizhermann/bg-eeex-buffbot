@@ -8,7 +8,7 @@
 
 **Goal:** Let allied clones (Project Image / Simulacrum) and, generically, any allied spellcasting summon act as additional BuffBot casters, with first-class per-identity preset config, a "Summons" view switch in the panel, joint + standalone firing, and mid-run late-join.
 
-**Architecture:** Casters stop being portrait slots: a caster reference (`"p<slot>"` / `"s<objectID>"`) with a central live-sprite resolver replaces slot keying in the exec engine (freed-pointer discipline per issue #38, object-ID based for summons). Detection is structural (allied + not-party + has castable spells, from the live area). Config is keyed by summon *identity* (clone→owner, summon→scriptname/CRE-resref) under a new `summons` table in the protagonist's schema-v7 config, same shape as character presets so the existing UI/list code is reused via a view switch.
+**Architecture:** Casters stop being portrait slots: a caster reference (`"p<slot>"` / `"s<objectID>"`) with a central live-sprite resolver replaces slot keying in the exec engine (freed-pointer discipline per issue #38, object-ID based for summons). Detection is structural (allied + not-party + has castable spells, from the live area). Config is keyed by summon *identity* (clone→owner, summon→scriptname/CRE-resref) under a new `summons` table in the protagonist's schema-v8 config, same shape as character presets so the existing UI/list code is reused via a view switch.
 
 **Tech Stack:** EEex Lua (BG2:EE), `.menu` UI DSL, EEex remote console for headless testing, in-game test suite (`BfBot.Test.RunAll()`).
 
@@ -310,7 +310,7 @@ Each hit → `{oid, sprite, name, kind = "clone"|"summon" (clone iff `m_bInCopy`
 
 ---
 
-### Task 6: Schema v7 + summon config accessors + clone seeding
+### Task 6: Schema v8 + summon config accessors + clone seeding
 
 **Files:**
 - Modify: `buffbot/BfBotPer.lua` — schema constant + `_Refresh` migration (find the v5→v6 lazy-migration block for the pattern), new accessor section near `GetConfig` (~line 404)
@@ -318,9 +318,10 @@ Each hit → `{oid, sprite, name, kind = "clone"|"summon" (clone iff `m_bInCopy`
 
 **Step 1 — failing tests** (pure-Lua, no live summons needed):
 ```lua
--- v6 -> v7 migration adds summons table (protagonist config)
+-- v7 -> v8 migration adds summons table (protagonist config)
+-- NOTE: v7 is already taken on this branch (spell-lock); summons bump is v8
 local cfg = BfBot.Persist.GetConfig(EEex_Sprite_GetInPortrait(0))
-chk(cfg.v == 7, "schema v7")
+chk(cfg.v == 8, "schema v8")
 local prot = BfBot.Persist._GetProtagonistConfig()
 chk(prot and type(prot.summons) == "table", "protagonist summons table")
 -- accessor creates + seeds lazily; summon (non-clone) seeds empty
@@ -335,14 +336,14 @@ chk(seeded.SPWI305 and seeded.SPWI305.on == 1 and seeded.SPWI999 == nil, "clone 
 
 **Step 2 — implement:**
 - `_GetProtagonist()`: loop portraits 0-5, return sprite with `EEex_Sprite_GetCharacterIndex(sprite) == 0`.
-- Migration in `_Refresh`: `if config.v == 6 then config.v = 7; config.summons = config.summons or {} end` (summons table lives in every config but only the protagonist's is read — simplest uniform bump; document that).
+- Migration in `_Refresh`: `if config.v == 7 then config.v = 8; config.summons = config.summons or {} end` (summons table lives in every config but only the protagonist's is read — simplest uniform bump; document that).
 - `GetSummonPreset(identity, presetIdx, seedCtx)` → `prot.summons[identity].presets[presetIdx]`, creating `{qc=0, spells={}}` lazily; when creating for a clone identity and `seedCtx = {ownerSprite=…, cloneSprite=…}` is given, `spells = _SeedCloneSpells(ownerPreset, GetCastableSpells(cloneSprite))` (deep-copy on/tgt/pri/var).
 - `_SeedCloneSpells(ownerPreset, cloneCastable)` pure function as tested.
 - Export/import: include `summons` in the exported table (find the export serializer; it already walks the config — verify nested tables of this depth marshal + export cleanly; the marshaler is number/string/table-safe by construction).
 
 **Step 3:** Deploy, reload BfBotPer + BfBotTst, run phase → green. Save + reload the game once, re-run `chk(cfg.v == 7 …)` to prove the marshal round-trip survives.
 
-**Commit:** `feat(summon): schema v7 — per-identity summon presets on protagonist config, clone seeding (#19)`
+**Commit:** `feat(summon): schema v8 — per-identity summon presets on protagonist config, clone seeding (#19)`
 
 ---
 
@@ -509,8 +510,8 @@ Per the MP rule recorded in Task 2 Step 3 (conservative default, **no 2-machine 
 
 1. Full `RunAll()` green on the test install; read all three logs.
 2. ⚠️ **USER CHECKPOINT** — final manual pass: party-only regression, clone standalone, joint fire, late-join, view UX.
-3. `CHANGELOG.md`: `v1.6.0-alpha — summons & clones as casters` (feature summary, MP caveat, schema v7 note: saves upgrade lazily, downgrade unsupported). NO `--prerelease` flag on any release (project rule).
-4. `CLAUDE.md`: add module-facts (schema v7 shape, `GetAlliedSummons` filters, caster-key format) to the invariants section — short.
+3. `CHANGELOG.md`: `v1.6.0-alpha — summons & clones as casters` (feature summary, MP caveat, schema v8 note: saves upgrade lazily, downgrade unsupported). NO `--prerelease` flag on any release (project rule).
+4. `CLAUDE.md`: add module-facts (schema v8 shape, `GetAlliedSummons` filters, caster-key format) to the invariants section — short. Note: CLAUDE.md still says "Config schema v6" — it is v7 on this branch already (spell-lock); correct it while there.
 5. `bg-modding-learn`: record any further verified findings from Tasks 8–13.
 6. Issue #19: comment "implemented on feat/summon-casters @ <sha>, verified scenarios: …", tick the body's task list.
 7. PR `feat/summon-casters` → `main` (personal account `Chrizhermann`), body ends with the standard generated-with footer. Merge + release only on user go-ahead.
