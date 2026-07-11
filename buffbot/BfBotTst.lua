@@ -2033,26 +2033,45 @@ function BfBot.Test.PlanReconciliation()
     for i = 1, BfBot.MAX_PRESETS do allPresets[i] = {} end
     local probe = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
         { presets = allPresets })
-    if probe.hasMismatch then
-        -- Every preset is desired in the probe, so a mismatch means
-        -- duplicated entries (legacy v1.3.9 accumulation) or a BFBT resref
-        -- with an out-of-range preset digit — hasMismatch would then be
-        -- true regardless of the configs below and Cases 3/5 can't assert
-        -- anything meaningful.
+
+    -- Judge the save's dirtiness from probe.actual itself, NOT from the
+    -- planner's hasMismatch: dirty = a duplicated entry (legacy v1.3.9
+    -- accumulation) or a preset digit outside 1..MAX_PRESETS. On a dirty
+    -- save hasMismatch is true regardless of the configs below, so Cases
+    -- 3/5 can't assert anything meaningful — skip. On a CLEAN actual set,
+    -- though, every entry is desired by the all-presets probe config, so
+    -- planner-reported hasMismatch is an over-report regression (would
+    -- cause spurious revoke-all/regrant churn in Refresh) — that must
+    -- FAIL loudly, or the regression hides behind a permanently-skipped
+    -- phase and RunAll stays green.
+    local realPresets, probeDirty = {}, false
+    for resref, count in pairs(probe.actual) do
+        local rp = tonumber(resref:match("^BFBT%d(%d)$"))
+        if count > 1 or not rp or rp < 1 or rp > BfBot.MAX_PRESETS then
+            probeDirty = true
+        else
+            realPresets[rp] = true
+        end
+    end
+    if probeDirty then
         _warning("sprite carries duplicated/unknown BFBT entries — skipping"
             .. " (open the BuffBot panel once to reconcile, then re-run)")
         return _summary("PlanReconciliation")
     end
-    local realPresets = {}
-    for resref in pairs(probe.actual) do
-        local rp = tonumber(resref:match("^BFBT%d(%d)$"))
-        if rp then realPresets[rp] = true end
+    if probe.hasMismatch then
+        _nok("all-presets probe reports hasMismatch on a clean actual set"
+            .. " — planner over-report (would cause revoke/regrant churn)")
+        return _summary("PlanReconciliation")
     end
     if realPresets[syntheticPreset] or realPresets[missingPreset] then
         -- Preset 7 or 8 really granted: the synthetic grant would alias the
         -- user's real innate and the opcode-172 cleanup in Case 8 would
         -- revoke it — a user-visible state mutation. Bail out instead.
-        _warning("preset " .. syntheticPreset .. " or " .. missingPreset
+        local collided = {}
+        for _, cp in ipairs({ syntheticPreset, missingPreset }) do
+            if realPresets[cp] then collided[#collided + 1] = cp end
+        end
+        _warning("preset(s) " .. table.concat(collided, " and ")
             .. " really granted on sprite — skipping to protect user innates")
         return _summary("PlanReconciliation")
     end
