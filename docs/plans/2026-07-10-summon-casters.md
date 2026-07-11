@@ -16,7 +16,7 @@
 
 **Conventions for every task:**
 - Deploy: `bash tools/deploy.sh` (after Task 1 this targets the TEST install `modded - Copy - Copy`).
-- Reload one module in the running game: remote console `Infinity_DoFile("BfBotXxx")`.
+- Reload one module in the running game: **`Infinity_DoFile` serves a memory cache and does NOT reread disk** (verified again 2026-07-11; see `eeex-filesystem.md`). Force-reload via the documented `io.open` + `loadstring` pattern: `forceLoad("override/BfBotXxx.lua")` sent through the remote console — or ask the user for a game restart when many modules changed / listener re-registration is a concern (Persist.Init/Innate.Init must not run twice).
 - Remote console (game must be on world screen, unpaused; single-line Lua only, no heredocs — CRLF breaks loadstring):
   `bash /c/src/private/eeex-remote-console/tools/eeex-remote.sh "c:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy/override" '<lua>'`
 - After every deploy+run, read `buffbot_test.log` / `buffbot_exec.log` / `buffbot_innate.log` in the game dir directly (never ask for console screenshots).
@@ -456,7 +456,9 @@ end
 EEex_Sprite_AddLoadedListener(function(sprite)
     if BfBot.Exec._state ~= "running" then return end
     if BfBot.Exec._runPresetIdx == nil then return end          -- set by Start()
-    pcall(function()
+    -- NOT a bare pcall: check the result and BfBot._Warn on failure (silent-pcall landmine —
+    -- a structurally broken listener would silently disable late-join forever).
+    local ok, err = pcall(function()
         if EEex_Sprite_GetPortraitIndex(sprite) ~= -1 then return end
         -- structural filter reused (single-sprite form of GetAlliedSummons):
         local e = BfBot.Scan.ClassifySummonSprite(sprite)        -- nil if not allied castable summon

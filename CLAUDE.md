@@ -66,7 +66,7 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 ## Workflow
 
 - **Deploy**: `bash tools/deploy.sh` (reads `tools/deploy.conf` for game dir).
-- **Reload in running game**: `Infinity_DoFile("BfBotX")` for the changed module(s) — avoids a full restart.
+- **Reload in running game**: `Infinity_DoFile` serves a memory cache and does NOT reread disk (verified 2026-04-19, re-confirmed 2026-07-11). Force-reload a changed module from disk via the `io.open`+`loadstring` pattern in `eeex-filesystem.md` (`forceLoad("override/BfBotX.lua")`, e.g. through the remote console); restart the game instead when many modules changed or init/listener re-registration is a concern.
 - **Tests**: `BfBot.Test.RunAll()` in the in-game console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
 - **Remote console** (headless testing): `bash /c/src/private/eeex-remote-console/tools/eeex-remote.sh "<game>/override" "<lua>"`. Game must be on the world screen.
 - **Branch vs main**: small code change → main; bigger work → feature branch. Design in GitHub issues, not `docs/plans/`.
