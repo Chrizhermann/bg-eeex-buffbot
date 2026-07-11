@@ -2002,7 +2002,8 @@ function BfBot.Test.PlanReconciliation()
     -- Pick any party slot with a sprite. We bootstrap our own BFBT state via
     -- INSTANT.IDS AddSpecialAbility, so this test does NOT depend on prior
     -- BuffBot panel use — works on a freshly-loaded save where the
-    -- AddLoadedListener hasn't fired yet.
+    -- AddLoadedListener hasn't fired yet. REAL granted innates from prior
+    -- panel use are merged into the synthetic configs below (issue #56).
     local sprite, slotIdx
     for s = 0, 5 do
         local sp = EEex_Sprite_GetInPortrait(s)
@@ -2013,11 +2014,61 @@ function BfBot.Test.PlanReconciliation()
         return _summary("PlanReconciliation")
     end
 
-    -- Inject a synthetic BFBT entry the planner can detect. Preset 7 is
-    -- intentional: default configs carry presets 1-2 and the user would have
-    -- to manually create up to preset 7 to collide. AddSpecialAbility IS in
-    -- INSTANT.IDS so the grant lands synchronously.
+    -- Synthetic presets 7/8 are intentional: default configs carry presets
+    -- 1-2 and the user would have to manually create up to preset 7 to
+    -- collide (guarded below).
     local syntheticPreset = 7
+    local missingPreset = 8
+
+    -- The sprite may carry REAL granted BFBT innates (issue #56 — the
+    -- normal state on any save after panel use with innates enabled). The
+    -- planner correctly reports those as orphans relative to a synthetic-
+    -- only config, so derive the real granted presets up front (probe the
+    -- planner once with an all-presets config, parse the preset digit out
+    -- of each actual resref) and merge them into every synthetic config in
+    -- Cases 3-5. Must run BEFORE the synthetic grant below so the synthetic
+    -- preset never leaks into realPresets (Case 4 relies on it being absent
+    -- from desired).
+    local allPresets = {}
+    for i = 1, BfBot.MAX_PRESETS do allPresets[i] = {} end
+    local probe = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+        { presets = allPresets })
+    if probe.hasMismatch then
+        -- Every preset is desired in the probe, so a mismatch means
+        -- duplicated entries (legacy v1.3.9 accumulation) or a BFBT resref
+        -- with an out-of-range preset digit — hasMismatch would then be
+        -- true regardless of the configs below and Cases 3/5 can't assert
+        -- anything meaningful.
+        _warning("sprite carries duplicated/unknown BFBT entries — skipping"
+            .. " (open the BuffBot panel once to reconcile, then re-run)")
+        return _summary("PlanReconciliation")
+    end
+    local realPresets = {}
+    for resref in pairs(probe.actual) do
+        local rp = tonumber(resref:match("^BFBT%d(%d)$"))
+        if rp then realPresets[rp] = true end
+    end
+    if realPresets[syntheticPreset] or realPresets[missingPreset] then
+        -- Preset 7 or 8 really granted: the synthetic grant would alias the
+        -- user's real innate and the opcode-172 cleanup in Case 8 would
+        -- revoke it — a user-visible state mutation. Bail out instead.
+        _warning("preset " .. syntheticPreset .. " or " .. missingPreset
+            .. " really granted on sprite — skipping to protect user innates")
+        return _summary("PlanReconciliation")
+    end
+
+    --- Config whose presets are the sprite's real granted presets plus the
+    -- given extras. Cases 3-5 must account for what is actually on the
+    -- sprite, or the planner (correctly) flags the real innates as orphans.
+    local function _cfgWith(...)
+        local presets = {}
+        for rp in pairs(realPresets) do presets[rp] = {} end
+        for _, rp in ipairs({ ... }) do presets[rp] = {} end
+        return { presets = presets }
+    end
+
+    -- Inject a synthetic BFBT entry the planner can detect.
+    -- AddSpecialAbility IS in INSTANT.IDS so the grant lands synchronously.
     local syntheticResref = string.format("BFBT%d%d", slotIdx, syntheticPreset)
     EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
         'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
@@ -2042,32 +2093,34 @@ function BfBot.Test.PlanReconciliation()
     _check(p.hasMismatch == false and next(p.desired) == nil,
         "config without presets → empty desired, no mismatch")
 
-    -- Case 3: config explicitly contains the synthetic preset → no mismatch,
-    -- synthetic entry is in both actual and desired.
+    -- Case 3: config explicitly contains the synthetic preset (plus the
+    -- real granted ones) → no mismatch, synthetic entry is in both actual
+    -- and desired.
     p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {} } })
+        _cfgWith(syntheticPreset))
     _check(p.hasMismatch == false
         and p.actual[syntheticResref] == 1
         and p.desired[syntheticResref] == true,
         "config contains preset " .. syntheticPreset .. " → no mismatch")
 
-    -- Case 4: config has different presets, missing the synthetic one
-    -- → mismatch (the orphan bug, issue #47).
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [1] = {}, [2] = {} } })
+    -- Case 4: config has different presets (the real granted ones plus
+    -- 1-2), missing the synthetic one → mismatch (the orphan bug, #47).
+    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, _cfgWith(1, 2))
     _check(p.hasMismatch == true and p.actual[syntheticResref] == 1,
         "config {1,2} + sprite has preset " .. syntheticPreset .. " → mismatch (orphan)")
 
-    -- Case 5: config requires a preset the sprite doesn't have (preset 8)
-    -- → no mismatch (orphans are sprite-side, not desired-side), and
-    -- desired contains the missing entry so the orchestrator can grant it.
+    -- Case 5: config requires a preset the sprite doesn't have (preset 8,
+    -- guarded above) → no mismatch (orphans are sprite-side, not
+    -- desired-side), and desired contains the missing entry so the
+    -- orchestrator can grant it.
     p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {}, [8] = {} } })
-    local missingResref = string.format("BFBT%d8", slotIdx)
+        _cfgWith(syntheticPreset, missingPreset))
+    local missingResref = string.format("BFBT%d%d", slotIdx, missingPreset)
     _check(p.hasMismatch == false
         and p.desired[missingResref] == true
         and p.actual[missingResref] == nil,
-        "config requires preset 8 not on sprite → no mismatch, desired has missing entry")
+        "config requires preset " .. missingPreset
+        .. " not on sprite → no mismatch, desired has missing entry")
 
     -- Case 6: foreign slot — querying a different slot must ignore the
     -- synthetic entry (which belongs to slotIdx's namespace).
