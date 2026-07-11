@@ -23,6 +23,41 @@ BfBot.Exec._lastProgressGameTime = nil  -- game-time of last forward progress (w
 -- this is a safety-net threshold, so the exact real-time it maps to is non-critical.
 BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS = 450
 
+--- Caster reference <-> canonical string key ("p<slot>" party, "s<objectID>" summon).
+function BfBot.Exec._CasterKey(ref)
+    if ref.kind == "party" then return "p" .. ref.slot end
+    return "s" .. ref.oid
+end
+
+function BfBot.Exec._ParseCasterKey(key)
+    if type(key) ~= "string" then return nil end
+    local slot = key:match("^p(%d)$")
+    if slot then return { kind = "party", slot = tonumber(slot) } end
+    local oid = key:match("^s(%d+)$")
+    if oid then return { kind = "summon", oid = tonumber(oid) } end
+    return nil
+end
+
+--- Resolve a caster ref to a LIVE sprite or nil. Never returns cached userdata.
+--- Party: portrait re-resolution (issue-#38 discipline). Summon: object-ID lookup
+--- + type/name sanity so a recycled ID never masquerades as our caster.
+function BfBot.Exec._ResolveCaster(ref)
+    if not ref then return nil end
+    if ref.kind == "party" then
+        return EEex_Sprite_GetInPortrait(ref.slot)
+    end
+    local sprite = nil
+    pcall(function()
+        local obj = EEex_GameObject_Get(ref.oid)
+        if obj and EEex_GameObject_IsSprite(obj, false) then
+            local s = EEex_GameObject_CastUserType(obj)
+            if ref.name and BfBot._GetName(s) ~= ref.name then return end
+            sprite = s
+        end
+    end)
+    return sprite
+end
+
 --- Log an execution event.
 function BfBot.Exec._LogEntry(type, msg)
     table.insert(BfBot.Exec._log, { type = type, msg = msg })

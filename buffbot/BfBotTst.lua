@@ -2721,6 +2721,34 @@ function BfBot.Test.Mp()
 end
 
 -- ============================================================
+-- BfBot.Test.SummonCasters — Caster keys + live-sprite resolver (issue #19)
+-- ============================================================
+
+function BfBot.Test.SummonCasters()
+    P("=== SummonCasters: caster keys + live-sprite resolver ===")
+    _reset()
+
+    -- Caster key round-trip
+    _check(BfBot.Exec._CasterKey({ kind = "party", slot = 3 }) == "p3", "party key")
+    _check(BfBot.Exec._CasterKey({ kind = "summon", oid = 4711 }) == "s4711", "summon key")
+    local r = BfBot.Exec._ParseCasterKey("p3")
+    _check(r and r.kind == "party" and r.slot == 3, "parse party")
+    r = BfBot.Exec._ParseCasterKey("s4711")
+    _check(r and r.kind == "summon" and r.oid == 4711, "parse summon")
+    _check(BfBot.Exec._ParseCasterKey("x9") == nil, "parse invalid")
+
+    -- Resolver: party slot 0 resolves to the leader sprite
+    local s = BfBot.Exec._ResolveCaster({ kind = "party", slot = 0 })
+    _check(s ~= nil and EEex_Sprite_GetPortraitIndex(s) == 0, "resolve party leader")
+
+    -- Resolver: bogus summon oid resolves nil, never errors
+    _check(BfBot.Exec._ResolveCaster({ kind = "summon", oid = 999999999, name = "ZZZ" }) == nil,
+        "resolve dead oid nil")
+
+    return _summary("SummonCasters")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -2786,6 +2814,10 @@ function BfBot.Test.RunAll()
     local lockOk = BfBot.Test.SpellLockPersist()
     P("")
 
+    -- Phase: Summon Casters (caster keys + resolver, issue #19)
+    local summonOk = BfBot.Test.SummonCasters()
+    P("")
+
     -- Phase: Name Strip (cdtweaks Colorize NPC Names compat)
     local nameStripOk = BfBot.Test.NameStrip()
     P("")
@@ -2836,6 +2868,7 @@ function BfBot.Test.RunAll()
     P("  Combat Safety: " .. (combatOk and "PASS" or "FAIL"))
     P("  Subwindow Selection: " .. (subwinOk and "PASS" or "FAIL"))
     P("  Spell Lock Persist: " .. (lockOk and "PASS" or "FAIL"))
+    P("  Summon Casters:     " .. (summonOk and "PASS" or "FAIL"))
     P("  Name Strip:         " .. (nameStripOk and "PASS" or "FAIL"))
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
@@ -2849,7 +2882,7 @@ function BfBot.Test.RunAll()
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk
 end
 
 -- ============================================================
