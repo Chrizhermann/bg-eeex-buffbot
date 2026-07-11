@@ -2737,6 +2737,13 @@ function BfBot.Test.SummonCasters()
     _check(r and r.kind == "summon" and r.oid == 4711, "parse summon")
     _check(BfBot.Exec._ParseCasterKey("x9") == nil, "parse invalid")
 
+    -- Malformed keys all parse to nil
+    _check(BfBot.Exec._ParseCasterKey("p") == nil, "parse bare p")
+    _check(BfBot.Exec._ParseCasterKey("p12") == nil, "parse p12 (slot is one digit)")
+    _check(BfBot.Exec._ParseCasterKey("s") == nil, "parse bare s")
+    _check(BfBot.Exec._ParseCasterKey("") == nil, "parse empty string")
+    _check(BfBot.Exec._ParseCasterKey(nil) == nil, "parse nil")
+
     -- Resolver: party slot 0 resolves to the leader sprite
     local s = BfBot.Exec._ResolveCaster({ kind = "party", slot = 0 })
     _check(s ~= nil and EEex_Sprite_GetPortraitIndex(s) == 0, "resolve party leader")
@@ -2744,6 +2751,22 @@ function BfBot.Test.SummonCasters()
     -- Resolver: bogus summon oid resolves nil, never errors
     _check(BfBot.Exec._ResolveCaster({ kind = "summon", oid = 999999999, name = "ZZZ" }) == nil,
         "resolve dead oid nil")
+
+    -- Resolver: summon-branch positive — a party sprite is a valid game object,
+    -- so resolving it via a summon ref exercises Get -> IsSprite -> CastUserType
+    -- plus the anti-recycle name guard (accept on match, reject on mismatch).
+    local leader = EEex_Sprite_GetInPortrait(0)
+    if leader then
+        local rs = BfBot.Exec._ResolveCaster({
+            kind = "summon", oid = leader.m_id, name = BfBot._GetName(leader) })
+        _check(rs ~= nil and EEex_Sprite_GetPortraitIndex(rs) == 0,
+            "resolve summon branch positive (leader oid)")
+        _check(BfBot.Exec._ResolveCaster({
+            kind = "summon", oid = leader.m_id, name = "ZZZ" }) == nil,
+            "summon name mismatch rejected")
+    else
+        _nok("no leader sprite in slot 0 for summon-branch tests")
+    end
 
     return _summary("SummonCasters")
 end

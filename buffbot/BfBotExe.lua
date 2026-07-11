@@ -29,6 +29,10 @@ function BfBot.Exec._CasterKey(ref)
     return "s" .. ref.oid
 end
 
+--- Parse a canonical caster key back into a ref table, or nil if malformed.
+--- NOTE: keys carry no `name`, so a ref rebuilt here lacks the summon
+--- anti-recycle name guard — treat keys as map keys only; always resolve
+--- from stored full refs, never from re-parsed keys.
 function BfBot.Exec._ParseCasterKey(key)
     if type(key) ~= "string" then return nil end
     local slot = key:match("^p(%d)$")
@@ -38,24 +42,34 @@ function BfBot.Exec._ParseCasterKey(key)
     return nil
 end
 
+--- Summon-branch body for _ResolveCaster, pcall-wrapped there. Split out so
+--- structural failures (API drift, typo'd field) surface as pcall errors
+--- instead of being silently swallowed into "caster gone" nils.
+local function _resolveSummon(ref)
+    local obj = EEex_GameObject_Get(ref.oid)
+    if not obj or not EEex_GameObject_IsSprite(obj, false) then return nil end
+    local s = EEex_GameObject_CastUserType(obj)
+    if ref.name and BfBot._GetName(s) ~= ref.name then return nil end
+    return s
+end
+
 --- Resolve a caster ref to a LIVE sprite or nil. Never returns cached userdata.
 --- Party: portrait re-resolution (issue-#38 discipline). Summon: object-ID lookup
 --- + type/name sanity so a recycled ID never masquerades as our caster.
+--- A dead/recycled oid resolves nil silently (normal churn); a structural error
+--- in the lookup chain is logged via _Warn so a broken resolver can't nil every
+--- summon forever behind green tests.
 function BfBot.Exec._ResolveCaster(ref)
     if not ref then return nil end
     if ref.kind == "party" then
         return EEex_Sprite_GetInPortrait(ref.slot)
     end
-    local sprite = nil
-    pcall(function()
-        local obj = EEex_GameObject_Get(ref.oid)
-        if obj and EEex_GameObject_IsSprite(obj, false) then
-            local s = EEex_GameObject_CastUserType(obj)
-            if ref.name and BfBot._GetName(s) ~= ref.name then return end
-            sprite = s
-        end
-    end)
-    return sprite
+    local ok, res = pcall(_resolveSummon, ref)
+    if not ok then
+        BfBot._Warn("[Exec] _ResolveCaster(s" .. tostring(ref.oid) .. ") failed: " .. tostring(res))
+        return nil
+    end
+    return res
 end
 
 --- Log an execution event.
