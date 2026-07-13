@@ -840,6 +840,26 @@ function BfBot.Exec._ForceComplete(reason)
     BfBot._CloseLog()
 end
 
+--- Highest 1-based index of an entry carrying the cheat flag in ONE
+--- caster's built entry list, 0 when none. Factored out of Start so the
+--- rule is testable without a live run. UNCONDITIONAL by design — no
+--- _qcMode gate: summon entries carry their identity preset's OWN
+--- precomputed cheat flag (issue #19) and must get their BFBTCH toggle
+--- even in a run started with qcMode=0 (the default UI path and the
+--- standalone summon cast). Party-inert by construction: _BuildQueue only
+--- marks party entries cheat=true when qcMode>0, so a qcMode=0 party run
+--- still derives boundary 0 everywhere.
+function BfBot.Exec._DeriveCheatBoundary(entries)
+    local boundary = 0
+    for i, e in ipairs(type(entries) == "table" and entries or {}) do
+        -- Same cheat-on predicate as _BuildQueue's normalization: only 1 or
+        -- true count, never bare truthiness — Lua 0 is TRUTHY, and builder-
+        -- level entries carry cheat as 1/0 (marshal convention).
+        if e.cheat == 1 or e.cheat == true then boundary = i end
+    end
+    return boundary
+end
+
 --- Start executing a buff queue with parallel per-caster casting.
 -- @param queue array of {caster=0-5, spell="RESREF", target="self"|"all"|1-6}
 -- @return true if started, false + reason string if not
@@ -890,13 +910,11 @@ function BfBot.Exec.Start(queue, qcMode)
         local name = entries[1].casterName
 
         -- Quick Cast: cheatBoundary > 0 means this caster has cheat entries.
-        -- IA toggles on/off per entry — no reordering by duration.
-        local cheatBoundary = 0
-        if BfBot.Exec._qcMode > 0 then
-            for i, e in ipairs(entries) do
-                if e.cheat then cheatBoundary = i end
-            end
-        end
+        -- IA toggles on/off per entry — no reordering by duration. Derived
+        -- from the entries' cheat flags unconditionally — a summon whose own
+        -- preset carries qc>0 gets its toggle even in a qcMode=0 run (see
+        -- _DeriveCheatBoundary for why this is party-inert).
+        local cheatBoundary = BfBot.Exec._DeriveCheatBoundary(entries)
 
         -- No sprite userdata on the record: every exec step resolves fresh
         -- from the ref (issues #38/#19).

@@ -3405,9 +3405,15 @@ function BfBot.Test.SummonCasters()
                 and pcs ~= nil and pcs["test:peek"] ~= nil
                 and pcs["test:peek"].presets[3] == nil,
                 "Peek on uncreated preset index stays nil, creates nothing")
-            if pcs then pcs["test:peek"] = nil end  -- shared-save hygiene
         end)
         if not ok7 then _nok("Peek block errored: " .. tostring(err7)) end
+        -- Cleanup OUTSIDE the pcall ([7.3]/[7.4] pattern): a hard error
+        -- above must never strand the synthetic identity in the shared save.
+        local pc = BfBot.Persist._GetProtagonistConfig()
+        local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+        if pcs then pcs["test:peek"] = nil end
+        _check(pcs ~= nil and pcs["test:peek"] == nil,
+            "cleanup: test:peek identity removed")
     end
 
     -- [7.2] INI kill-switch default
@@ -3816,6 +3822,242 @@ function BfBot.Test.SummonCasters()
             end
         end)
         if not ok7 then _nok("EA re-read block errored: " .. tostring(err7)) end
+    end
+
+    -- [7.8] Cheat boundary derivation is unconditional (review M1). A summon
+    -- caster's entries carry the summon preset's OWN precomputed cheat flag
+    -- (cheat=1 when its qc>0); in a run started with qcMode=0 (the default
+    -- UI path and Task 8's Exec.Start(q, 0)) Start must still derive
+    -- cheatBoundary > 0 for that caster, or the BFBTCH apply/strip block in
+    -- _ProcessCasterEntry never engages. Party entries carry no cheat flag
+    -- under qcMode=0, so their boundary stays 0 (party-inert). Synthetic
+    -- Start: _BuildQueue and _ProcessCasterEntry stubbed — no engine action
+    -- is ever queued (Watchdog-phase pattern). Checks are asserted AFTER the
+    -- restore so their output lands in the suite log, not the exec log that
+    -- Start opens.
+    if BfBot.Exec.GetState() == "running" then
+        _warning("exec currently running; skipping cheat-boundary checks")
+    else
+        local savedBuild   = BfBot.Exec._BuildQueue
+        local savedProcess = BfBot.Exec._ProcessCasterEntry
+        local saved = {
+            state        = BfBot.Exec._state,
+            casters      = BfBot.Exec._casters,
+            active       = BfBot.Exec._activeCasters,
+            log          = BfBot.Exec._log,
+            castCount    = BfBot.Exec._castCount,
+            skipCount    = BfBot.Exec._skipCount,
+            total        = BfBot.Exec._totalEntries,
+            qcMode       = BfBot.Exec._qcMode,
+            lastProgress = BfBot.Exec._lastProgressGameTime,
+        }
+        local res = {}
+        local ok7, err7 = pcall(function()
+            local function mkE(ref, name, cheat, resref)
+                return { casterRef = ref, casterName = name, resref = resref,
+                         spellName = resref, targetObj = "Myself",
+                         targetName = name, splstates = {}, isAoE = false,
+                         cheat = cheat }
+            end
+            local pRef = { kind = "party", slot = 0 }
+            local sRef = { kind = "summon", oid = 424242, name = "CLONESTUB" }
+            BfBot.Exec._BuildQueue = function()
+                return {
+                    ["p0"]      = { mkE(pRef, "PartyStub", false, "XXPART1"),
+                                    mkE(pRef, "PartyStub", false, "XXPART2") },
+                    ["s424242"] = { mkE(sRef, "CloneStub", 1, "XXSUMM1"),
+                                    mkE(sRef, "CloneStub", 1, "XXSUMM2") },
+                }, 4
+            end
+            BfBot.Exec._ProcessCasterEntry = function() end
+            res.startOk = BfBot.Exec.Start({ { synthetic = 1 } }, 0)  -- qcMode 0
+            local sRec = BfBot.Exec._casters["s424242"]
+            local pRec = BfBot.Exec._casters["p0"]
+            res.sBoundary = sRec and sRec.cheatBoundary
+            res.pBoundary = pRec and pRec.cheatBoundary
+            -- Pure helper contract (the factored-out derivation itself;
+            -- errors here on pre-fix code where the helper doesn't exist).
+            res.h1 = BfBot.Exec._DeriveCheatBoundary({ { cheat = 1 }, { cheat = 0 } })
+            res.h2 = BfBot.Exec._DeriveCheatBoundary({ { cheat = false }, { cheat = true } })
+            res.h3 = BfBot.Exec._DeriveCheatBoundary({})
+        end)
+        -- Restore OUTSIDE the pcall: stubs, exec state, and the suite's log
+        -- handle (Start switched the open handle to the exec log).
+        BfBot.Exec._BuildQueue           = savedBuild
+        BfBot.Exec._ProcessCasterEntry   = savedProcess
+        BfBot.Exec._state                = saved.state
+        BfBot.Exec._casters              = saved.casters
+        BfBot.Exec._activeCasters        = saved.active
+        BfBot.Exec._log                  = saved.log
+        BfBot.Exec._castCount            = saved.castCount
+        BfBot.Exec._skipCount            = saved.skipCount
+        BfBot.Exec._totalEntries         = saved.total
+        BfBot.Exec._qcMode               = saved.qcMode
+        BfBot.Exec._lastProgressGameTime = saved.lastProgress
+        if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+        if not ok7 then _nok("cheat-boundary block errored: " .. tostring(err7)) end
+        _check(res.startOk == true, "synthetic Start accepted the stubbed queue")
+        _check(type(res.sBoundary) == "number" and res.sBoundary > 0,
+            "qcMode=0: summon caster with cheat=1 entries derives boundary > 0 (got "
+            .. tostring(res.sBoundary) .. ")")
+        _check(res.pBoundary == 0,
+            "qcMode=0: party caster stays boundary 0 (party-inert, got "
+            .. tostring(res.pBoundary) .. ")")
+        _check(res.h1 == 1 and res.h2 == 2 and res.h3 == 0,
+            "_DeriveCheatBoundary: highest cheat index wins, none -> 0 (got "
+            .. tostring(res.h1) .. "/" .. tostring(res.h2) .. "/"
+            .. tostring(res.h3) .. ")")
+    end
+
+    -- [7.9] Per-character builder puppet-lock (review M2): the Cast-
+    -- Character button and the F12 innate path both build through
+    -- BuildQueueForCharacter, which previously let a Project-Image owner
+    -- queue probe-verified zombie casts. Same policy as the preset builder.
+    -- Fully synthetic for determinism on the shared save: the scan is
+    -- stubbed to a one-spell castable set (so the leader's REAL preset-1
+    -- content — tied priorities, an actual Project Image — can't skew the
+    -- build), descriptor collection is stubbed, and the synthetic PI
+    -- descriptor rides the leader's own object id. Save/restore OUTSIDE
+    -- the pcall, asserted.
+    if leader then
+        local leaderName = BfBot._GetName(leader)
+        local pre1 = BfBot.Persist.GetPreset(leader, 1)
+        if not pre1 or type(pre1.spells) ~= "table" then
+            _warning("no preset 1 on the leader for per-char puppet-lock checks")
+        else
+            local savedCollect  = BfBot.Persist._CollectLiveCloneDescriptors
+            local savedScan     = BfBot.Scan.GetCastableSpells
+            local savedSpellCfg = pre1.spells.XXTSTA  -- restore EXACTLY (nil or table)
+            local ok7, err7 = pcall(function()
+                pre1.spells.XXTSTA = { on = 1, tgt = "s", pri = 1 }
+                BfBot.Scan.GetCastableSpells = function()
+                    return { XXTSTA = { count = 1, name = "Armor",
+                                        durCat = "long" } }
+                end
+
+                -- (b) Control: no live clones -> queue builds; exactly the
+                -- one synthetic entry, ride-alongs stripped.
+                BfBot.Persist._CollectLiveCloneDescriptors = function() return {} end
+                local qc, qcErr = BfBot.Persist.BuildQueueForCharacter(0, 1)
+                _check(qc ~= nil and #qc == 1,
+                    "control build returns the one entry (n=" .. tostring(qc and #qc)
+                    .. " err=" .. tostring(qcErr) .. ")")
+                local e1 = qc and qc[1]
+                _check(e1 ~= nil and e1.caster == 0 and e1.spell == "XXTSTA"
+                    and e1.target == "self" and e1.durCat == "long",
+                    "control build: entry fields {caster=0, spell, self, durCat}")
+                _check(e1 ~= nil and e1.spellName == nil and e1.pri == nil,
+                    "control build: spellName/pri ride-alongs stripped")
+
+                -- (a) Live PI clone owned by this caster -> ALL entries
+                -- skipped, build nil, skip recorded via _LogBuildSkips.
+                BfBot.Persist._CollectLiveCloneDescriptors = function()
+                    return { { cloneType = 2, ownerOid = leader.m_id,
+                               ownerName = leaderName } }
+                end
+                local logBefore = #BfBot.Exec._log
+                local qa = BfBot.Persist.BuildQueueForCharacter(0, 1)
+                local skipSeen = false
+                for i = logBefore + 1, #BfBot.Exec._log do
+                    local le = BfBot.Exec._log[i]
+                    if le and le.type == "SKIP" and type(le.msg) == "string"
+                        and le.msg:find("puppet-locked by Project Image", 1, true) then
+                        skipSeen = true
+                    end
+                end
+                _check(qa == nil, "PI-locked owner: per-char build returns nil")
+                _check(skipSeen, "PI-locked owner: skip recorded via _LogBuildSkips")
+
+                -- (b') No descriptors again: output unchanged vs the control
+                -- build (same count + same entry fields).
+                BfBot.Persist._CollectLiveCloneDescriptors = function() return {} end
+                local qc2 = BfBot.Persist.BuildQueueForCharacter(0, 1)
+                local e2 = qc2 and qc2[1]
+                _check(qc ~= nil and qc2 ~= nil and #qc2 == #qc
+                    and e1 ~= nil and e2 ~= nil
+                    and e2.caster == e1.caster and e2.spell == e1.spell
+                    and e2.target == e1.target and e2.durCat == e1.durCat,
+                    "no descriptors: output unchanged vs control build")
+            end)
+            -- Restore OUTSIDE the pcall (stubs + the leader's preset-1
+            -- entry), then assert — never leave synthetic config behind.
+            BfBot.Persist._CollectLiveCloneDescriptors = savedCollect
+            BfBot.Scan.GetCastableSpells = savedScan
+            pre1.spells.XXTSTA = savedSpellCfg
+            if not ok7 then
+                _nok("per-char puppet-lock block errored: " .. tostring(err7))
+            end
+            _check(BfBot.Persist._CollectLiveCloneDescriptors == savedCollect
+                and BfBot.Scan.GetCastableSpells == savedScan
+                and pre1.spells.XXTSTA == savedSpellCfg,
+                "cleanup: stubs restored + synthetic preset-1 entry removed")
+        end
+    else
+        _nok("no leader sprite in slot 0 for per-char puppet-lock checks")
+    end
+
+    -- [7.10] Summon's own chain can self-lock (review N6): a clone preset
+    -- seeded from a PI-enabled owner includes Project Image, and a clone
+    -- casting PI engine-locks ITSELF (zombie tail + watchdog stall).
+    -- BuildQueueForSummon must apply rule 2 (trailing-entry drop) to the
+    -- summon's own chain; rule 1 does NOT apply (a clone is not a party
+    -- owner). Scan is stubbed to a synthetic castable set whose middle
+    -- entry is named "Project Image".
+    if leader then
+        local leaderName = BfBot._GetName(leader)
+        local savedScan = BfBot.Scan.GetCastableSpells
+        local ok7, err7 = pcall(function()
+            local sp = BfBot.Persist.GetSummonPreset("test:fake", 1)
+            sp.spells = {
+                XXTSTA = { on = 1, tgt = "s", pri = 1 },
+                XXTSTP = { on = 1, tgt = "s", pri = 2 },
+                XXTSTB = { on = 1, tgt = "s", pri = 3 },
+            }
+            BfBot.Scan.GetCastableSpells = function()
+                return {
+                    XXTSTA = { count = 1, name = "Armor",         durCat = "long"  },
+                    XXTSTP = { count = 1, name = "Project Image", durCat = "short" },
+                    XXTSTB = { count = 1, name = "Blur",          durCat = "long"  },
+                }
+            end
+            -- No sprite field: the builder must fresh-resolve from oid+name
+            -- (review M3 — caller-supplied sprites are never dereferenced).
+            local fake = { oid = leader.m_id, name = leaderName,
+                           kind = "summon", identity = "test:fake" }
+            local logBefore = #BfBot.Exec._log
+            local q = BfBot.Persist.BuildQueueForSummon(fake, 1)
+            _check(q ~= nil and #q == 2,
+                "summon chain: trailing entry after PI dropped (got "
+                .. tostring(q and #q) .. " of 3)")
+            _check(q ~= nil and q[1] ~= nil and q[1].spell == "XXTSTA"
+                and q[2] ~= nil and q[2].spell == "XXTSTP",
+                "summon chain: pre-PI entry + the PI cast itself retained")
+            local stripOk = true
+            for _, e in ipairs(q or {}) do
+                if e.spellName ~= nil or e.pri ~= nil then stripOk = false end
+            end
+            _check(stripOk, "summon chain: spellName/pri ride-alongs stripped")
+            local skipSeen = false
+            for i = logBefore + 1, #BfBot.Exec._log do
+                local le = BfBot.Exec._log[i]
+                if le and le.type == "SKIP" and type(le.msg) == "string"
+                    and le.msg:find("entries after Project Image skipped", 1, true) then
+                    skipSeen = true
+                end
+            end
+            _check(skipSeen, "summon chain: rule-2 skip recorded")
+        end)
+        -- Restore OUTSIDE the pcall (scan stub + synthetic identity), assert.
+        BfBot.Scan.GetCastableSpells = savedScan
+        local pc = BfBot.Persist._GetProtagonistConfig()
+        local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+        if pcs then pcs["test:fake"] = nil end
+        if not ok7 then _nok("summon self-lock block errored: " .. tostring(err7)) end
+        _check(BfBot.Scan.GetCastableSpells == savedScan
+            and pcs ~= nil and pcs["test:fake"] == nil,
+            "cleanup: scan stub restored + test:fake identity removed")
+    else
+        _nok("no leader sprite in slot 0 for summon self-lock checks")
     end
 
     return _summary("SummonCasters")
@@ -4366,11 +4608,22 @@ function BfBot.Test.Persist()
     if queue then
         _ok("BuildQueueFromPreset(1) returned " .. #queue .. " entries")
 
-        -- Validate queue entry format
+        -- Validate queue entry format. Two legitimate caster shapes since
+        -- Task 7 (#19): party entries carry numeric caster 0..5; summon
+        -- entries (a configured live summon during the suite run) carry
+        -- casterRef {kind="summon", oid, name} instead. Anything else
+        -- still fails.
         local formatOk = true
         for i, entry in ipairs(queue) do
-            if type(entry.caster) ~= "number" or entry.caster < 0 or entry.caster > 5 then
-                _nok("Entry " .. i .. ": bad caster=" .. tostring(entry.caster))
+            local partyOk = type(entry.caster) == "number"
+                and entry.caster >= 0 and entry.caster <= 5
+            local ref = entry.casterRef
+            local summonOk = type(ref) == "table" and ref.kind == "summon"
+                and type(ref.oid) == "number"
+                and type(ref.name) == "string" and ref.name ~= ""
+            if not (partyOk or summonOk) then
+                _nok("Entry " .. i .. ": bad caster=" .. tostring(entry.caster)
+                    .. " casterRef=" .. tostring(ref))
                 formatOk = false
             end
             if type(entry.spell) ~= "string" or entry.spell == "" then

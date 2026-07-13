@@ -1381,9 +1381,13 @@ end
 ---           cast itself stay. Detection is pragmatic: the scan entry's
 ---           display NAME matched against "project image" case-insensitively
 ---           (resref is NOT assumable under Spell Revisions relocation).
----           LIMITATION: modded PI-alikes with different names aren't
----           caught; their trailing entries fire delayed at image expiry and
----           the exec watchdog still completes the run.
+---           LIMITATION: the name match is English-only — on TLK-localized
+---           installs (e.g. German "Projektion") rule 2 does not match, and
+---           modded PI-alikes with different names aren't caught either. In
+---           both cases the degradation is benign: the trailing entries fire
+---           delayed at image expiry and the exec watchdog still completes
+---           the run. Rule 1 is locale-independent (stat 139 + object id),
+---           so the owner lock itself holds on every locale.
 ---   Rule 3: Simulacrum (cloneType 3) locks nothing — only cloneType 2
 ---           participates, no other handling.
 --- No logging here (pure, synthetic-testable) — callers log the returned
@@ -1468,9 +1472,9 @@ end
 --- Exec._BuildQueue applies to qcMode, and attached as entry.cheat (1/0) so
 --- the summon follows its own qc even inside a party run with a different
 --- mode.
--- @param summonEntry detection-entry table {oid, name, identity, sprite?}
---        (ClassifySummonSprite shape; sprite optional — fresh-resolved from
---        oid+name when absent)
+-- @param summonEntry detection-entry table {oid, name, identity}
+--        (ClassifySummonSprite shape; a sprite field, if present, is
+--        IGNORED — the builder always fresh-resolves from oid+name)
 -- @param presetIdx  preset index 1..BfBot.MAX_PRESETS
 -- @return queue array compatible with BfBot.Exec.Start(), or nil + reason
 function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
@@ -1486,15 +1490,21 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
             .. " for '" .. tostring(summonEntry.identity) .. "'"
     end
 
-    -- Build-time sprite: caller-provided (same-frame detection entry) or a
-    -- fresh oid+name resolve — never a cached pointer from an earlier frame
-    -- (issue-#38 discipline).
-    local sprite = summonEntry.sprite
-    if not sprite and BfBot.Exec and BfBot.Exec._ResolveCaster then
-        sprite = BfBot.Exec._ResolveCaster({ kind = "summon",
-            oid = summonEntry.oid, name = summonEntry.name })
+    -- Build-time sprite: ALWAYS a fresh oid+name resolve — never the
+    -- caller-supplied summonEntry.sprite, whose freshness this function
+    -- cannot verify (issue-#38 class: pcall does NOT catch the access
+    -- violation from dereferencing a freed CGameSprite, and stored
+    -- detection entries WILL be handed in once the summon UI lands). The
+    -- resolver also carries the anti-recycle name guard, so a recycled
+    -- object id never builds a queue for the wrong sprite.
+    if not (BfBot.Exec and BfBot.Exec._ResolveCaster) then
+        return nil, "caster resolver unavailable"
     end
+    local sprite = BfBot.Exec._ResolveCaster({ kind = "summon",
+        oid = summonEntry.oid, name = summonEntry.name })
     if not sprite then
+        BfBot._Warn("[Persist] BuildQueueForSummon: summon gone ("
+            .. summonEntry.name .. ", oid " .. summonEntry.oid .. ")")
         return nil, "summon gone (" .. summonEntry.name .. ")"
     end
 
@@ -1517,6 +1527,9 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do
+                    -- Display name rides along for the puppet-lock rule-2
+                    -- name match; never copied onto the final queue entry.
+                    e.spellName = scanData.name or resref
                     table.insert(entries, e)
                 end
             end
@@ -1526,7 +1539,22 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     -- Sort by priority (ascending: lower = cast first)
     table.sort(entries, function(a, b) return a.pri < b.pri end)
 
-    -- Append to queue (strip pri field — exec engine doesn't use it)
+    -- Puppet-lock rule 2 on the summon's OWN chain (issue #19): a clone
+    -- preset seeded from a PI-enabled owner includes Project Image
+    -- (_SeedCloneSpells mirrors the owner by design), and a clone casting
+    -- PI engine-locks ITSELF — the trailing entries would sit as zombie
+    -- casts and stall the run into the watchdog. Empty descriptor list:
+    -- rule 1 is owner-only (a clone is not a party owner), so only the
+    -- trailing-entry drop applies here.
+    do
+        local kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(
+            { oid = summonEntry.oid, name = summonEntry.name }, entries, {})
+        BfBot.Persist._LogBuildSkips(skips)
+        entries = kept
+    end
+
+    -- Append to queue (strip pri/spellName ride-alongs — exec rebuilds its
+    -- own entries from the scan)
     local qc = (type(preset.qc) == "number") and preset.qc or 0
     local queue = {}
     for _, e in ipairs(entries) do
@@ -1952,6 +1980,9 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do
+                    -- Display name rides along for the puppet-lock rule-2
+                    -- name match; never copied onto the final queue entry.
+                    e.spellName = scanData.name or resref
                     table.insert(entries, e)
                 end
             end
@@ -1961,7 +1992,27 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     -- Sort by priority (ascending: lower = cast first)
     table.sort(entries, function(a, b) return a.pri < b.pri end)
 
-    -- Strip pri field — exec engine doesn't use it
+    -- Puppet-lock policy (issue #19), same rules as BuildQueueFromPreset: a
+    -- PI-locked owner's entries are skipped entirely (the probe-verified
+    -- zombie-cast hazard applies to the Cast-Character button and the F12
+    -- innate path just the same — both build here); a chain that casts PI
+    -- drops its trailing entries. Deliberate scope extension of the plan's
+    -- puppet-lock policy to the per-character builder (Task 7 review).
+    -- Guarded on #entries: an empty build can't be locked, so don't pay for
+    -- the area sweep (the policy on empty input is a no-op either way).
+    if #entries > 0 then
+        local liveClones = BfBot.Persist._CollectLiveCloneDescriptors()
+        local casterOid = nil
+        local okId, id = pcall(function() return sprite.m_id end)
+        if okId and type(id) == "number" then casterOid = id end
+        local kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(
+            { oid = casterOid, name = BfBot._GetName(sprite) },
+            entries, liveClones)
+        BfBot.Persist._LogBuildSkips(skips)
+        entries = kept
+    end
+
+    -- Strip pri/spellName ride-alongs — exec engine doesn't use them
     local queue = {}
     for _, e in ipairs(entries) do
         local scanData = castable[e.spell]
