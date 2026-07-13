@@ -253,14 +253,94 @@ function BfBot.Persist._ValidateConfig(config)
         end
     end
 
-    -- Summons (schema v8): per-identity summon presets. Only the top-level
-    -- table shape is enforced here; per-identity shape is repaired lazily in
-    -- GetSummonPreset (the sole read/write path, protagonist-only).
+    -- Summons (schema v8): full subtree scrub — see _ValidateSummons. This
+    -- is NOT left to the runtime accessor (GetSummonPreset): hand-edited
+    -- preset files enter through ImportConfig → _ValidateConfig, and a single
+    -- marshal-unsafe value (boolean/userdata) parked anywhere in the config
+    -- crashes the NEXT save. Runtime reads/writes still go through
+    -- GetSummonPreset (protagonist-only), which additionally repairs shape
+    -- for mid-session mutations.
     if type(config.summons) ~= "table" then
         config.summons = {}
+    else
+        BfBot.Persist._ValidateSummons(config.summons)
     end
 
     return config
+end
+
+--- Scrub the summons subtree in place (schema v8). Whitelist by construction:
+--- identity entries must be { presets = { [1..MAX_PRESETS] = { qc, spells } } };
+--- unknown keys are dropped, known fields are type-enforced, malformed
+--- identities/presets/entries are removed. Guarantees the subtree holds only
+--- numbers/strings/tables (marshal constraint) after the pass.
+-- @param summons  config.summons table (mutated in place)
+-- @return the same table, scrubbed
+function BfBot.Persist._ValidateSummons(summons)
+    if type(summons) ~= "table" then return {} end
+    for identity, entry in pairs(summons) do
+        if type(identity) ~= "string" or identity == ""
+            or type(entry) ~= "table" or type(entry.presets) ~= "table" then
+            summons[identity] = nil
+        else
+            -- Identity entry: whitelist { presets }
+            for k in pairs(entry) do
+                if k ~= "presets" then entry[k] = nil end
+            end
+            for idx, preset in pairs(entry.presets) do
+                if type(idx) ~= "number" or idx ~= math.floor(idx)
+                    or idx < 1 or idx > BfBot.MAX_PRESETS
+                    or type(preset) ~= "table" then
+                    entry.presets[idx] = nil
+                else
+                    -- Preset: whitelist { qc, spells }
+                    for k in pairs(preset) do
+                        if k ~= "qc" and k ~= "spells" then preset[k] = nil end
+                    end
+                    if type(preset.qc) ~= "number"
+                        or preset.qc < 0 or preset.qc > 2 then
+                        preset.qc = 0
+                    end
+                    if type(preset.spells) ~= "table" then preset.spells = {} end
+                    for resref, se in pairs(preset.spells) do
+                        if type(resref) ~= "string" or type(se) ~= "table" then
+                            preset.spells[resref] = nil
+                        else
+                            -- Spell entry: whitelist { on, tgt, pri, var }
+                            for k in pairs(se) do
+                                if k ~= "on" and k ~= "tgt"
+                                    and k ~= "pri" and k ~= "var" then
+                                    se[k] = nil
+                                end
+                            end
+                            if type(se.on) ~= "number" then se.on = 0 end
+                            local tt = type(se.tgt)
+                            if tt == "table" then
+                                local cleaned = {}
+                                for _, v in ipairs(se.tgt) do
+                                    if type(v) == "string" then
+                                        table.insert(cleaned, v)
+                                    end
+                                end
+                                if #cleaned == 0 then
+                                    se.tgt = "p"
+                                else
+                                    se.tgt = cleaned
+                                end
+                            elseif tt ~= "string" then
+                                se.tgt = "p"
+                            end
+                            if type(se.pri) ~= "number" then se.pri = 999 end
+                            if se.var ~= nil and type(se.var) ~= "string" then
+                                se.var = nil
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return summons
 end
 
 --- Migrate config from an older schema version.
@@ -430,7 +510,7 @@ function BfBot.Persist.GetConfig(sprite)
         config = BfBot.Persist._CreateDefaultConfig(sprite)
     end
     -- Lazy migration: fix wrong default targets from v1/v2 AoE misclassification
-    if config and config.v and config.v < 3 then
+    if config and type(config.v) == "number" and config.v < 3 then
         BfBot.Persist._MigrateV1Targets(sprite, config)
         config.v = 3
     end
@@ -679,15 +759,26 @@ function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
         BfBot._Warn("[Persist] GetSummonPreset: no protagonist config")
         return nil
     end
-    -- Shape repair on read — the validator only guarantees the top-level table
+    -- Shape repair on read — _ValidateSummons scrubs the subtree at
+    -- import/SetConfig time; this path covers mid-session mutations. Repairs
+    -- of EXISTING (non-nil) data warn: external corruption must be
+    -- diagnosable, never silently discarded.
     if type(config.summons) ~= "table" then config.summons = {} end
     local entry = config.summons[identity]
     if type(entry) ~= "table" or type(entry.presets) ~= "table" then
+        if entry ~= nil then
+            BfBot._Warn("[Persist] GetSummonPreset: malformed entry for '"
+                .. identity .. "' (" .. type(entry) .. ") replaced")
+        end
         entry = { presets = {} }
         config.summons[identity] = entry
     end
     local preset = entry.presets[presetIdx]
     if type(preset) ~= "table" then
+        if preset ~= nil then
+            BfBot._Warn("[Persist] GetSummonPreset: corrupt preset " .. presetIdx
+                .. " for '" .. identity .. "' (" .. type(preset) .. ") recreated")
+        end
         -- CREATE path — the only place seeding ever happens
         preset = { qc = 0, spells = {} }
         if seedCtx ~= nil then
@@ -710,9 +801,25 @@ function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
         end
         entry.presets[presetIdx] = preset
     else
-        -- READ path — repair shape, never re-seed
-        if type(preset.spells) ~= "table" then preset.spells = {} end
-        if type(preset.qc) ~= "number" then preset.qc = 0 end
+        -- READ path — repair shape (warn: see above), never re-seed
+        if type(preset.spells) ~= "table" then
+            if preset.spells ~= nil then
+                BfBot._Warn("[Persist] GetSummonPreset: spells for '" .. identity
+                    .. "' preset " .. presetIdx .. " was " .. type(preset.spells)
+                    .. " — reset to empty")
+            end
+            preset.spells = {}
+        end
+        -- qc: same 0..2 contract as _ValidateSummons — out-of-range values
+        -- from hand-imported files must never reach consumers
+        if type(preset.qc) ~= "number" or preset.qc < 0 or preset.qc > 2 then
+            if preset.qc ~= nil then
+                BfBot._Warn("[Persist] GetSummonPreset: qc for '" .. identity
+                    .. "' preset " .. presetIdx .. " was "
+                    .. tostring(preset.qc) .. " — reset to 0")
+            end
+            preset.qc = 0
+        end
     end
     return preset
 end
@@ -785,6 +892,17 @@ end
 -- ---- Config export/import ----
 
 BfBot.Persist._PRESETS_DIR = "override/bfbot_presets"
+
+-- Lua keywords can never be emitted as bare table keys (`end = {...}` is a
+-- syntax error on re-import). Reachable via summon identities: a summon with
+-- script name "END" derives identity "end". Includes goto (LuaJIT 5.1+ext).
+BfBot.Persist._LUA_KEYWORDS = {
+    ["and"] = 1, ["break"] = 1, ["do"] = 1, ["else"] = 1, ["elseif"] = 1,
+    ["end"] = 1, ["false"] = 1, ["for"] = 1, ["function"] = 1, ["goto"] = 1,
+    ["if"] = 1, ["in"] = 1, ["local"] = 1, ["nil"] = 1, ["not"] = 1,
+    ["or"] = 1, ["repeat"] = 1, ["return"] = 1, ["then"] = 1, ["true"] = 1,
+    ["until"] = 1, ["while"] = 1,
+}
 
 --- Recursively serialize a Lua value to a string representation.
 -- Supports number, string, table, nil. Sorts keys: integers first (ascending),
@@ -864,8 +982,9 @@ function BfBot.Persist._Serialize(val, indent)
     -- String keys
     for _, k in ipairs(strKeys) do
         local serialized = BfBot.Persist._Serialize(val[k], nextIndent)
-        -- Use simple key format for valid identifiers, bracketed otherwise
-        if k:match("^[%a_][%w_]*$") then
+        -- Use simple key format for valid identifiers (keywords excluded —
+        -- a bare `end = ...` would make the export unparseable), bracketed otherwise
+        if k:match("^[%a_][%w_]*$") and not BfBot.Persist._LUA_KEYWORDS[k] then
             table.insert(lines, nextIndent .. k .. " = " .. serialized .. ",")
         else
             table.insert(lines, nextIndent .. "[" .. string.format("%q", k) .. "] = " .. serialized .. ",")

@@ -3125,6 +3125,24 @@ function BfBot.Test.SummonCasters()
         _nok("no leader sprite in slot 0 for schema version check")
     end
 
+    -- v7→v8 migration contract (direct, mirrors the v5/v6 migration tests):
+    -- summons table added, version bumped, unrelated fields preserved.
+    local v7cfg = {
+        v = 7, ap = 1,
+        presets = {
+            [1] = { name = "Legacy", cat = "long", qc = 0,
+                    spells = { TSTMIG = { on = 1, tgt = "s", pri = 3, lock = 0 } } },
+        },
+        opts = { skip = 1 }, ovr = {},
+    }
+    local mig = BfBot.Persist._MigrateConfig(v7cfg, v7cfg.v)
+    _check(mig.v == BfBot.Persist._SCHEMA_VERSION
+        and type(mig.summons) == "table" and next(mig.summons) == nil,
+        "v7→v8 migration adds empty summons table and bumps version")
+    _check(mig.presets[1].spells.TSTMIG.on == 1
+        and mig.presets[1].spells.TSTMIG.pri == 3,
+        "v7→v8 migration preserves preset spell fields")
+
     -- Protagonist: join-order character index 0, NOT portrait slot 0.
     local protSprite = BfBot.Persist._GetProtagonist()
     _check(protSprite ~= nil
@@ -3159,6 +3177,20 @@ function BfBot.Test.SummonCasters()
     local sp2 = BfBot.Persist.GetSummonPreset("test:fake", 1)
     _check(sp2 ~= nil and sp2 == sp and sp2.spells["SPWI999X"] ~= nil,
         "second read returns the same stored table (no re-seed)")
+    -- seedCtx on an EXISTING preset must NOT re-seed (create-only contract):
+    -- a re-seed would replace the spells table and wipe the marker.
+    if leader then
+        local pre2 = BfBot.Persist.GetSummonPreset("test:fake", 2)  -- fresh, empty
+        if pre2 then pre2.spells["MARKER01"] = { on = 1, tgt = "s", pri = 7 } end
+        local re = BfBot.Persist.GetSummonPreset("test:fake", 2,
+            { ownerSprite = leader, cloneSprite = leader })
+        local cnt = 0
+        if re then for _ in pairs(re.spells) do cnt = cnt + 1 end end
+        _check(re ~= nil and re == pre2 and re.spells.MARKER01 ~= nil and cnt == 1,
+            "seedCtx on existing preset does not re-seed")
+    else
+        _nok("no leader sprite for re-seed guard check")
+    end
 
     -- _SeedCloneSpells is PURE: filter owner's preset to the clone's castable set.
     local ownerPre = { spells = {
@@ -3209,6 +3241,90 @@ function BfBot.Test.SummonCasters()
         and rt.summons["test:fake"].presets[1].spells.SPWI305.on == 1,
         "serialized summons fragment parses back (export round-trip)")
 
+    -- Serializer: Lua keyword keys must be bracket-quoted — identity "end" is
+    -- reachable (a summon scriptname "END" lowers to "end"), and a bare
+    -- `end = {...}` makes the export unparseable.
+    local kwFrag = BfBot.Persist._Serialize({ ["end"] = { qc = 0 }, ["while"] = 1 })
+    _check(kwFrag:find('["end"]', 1, true) ~= nil
+        and kwFrag:find('["while"]', 1, true) ~= nil,
+        "serializer bracket-quotes Lua keyword keys")
+    local kwOk, kwT = pcall(function()
+        local c = loadfn("return " .. kwFrag)
+        return c and c() or nil
+    end)
+    _check(kwOk and type(kwT) == "table" and kwT["end"] ~= nil
+        and kwT["end"].qc == 0 and kwT["while"] == 1,
+        "keyword-keyed table parses back")
+
+    -- Validator descends into summons (crash-on-save class): marshal-unsafe
+    -- and unknown values are scrubbed at import time (_ValidateConfig is the
+    -- exact function both ImportConfig and the marshal importer call),
+    -- not left for the runtime accessor.
+    local vc = BfBot.Persist._ValidateConfig({ v = 8, summons = {
+        ["a:b"] = { presets = { [1] = { qc = true, junk = true, spells = {
+            GOOD1 = { on = 1, tgt = "p", pri = 1, bogus = true },
+            BAD1  = "corrupt",
+        } } } },
+        ["c:d"] = "not a table",
+        ["e:f"] = { presets = {
+            [1] = { qc = 7, spells = {
+                T1 = { on = 1, tgt = { 42, "Imoen" }, pri = "z", var = 9 },
+            } },
+            [99] = { qc = 0, spells = {} },
+        } },
+    } })
+    local ab = vc.summons["a:b"] and vc.summons["a:b"].presets[1]
+    _check(ab ~= nil and ab.qc == 0 and ab.junk == nil,
+        "validator: boolean qc reset, unknown preset key dropped")
+    _check(ab ~= nil and ab.spells.GOOD1 ~= nil and ab.spells.GOOD1.bogus == nil
+        and ab.spells.BAD1 == nil,
+        "validator: spell-entry whitelist enforced, non-table entry dropped")
+    _check(vc.summons["c:d"] == nil, "validator: non-table identity dropped")
+    local ef = vc.summons["e:f"] and vc.summons["e:f"].presets[1]
+    _check(ef ~= nil and ef.qc == 0 and ef.spells.T1.pri == 999
+        and ef.spells.T1.var == nil and type(ef.spells.T1.tgt) == "table"
+        and #ef.spells.T1.tgt == 1 and ef.spells.T1.tgt[1] == "Imoen"
+        and vc.summons["e:f"].presets[99] == nil,
+        "validator: qc range, pri/var/tgt scrub, out-of-range preset index dropped")
+
+    -- Read-path repair warns (external corruption must be diagnosable, never
+    -- silently discarded) + out-of-range qc clamped on read too.
+    do
+        local pc2 = BfBot.Persist._GetProtagonistConfig()
+        local pc2s = pc2 and type(pc2.summons) == "table" and pc2.summons or nil
+        if pc2s then
+            pc2s["test:corrupt"] = { presets = { [1] = { qc = "x", spells = 5 } } }
+            local savedWarn = BfBot._Warn
+            local warns = 0
+            BfBot._Warn = function(msg) warns = warns + 1 return savedWarn(msg) end
+            local rpOk, rp = pcall(BfBot.Persist.GetSummonPreset, "test:corrupt", 1)
+            BfBot._Warn = savedWarn
+            _check(rpOk and rp ~= nil and rp.qc == 0 and type(rp.spells) == "table"
+                and next(rp.spells) == nil,
+                "corrupt qc/spells repaired on read")
+            _check(warns >= 2, "read-path repairs warned (n=" .. tostring(warns) .. ")")
+            -- Out-of-range numeric qc: clamped to 0 with a warn.
+            if rp then rp.qc = 7 end
+            local warns2 = 0
+            BfBot._Warn = function(msg) warns2 = warns2 + 1 return savedWarn(msg) end
+            local rp2Ok, rp2 = pcall(BfBot.Persist.GetSummonPreset, "test:corrupt", 1)
+            BfBot._Warn = savedWarn
+            _check(rp2Ok and rp2 ~= nil and rp2.qc == 0 and warns2 >= 1,
+                "out-of-range qc reset to 0 on read (warned)")
+            -- Malformed identity ENTRY (non-table): warned and replaced.
+            pc2s["test:corrupt"] = "junk"
+            local warns3 = 0
+            BfBot._Warn = function(msg) warns3 = warns3 + 1 return savedWarn(msg) end
+            local rp3Ok, rp3 = pcall(BfBot.Persist.GetSummonPreset, "test:corrupt", 1)
+            BfBot._Warn = savedWarn
+            _check(rp3Ok and rp3 ~= nil and rp3.qc == 0
+                and next(rp3.spells) == nil and warns3 >= 1,
+                "malformed identity entry warned and replaced")
+        else
+            _nok("no protagonist summons table for read-repair checks")
+        end
+    end
+
     -- Live seeding (owner = clone = leader; a party sprite is a valid scan
     -- target): expected = preset-1 entries the leader can still cast.
     if leader and protCfg then
@@ -3245,9 +3361,10 @@ function BfBot.Test.SummonCasters()
         if pcSummons then
             pcSummons["test:fake"] = nil
             pcSummons["test:live"] = nil
+            pcSummons["test:corrupt"] = nil
         end
         _check(pcSummons ~= nil and pcSummons["test:fake"] == nil
-            and pcSummons["test:live"] == nil,
+            and pcSummons["test:live"] == nil and pcSummons["test:corrupt"] == nil,
             "cleanup: synthetic summon identities removed")
     end
 
