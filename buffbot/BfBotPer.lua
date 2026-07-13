@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 7
+BfBot.Persist._SCHEMA_VERSION = 8
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -42,6 +42,10 @@ function BfBot.Persist.GetDefaultConfig()
         },
         opts = { skip = 1 },
         ovr  = {},
+        -- v8: per-identity summon presets (issue #19). Present on every
+        -- config for uniformity, but only the PROTAGONIST's is ever read —
+        -- see GetSummonPreset.
+        summons = {},
     }
 end
 
@@ -249,6 +253,13 @@ function BfBot.Persist._ValidateConfig(config)
         end
     end
 
+    -- Summons (schema v8): per-identity summon presets. Only the top-level
+    -- table shape is enforced here; per-identity shape is repaired lazily in
+    -- GetSummonPreset (the sole read/write path, protagonist-only).
+    if type(config.summons) ~= "table" then
+        config.summons = {}
+    end
+
     return config
 end
 
@@ -308,6 +319,14 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
                 end
             end
         end
+    end
+    if fromVersion < 8 then
+        -- v8: summon casters (#19) — per-identity summon presets under
+        -- config.summons. The table is added uniformly to EVERY character's
+        -- config (simplest uniform bump), but only the PROTAGONIST's summons
+        -- table is ever read or written — see _GetProtagonistConfig /
+        -- GetSummonPreset.
+        config.summons = config.summons or {}
     end
     config.v = BfBot.Persist._SCHEMA_VERSION
     return config
@@ -414,6 +433,22 @@ function BfBot.Persist.GetConfig(sprite)
     if config and config.v and config.v < 3 then
         BfBot.Persist._MigrateV1Targets(sprite, config)
         config.v = 3
+    end
+    -- Lazy schema migration: _Import migrates at save load, but a config can
+    -- still be at an older version mid-session (e.g. the module was reloaded
+    -- after a schema bump). _MigrateConfig mutates in place, so the table
+    -- held by UDAux stays migrated after the first access.
+    if config and type(config.v) == "number"
+        and config.v < BfBot.Persist._SCHEMA_VERSION then
+        config = BfBot.Persist._MigrateConfig(config, config.v)
+    end
+    -- Shape guarantee (v8): a config can carry the current version yet miss
+    -- the summons table (stamped by an intermediate module state, or a table
+    -- lost across a round-trip under an older module). The migration gate
+    -- can't catch that — v is already current — so repair at the read path;
+    -- _ValidateConfig does the same at import/SetConfig time.
+    if config and type(config.summons) ~= "table" then
+        config.summons = {}
     end
     return config
 end
@@ -531,6 +566,155 @@ function BfBot.Persist.GetSpellConfig(sprite, presetIndex, resref)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset or not preset.spells then return nil end
     return preset.spells[resref]
+end
+
+-- ---- Summon config accessors (schema v8, issue #19) ----
+-- Summon/clone presets are keyed by summon IDENTITY (BfBot.Scan._SummonIdentity)
+-- and live ONLY on the protagonist's config:
+--     config.summons[identity] = { presets = { [n] = { qc, spells } } }
+-- Every character's config carries a summons table (uniform v8 migration),
+-- but all reads and writes go through the protagonist so the data has one
+-- authoritative home that survives party reordering.
+
+--- Find the protagonist sprite: the party member whose JOIN-ORDER character
+--- index is 0 (EEex_Sprite_GetCharacterIndex) — NOT portrait slot 0, which
+--- changes when portraits are reordered.
+-- @return sprite or nil (+ warn) if no character-index-0 member exists
+function BfBot.Persist._GetProtagonist()
+    local firstErr = nil
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local ok, idx = pcall(EEex_Sprite_GetCharacterIndex, sprite)
+            if ok and idx == 0 then
+                return sprite
+            elseif not ok and not firstErr then
+                firstErr = tostring(idx)  -- surface API failure, don't mask it
+            end
+        end
+    end
+    BfBot._Warn("[Persist] _GetProtagonist: no party sprite with character index 0"
+        .. (firstErr and (" (GetCharacterIndex error: " .. firstErr .. ")") or ""))
+    return nil
+end
+
+--- Config of the protagonist (nil-safe). All summon config lives here.
+function BfBot.Persist._GetProtagonistConfig()
+    local prot = BfBot.Persist._GetProtagonist()
+    if not prot then return nil end
+    return BfBot.Persist.GetConfig(prot)
+end
+
+--- PURE (no engine calls): seed a clone's spell table from its owner's
+--- preset, filtered to the spells the clone can actually cast. Deep-copies
+--- on/tgt/pri/var — tgt may be an ordered TABLE of names, which must be
+--- copied, never aliased, so edits to the summon config can never mutate the
+--- owner's preset (or vice versa). Output holds numbers/strings/tables only
+--- (marshal constraint: no booleans, no userdata).
+--- Nil-safe: invalid ownerPreset or cloneCastable returns {}.
+-- @param ownerPreset    owner preset table { spells = { [resref] = entry } }
+-- @param cloneCastable  scan result for the clone { [resref] = {count=..} }
+-- @return table: fresh spells table (never aliases input tables)
+function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
+    local seeded = {}
+    if type(ownerPreset) ~= "table" or type(ownerPreset.spells) ~= "table"
+        or type(cloneCastable) ~= "table" then
+        return seeded
+    end
+    for resref, entry in pairs(ownerPreset.spells) do
+        local scanData = cloneCastable[resref]
+        if type(entry) == "table" and type(scanData) == "table"
+            and (tonumber(scanData.count) or 0) > 0 then
+            local copy = {
+                on  = (type(entry.on) == "number") and entry.on or 0,
+                pri = (type(entry.pri) == "number") and entry.pri or 999,
+            }
+            if type(entry.var) == "string" then copy.var = entry.var end
+            if type(entry.tgt) == "table" then
+                local t = {}
+                for _, v in ipairs(entry.tgt) do
+                    if type(v) == "string" then table.insert(t, v) end
+                end
+                if #t > 0 then copy.tgt = t else copy.tgt = "p" end
+            elseif type(entry.tgt) == "string" then
+                copy.tgt = entry.tgt
+            else
+                copy.tgt = "p"
+            end
+            seeded[resref] = copy
+        end
+    end
+    return seeded
+end
+
+--- Get (lazily creating) a summon preset on the protagonist's config.
+--- Seeding happens on CREATE only; later reads return the stored table
+--- untouched (shape-repaired, never re-seeded). Everything stored is
+--- numbers/strings/tables only (marshal constraint).
+-- @param identity   summon identity key (non-empty string)
+-- @param presetIdx  preset index 1..BfBot.MAX_PRESETS
+-- @param seedCtx    optional { ownerSprite=..., cloneSprite=... }: on create,
+--                   seed from the owner's same-index preset filtered to the
+--                   clone's castable set. Owner preset missing → seeds empty.
+-- @return preset table { qc, spells }, or nil (+ warn) on invalid args /
+--         no protagonist
+function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
+    if type(identity) ~= "string" or identity == "" then
+        BfBot._Warn("[Persist] GetSummonPreset: invalid identity ("
+            .. tostring(identity) .. ")")
+        return nil
+    end
+    -- Integer required: this accessor CREATES at the key, and a fractional
+    -- key would persist entries the export serializer silently drops
+    -- (its integer-key walk requires k == floor(k)).
+    if type(presetIdx) ~= "number" or presetIdx < 1
+        or presetIdx > BfBot.MAX_PRESETS
+        or presetIdx ~= math.floor(presetIdx) then
+        BfBot._Warn("[Persist] GetSummonPreset: invalid preset index ("
+            .. tostring(presetIdx) .. ")")
+        return nil
+    end
+    local config = BfBot.Persist._GetProtagonistConfig()
+    if not config then
+        BfBot._Warn("[Persist] GetSummonPreset: no protagonist config")
+        return nil
+    end
+    -- Shape repair on read — the validator only guarantees the top-level table
+    if type(config.summons) ~= "table" then config.summons = {} end
+    local entry = config.summons[identity]
+    if type(entry) ~= "table" or type(entry.presets) ~= "table" then
+        entry = { presets = {} }
+        config.summons[identity] = entry
+    end
+    local preset = entry.presets[presetIdx]
+    if type(preset) ~= "table" then
+        -- CREATE path — the only place seeding ever happens
+        preset = { qc = 0, spells = {} }
+        if seedCtx ~= nil then
+            if type(seedCtx) == "table" and seedCtx.ownerSprite
+                and seedCtx.cloneSprite then
+                local ownerPreset = BfBot.Persist.GetPreset(
+                    seedCtx.ownerSprite, presetIdx)
+                local scanOk, castable = pcall(
+                    BfBot.Scan.GetCastableSpells, seedCtx.cloneSprite)
+                if not scanOk then
+                    BfBot._Warn("[Persist] GetSummonPreset: clone scan failed,"
+                        .. " seeding empty (" .. tostring(castable) .. ")")
+                    castable = nil
+                end
+                preset.spells = BfBot.Persist._SeedCloneSpells(ownerPreset, castable)
+            else
+                BfBot._Warn("[Persist] GetSummonPreset: malformed seedCtx"
+                    .. " ignored (need ownerSprite + cloneSprite)")
+            end
+        end
+        entry.presets[presetIdx] = preset
+    else
+        -- READ path — repair shape, never re-seed
+        if type(preset.spells) ~= "table" then preset.spells = {} end
+        if type(preset.qc) ~= "number" then preset.qc = 0 end
+    end
+    return preset
 end
 
 -- ---- Options ----

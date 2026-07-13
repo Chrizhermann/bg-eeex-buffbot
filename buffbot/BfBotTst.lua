@@ -3114,6 +3114,143 @@ function BfBot.Test.SummonCasters()
         BfBot.Scan.InvalidateSummons()  -- leave no synthetic cache behind
     end
 
+    -- ---- Task 6: schema v8 — summon config accessors + clone seeding ----
+    -- Migration: mid-session configs are lazily migrated on read (GetConfig),
+    -- so the leader reports the current schema without a save/load cycle.
+    if leader then
+        local cfg = BfBot.Persist.GetConfig(leader)
+        _check(cfg ~= nil and cfg.v == 8,
+            "schema v8 (leader cfg.v=" .. tostring(cfg and cfg.v) .. ")")
+    else
+        _nok("no leader sprite in slot 0 for schema version check")
+    end
+
+    -- Protagonist: join-order character index 0, NOT portrait slot 0.
+    local protSprite = BfBot.Persist._GetProtagonist()
+    _check(protSprite ~= nil
+        and EEex_Sprite_GetCharacterIndex(protSprite) == 0,
+        "_GetProtagonist returns the character-index-0 sprite")
+    local protCfg = BfBot.Persist._GetProtagonistConfig()
+    _check(protCfg ~= nil and type(protCfg.summons) == "table",
+        "protagonist config carries a summons table")
+
+    -- Accessor validation: invalid args → nil + warn, and NO entry created.
+    _check(BfBot.Persist.GetSummonPreset("", 1) == nil, "empty identity rejected")
+    _check(BfBot.Persist.GetSummonPreset("x", 0) == nil, "preset index 0 rejected")
+    _check(BfBot.Persist.GetSummonPreset("x", 99) == nil, "preset index 99 rejected")
+    _check(BfBot.Persist.GetSummonPreset("x", 1.5) == nil,
+        "fractional preset index rejected")
+    -- (summons-table indexing below is type-guarded so a broken invariant
+    --  shows as the FAIL above, not an error abort mid-phase)
+    local protSummons = protCfg and type(protCfg.summons) == "table"
+        and protCfg.summons or nil
+    _check(protSummons == nil or protSummons["x"] == nil,
+        "rejected calls never created a summons entry")
+
+    -- Lazy create (no seedCtx): fresh empty preset, stored on the protagonist.
+    local sp = BfBot.Persist.GetSummonPreset("test:fake", 1)
+    _check(sp ~= nil and sp.qc == 0 and type(sp.spells) == "table"
+        and next(sp.spells) == nil, "lazy-create yields {qc=0, spells={}}")
+    _check(protSummons ~= nil and protSummons["test:fake"] ~= nil
+        and protSummons["test:fake"].presets[1] == sp,
+        "created preset stored under protagonist summons[identity].presets[1]")
+    -- Second read: the SAME stored table — no re-create, no re-seed.
+    if sp then sp.spells["SPWI999X"] = { on = 1, tgt = "s", pri = 1 } end
+    local sp2 = BfBot.Persist.GetSummonPreset("test:fake", 1)
+    _check(sp2 ~= nil and sp2 == sp and sp2.spells["SPWI999X"] ~= nil,
+        "second read returns the same stored table (no re-seed)")
+
+    -- _SeedCloneSpells is PURE: filter owner's preset to the clone's castable set.
+    local ownerPre = { spells = {
+        SPWI305 = { on = 1, tgt = "p", pri = 1 },
+        SPWI999 = { on = 1, tgt = "s", pri = 2 },
+    } }
+    local seeded = BfBot.Persist._SeedCloneSpells(ownerPre, { SPWI305 = { count = 1 } })
+    _check(seeded.SPWI305 ~= nil and seeded.SPWI305.on == 1
+        and seeded.SPWI305.tgt == "p" and seeded.SPWI305.pri == 1
+        and seeded.SPWI999 == nil,
+        "seed filters to castable: SPWI305 copied, SPWI999 dropped")
+    _check(seeded.SPWI305 ~= ownerPre.spells.SPWI305,
+        "seeded entry is a fresh table, not the owner's")
+
+    -- Deep copy: a tgt TABLE (ordered names) must be duplicated, never aliased.
+    local ownerTbl = { spells = { SPWI305 = { on = 1, pri = 1,
+        tgt = { "Imoen", "Minsc" } } } }
+    local seeded2 = BfBot.Persist._SeedCloneSpells(ownerTbl, { SPWI305 = { count = 2 } })
+    local st = seeded2.SPWI305 and seeded2.SPWI305.tgt
+    _check(type(st) == "table" and st[1] == "Imoen" and st[2] == "Minsc",
+        "tgt name table copied in order")
+    if type(st) == "table" then
+        st[1] = "MUTATED"
+        st[3] = "EXTRA"
+    end
+    local ot = ownerTbl.spells.SPWI305.tgt
+    _check(ot[1] == "Imoen" and ot[2] == "Minsc" and ot[3] == nil,
+        "mutating the seeded tgt leaves the owner's table untouched")
+
+    -- Nil-safety: garbage in → fresh empty table out.
+    local emptySeed = BfBot.Persist._SeedCloneSpells(nil, nil)
+    _check(type(emptySeed) == "table" and next(emptySeed) == nil,
+        "_SeedCloneSpells(nil, nil) returns {}")
+
+    -- Export serializer: identity keys contain ':' (not a Lua identifier) —
+    -- must serialize in bracketed-quoted form at summons nesting depth.
+    local frag = BfBot.Persist._Serialize({ summons = { ["test:fake"] = {
+        presets = { [1] = { qc = 0, spells = { SPWI305 = { on = 1 } } } } } } })
+    _check(type(frag) == "string" and frag:find('["test:fake"]', 1, true) ~= nil,
+        "serializer emits bracketed-quoted identity key")
+    local loadfn = loadstring or load
+    local rtOk, rt = pcall(function()
+        local chunk = loadfn("return " .. frag)
+        return chunk and chunk() or nil
+    end)
+    _check(rtOk and type(rt) == "table" and rt.summons
+        and rt.summons["test:fake"]
+        and rt.summons["test:fake"].presets[1].spells.SPWI305.on == 1,
+        "serialized summons fragment parses back (export round-trip)")
+
+    -- Live seeding (owner = clone = leader; a party sprite is a valid scan
+    -- target): expected = preset-1 entries the leader can still cast.
+    if leader and protCfg then
+        local ownPre1 = BfBot.Persist.GetPreset(leader, 1)
+        local okScan, castable = pcall(BfBot.Scan.GetCastableSpells, leader)
+        local expect = 0
+        if ownPre1 and type(ownPre1.spells) == "table" and okScan and castable then
+            for resref in pairs(ownPre1.spells) do
+                local sd = castable[resref]
+                if type(sd) == "table" and (sd.count or 0) > 0 then
+                    expect = expect + 1
+                end
+            end
+        end
+        if expect > 0 then
+            local live = BfBot.Persist.GetSummonPreset("test:live", 1,
+                { ownerSprite = leader, cloneSprite = leader })
+            local n = 0
+            if live then for _ in pairs(live.spells) do n = n + 1 end end
+            _check(live ~= nil and n == expect,
+                "live seed copies castable preset-1 spells (" .. tostring(n)
+                .. "/" .. tostring(expect) .. ")")
+        else
+            _warning("leader preset 1 has no castable spells; live seeding check skipped")
+        end
+    else
+        _warning("no leader/protagonist config; live seeding check skipped")
+    end
+
+    -- Cleanup: leave no synthetic identities in the protagonist's save data.
+    do
+        local pc = BfBot.Persist._GetProtagonistConfig()
+        local pcSummons = pc and type(pc.summons) == "table" and pc.summons or nil
+        if pcSummons then
+            pcSummons["test:fake"] = nil
+            pcSummons["test:live"] = nil
+        end
+        _check(pcSummons ~= nil and pcSummons["test:fake"] == nil
+            and pcSummons["test:live"] == nil,
+            "cleanup: synthetic summon identities removed")
+    end
+
     return _summary("SummonCasters")
 end
 
