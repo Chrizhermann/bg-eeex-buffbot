@@ -21,6 +21,7 @@ end
 
 BfBot.UI._charSlot = 0        -- selected character slot (0-5)
 BfBot.UI._presetIdx = 1       -- selected preset index (1-5)
+BfBot.UI._view = "party"      -- active view: "party" (portrait tabs) or "summons" (Task 10 tab)
 BfBot.UI._initialized = false
 
 -- Panel geometry (nil = use default 80%-centered)
@@ -54,6 +55,25 @@ function BfBot.UI._ClampPresetIdx(config)
     end
     BfBot.UI._presetIdx = 1
     return 1
+end
+
+--- Selected summon entry ({oid=..., name=...}) for the summons view.
+-- Stub — Task 10 (summon tab) supplies the real selection state.
+function BfBot.UI._SelectedSummon()
+    return nil
+end
+
+--- Current view's selected sprite: party view resolves the portrait slot,
+--- summons view live-resolves the selected summon via oid+name re-validation.
+--- Always a fresh resolve — never cache the returned userdata across frames (#38).
+function BfBot.UI._GetSelectedSprite()
+    if BfBot.UI._view == "summons" then
+        local entry = BfBot.UI._SelectedSummon()
+        return entry and BfBot.Exec._ResolveCaster({
+            kind = "summon", oid = entry.oid, name = entry.name,
+        }) or nil
+    end
+    return EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
 end
 
 -- ============================================================
@@ -641,8 +661,10 @@ end
 function BfBot.UI._OnOpen()
     buffbot_isOpen = true
     BfBot.UI._Layout()
-    -- Default to first party member if current slot is empty
-    if not EEex_Sprite_GetInPortrait(BfBot.UI._charSlot) then
+    -- Selection gone (empty slot / vanished summon) → default to party view,
+    -- first party member
+    if not BfBot.UI._GetSelectedSprite() then
+        BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
     end
     -- Invalidate all scan caches on panel open (party may have changed)
@@ -677,7 +699,7 @@ function BfBot.UI._Refresh()
     end
 
     -- 2. Get current character's sprite + config
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
         buffbot_spellTable = {}
         buffbot_presetNames = {}
@@ -916,7 +938,7 @@ function BfBot.UI.ToggleSpell(row)
         return
     end
 
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     -- Integer toggle: 1 -> 0, 0 -> 1. NEVER pass boolean to Persist.
     local newState = (entry.on == 1) and 0 or 1
@@ -1058,7 +1080,7 @@ function BfBot.UI.PickerSelf()
     local row = buffbot_targetRow
     local entry = buffbot_spellTable[row]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, "s")
@@ -1108,7 +1130,7 @@ function BfBot.UI.PickerDone()
         Infinity_PopMenu("BUFFBOT_TARGETS")
         return
     end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
         Infinity_PopMenu("BUFFBOT_TARGETS")
         return
@@ -1144,7 +1166,7 @@ function BfBot.UI.PickerUnlock()
     local row = buffbot_targetRow
     local entry = buffbot_spellTable[row]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, entry.resref, 1)
@@ -1186,7 +1208,7 @@ function BfBot.UI.DeleteCurrentPreset()
     local result = BfBot.Persist.DeletePresetAll(BfBot.UI._presetIdx)
     if result then
         -- Clamp to first valid preset for the current character
-        local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+        local sprite = BfBot.UI._GetSelectedSprite()
         if sprite then
             local config = BfBot.Persist.GetConfig(sprite)
             BfBot.UI._ClampPresetIdx(config)
@@ -1202,7 +1224,7 @@ end
 
 function BfBot.UI.Cast()
     -- Validate preset index before building queue
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if sprite then
         local config = BfBot.Persist.GetConfig(sprite)
         BfBot.UI._ClampPresetIdx(config)
@@ -1219,7 +1241,7 @@ function BfBot.UI.Cast()
 end
 
 function BfBot.UI.CastCharacter()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     BfBot.UI._ClampPresetIdx(config)
@@ -1341,7 +1363,7 @@ end
 --- Renumber all spell priorities contiguously (1, 2, 3, ...) based on
 --- current buffbot_spellTable order. Writes back to Persist.
 function BfBot.UI._RenumberPriorities()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     for i, entry in ipairs(buffbot_spellTable) do
         entry.pri = i
@@ -1465,7 +1487,7 @@ end
 function BfBot.UI._BuildPickerList()
     buffbot_pickerSpells = {}
     buffbot_pickerSelected = 0
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
@@ -1515,7 +1537,7 @@ end
 function BfBot.UI.AddPickedSpell()
     local entry = buffbot_pickerSpells[buffbot_pickerSelected]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     -- Set include override (classification-level)
@@ -1535,7 +1557,7 @@ function BfBot.UI.ExcludeSelected()
     if not BfBot.UI._HasSelection() then return end
     local entry = buffbot_spellTable[buffbot_selectedRow]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     -- Set exclude override
@@ -1570,7 +1592,7 @@ end
 
 --- Export current character's config.
 function BfBot.UI.ExportConfig()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     local ok, result = BfBot.Persist.ExportConfig(sprite)
@@ -1608,7 +1630,7 @@ end
 function BfBot.UI.ImportSelected()
     local entry = buffbot_importList[buffbot_importSelected]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     local ok, presets, skipped = BfBot.Persist.ImportConfig(sprite, entry.filename)
@@ -1673,7 +1695,7 @@ function BfBot.UI.SelectVariant(row)
         return
     end
 
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
         Infinity_PopMenu("BUFFBOT_VARIANTS")
         return
@@ -1782,7 +1804,7 @@ end
 function BfBot.UI.ToggleLock(row)
     local entry = buffbot_spellTable[row]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local newState = (entry.lock == 1) and 0 or 1
     entry.lock = newState  -- immediate visual update
@@ -1837,7 +1859,7 @@ end
 -- ============================================================
 
 function BfBot.UI.CycleQuickCast()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local current = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
     local next = (current + 1) % 3
@@ -1846,7 +1868,7 @@ end
 
 function BfBot.UI._QuickCastLabel()
     if not buffbot_isOpen then return "" end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return "Quick Cast: Off" end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
     if qc == 1 then return "Quick Cast: Long" end
@@ -1855,7 +1877,7 @@ function BfBot.UI._QuickCastLabel()
 end
 
 function BfBot.UI._QuickCastColor()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return _parseColor(BfBot.UI._T("qcOff")) end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
     if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
@@ -1864,7 +1886,7 @@ function BfBot.UI._QuickCastColor()
 end
 
 function BfBot.UI._QuickCastTooltip()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return "Normal casting speed" end
     local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
     if qc == 1 then return "Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle." end
