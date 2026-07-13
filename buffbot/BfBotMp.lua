@@ -143,7 +143,17 @@ function BfBot.Mp._IsMpSession()
     local ok, conn = pcall(function()
         return chitin.cNetwork.m_bConnectionEstablished
     end)
-    if not ok then return false end
+    if not ok then
+        -- Warn-once latch: a broken reflection degrades to single-player
+        -- permanently (same fallback as IsLocallyControlled's inline read);
+        -- surface the first failure instead of spamming per-entry per-sweep.
+        if not BfBot.Mp._warnedMpReflect then
+            BfBot.Mp._warnedMpReflect = true
+            BfBot._Warn("[Mp] connection-flag read failed — treating session as"
+                .. " single-player from here on: " .. tostring(conn))
+        end
+        return false
+    end
     -- `not conn` covers a BOOL reflected as Lua false; `conn == 0` as int 0.
     return not (not conn or conn == 0)
 end
@@ -154,7 +164,9 @@ end
 ---   1. Single-player → always true (connection-flag short-circuit; first
 ---      and cheapest check — the entry is never inspected in SP).
 ---   2. MP, clone summon (fresh-resolved sprite carries an owner object id
----      in m_nCopyParent — Project Image / Simulacrum / Mislead): the clone
+---      in m_nCopyParent — Project Image / Simulacrum, probe-verified;
+---      Mislead per IESDP, unverified — a Mislead clone without the field
+---      would fall to rule 3, still conservative): the clone
 ---      follows its OWNER's control → IsLocallyControlled(ownerSprite). The
 ---      owner must be a party member (portrait index 0-5) — the only class
 ---      of sprite IsLocallyControlled is trustworthy on.
