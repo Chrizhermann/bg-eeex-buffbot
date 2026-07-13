@@ -8,12 +8,12 @@
     {"id": 5, "nativeId": 11, "subject": "Task 5: Structural summon detection (GetAlliedSummons)", "status": "completed", "blockedBy": [2]},
     {"id": 6, "nativeId": 12, "subject": "Task 6: Schema v8 + summon config accessors + clone seeding", "status": "completed", "blockedBy": [2]},
     {"id": 7, "nativeId": 13, "subject": "Task 7: Queue building — standalone + preset sweep + INI kill-switch", "status": "completed", "blockedBy": [4, 5, 6]},
-    {"id": 8, "nativeId": 14, "subject": "Task 8: Live-clone standalone execution verification", "status": "pending", "blockedBy": [7]},
-    {"id": 9, "nativeId": 15, "subject": "Task 9: UI _GetSelectedSprite refactor (behavior-neutral)", "status": "pending", "blockedBy": [3]},
+    {"id": 8, "nativeId": 14, "subject": "Task 8: Live-clone standalone execution verification", "status": "completed", "blockedBy": [7]},
+    {"id": 9, "nativeId": 15, "subject": "Task 9: UI _GetSelectedSprite refactor (behavior-neutral)", "status": "completed", "blockedBy": [3]},
     {"id": 10, "nativeId": 16, "subject": "Task 10: Summons view — button, tab source, paging, empty state", "status": "pending", "blockedBy": [9, 5, 6, 7]},
     {"id": 11, "nativeId": 17, "subject": "Task 11: Late-join listener", "status": "pending", "blockedBy": [8]},
     {"id": 12, "nativeId": 18, "subject": "Task 12: Clone F12 innates (conditional on probe)", "status": "pending", "blockedBy": [11]},
-    {"id": 13, "nativeId": 19, "subject": "Task 13: Multiplayer rule for summon casters", "status": "pending", "blockedBy": [7]},
+    {"id": 13, "nativeId": 19, "subject": "Task 13: Multiplayer rule for summon casters", "status": "completed", "blockedBy": [7]},
     {"id": 14, "nativeId": 20, "subject": "Task 14: Full regression, docs, close-out", "status": "pending", "blockedBy": [10, 11, 12, 13]}
   ],
   "lastUpdated": "2026-07-13"
