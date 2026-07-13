@@ -3368,6 +3368,456 @@ function BfBot.Test.SummonCasters()
             "cleanup: synthetic summon identities removed")
     end
 
+    -- ============================================================
+    -- ---- Task 7: summon queue building, preset sweep, guards ----
+    -- ============================================================
+    -- Each sub-block runs under pcall so a missing function (fail-first
+    -- stage) yields FAIL lines instead of aborting the whole phase.
+
+    -- [7.1] PeekSummonPreset — read-only contract: queue building is a read
+    -- path and must never create config (only UI/seed flows may, via
+    -- GetSummonPreset).
+    do
+        local ok7, err7 = pcall(function()
+            _check(type(BfBot.Persist.PeekSummonPreset) == "function",
+                "PeekSummonPreset is a function")
+            local pc = BfBot.Persist._GetProtagonistConfig()
+            local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+            _check(BfBot.Persist.PeekSummonPreset("test:peek", 1) == nil,
+                "Peek on unknown identity returns nil")
+            _check(pcs ~= nil and pcs["test:peek"] == nil,
+                "Peek never created the identity (read-only)")
+            _check(BfBot.Persist.PeekSummonPreset("", 1) == nil,
+                "Peek: empty identity rejected")
+            _check(BfBot.Persist.PeekSummonPreset("test:peek", 0) == nil,
+                "Peek: preset index 0 rejected")
+            _check(BfBot.Persist.PeekSummonPreset("test:peek", 1.5) == nil,
+                "Peek: fractional preset index rejected")
+            _check(pcs ~= nil and pcs["test:peek"] == nil,
+                "rejected Peek calls never created an entry")
+            -- After a create, Peek returns the SAME stored table.
+            local created = BfBot.Persist.GetSummonPreset("test:peek", 1)
+            local peeked = BfBot.Persist.PeekSummonPreset("test:peek", 1)
+            _check(created ~= nil and peeked == created,
+                "Peek returns the stored table after create")
+            -- Existing identity, uncreated preset index → nil, nothing appears.
+            _check(BfBot.Persist.PeekSummonPreset("test:peek", 3) == nil
+                and pcs ~= nil and pcs["test:peek"] ~= nil
+                and pcs["test:peek"].presets[3] == nil,
+                "Peek on uncreated preset index stays nil, creates nothing")
+            if pcs then pcs["test:peek"] = nil end  -- shared-save hygiene
+        end)
+        if not ok7 then _nok("Peek block errored: " .. tostring(err7)) end
+    end
+
+    -- [7.2] INI kill-switch default
+    _check(BfBot.Persist.GetPref("SummonsJoinCast") == 1,
+        "SummonsJoinCast pref defaults to 1")
+
+    -- [7.3] BuildQueueForSummon — fake summon riding the leader's own sprite
+    -- (a party sprite is a valid CGameSprite for scan purposes; plan's seam).
+    if leader then
+        local leaderName = BfBot._GetName(leader)
+        -- Deterministic castable picks: sort resrefs, take up to three.
+        local castable = BfBot.Scan.GetCastableSpells(leader)
+        local picks = {}
+        for resref, data in pairs(castable or {}) do
+            if type(data) == "table" and (data.count or 0) > 0 then
+                picks[#picks + 1] = resref
+            end
+        end
+        table.sort(picks)
+        local resA, resB, resC = picks[1], picks[2], picks[3]
+        if not resA then
+            _warning("leader has no castable spell; skipping BuildQueueForSummon checks")
+        else
+            local ok7, err7 = pcall(function()
+                local fake = { oid = leader.m_id, sprite = leader,
+                               name = leaderName, kind = "summon",
+                               identity = "test:fake" }
+                local pc = BfBot.Persist._GetProtagonistConfig()
+                local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+
+                -- Unconfigured identity → no queue AND no config created
+                -- (BuildQueueForSummon is a read path — Peek, never Get).
+                local q0 = BfBot.Persist.BuildQueueForSummon(fake, 1)
+                _check(q0 == nil or #q0 == 0,
+                    "unconfigured summon builds no queue")
+                _check(pcs ~= nil and pcs["test:fake"] == nil,
+                    "queue build created no config for the identity")
+
+                -- Configure: resB pri 1, resA pri 2, resC disabled.
+                local sp = BfBot.Persist.GetSummonPreset("test:fake", 1)
+                sp.spells[resA] = { on = 1, tgt = "s", pri = 2 }
+                if resB then sp.spells[resB] = { on = 1, tgt = "s", pri = 1 } end
+                if resC then sp.spells[resC] = { on = 0, tgt = "s", pri = 3 } end
+
+                local q = BfBot.Persist.BuildQueueForSummon(fake, 1)
+                local expected = resB and 2 or 1
+                _check(q ~= nil and #q == expected,
+                    "configured summon queue has " .. expected .. " entries (got "
+                    .. tostring(q and #q) .. ")")
+                local refsOk, noSlotField, selfTargets = true, true, true
+                for _, e in ipairs(q or {}) do
+                    if not (type(e.casterRef) == "table"
+                        and e.casterRef.kind == "summon"
+                        and e.casterRef.oid == leader.m_id
+                        and e.casterRef.name == leaderName) then refsOk = false end
+                    if e.caster ~= nil then noSlotField = false end
+                    if e.target ~= "self" then selfTargets = false end
+                end
+                _check(refsOk, "entries carry casterRef {kind=summon, oid, name}")
+                _check(noSlotField, "entries carry no party caster slot")
+                _check(selfTargets, "tgt='s' resolved to the summon itself")
+                if resB then
+                    _check(q ~= nil and q[1] and q[1].spell == resB
+                        and q[2] and q[2].spell == resA,
+                        "priority order honored (pri 1 before pri 2)")
+                end
+                if resC then
+                    local hasC = false
+                    for _, e in ipairs(q or {}) do
+                        if e.spell == resC then hasC = true end
+                    end
+                    _check(hasC == false, "disabled spell excluded (on honored)")
+                end
+
+                -- Name target resolves like the party builder does (leader
+                -- sits in portrait slot 0 → target 1).
+                if leaderName ~= "?" then
+                    sp.spells[resA].tgt = leaderName
+                    local qn = BfBot.Persist.BuildQueueForSummon(fake, 1)
+                    local found = nil
+                    for _, e in ipairs(qn or {}) do
+                        if e.spell == resA then found = e end
+                    end
+                    _check(found ~= nil and found.target == 1,
+                        "name tgt resolves to party slot target (got "
+                        .. tostring(found and found.target) .. ")")
+                    sp.spells[resA].tgt = "s"
+                end
+
+                -- qc contract: the summon preset's OWN qc drives the cheat
+                -- flag; the run-wide qcMode must not override it.
+                sp.qc = 2
+                local qCheat = BfBot.Persist.BuildQueueForSummon(fake, 1)
+                local allCheat = qCheat ~= nil and #qCheat > 0
+                for _, e in ipairs(qCheat or {}) do
+                    if e.cheat ~= 1 then allCheat = false end
+                end
+                _check(allCheat, "qc=2 marks every summon entry cheat=1")
+                local sKey = "s" .. leader.m_id
+                local by1 = BfBot.Exec._BuildQueue(qCheat, 0)  -- run-wide qc OFF
+                _check(by1 ~= nil and by1[sKey] ~= nil
+                    and by1[sKey][1].cheat == true,
+                    "exec honors summon cheat=1 even with qcMode=0")
+
+                sp.qc = 0
+                local qPlain = BfBot.Persist.BuildQueueForSummon(fake, 1)
+                local nonCheat = qPlain ~= nil and #qPlain > 0
+                for _, e in ipairs(qPlain or {}) do
+                    if e.cheat ~= 0 then nonCheat = false end
+                end
+                _check(nonCheat, "qc=0 marks every summon entry cheat=0")
+                local by0 = BfBot.Exec._BuildQueue(qPlain, 2)  -- run-wide qc ALL
+                _check(by0 ~= nil and by0[sKey] ~= nil
+                    and by0[sKey][1].cheat == false,
+                    "summon qc=0 beats run-wide qcMode=2 (own qc wins)")
+            end)
+            if not ok7 then
+                _nok("BuildQueueForSummon block errored: " .. tostring(err7))
+            end
+            -- Cleanup runs even when the block errored mid-way: never leave
+            -- the synthetic identity in the save.
+            local pc = BfBot.Persist._GetProtagonistConfig()
+            local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+            if pcs then pcs["test:fake"] = nil end
+            _check(pcs ~= nil and pcs["test:fake"] == nil,
+                "cleanup: test:fake identity removed")
+        end
+    else
+        _nok("no leader sprite in slot 0 for BuildQueueForSummon checks")
+    end
+
+    -- [7.4] Preset sweep + SummonsJoinCast kill-switch (stubbed detection).
+    if leader then
+        local leaderName = BfBot._GetName(leader)
+        -- Fail-first guard: don't write the pref into baldur.ini before its
+        -- default is registered (a pre-implementation SetPref would bake 0 in
+        -- and shadow the future default forever).
+        if BfBot.Persist._INI_DEFAULTS.SummonsJoinCast == nil then
+            _nok("SummonsJoinCast missing from _INI_DEFAULTS — sweep not implemented")
+        else
+            local castable = BfBot.Scan.GetCastableSpells(leader)
+            local picks = {}
+            for resref, data in pairs(castable or {}) do
+                if type(data) == "table" and (data.count or 0) > 0 then
+                    picks[#picks + 1] = resref
+                end
+            end
+            table.sort(picks)
+            local resA = picks[1]
+            if not resA then
+                _warning("leader has no castable spell; skipping sweep checks")
+            else
+                local savedSummons = BfBot.Scan.GetAlliedSummons
+                local savedClassify = BfBot.Scan.ClassifySummonSprite
+                local savedPref = BfBot.Persist.GetPref("SummonsJoinCast")
+                local ok7, err7 = pcall(function()
+                    -- Configure the fake identity's preset 1.
+                    local sp = BfBot.Persist.GetSummonPreset("test:fake", 1)
+                    sp.spells[resA] = { on = 1, tgt = "s", pri = 1 }
+
+                    -- Stub detection: one fake summon riding the leader's oid.
+                    -- ClassifySummonSprite must be stubbed too — the sweep
+                    -- re-validates allegiance by re-classifying the fresh
+                    -- resolve, and a party sprite classifies nil (portrait
+                    -- filter) by design.
+                    BfBot.Scan.GetAlliedSummons = function()
+                        return { { oid = leader.m_id, name = leaderName,
+                                   kind = "summon", identity = "test:fake",
+                                   sprite = EEex_Sprite_GetInPortrait(0) } }
+                    end
+                    BfBot.Scan.ClassifySummonSprite = function(sprite)
+                        local okId, id = pcall(function() return sprite.m_id end)
+                        if okId and id == leader.m_id then
+                            return { oid = leader.m_id, sprite = sprite,
+                                     name = leaderName, kind = "summon",
+                                     identity = "test:fake" }
+                        end
+                        return savedClassify(sprite)
+                    end
+
+                    local function summonRefs(q)
+                        local n = 0
+                        for _, e in ipairs(type(q) == "table" and q or {}) do
+                            if type(e.casterRef) == "table"
+                                and e.casterRef.kind == "summon" then
+                                n = n + 1
+                            end
+                        end
+                        return n
+                    end
+
+                    BfBot.Persist.SetPref("SummonsJoinCast", 0)
+                    local okq0, q0 = pcall(BfBot.Persist.BuildQueueFromPreset, 1)
+                    BfBot.Persist.SetPref("SummonsJoinCast", 1)
+                    local okq1, q1 = pcall(BfBot.Persist.BuildQueueFromPreset, 1)
+
+                    _check(okq0 and summonRefs(q0) == 0,
+                        "pref 0: no summon refs in the queue (ok=" .. tostring(okq0)
+                        .. " n=" .. tostring(summonRefs(q0)) .. ")")
+                    _check(okq1 and summonRefs(q1) >= 1,
+                        "pref 1: sweep appended summon entries (ok=" .. tostring(okq1)
+                        .. " n=" .. tostring(summonRefs(q1)) .. ")")
+                end)
+                -- pcall-safe restore, then assert.
+                BfBot.Scan.GetAlliedSummons = savedSummons
+                BfBot.Scan.ClassifySummonSprite = savedClassify
+                BfBot.Persist.SetPref("SummonsJoinCast", savedPref)
+                pcall(BfBot.Scan.InvalidateSummons)  -- drop stub-tainted cache
+                local pc = BfBot.Persist._GetProtagonistConfig()
+                local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+                if pcs then pcs["test:fake"] = nil end
+                if not ok7 then _nok("sweep block errored: " .. tostring(err7)) end
+                _check(pcs ~= nil and pcs["test:fake"] == nil,
+                    "cleanup: sweep test identity removed")
+            end
+        end
+    else
+        _nok("no leader sprite in slot 0 for sweep checks")
+    end
+
+    -- [7.5] Puppet-lock policy — pure decision core, synthetic tables only.
+    do
+        local ok7, err7 = pcall(function()
+            _check(type(BfBot.Persist._ApplyPuppetLockPolicy) == "function",
+                "_ApplyPuppetLockPolicy is a function")
+            local function mk(name) return { caster = 0, spell = "X" .. name,
+                spellName = name, target = "self", pri = 1 } end
+            local caster = { oid = 100, name = "Testmage" }
+            local plain = { mk("Stoneskin"), mk("Blur") }
+
+            -- Rule 1: live PI descriptor, owner matched by oid → all skipped.
+            local kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain,
+                { { cloneType = 2, ownerOid = 100, ownerName = "Testmage" } })
+            _check(#kept == 0 and #skips == 1,
+                "rule 1: PI clone of this owner skips all entries")
+            _check(skips[1] ~= nil and type(skips[1].msg) == "string"
+                and skips[1].msg:find("puppet-locked by Project Image", 1, true) ~= nil
+                and skips[1].msg:find("Testmage", 1, true) ~= nil,
+                "rule 1: skip record names the owner and the lock")
+
+            -- Rule 1: oid is authoritative — name matches but oid differs → NOT locked.
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain,
+                { { cloneType = 2, ownerOid = 999, ownerName = "Testmage" } })
+            _check(#kept == 2 and #skips == 0,
+                "rule 1: oid mismatch wins over name match (not locked)")
+
+            -- Rule 1: name fallback only when the descriptor has no oid.
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain,
+                { { cloneType = 2, ownerName = "Testmage" } })
+            _check(#kept == 0 and #skips == 1,
+                "rule 1: name fallback locks when descriptor lacks an oid")
+
+            -- Rule 3: Simulacrum locks nothing.
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain,
+                { { cloneType = 3, ownerOid = 100, ownerName = "Testmage" } })
+            _check(#kept == 2 and #skips == 0, "rule 3: Simulacrum locks nothing")
+
+            -- Rule 2: trailing entries after a "Project Image" cast drop; the
+            -- PI entry itself and everything before it stay (case-insensitive).
+            local chain = { mk("Stoneskin"), mk("PROJECT IMAGE"), mk("Blur"), mk("Haste") }
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, chain, {})
+            _check(#kept == 2 and kept[1].spellName == "Stoneskin"
+                and kept[2].spellName == "PROJECT IMAGE",
+                "rule 2: entries before + the PI cast retained")
+            _check(#skips == 1 and skips[1].msg:find(
+                "entries after Project Image skipped", 1, true) ~= nil,
+                "rule 2: trailing entries dropped with the documented skip line")
+
+            -- Rule 2: PI last in chain → nothing dropped.
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster,
+                { mk("Stoneskin"), mk("Project Image") }, {})
+            _check(#kept == 2 and #skips == 0,
+                "rule 2: PI as last entry drops nothing")
+
+            -- No clones, no PI in chain → untouched.
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain, {})
+            _check(#kept == 2 and #skips == 0, "no locks: entries pass through")
+
+            -- _LogBuildSkips: callable with records (writes SKIP lines to the
+            -- open suite log) and nil-safe.
+            _check(pcall(BfBot.Persist._LogBuildSkips,
+                    { { msg = "test skip line (ignore)" } }) == true
+                and pcall(BfBot.Persist._LogBuildSkips, nil) == true,
+                "_LogBuildSkips handles records and nil")
+        end)
+        if not ok7 then _nok("puppet-lock block errored: " .. tostring(err7)) end
+    end
+
+    -- [7.6] Gone-summon sweep in _SafetyTick: a summon destroyed mid-cast
+    -- takes its queued EEex_LuaAction advance with it — the per-step gone
+    -- path never fires, so the sweep must finish its record (≤2s) instead of
+    -- stalling the run until the watchdog.
+    if leader then
+        local leaderName = BfBot._GetName(leader)
+        local saved = {
+            state        = BfBot.Exec._state,
+            casters      = BfBot.Exec._casters,
+            active       = BfBot.Exec._activeCasters,
+            lastSafety   = BfBot.Exec._lastSafetyTick,
+            lastProgress = BfBot.Exec._lastProgressGameTime,
+            castCount    = BfBot.Exec._castCount,
+            skipCount    = BfBot.Exec._skipCount,
+        }
+        local function _restoreExec()
+            BfBot.Exec._state                = saved.state
+            BfBot.Exec._casters              = saved.casters
+            BfBot.Exec._activeCasters        = saved.active
+            BfBot.Exec._lastSafetyTick       = saved.lastSafety
+            BfBot.Exec._lastProgressGameTime = saved.lastProgress
+            BfBot.Exec._castCount            = saved.castCount
+            BfBot.Exec._skipCount            = saved.skipCount
+        end
+        local function _reopenLog()
+            if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+        end
+        local ok7, err7 = pcall(function()
+            -- One bogus-oid summon (not done) + one party record already
+            -- done. Real leader name keeps _IsStateStale out of the way; the
+            -- stray sprite sentinel guards against any cached-userdata read.
+            BfBot.Exec._state = "running"
+            BfBot.Exec._casters = {
+                ["p0"] = { ref = { kind = "party", slot = 0 }, name = leaderName,
+                           cheatApplied = false, queue = {}, index = 0,
+                           done = true, cheatBoundary = 0 },
+                ["s134217727"] = {
+                    ref = { kind = "summon", oid = 134217727, name = "GONE" },
+                    sprite = "STALE_SENTINEL",  -- stray field: nothing may read it
+                    name = "GONE", cheatApplied = false, queue = {}, index = 0,
+                    done = false, cheatBoundary = 0 },
+            }
+            BfBot.Exec._activeCasters = 1
+            BfBot.Exec._NoteProgress()      -- watchdog freshly armed (must not trip)
+            BfBot.Exec._lastSafetyTick = 0  -- bypass the 2s rate limit
+            local stOk, stErr = pcall(BfBot.Exec._SafetyTick)
+            _reopenLog()  -- run completion closed the suite's log
+            local rec = BfBot.Exec._casters["s134217727"]
+            _check(stOk, "sweep tick ran without error (" .. tostring(stErr) .. ")")
+            _check(rec ~= nil and rec.done == true,
+                "gone summon record finished by the sweep")
+            _check(BfBot.Exec._activeCasters <= 0,
+                "no active casters left after the sweep")
+            _check(BfBot.Exec._state == "done",
+                "run completed when the sweep finished the last caster (state="
+                .. tostring(BfBot.Exec._state) .. ")")
+
+            -- Healthy summon: resolves + allied → the sweep leaves it alone.
+            BfBot.Exec._state = "running"
+            BfBot.Exec._casters = {
+                ["s" .. leader.m_id] = {
+                    ref = { kind = "summon", oid = leader.m_id, name = leaderName },
+                    name = leaderName, cheatApplied = false, queue = {}, index = 0,
+                    done = false, cheatBoundary = 0 },
+            }
+            BfBot.Exec._activeCasters = 1
+            BfBot.Exec._NoteProgress()
+            BfBot.Exec._lastSafetyTick = 0
+            local stOk2 = pcall(BfBot.Exec._SafetyTick)
+            local rec2 = BfBot.Exec._casters["s" .. leader.m_id]
+            _check(stOk2 and BfBot.Exec._state == "running"
+                and rec2 ~= nil and rec2.done == false,
+                "healthy (resolving, allied) summon untouched by the sweep")
+            -- leave clean for restore
+            BfBot.Exec._state = "idle"
+            BfBot.Exec._casters = {}
+            BfBot.Exec._activeCasters = 0
+        end)
+        _restoreExec()
+        if not ok7 then _nok("gone-summon sweep block errored: " .. tostring(err7)) end
+    else
+        _nok("no leader sprite in slot 0 for gone-summon sweep checks")
+    end
+
+    -- [7.7] Per-step allegiance re-read: band predicate + step resolver.
+    -- The live hostile-flip (charm/dominate mid-run) is NOT synthetically
+    -- testable — mutating EA on a live sprite risks the save; the predicate
+    -- and its wiring are covered here, the flip itself is a manual Task 8
+    -- scenario.
+    do
+        local ok7, err7 = pcall(function()
+            _check(type(BfBot.Exec._IsAlliedEA) == "function",
+                "_IsAlliedEA is a function")
+            _check(BfBot.Exec._IsAlliedEA(2) == true,  "EA 2 (PC) allied")
+            _check(BfBot.Exec._IsAlliedEA(4) == true,  "EA 4 (ALLY) allied")
+            _check(BfBot.Exec._IsAlliedEA(30) == true, "EA 30 upper bound allied")
+            _check(BfBot.Exec._IsAlliedEA(1) == false,   "EA 1 not allied")
+            _check(BfBot.Exec._IsAlliedEA(31) == false,  "EA 31 not allied")
+            _check(BfBot.Exec._IsAlliedEA(128) == false, "EA 128 (neutral) not allied")
+            _check(BfBot.Exec._IsAlliedEA(255) == false, "EA 255 (enemy) not allied")
+            _check(BfBot.Exec._IsAlliedEA(nil) == false, "EA nil not allied")
+            if leader then
+                local leaderName = BfBot._GetName(leader)
+                _check(BfBot.Exec._SummonStillAllied(leader) == true,
+                    "live EA re-read: leader is in the allied band")
+                local liveRec = { ref = { kind = "summon", oid = leader.m_id,
+                    name = leaderName }, name = leaderName }
+                _check(BfBot.Exec._ResolveCasterForStep(liveRec) ~= nil,
+                    "step resolver returns a live allied summon's sprite")
+                local goneRec = { ref = { kind = "summon", oid = 134217727,
+                    name = "GONE" }, name = "GONE" }
+                _check(BfBot.Exec._ResolveCasterForStep(goneRec) == nil,
+                    "step resolver nil for a gone summon")
+                local wrongName = { ref = { kind = "party", slot = 0 },
+                    name = "NOT_THE_LEADER" }
+                _check(BfBot.Exec._ResolveCasterForStep(wrongName) == nil,
+                    "step resolver nil for a reshuffled party slot")
+            end
+        end)
+        if not ok7 then _nok("EA re-read block errored: " .. tostring(err7)) end
+    end
+
     return _summary("SummonCasters")
 end
 

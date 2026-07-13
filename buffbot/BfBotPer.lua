@@ -27,6 +27,7 @@ BfBot.Persist._INI_DEFAULTS = {
     FontSize      = 2,    -- 1=small, 2=medium, 3=large
     MpControlMode = "auto",  -- multiplayer caster filter: "auto" | "manual" | "all"
     MpControlNames = "",     -- manual mode: comma-separated names the local player controls
+    SummonsJoinCast = 1,     -- allied summons/clones with configured presets join party casts (#19)
 }
 
 -- ---- Default config ----
@@ -727,6 +728,59 @@ function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
     return seeded
 end
 
+--- Shared argument validation for the summon-preset accessors
+--- (GetSummonPreset / PeekSummonPreset). Same contract for both:
+--- invalid args → warn + nil.
+--- Integer preset index required: the Get accessor CREATES at the key, and a
+--- fractional key would persist entries the export serializer silently drops
+--- (its integer-key walk requires k == floor(k)).
+-- @param fn        accessor name for the warn prefix
+-- @param identity  summon identity key (non-empty string)
+-- @param presetIdx preset index 1..BfBot.MAX_PRESETS (integer)
+-- @return 1 when valid, nil (+ warn) otherwise
+function BfBot.Persist._CheckSummonArgs(fn, identity, presetIdx)
+    if type(identity) ~= "string" or identity == "" then
+        BfBot._Warn("[Persist] " .. fn .. ": invalid identity ("
+            .. tostring(identity) .. ")")
+        return nil
+    end
+    if type(presetIdx) ~= "number" or presetIdx < 1
+        or presetIdx > BfBot.MAX_PRESETS
+        or presetIdx ~= math.floor(presetIdx) then
+        BfBot._Warn("[Persist] " .. fn .. ": invalid preset index ("
+            .. tostring(presetIdx) .. ")")
+        return nil
+    end
+    return 1
+end
+
+--- READ-ONLY summon-preset lookup: the stored preset table, or nil when the
+--- identity/preset does not exist. NEVER creates, never seeds, never mutates
+--- config. Contract: queue building is a read path — only UI/seed flows may
+--- create presets (via GetSummonPreset). Without this, every detected summon
+--- would pollute the protagonist config (and thus the save) with empty
+--- identities. Malformed stored shapes read as nil here (no repair — the
+--- write accessor and _ValidateSummons own repairs).
+-- @param identity   summon identity key (non-empty string)
+-- @param presetIdx  preset index 1..BfBot.MAX_PRESETS
+-- @return preset table { qc, spells } or nil
+function BfBot.Persist.PeekSummonPreset(identity, presetIdx)
+    if not BfBot.Persist._CheckSummonArgs("PeekSummonPreset", identity, presetIdx) then
+        return nil
+    end
+    local config = BfBot.Persist._GetProtagonistConfig()
+    if not config then
+        BfBot._Warn("[Persist] PeekSummonPreset: no protagonist config")
+        return nil
+    end
+    if type(config.summons) ~= "table" then return nil end
+    local entry = config.summons[identity]
+    if type(entry) ~= "table" or type(entry.presets) ~= "table" then return nil end
+    local preset = entry.presets[presetIdx]
+    if type(preset) ~= "table" then return nil end
+    return preset
+end
+
 --- Get (lazily creating) a summon preset on the protagonist's config.
 --- Seeding happens on CREATE only; later reads return the stored table
 --- untouched (shape-repaired, never re-seeded). Everything stored is
@@ -739,19 +793,7 @@ end
 -- @return preset table { qc, spells }, or nil (+ warn) on invalid args /
 --         no protagonist
 function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
-    if type(identity) ~= "string" or identity == "" then
-        BfBot._Warn("[Persist] GetSummonPreset: invalid identity ("
-            .. tostring(identity) .. ")")
-        return nil
-    end
-    -- Integer required: this accessor CREATES at the key, and a fractional
-    -- key would persist entries the export serializer silently drops
-    -- (its integer-key walk requires k == floor(k)).
-    if type(presetIdx) ~= "number" or presetIdx < 1
-        or presetIdx > BfBot.MAX_PRESETS
-        or presetIdx ~= math.floor(presetIdx) then
-        BfBot._Warn("[Persist] GetSummonPreset: invalid preset index ("
-            .. tostring(presetIdx) .. ")")
+    if not BfBot.Persist._CheckSummonArgs("GetSummonPreset", identity, presetIdx) then
         return nil
     end
     local config = BfBot.Persist._GetProtagonistConfig()
@@ -1185,12 +1227,28 @@ end
 --- Resolve a config target (tgt field) into one or more exec queue entries.
 -- Accepts both legacy slot strings ("1"-"6") and name strings ("Branwen").
 -- @param tgt string|table: "s", "p", slot string, name string, or table of slot/name strings
--- @param slot number: caster party slot (0-5)
+-- @param caster number|table: party slot 0-5 (legacy party path — entries get
+--        `caster = slot`, byte-identical to the historical output) OR a
+--        pre-built caster-ref table (summon path, issue #19 — entries get
+--        `casterRef = ref`, the Task-4 exec seam; `tgt = "s"` then means the
+--        summon itself)
 -- @param resref string: spell resref
 -- @param pri number: priority value
--- @return table: array of {caster, spell, target, pri} entries
-function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
+-- @return table: array of {caster|casterRef, spell, target, pri} entries
+function BfBot.Persist._ResolveConfigTarget(tgt, caster, resref, pri)
     local results = {}
+    -- Entry factory: the only line that differs between the party and summon
+    -- paths. The same ref TABLE is shared across a spell's entries — exec
+    -- treats casterRef as read-only, so aliasing is safe.
+    local function mkEntry(target, priVal)
+        local e = { spell = resref, target = target, pri = priVal }
+        if type(caster) == "table" then
+            e.casterRef = caster
+        else
+            e.caster = caster
+        end
+        return e
+    end
     if type(tgt) == "table" then
         -- Ordered target list: one queue entry per target.
         -- Fractional sub-priority preserves target order within the spell
@@ -1201,22 +1259,13 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
             local num = tonumber(entry)
             if num and num >= 1 and num <= 6 then
                 -- Legacy slot string
-                table.insert(results, {
-                    caster = slot,
-                    spell  = resref,
-                    target = num,
-                    pri    = pri + subPri / 1000,
-                })
+                table.insert(results, mkEntry(num, pri + subPri / 1000))
             else
                 -- Name-based: resolve to slot
                 local resolved = BfBot.Persist._ResolveNameToSlot(entry)
                 if resolved then
-                    table.insert(results, {
-                        caster = slot,
-                        spell  = resref,
-                        target = resolved + 1,  -- slot 0-5 → Player 1-6
-                        pri    = pri + subPri / 1000,
-                    })
+                    -- slot 0-5 → Player 1-6
+                    table.insert(results, mkEntry(resolved + 1, pri + subPri / 1000))
                 end
                 -- Unresolved names silently skipped
             end
@@ -1242,22 +1291,282 @@ function BfBot.Persist._ResolveConfigTarget(tgt, slot, resref, pri)
                 end
             end
         end
-        table.insert(results, {
-            caster = slot,
-            spell  = resref,
-            target = target,
-            pri    = pri,
-        })
+        table.insert(results, mkEntry(target, pri))
     end
     return results
 end
 
---- Build an execution queue from a preset across all party members.
+-- ---- Summon queue building (issue #19) ----
+
+--- Multiplayer gate for the summon sweep — Task 13 seam. Single-player →
+--- always true. An ESTABLISHED multiplayer session → false: BuffBot's cast
+--- chains are queued on the LOCAL action list only (see BfBotMp.lua), so
+--- queuing onto a summon another machine may own would hang its chain. The
+--- conservative ownership rule (clone follows its owner's control, ownerless
+--- summons host-only) lands with Task 13 as
+--- BfBot.Mp.IsSummonLocallyControlled; this predicate defers to it once it
+--- exists.
+-- @param summonEntry detection entry (unused until Task 13)
+-- @return boolean
+function BfBot.Persist._SummonPassesMpRule(summonEntry)
+    if BfBot.Mp and BfBot.Mp.IsSummonLocallyControlled then
+        return BfBot.Mp.IsSummonLocallyControlled(summonEntry) and true or false
+    end
+    -- Pre-Task-13 fallback: single-player detection via the engine's
+    -- connection flag, mirroring BfBot.Mp.IsLocallyControlled's short-circuit.
+    -- Reflection failure → treat as single-player (never silently stop SP
+    -- buffing; the exec watchdog backstops any resulting MP hang).
+    local ok, established = pcall(function()
+        local chitin = rawget(_G, "EEex_EngineGlobal_CBaldurChitin")
+            or (rawget(_G, "EngineGlobals") and EngineGlobals.g_pBaldurChitin)
+        if not chitin then return false end
+        local conn = chitin.cNetwork.m_bConnectionEstablished
+        return conn ~= nil and conn ~= false and conn ~= 0
+    end)
+    if ok and established then return false end
+    return true
+end
+
+--- Collect live Project-Image clone descriptors for the puppet-lock policy.
+--- Fresh by construction: drops the summon sweep cache, then re-classifies
+--- each candidate off a fresh oid+name resolve (detection entries reflect
+--- allegiance/liveness at sweep time only). Only PI-type clones
+--- (stat 139 == 2) produce descriptors — Simulacrum (3) locks nothing.
+--- Owner linkage is read directly off the LIVE clone sprite: m_nCopyParent
+--- is the owner's object id (probe-verified); the detection entry only
+--- carries ownerName.
+--- LIMITATION: detection rides on GetAlliedSummons, so a spell-less clone
+--- would be missed — acceptable: Project Image exists only on casters, and
+--- clones copy the full spellbook.
+-- @return array of { cloneType = 2, ownerOid = number|nil, ownerName = string|nil }
+function BfBot.Persist._CollectLiveCloneDescriptors()
+    local out = {}
+    if not (BfBot.Scan and BfBot.Scan.GetAlliedSummons
+        and BfBot.Exec and BfBot.Exec._ResolveCaster) then
+        return out
+    end
+    pcall(BfBot.Scan.InvalidateSummons)  -- build-time freshness (≤2s TTL cache)
+    local okList, list = pcall(BfBot.Scan.GetAlliedSummons)
+    if not okList or type(list) ~= "table" then return out end
+    for _, e in ipairs(list) do
+        local sprite = BfBot.Exec._ResolveCaster({
+            kind = "summon", oid = e.oid, name = e.name })
+        if sprite then
+            local okC, fresh = pcall(BfBot.Scan.ClassifySummonSprite, sprite)
+            if okC and type(fresh) == "table" and fresh.kind == "clone"
+                and fresh.cloneType == 2 then
+                local ownerOid = nil
+                local okP, cp = pcall(function() return sprite.m_nCopyParent end)
+                if okP and type(cp) == "number" and cp ~= -1 then
+                    ownerOid = cp
+                end
+                out[#out + 1] = { cloneType = fresh.cloneType,
+                    ownerOid = ownerOid, ownerName = fresh.ownerName }
+            end
+        end
+    end
+    return out
+end
+
+--- PURE decision core for the Project-Image owner-lock policy (issue #19).
+--- Probe-verified engine fact: while a PI clone lives, actions queued on its
+--- OWNER are engine-delayed and fire as "zombie casts" when the image
+--- expires. Rules, in order:
+---   Rule 1: a live PI clone (cloneType 2) owned by this caster → ALL
+---           entries skipped (the clone casts instead). Owner matched by
+---           object id when the descriptor carries one; name compare is the
+---           fallback only when it doesn't.
+---   Rule 2: the caster's own chain casts Project Image with entries AFTER
+---           it → trailing entries dropped; entries before it and the PI
+---           cast itself stay. Detection is pragmatic: the scan entry's
+---           display NAME matched against "project image" case-insensitively
+---           (resref is NOT assumable under Spell Revisions relocation).
+---           LIMITATION: modded PI-alikes with different names aren't
+---           caught; their trailing entries fire delayed at image expiry and
+---           the exec watchdog still completes the run.
+---   Rule 3: Simulacrum (cloneType 3) locks nothing — only cloneType 2
+---           participates, no other handling.
+--- No logging here (pure, synthetic-testable) — callers log the returned
+--- skip records (see _LogBuildSkips).
+-- @param caster     { oid = number|nil, name = string|nil } — the party caster
+-- @param entries    ONE caster's priority-sorted entry list; each entry
+--                   carries `spellName` (display name, rule-2 match)
+-- @param liveClones array of { cloneType, ownerOid|nil, ownerName|nil }
+-- @return kept (array, same entry tables), skips (array of { msg = string })
+function BfBot.Persist._ApplyPuppetLockPolicy(caster, entries, liveClones)
+    local kept, skips = {}, {}
+    if type(entries) ~= "table" then return kept, skips end
+    if type(caster) ~= "table" then caster = {} end
+    if type(liveClones) ~= "table" then liveClones = {} end
+
+    -- Rule 1: is this caster the owner of a live PI clone?
+    for _, c in ipairs(liveClones) do
+        if type(c) == "table" and c.cloneType == 2 then
+            local owned
+            if c.ownerOid ~= nil then
+                -- Object id is authoritative when available
+                owned = (caster.oid ~= nil and c.ownerOid == caster.oid)
+            else
+                owned = (c.ownerName ~= nil and c.ownerName == caster.name)
+            end
+            if owned then
+                if #entries > 0 then
+                    skips[#skips + 1] = { msg = tostring(caster.name)
+                        .. " puppet-locked by Project Image — cast again"
+                        .. " after the image expires" }
+                end
+                return kept, skips  -- kept stays empty
+            end
+        end
+    end
+
+    -- Rule 2: drop trailing entries after a Project Image cast in the chain.
+    for i, e in ipairs(entries) do
+        kept[#kept + 1] = e
+        local nm = type(e.spellName) == "string" and e.spellName:lower() or ""
+        if nm:find("project image", 1, true) then
+            if #entries > i then
+                skips[#skips + 1] = { msg = tostring(caster.name) .. ": "
+                    .. (#entries - i) .. " entries after Project Image skipped"
+                    .. " — owner locked while image is active" }
+            end
+            break
+        end
+    end
+    return kept, skips
+end
+
+--- Log puppet-lock skip records from the queue builders. Uses the exec
+--- SKIP-logging convention (BfBot.Exec._LogEntry). Builders run BEFORE
+--- Exec.Start opens the run's log, so when no log handle is open this
+--- briefly opens buffbot_exec.log in append mode (the _SweepOrphanCheat
+--- pattern); when one IS open (test suite, mid-run), it writes there and
+--- leaves the handle alone.
+function BfBot.Persist._LogBuildSkips(skips)
+    if type(skips) ~= "table" or #skips == 0 then return end
+    if not (BfBot.Exec and BfBot.Exec._LogEntry) then return end
+    local hadLog = BfBot._logHandle ~= nil
+    if not hadLog then BfBot._OpenLogAppend(BfBot.Exec._logFile) end
+    for _, s in ipairs(skips) do
+        if type(s) == "table" and type(s.msg) == "string" then
+            BfBot.Exec._LogEntry("SKIP", s.msg)
+        end
+    end
+    if not hadLog then BfBot._CloseLog() end
+end
+
+--- Build an execution queue for a single allied summon/clone (issue #19).
+--- READ path by contract: uses PeekSummonPreset — an unconfigured summon
+--- must never create config (queue building would otherwise pollute the
+--- protagonist's save with an empty identity per detected summon).
+--- Mirrors the per-character builder's spells walk exactly: honors on
+--- (enabled), pri (priority order), tgt (via _ResolveConfigTarget with a
+--- summon caster ref: "s" → the summon itself, names/tables → party slots
+--- as today) and var (variant).
+--- Quick Cast: the summon preset carries its OWN qc (0..2); the cheat flag
+--- is computed here per entry with the same duration-boundary rule
+--- Exec._BuildQueue applies to qcMode, and attached as entry.cheat (1/0) so
+--- the summon follows its own qc even inside a party run with a different
+--- mode.
+-- @param summonEntry detection-entry table {oid, name, identity, sprite?}
+--        (ClassifySummonSprite shape; sprite optional — fresh-resolved from
+--        oid+name when absent)
+-- @param presetIdx  preset index 1..BfBot.MAX_PRESETS
+-- @return queue array compatible with BfBot.Exec.Start(), or nil + reason
+function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
+    if type(summonEntry) ~= "table" or type(summonEntry.oid) ~= "number"
+        or type(summonEntry.name) ~= "string" then
+        return nil, "invalid summon entry"
+    end
+
+    local preset = BfBot.Persist.PeekSummonPreset(summonEntry.identity, presetIdx)
+    if not preset or type(preset.spells) ~= "table"
+        or next(preset.spells) == nil then
+        return nil, "no configured summon preset " .. tostring(presetIdx)
+            .. " for '" .. tostring(summonEntry.identity) .. "'"
+    end
+
+    -- Build-time sprite: caller-provided (same-frame detection entry) or a
+    -- fresh oid+name resolve — never a cached pointer from an earlier frame
+    -- (issue-#38 discipline).
+    local sprite = summonEntry.sprite
+    if not sprite and BfBot.Exec and BfBot.Exec._ResolveCaster then
+        sprite = BfBot.Exec._ResolveCaster({ kind = "summon",
+            oid = summonEntry.oid, name = summonEntry.name })
+    end
+    if not sprite then
+        return nil, "summon gone (" .. summonEntry.name .. ")"
+    end
+
+    -- Fresh scan (same invalidate-then-scan the party builders do)
+    BfBot.Scan.Invalidate(sprite)
+    local ok, castable, _ = pcall(BfBot.Scan.GetCastableSpells, sprite)
+    if not ok or not castable then
+        return nil, "scan failed for summon " .. summonEntry.name
+    end
+
+    local casterRef = { kind = "summon", oid = summonEntry.oid,
+                        name = summonEntry.name }
+
+    -- Collect enabled, castable spells with priority
+    local entries = {}
+    for resref, spellCfg in pairs(preset.spells) do
+        if spellCfg.on == 1 then
+            local scanData = castable[resref]
+            if scanData and scanData.count > 0 then
+                local resolved = BfBot.Persist._ResolveConfigTarget(
+                    spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
+                for _, e in ipairs(resolved) do
+                    table.insert(entries, e)
+                end
+            end
+        end
+    end
+
+    -- Sort by priority (ascending: lower = cast first)
+    table.sort(entries, function(a, b) return a.pri < b.pri end)
+
+    -- Append to queue (strip pri field — exec engine doesn't use it)
+    local qc = (type(preset.qc) == "number") and preset.qc or 0
+    local queue = {}
+    for _, e in ipairs(entries) do
+        local scanData = castable[e.spell]
+        local spellCfg = preset.spells[e.spell]
+        local durCat = scanData and scanData.durCat or "short"
+        local isCheat = (qc == 2)
+            or (qc == 1 and (durCat == "long" or durCat == "permanent"))
+        table.insert(queue, {
+            casterRef = e.casterRef,
+            spell  = e.spell,
+            target = e.target,
+            durCat = durCat,
+            var    = spellCfg and spellCfg.var or nil,
+            cheat  = isCheat and 1 or 0,  -- explicit 0: own qc beats run qcMode
+        })
+    end
+
+    if #queue == 0 then
+        return nil, "no castable spells in summon preset " .. presetIdx
+            .. " for '" .. tostring(summonEntry.identity) .. "'"
+    end
+
+    return queue
+end
+
+--- Build an execution queue from a preset across all party members, plus
+--- (issue #19) any configured allied summons/clones in the leader's area.
 -- Returns queue compatible with BfBot.Exec.Start(), or nil + error message.
 function BfBot.Persist.BuildQueueFromPreset(presetIndex)
     if not presetIndex then return nil, "no preset index" end
 
     local queue = {}
+
+    -- Live Project-Image clones engine-lock their owners (probe-verified:
+    -- actions queued on a PI owner sit in the queue and fire as "zombie
+    -- casts" when the image expires). Collect live-clone descriptors ONCE up
+    -- front. This runs regardless of the SummonsJoinCast pref — the engine
+    -- lock is a fact, not a feature.
+    local liveClones = BfBot.Persist._CollectLiveCloneDescriptors()
 
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -1290,6 +1599,9 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                     local resolved = BfBot.Persist._ResolveConfigTarget(
                         spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                     for _, e in ipairs(resolved) do
+                        -- Display name rides along for the puppet-lock rule-2
+                        -- name match; never copied onto the final queue entry.
+                        e.spellName = scanData.name or resref
                         table.insert(entries, e)
                     end
                 end
@@ -1298,6 +1610,19 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
 
         -- Sort by priority (ascending: lower = cast first)
         table.sort(entries, function(a, b) return a.pri < b.pri end)
+
+        -- Puppet-lock policy (issue #19): a PI-locked owner's entries are
+        -- skipped entirely; a chain that casts PI drops its trailing entries.
+        do
+            local casterOid = nil
+            local okId, id = pcall(function() return sprite.m_id end)
+            if okId and type(id) == "number" then casterOid = id end
+            local kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(
+                { oid = casterOid, name = BfBot._GetName(sprite) },
+                entries, liveClones)
+            BfBot.Persist._LogBuildSkips(skips)
+            entries = kept
+        end
 
         -- Append to queue (strip pri field — exec engine doesn't use it)
         for _, e in ipairs(entries) do
@@ -1313,6 +1638,66 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
         end
 
         ::nextSlot::
+    end
+
+    -- ---- Allied-summon sweep (issue #19) ----
+    -- Configured allied summons/clones join the party cast. Kill-switch: INI
+    -- pref SummonsJoinCast (default 1). NOTE the puppet-lock policy above is
+    -- NOT behind this pref — the engine lock exists whether or not summons
+    -- join the cast.
+    if BfBot.Persist.GetPref("SummonsJoinCast") == 1
+        and BfBot.Scan and BfBot.Scan.GetAlliedSummons
+        and BfBot.Exec and BfBot.Exec._ResolveCaster then
+        local okList, list = pcall(BfBot.Scan.GetAlliedSummons)
+        if not okList then
+            BfBot._Warn("[Persist] summon sweep failed: " .. tostring(list))
+            list = nil
+        end
+        for _, entry in ipairs(type(list) == "table" and list or {}) do
+            -- (1) Multiplayer rule seam — single-player always true; the
+            --     conservative ownership rule lands with Task 13.
+            -- (2) Allegiance re-validation: detection entries reflect
+            --     allegiance at sweep time only — re-classify off a fresh
+            --     oid+name resolve so a stale/charmed/dead summon drops out
+            --     at build time.
+            local fresh = nil
+            if BfBot.Persist._SummonPassesMpRule(entry) then
+                local sprite = BfBot.Exec._ResolveCaster({
+                    kind = "summon", oid = entry.oid, name = entry.name })
+                if sprite then
+                    local okC, fc = pcall(BfBot.Scan.ClassifySummonSprite, sprite)
+                    if okC then
+                        fresh = fc
+                    else
+                        BfBot._Warn("[Persist] summon re-classify failed ("
+                            .. tostring(entry.name) .. "): " .. tostring(fc))
+                    end
+                end
+            end
+            -- (3) Only a configured preset with ≥1 enabled spell builds —
+            --     PeekSummonPreset: the sweep must never create config.
+            if fresh then
+                local preset = BfBot.Persist.PeekSummonPreset(
+                    fresh.identity, presetIndex)
+                local anyOn = false
+                if preset and type(preset.spells) == "table" then
+                    for _, se in pairs(preset.spells) do
+                        if type(se) == "table" and se.on == 1 then
+                            anyOn = true
+                            break
+                        end
+                    end
+                end
+                if anyOn then
+                    local sq = BfBot.Persist.BuildQueueForSummon(fresh, presetIndex)
+                    if sq then
+                        for _, e in ipairs(sq) do
+                            table.insert(queue, e)
+                        end
+                    end
+                end
+            end
+        end
     end
 
     if #queue == 0 then

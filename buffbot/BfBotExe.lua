@@ -74,6 +74,54 @@ function BfBot.Exec._ResolveCaster(ref)
     return res
 end
 
+--- Allied EA-band predicate (probe-verified values: party PC = 2, allied
+--- summons/clones/Planetar = 4, neutral townsfolk = 128). Same 2..30 band
+--- BfBot.Scan.ClassifySummonSprite filters on. Pure — unit-testable.
+function BfBot.Exec._IsAlliedEA(ea)
+    return type(ea) == "number" and ea >= 2 and ea <= 30
+end
+
+--- Re-read a summon caster's allegiance off a freshly-resolved sprite.
+--- Allegiance can flip mid-run (charm, dominate) — a summon outside the
+--- allied band must be treated as gone, not receive buffs. A read failure
+--- counts as gone too: never keep casting through an unverifiable caster.
+function BfBot.Exec._SummonStillAllied(sprite)
+    local ok, ea = pcall(function() return sprite.m_typeAI.m_EnemyAlly end)
+    if not ok then
+        BfBot._Warn("[Exec] EA re-read failed: " .. tostring(ea))
+        return false
+    end
+    return BfBot.Exec._IsAlliedEA(ea)
+end
+
+--- Resolve a caster record to a live, still-valid sprite for an exec step,
+--- or nil when the caster should be treated as gone. Shared by
+--- _ProcessCasterEntry, _Advance and the _SafetyTick gone-summon sweep so
+--- all three apply identical rules:
+---   party:  portrait re-resolve + cached-name guard — a mid-run portrait
+---           reshuffle must never route a cast through the wrong character
+---           (a rename mid-run also ends the chain early — benign; the
+---           stale tick still whole-run-resets).
+---   summon: oid+name re-resolve (anti-recycle guard in _ResolveCaster)
+---           + EA-band re-read — a summon turning hostile mid-run ends its
+---           chain instead of receiving buffs (issue #19).
+function BfBot.Exec._ResolveCasterForStep(caster)
+    local sprite = BfBot.Exec._ResolveCaster(caster.ref)
+    if not sprite then return nil end
+    if caster.ref.kind == "party" then
+        if caster.name and BfBot._GetName(sprite) ~= caster.name then
+            return nil
+        end
+    else
+        if not BfBot.Exec._SummonStillAllied(sprite) then
+            BfBot.Exec._LogEntry("INFO",
+                tostring(caster.name) .. " no longer allied — treating as gone")
+            return nil
+        end
+    end
+    return sprite
+end
+
 --- Log an execution event.
 function BfBot.Exec._LogEntry(type, msg)
     table.insert(BfBot.Exec._log, { type = type, msg = msg })
@@ -295,12 +343,15 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
 
         -- Build-time resolution for the scan/spell checks below. Exec-time
         -- code re-resolves fresh each step — never through this userdata.
+        -- An unresolvable SUMMON is normal churn (expired/killed between
+        -- sweep and build) → SKIP; an empty party slot is a caller bug → ERROR.
         local casterSprite = BfBot.Exec._ResolveCaster(casterRef)
         if not casterSprite then
             if casterRef.kind == "party" then
                 BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": no character in slot " .. casterRef.slot)
             else
-                BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": caster gone (" .. casterKey .. ")")
+                BfBot.Exec._LogEntry("SKIP", "Entry " .. i .. ": summon caster gone ("
+                    .. tostring(casterRef.name) .. ", " .. casterKey .. ")")
             end
             goto continue
         end
@@ -361,9 +412,15 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         -- Group by caster key
         byCaster[casterKey] = byCaster[casterKey] or {}
 
-        -- Determine cheat tagging for quick cast mode
+        -- Determine cheat tagging for quick cast mode. A builder-precomputed
+        -- entry.cheat (summon queues: the summon preset carries its OWN qc,
+        -- issue #19) takes precedence over the run-wide qcMode in BOTH
+        -- directions — 1 forces cheat on, 0 forces it off. Party entries
+        -- never carry the field, so their behavior is unchanged.
         local isCheat = false
-        if qcMode == 2 then
+        if entry.cheat ~= nil then
+            isCheat = (entry.cheat == 1 or entry.cheat == true)
+        elseif qcMode == 2 then
             isCheat = true
         elseif qcMode == 1 then
             local durCat = entry.durCat or "short"
@@ -486,8 +543,10 @@ end
 --- Finish the chain of a caster whose ref no longer resolves to a live
 --- sprite (dead/expired summon, emptied portrait slot). Marks it done,
 --- decrements the active count, completes the run when it was the last one.
---- Per-caster and clean by design: a gone summon must never reset or stall
---- the whole run (issue #19).
+--- Per-caster and clean by design: a gone summon must never reset the whole
+--- run, and can never stall it INDEFINITELY (issue #19) — a summon destroyed
+--- mid-cast takes its queued advance with it, so this may only fire via the
+--- _SafetyTick gone-summon sweep (~2s) or, worst case, the watchdog.
 function BfBot.Exec._FinishGoneCaster(caster)
     if caster.done then return end
     caster.done = true
@@ -507,14 +566,11 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
 
     -- Fresh-resolve the caster EVERY step — records/entries carry no sprite
     -- userdata (issues #38/#19). A caster that no longer resolves finishes
-    -- its chain cleanly instead of dereferencing a stale pointer. For party
-    -- refs the resolved sprite's name must still match the record: a mid-run
-    -- portrait reshuffle must never route a cast through the wrong character
-    -- (a rename-mid-run also ends the chain early — benign; the stale tick
-    -- still whole-run-resets).
-    local sprite = BfBot.Exec._ResolveCaster(caster.ref)
-    if not sprite or (caster.ref.kind == "party"
-            and caster.name and BfBot._GetName(sprite) ~= caster.name) then
+    -- its chain cleanly instead of dereferencing a stale pointer. Party refs
+    -- add a name guard (portrait reshuffle), summon refs an EA-band re-read
+    -- (allegiance flip) — see _ResolveCasterForStep.
+    local sprite = BfBot.Exec._ResolveCasterForStep(caster)
+    if not sprite then
         BfBot.Exec._FinishGoneCaster(caster)
         return
     end
@@ -624,13 +680,12 @@ function BfBot.Exec._Advance(key)
     if not caster or caster.done then return end
 
     -- Caster vanished between steps (summon expired/killed, slot emptied),
-    -- or a party slot changed occupant (portrait reshuffle — never route the
-    -- chain through the wrong character; a rename ends the chain early,
-    -- benign; the stale tick still whole-run-resets): finish cleanly before
-    -- touching anything sprite-related.
-    local sprite = BfBot.Exec._ResolveCaster(caster.ref)
-    if not sprite or (caster.ref.kind == "party"
-            and caster.name and BfBot._GetName(sprite) ~= caster.name) then
+    -- changed occupant (portrait reshuffle — never route the chain through
+    -- the wrong character) or flipped allegiance (summon EA re-read): finish
+    -- cleanly before touching anything sprite-related. Shared rules in
+    -- _ResolveCasterForStep.
+    local sprite = BfBot.Exec._ResolveCasterForStep(caster)
+    if not sprite then
         BfBot.Exec._FinishGoneCaster(caster)
         return
     end
@@ -930,17 +985,35 @@ function BfBot.Exec._SafetyTick()
         BfBot.Exec._HardReset()
     end
 
-    -- Watchdog: force-complete a run that has stopped making progress. In
-    -- multiplayer, casters controlled by another player never fire their
-    -- _Advance callback (the queued SpellRES + EEex_LuaAction live only in this
-    -- machine's local action list and are not networked), so _activeCasters
-    -- never reaches 0 and the status would stay stuck on "casting" forever.
-    -- This also covers any other cause of a wedged caster chain. _NoteProgress()
+    -- Watchdog: force-complete a run that has stopped making progress. Known
+    -- causes: multiplayer casters controlled by another player (their queued
+    -- SpellRES + EEex_LuaAction live only in this machine's local action list
+    -- and are not networked, so _Advance never fires), gone-summon edge cases
+    -- the sweep below didn't catch, and plain engine stalls. _NoteProgress()
     -- bumps the timer on every queued cast and every advance, so a healthy run
     -- never trips it; only a genuine stall (no progress anywhere for the whole
-    -- timeout) force-completes. The real MP fix is filtering casters to
-    -- locally-controlled characters — this is the hard safety net underneath it.
+    -- timeout) force-completes. Targeted fixes (MP caster filter, gone-summon
+    -- sweep) come first — this is the hard safety net underneath them all.
     if BfBot.Exec._state == "running" then
+        -- Gone-summon sweep (issue #19), BEFORE the watchdog: a summon
+        -- destroyed mid-cast takes its queued EEex_LuaAction advance with it,
+        -- so the per-step gone path never fires and the run would stall until
+        -- the watchdog. Finish summon-kind casters whose ref no longer
+        -- resolves (or fails the EA-band re-read) here → clean completion in
+        -- ~2s with a correct DONE summary. Summon-kind only — party slots
+        -- stay per-step (portraits don't vanish silently; the stale check
+        -- covers reloads).
+        for _, caster in pairs(BfBot.Exec._casters) do
+            if not caster.done and caster.ref and caster.ref.kind == "summon" then
+                if not BfBot.Exec._ResolveCasterForStep(caster) then
+                    BfBot.Exec._FinishGoneCaster(caster)
+                end
+            end
+        end
+        -- The sweep may have finished the LAST caster: _FinishGoneCaster then
+        -- ran _Complete and the run is over — nothing left to watchdog.
+        if BfBot.Exec._state ~= "running" then return end
+
         -- Measure progress in GAME time (frozen while paused) so a paused-but-
         -- healthy buff run is never force-killed. Only trip when the game has
         -- actually advanced _WATCHDOG_TIMEOUT_GAMETICKS with no forward progress.
@@ -949,8 +1022,9 @@ function BfBot.Exec._SafetyTick()
         if gtNow and gtLast and (gtNow - gtLast) >= BfBot.Exec._WATCHDOG_TIMEOUT_GAMETICKS then
             BfBot.Exec._ForceComplete(string.format(
                 "Watchdog: no cast progress for %d game-ticks — force-completing. A "
-                .. "caster's chain never advanced (e.g. a multiplayer character "
-                .. "controlled by another player). Cast again if buffing is incomplete.",
+                .. "caster's chain never advanced (multiplayer character controlled "
+                .. "by another player, a gone-summon edge case, or an engine stall). "
+                .. "Cast again if buffing is incomplete.",
                 gtNow - gtLast))
             pcall(function()
                 local leader = EEex_Sprite_GetInPortrait(0)
