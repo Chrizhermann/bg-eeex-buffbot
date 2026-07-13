@@ -4060,6 +4060,139 @@ function BfBot.Test.SummonCasters()
         _nok("no leader sprite in slot 0 for summon self-lock checks")
     end
 
+    -- ---- Task 13: conservative multiplayer gate for summons ----
+    -- BfBot.Mp.IsSummonLocallyControlled(summonEntry): SP → always true
+    -- (short-circuit precedes ANY entry inspection/resolution); an
+    -- ESTABLISHED MP session → fail-closed ownership rule: a clone summon
+    -- follows its OWNER's control, an ownerless summon is host-only (the
+    -- machine controlling portrait slot 0). IsLocallyControlled must never
+    -- run on a SUMMON sprite (verified hazard: its GetCharacterIndex
+    -- failure path degrades to TRUE for non-party sprites in MP auto mode).
+
+    -- [13.1] Contract + SP short-circuit order.
+    P("")
+    P("  [13] Conservative multiplayer gate (IsSummonLocallyControlled)")
+    _check(type(BfBot.Mp.IsSummonLocallyControlled) == "function",
+        "IsSummonLocallyControlled is a function")
+    _check(type(BfBot.Mp._IsMpSession) == "function",
+        "_IsMpSession detection helper is a function")
+    do
+        local ok13, err13 = pcall(function()
+            _check(BfBot.Mp._IsMpSession() == false,
+                "suite runs single-player (_IsMpSession() == false)")
+            -- Short-circuit ORDER proof: an unresolvable (bogus-oid) entry
+            -- still returns true in SP — resolution is never touched.
+            _check(BfBot.Mp.IsSummonLocallyControlled(
+                { oid = 999999999, name = "ZZZ_NO_SUCH" }) == true,
+                "SP: bogus-oid entry → true (short-circuit precedes resolution)")
+            _check(BfBot.Mp.IsSummonLocallyControlled(nil) == true,
+                "SP: nil entry → true (entry never inspected in SP)")
+        end)
+        if not ok13 then _nok("[13.1] SP block errored: " .. tostring(err13)) end
+    end
+
+    -- [13.2] MP branches — _IsMpSession stubbed true (no live MP session in
+    -- the suite); save/restore OUTSIDE the pcall. IsLocallyControlled keeps
+    -- its own independent connection-flag read, so under this stub it still
+    -- reports live-SP truth — every branch assert below therefore checks
+    -- AGREEMENT with IsLocallyControlled on the owner/slot-0 sprite (the
+    -- actual rule) instead of hardcoding true/false.
+    if leader then
+        local leaderName = BfBot._GetName(leader)
+        local savedMp = BfBot.Mp._IsMpSession
+        local savedResolve = BfBot.Exec._ResolveCaster
+        local ok13, err13 = pcall(function()
+            BfBot.Mp._IsMpSession = function() return true end
+
+            -- Fail-closed guards.
+            _check(BfBot.Mp.IsSummonLocallyControlled(nil) == false,
+                "MP: nil entry → false (fail-closed)")
+            _check(BfBot.Mp.IsSummonLocallyControlled(
+                { oid = 999999999, name = "ZZZ_NO_SUCH" }) == false,
+                "MP: unresolvable entry → false (fail-closed)")
+
+            -- OWNERLESS branch (host heuristic) via leader-as-fake-summon:
+            -- the leader resolves through the summon resolver and is not a
+            -- copy, so the host-heuristic path runs.
+            local okCp, cp = pcall(function() return leader.m_nCopyParent end)
+            _check(okCp and cp == -1,
+                "leader is no clone (m_nCopyParent == -1) → ownerless branch")
+            local direct = BfBot.Mp.IsLocallyControlled(
+                EEex_Sprite_GetInPortrait(0)) and true or false
+            local viaGate = BfBot.Mp.IsSummonLocallyControlled(
+                { oid = leader.m_id, name = leaderName }) and true or false
+            _check(viaGate == direct,
+                "MP ownerless: gate agrees with IsLocallyControlled(slot 0) ("
+                .. tostring(direct) .. ")")
+
+            -- CLONE branch: no live clone exists during the suite, so the
+            -- resolver is stubbed to return a minimal sprite stand-in whose
+            -- m_nCopyParent is the REAL leader's oid. This honestly covers
+            -- owner-oid extraction → owner resolution → party-membership
+            -- check → IsLocallyControlled(owner) delegation. NOT covered
+            -- here (2-machine-session-only, tracked on issue #19): real
+            -- clone userdata reads and true cross-machine ownership of the
+            -- delegated IsLocallyControlled result.
+            BfBot.Exec._ResolveCaster = function(ref)
+                if ref and ref.kind == "summon" and ref.oid == 4711 then
+                    return { m_nCopyParent = leader.m_id }
+                end
+                return savedResolve(ref)
+            end
+            local viaClone = BfBot.Mp.IsSummonLocallyControlled(
+                { oid = 4711, name = "FakePI" }) and true or false
+            _check(viaClone == direct,
+                "MP clone: gate agrees with IsLocallyControlled(owner) ("
+                .. tostring(direct) .. ")")
+
+            -- CLONE branch, owner unresolvable → fail closed.
+            BfBot.Exec._ResolveCaster = function(ref)
+                if ref and ref.kind == "summon" and ref.oid == 4711 then
+                    return { m_nCopyParent = 999999998 }
+                end
+                return savedResolve(ref)
+            end
+            _check(BfBot.Mp.IsSummonLocallyControlled(
+                { oid = 4711, name = "FakePI" }) == false,
+                "MP clone: owner gone → false (fail-closed)")
+        end)
+        BfBot.Mp._IsMpSession = savedMp
+        BfBot.Exec._ResolveCaster = savedResolve
+        if not ok13 then _nok("[13.2] MP block errored: " .. tostring(err13)) end
+        _check(BfBot.Mp._IsMpSession == savedMp
+            and BfBot.Exec._ResolveCaster == savedResolve,
+            "cleanup: _IsMpSession + _ResolveCaster stubs restored")
+    else
+        _nok("no leader sprite in slot 0 for MP gate checks")
+    end
+
+    -- [13.3] Seam: _SummonPassesMpRule routes through the Task-13 gate and
+    -- propagates its verdict (coerced to a plain boolean).
+    do
+        -- Live SP end-to-end: the real gate short-circuits true.
+        local okSp, spRes = pcall(BfBot.Persist._SummonPassesMpRule,
+            { oid = 999999999, name = "ZZZ_NO_SUCH" })
+        _check(okSp and spRes == true,
+            "seam SP: _SummonPassesMpRule true via the real gate")
+
+        local savedGate = BfBot.Mp.IsSummonLocallyControlled
+        local sawEntry = nil
+        local sentinel = { oid = 1, name = "SENTINEL" }
+        BfBot.Mp.IsSummonLocallyControlled = function(e)
+            sawEntry = e
+            return false
+        end
+        local okF, resF = pcall(BfBot.Persist._SummonPassesMpRule, sentinel)
+        BfBot.Mp.IsSummonLocallyControlled = function() return true end
+        local okT, resT = pcall(BfBot.Persist._SummonPassesMpRule, sentinel)
+        BfBot.Mp.IsSummonLocallyControlled = savedGate
+        _check(okF and resF == false and sawEntry == sentinel,
+            "seam: the entry table reaches the gate; false propagates")
+        _check(okT and resT == true, "seam: true propagates")
+        _check(BfBot.Mp.IsSummonLocallyControlled == savedGate,
+            "cleanup: gate stub restored")
+    end
+
     return _summary("SummonCasters")
 end
 
