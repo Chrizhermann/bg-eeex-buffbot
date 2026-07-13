@@ -20,6 +20,7 @@
 - Remote console (game must be on world screen, unpaused; single-line Lua only, no heredocs — CRLF breaks loadstring):
   `bash /c/src/private/eeex-remote-console/tools/eeex-remote.sh "c:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy/override" '<lua>'`
 - After every deploy+run, read `buffbot_test.log` / `buffbot_exec.log` / `buffbot_innate.log` in the game dir directly (never ask for console screenshots).
+- **Save-file hygiene (learned Task 6):** BOTH installs share the Documents save dir (OneDrive-redirected) — a quicksave on the test install clobbers the active playthrough's quicksave slot. Any save/load checkpoint uses a DEDICATED named save slot ("BFBT-TEST"), never quicksave. Any synthetic config written for verification must be removed from live config AND the verification save must be re-saved clean (or deleted) before the task closes.
 - Every commit message ends with:
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` and the session link footer per harness config.
 - All config values are numbers/strings/tables — **no booleans** in anything that reaches UDAux marshal.
