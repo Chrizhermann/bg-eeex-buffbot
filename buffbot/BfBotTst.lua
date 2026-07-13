@@ -3956,7 +3956,7 @@ function BfBot.Test.SummonCasters()
                                ownerName = leaderName } }
                 end
                 local logBefore = #BfBot.Exec._log
-                local qa = BfBot.Persist.BuildQueueForCharacter(0, 1)
+                local qa, qaReason = BfBot.Persist.BuildQueueForCharacter(0, 1)
                 local skipSeen = false
                 for i = logBefore + 1, #BfBot.Exec._log do
                     local le = BfBot.Exec._log[i]
@@ -3966,6 +3966,9 @@ function BfBot.Test.SummonCasters()
                     end
                 end
                 _check(qa == nil, "PI-locked owner: per-char build returns nil")
+                _check(qaReason == "puppet-locked",
+                    "PI-locked owner: distinct 'puppet-locked' reason (got "
+                    .. tostring(qaReason) .. ")")
                 _check(skipSeen, "PI-locked owner: skip recorded via _LogBuildSkips")
 
                 -- (b') No descriptors again: output unchanged vs the control
@@ -4191,6 +4194,211 @@ function BfBot.Test.SummonCasters()
         _check(okT and resT == true, "seam: true propagates")
         _check(BfBot.Mp.IsSummonLocallyControlled == savedGate,
             "cleanup: gate stub restored")
+    end
+
+    -- ---- Task 10: Summons view UI — pure bits only (page math, label
+    -- composition, list-model copy/filter semantics, view state machine,
+    -- build-skip surfacing). Interactive clicks are user-checkpoint
+    -- territory and deliberately NOT faked here.
+    P("")
+    P("  [T10] Summons view — page math, labels, list model, view state")
+
+    -- [T10.1] _SummonPageSlice: sizes + page clamping (6 per page)
+    do
+        local ok10, err10 = pcall(function()
+            local function mk(n)
+                local l = {}
+                for i = 1, n do
+                    l[i] = { oid = i, name = "N" .. i, identity = "id" .. i }
+                end
+                return l
+            end
+            local s, p, pc = BfBot.UI._SummonPageSlice({}, 1)
+            _check(#s == 0 and p == 1 and pc == 1,
+                "slice: empty list → 0 items, page 1/1")
+            s, p, pc = BfBot.UI._SummonPageSlice(mk(1), 1)
+            _check(#s == 1 and pc == 1, "slice: 1 item → 1 item, 1 page")
+            s, p, pc = BfBot.UI._SummonPageSlice(mk(6), 1)
+            _check(#s == 6 and pc == 1, "slice: 6 items → one full page")
+            s, p, pc = BfBot.UI._SummonPageSlice(mk(7), 1)
+            _check(#s == 6 and pc == 2, "slice: 7 items page 1 → 6 of 2 pages")
+            s, p, pc = BfBot.UI._SummonPageSlice(mk(7), 2)
+            _check(#s == 1 and s[1].oid == 7, "slice: 7 items page 2 → item 7")
+            s, p, pc = BfBot.UI._SummonPageSlice(mk(12), 2)
+            _check(#s == 6 and pc == 2 and s[1].oid == 7 and s[6].oid == 12,
+                "slice: 12 items page 2 → items 7..12")
+            s, p, pc = BfBot.UI._SummonPageSlice(mk(13), 3)
+            _check(#s == 1 and pc == 3 and s[1].oid == 13,
+                "slice: 13 items page 3 → item 13 of 3 pages")
+            s, p = BfBot.UI._SummonPageSlice(mk(13), 0)
+            _check(p == 1 and s[1].oid == 1, "slice: page 0 clamps to 1")
+            s, p = BfBot.UI._SummonPageSlice(mk(13), 99)
+            _check(p == 3 and s[1].oid == 13, "slice: page 99 clamps to last")
+        end)
+        if not ok10 then
+            _nok("[T10.1] page-slice block errored: " .. tostring(err10))
+        end
+    end
+
+    -- [T10.2] _SummonTabLabel composition (clone possessive vs plain summon)
+    do
+        local ok10, err10 = pcall(function()
+            _check(BfBot.UI._SummonTabLabel({ kind = "clone",
+                ownerName = "Imoen", cloneType = 2, name = "Imoen" })
+                == "Imoen's Image", "label: PI clone → owner-possessive Image")
+            _check(BfBot.UI._SummonTabLabel({ kind = "clone",
+                ownerName = "Imoen", cloneType = 3, name = "Imoen" })
+                == "Imoen's Simulacrum", "label: Sim clone → Simulacrum")
+            _check(BfBot.UI._SummonTabLabel({ kind = "clone",
+                identity = "clone:Edwin", cloneType = 2, name = "Edwin" })
+                == "Edwin's Image",
+                "label: owner derived from identity when ownerName absent")
+            _check(BfBot.UI._SummonTabLabel({ kind = "clone", name = "Copy",
+                identity = "name:copy" }) == "Copy",
+                "label: ownerless clone falls back to its name")
+            _check(BfBot.UI._SummonTabLabel({ kind = "summon", name = "Deva",
+                identity = "deva" }) == "Deva",
+                "label: plain summon is its name")
+        end)
+        if not ok10 then
+            _nok("[T10.2] tab-label block errored: " .. tostring(err10))
+        end
+    end
+
+    -- [T10.3] _BuildSummonListModel: cache-owned input copied (hand-off 5),
+    -- nameless entries refused (hand-off 3), no sprite userdata carried.
+    do
+        local ok10, err10 = pcall(function()
+            local raw = {
+                { oid = 1, name = "Deva", identity = "deva", kind = "summon" },
+                { oid = 2, name = "", identity = "x", kind = "summon" },
+                { oid = 3, name = "Imoen", identity = "clone:Imoen",
+                  kind = "clone", ownerName = "Imoen", cloneType = 2,
+                  sprite = {} },
+            }
+            local model = BfBot.UI._BuildSummonListModel(raw)
+            _check(#model == 2, "model: nameless entry filtered (2 of 3 kept)")
+            _check(model[1] ~= raw[1] and model[2] ~= raw[3],
+                "model: entries are copies, not aliases")
+            _check(model[2].sprite == nil,
+                "model: entries never carry the sprite field")
+            model[1].name = "MUTATED"
+            _check(raw[1].name == "Deva",
+                "model: mutating the model leaves scanner tables untouched")
+            _check(model[2].ownerName == "Imoen" and model[2].cloneType == 2
+                and model[2].identity == "clone:Imoen",
+                "model: clone fields copied through")
+            local empty = BfBot.UI._BuildSummonListModel(nil)
+            _check(type(empty) == "table" and #empty == 0,
+                "model: nil input → empty model")
+        end)
+        if not ok10 then
+            _nok("[T10.3] list-model block errored: " .. tostring(err10))
+        end
+    end
+
+    -- [T10.4] View state machine: identity-stable reselect (never by row
+    -- index), SetChar forces party view (hand-off 1), view-aware labels
+    -- (hand-off 2). Save/restore ALL touched UI state OUTSIDE the pcall.
+    do
+        local savedView = BfBot.UI._view
+        local savedSlot = BfBot.UI._charSlot
+        local savedList = BfBot.UI._summonList
+        local savedPage = BfBot.UI._summonPage
+        local savedSel  = BfBot.UI._summonSel
+        local ok10, err10 = pcall(function()
+            BfBot.UI._summonList = {
+                { oid = 11, name = "A", identity = "cre:a" },
+                { oid = 12, name = "B", identity = "cre:b" },
+            }
+            BfBot.UI._summonSel = { oid = 12, name = "B", identity = "cre:b" }
+            -- List refresh reordered the entries: selection must survive
+            BfBot.UI._summonList = {
+                { oid = 12, name = "B", identity = "cre:b" },
+                { oid = 11, name = "A", identity = "cre:a" },
+            }
+            BfBot.UI._ReselectSummon()
+            local sel = BfBot.UI._SelectedSummon()
+            _check(sel ~= nil and sel.oid == 12 and sel.name == "B",
+                "reselect: survives reorder via oid+name (not row index)")
+            -- Respawned "same" summon: identity fallback picks the new oid
+            BfBot.UI._summonList = {
+                { oid = 99, name = "B2", identity = "cre:b" },
+            }
+            BfBot.UI._ReselectSummon()
+            sel = BfBot.UI._SelectedSummon()
+            _check(sel ~= nil and sel.oid == 99,
+                "reselect: identity fallback for a respawned summon")
+            -- Selection gone entirely → first live entry
+            BfBot.UI._summonSel = { oid = 1000, name = "ZZ", identity = "zz" }
+            BfBot.UI._summonList = { { oid = 5, name = "C", identity = "cre:c" } }
+            BfBot.UI._ReselectSummon()
+            sel = BfBot.UI._SelectedSummon()
+            _check(sel ~= nil and sel.oid == 5,
+                "reselect: vanished selection → first entry")
+            -- Empty list → no selection, page resets
+            BfBot.UI._summonList = {}
+            BfBot.UI._ReselectSummon()
+            _check(BfBot.UI._SelectedSummon() == nil
+                and BfBot.UI._summonPage == 1,
+                "reselect: empty list → no selection, page 1")
+
+            -- Hand-off 1: clicking a portrait tab always leaves summons view
+            BfBot.UI._view = "summons"
+            BfBot.UI.SetChar(savedSlot)
+            _check(BfBot.UI._view == "party", "SetChar forces party view")
+
+            -- Hand-off 2: view-aware labels/selection
+            _check(BfBot.UI._CastCharLabel() ~= "Cast (this summon)",
+                "party view: cast-char label is per-character")
+            BfBot.UI._view = "summons"
+            _check(BfBot.UI._CastCharLabel() == "Cast (this summon)",
+                "summons view: cast-char label is 'Cast (this summon)'")
+            _check(BfBot.UI._IsCharSelected(savedSlot) == false,
+                "summons view: no portrait tab reads as selected")
+            _check(BfBot.UI._IsPartyView() == false
+                and BfBot.UI._ViewBtnLabel() == "Party",
+                "summons view: toggle button offers 'Party'")
+            BfBot.UI._view = "party"
+            _check(BfBot.UI._IsPartyView() == true
+                and BfBot.UI._ViewBtnLabel() == "Summons",
+                "party view: toggle button offers 'Summons'")
+        end)
+        BfBot.UI._view = savedView
+        BfBot.UI._charSlot = savedSlot
+        BfBot.UI._summonList = savedList
+        BfBot.UI._summonPage = savedPage
+        BfBot.UI._summonSel = savedSel
+        if not ok10 then
+            _nok("[T10.4] view-state block errored: " .. tostring(err10))
+        end
+        _check(BfBot.UI._view == savedView
+            and BfBot.UI._charSlot == savedSlot
+            and BfBot.UI._summonList == savedList,
+            "cleanup: view state restored")
+        BfBot.UI._Refresh()  -- re-sync UI globals with live state
+    end
+
+    -- [T10.5] Build-skip surfacing (hand-off 4): _LogBuildSkips accumulates
+    -- messages for the panel; DrainBuildSkips hands them over exactly once.
+    do
+        local ok10, err10 = pcall(function()
+            _check(type(BfBot.Persist.DrainBuildSkips) == "function",
+                "DrainBuildSkips is a function")
+            BfBot.Persist.DrainBuildSkips()  -- discard earlier phases' skips
+            BfBot.Persist._LogBuildSkips({
+                { msg = "T10 skip one" }, { msg = "T10 skip two" } })
+            local msgs = BfBot.Persist.DrainBuildSkips()
+            _check(type(msgs) == "table" and #msgs == 2
+                and msgs[1] == "T10 skip one" and msgs[2] == "T10 skip two",
+                "builder skips accumulate for the panel and drain in order")
+            local again = BfBot.Persist.DrainBuildSkips()
+            _check(type(again) == "table" and #again == 0,
+                "drain empties the pending list")
+        end)
+        if not ok10 then
+            _nok("[T10.5] skip-drain block errored: " .. tostring(err10))
+        end
     end
 
     return _summary("SummonCasters")

@@ -1454,9 +1454,26 @@ function BfBot.Persist._LogBuildSkips(skips)
     for _, s in ipairs(skips) do
         if type(s) == "table" and type(s.msg) == "string" then
             BfBot.Exec._LogEntry("SKIP", s.msg)
+            -- Also queue for the panel: Exec.Start resets the in-memory log
+            -- an instant after the builders write it, so the UI drains this
+            -- and re-appends the lines into the fresh run log (Task 10).
+            table.insert(BfBot.Persist._pendingSkips, s.msg)
         end
     end
     if not hadLog then BfBot._CloseLog() end
+end
+
+-- Build-time SKIP messages awaiting panel surfacing (transient, never saved).
+BfBot.Persist._pendingSkips = BfBot.Persist._pendingSkips or {}
+
+--- Hand over (and clear) the build-time SKIP messages collected since the
+--- last drain. UI cast handlers drain once BEFORE building (discard stale)
+--- and once AFTER Exec.Start (surface into the fresh run log).
+-- @return array of message strings (possibly empty)
+function BfBot.Persist.DrainBuildSkips()
+    local msgs = BfBot.Persist._pendingSkips
+    BfBot.Persist._pendingSkips = {}
+    return msgs
 end
 
 --- Build an execution queue for a single allied summon/clone (issue #19).
@@ -2000,6 +2017,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     -- puppet-lock policy to the per-character builder (Task 7 review).
     -- Guarded on #entries: an empty build can't be locked, so don't pay for
     -- the area sweep (the policy on empty input is a no-op either way).
+    local puppetLocked = nil
     if #entries > 0 then
         local liveClones = BfBot.Persist._CollectLiveCloneDescriptors()
         local casterOid = nil
@@ -2009,6 +2027,9 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             { oid = casterOid, name = BfBot._GetName(sprite) },
             entries, liveClones)
         BfBot.Persist._LogBuildSkips(skips)
+        -- Rule 1 is the only path that empties a non-empty build: surface it
+        -- as a distinct reason so the panel doesn't blame "no spells" (T10).
+        if #kept == 0 then puppetLocked = 1 end
         entries = kept
     end
 
@@ -2027,6 +2048,9 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     end
 
     if #queue == 0 then
+        if puppetLocked == 1 then
+            return nil, "puppet-locked"
+        end
         return nil, "no castable spells in preset " .. presetIndex .. " for slot " .. slot
     end
 
