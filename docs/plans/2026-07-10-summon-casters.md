@@ -445,6 +445,13 @@ end
 
 **Tests:** phase asserts pure bits (page math: `_SummonPageSlice(list, page)` returns ≤6 with correct offsets; label composition for clone vs summon). Manual: user runs through view switch, seeding, standalone cast, paging (spawn >6 castable allies via console if feasible, else skip paging visual), empty state.
 
+**Review hand-offs (recorded 2026-07-14; Task 9 review conditions + Task 7 residuals — all REQUIRED here):**
+1. `SetChar` (BfBotUI ~903) must set `_view = "party"` — otherwise clicking a portrait tab while in summons view changes the slot without leaving the view.
+2. Selection-adjacent slot reads the Task 9 helper deliberately does not cover — make them view-aware: `CastCharacter`'s `BuildQueueForCharacter(BfBot.UI._charSlot, …)` (~1249; in summons view route to `BuildQueueForSummon(selected, _presetIdx)`), `_CastCharLabel` (~1265), `_IsCharSelected` (~1316), `_CanCastAll`'s `slot ~= _charSlot` skip (~1337).
+3. `_SelectedSummon()` entries MUST always carry `name` — `_resolveSummon`'s anti-oid-recycle guard (BfBotExe ~54) is conditional on `ref.name`; a nameless entry silently degrades to oid-only matching. Treat `name` as mandatory in the summon list model (refuse to list nameless entries).
+4. From Task 7 residuals (#19 comment): a build returning nil due to puppet-lock should surface a distinct reason string in the panel (pattern: the existing "not locally controlled" reason near ~1229) instead of the generic "no castable spells"; and surface build-time SKIP lines in the panel log view (`Exec.Start` currently resets `_log` an instant after the builder logs them — file-only today).
+5. `GetAlliedSummons()` returns CACHE-OWNED tables — copy before sorting/mutating for `_summonList`.
+
 **Commit:** `feat(summon): summons view — tab-row switch, paging, seeded clone tabs, standalone cast (#19)`
 
 ---
