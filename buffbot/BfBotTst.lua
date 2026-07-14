@@ -4542,6 +4542,497 @@ function BfBot.Test.SummonCasters()
         end
     end
 
+    -- ---- Task 11: late-join listener (summons spawning mid-run) ----
+    -- Factored handler BfBot.Exec._OnSpriteLoaded is the registered
+    -- listener's whole body (M_BfBot registers a thin namespace-resolving
+    -- wrapper); guards are cheap-first in the plan-mandated order and the
+    -- work runs inside a CHECKED pcall (a structurally broken listener must
+    -- WARN every fire, never silently disable late-join).
+    P("")
+    P("  [11] Late-join listener (mid-run summon attach)")
+
+    -- [11.1] Start records the run's preset; raw/console Starts leave it
+    -- nil (late-join inert); _HardReset clears it. Synthetic Start ([7.8]
+    -- pattern): _BuildQueue + _ProcessCasterEntry stubbed, save/restore
+    -- OUTSIDE the pcall, checks asserted after the restore.
+    if BfBot.Exec.GetState() == "running" then
+        _warning("exec currently running; skipping late-join checks")
+    else
+        local savedBuild   = BfBot.Exec._BuildQueue
+        local savedProcess = BfBot.Exec._ProcessCasterEntry
+        local saved = {
+            state        = BfBot.Exec._state,
+            casters      = BfBot.Exec._casters,
+            active       = BfBot.Exec._activeCasters,
+            log          = BfBot.Exec._log,
+            castCount    = BfBot.Exec._castCount,
+            skipCount    = BfBot.Exec._skipCount,
+            total        = BfBot.Exec._totalEntries,
+            qcMode       = BfBot.Exec._qcMode,
+            lastProgress = BfBot.Exec._lastProgressGameTime,
+            runPreset    = BfBot.Exec._runPresetIdx,
+            pending      = BfBot.Exec._pendingLateJoin,
+        }
+        local function _restoreExec11()
+            BfBot.Exec._BuildQueue           = savedBuild
+            BfBot.Exec._ProcessCasterEntry   = savedProcess
+            BfBot.Exec._state                = saved.state
+            BfBot.Exec._casters              = saved.casters
+            BfBot.Exec._activeCasters        = saved.active
+            BfBot.Exec._log                  = saved.log
+            BfBot.Exec._castCount            = saved.castCount
+            BfBot.Exec._skipCount            = saved.skipCount
+            BfBot.Exec._totalEntries         = saved.total
+            BfBot.Exec._qcMode               = saved.qcMode
+            BfBot.Exec._lastProgressGameTime = saved.lastProgress
+            BfBot.Exec._runPresetIdx         = saved.runPreset
+            BfBot.Exec._pendingLateJoin      = saved.pending
+        end
+        local res = {}
+        local ok11, err11 = pcall(function()
+            local pRef = { kind = "party", slot = 0 }
+            BfBot.Exec._BuildQueue = function()
+                return { ["p0"] = { { casterRef = pRef, casterName = "PartyStub",
+                    resref = "XXPART1", spellName = "XXPART1",
+                    targetObj = "Myself", targetName = "PartyStub",
+                    splstates = {}, isAoE = false } } }, 1
+            end
+            BfBot.Exec._ProcessCasterEntry = function() end
+            res.s1 = BfBot.Exec.Start({ { synthetic = 1 } }, 0, 3)
+            res.p1 = BfBot.Exec._runPresetIdx
+            BfBot.Exec._HardReset()
+            res.p2 = BfBot.Exec._runPresetIdx
+            res.s2 = BfBot.Exec.Start({ { synthetic = 1 } }, 0)  -- no presetIdx
+            res.p3 = BfBot.Exec._runPresetIdx
+            BfBot.Exec._HardReset()
+        end)
+        -- Restore OUTSIDE the pcall; Start switched the open log handle to
+        -- the exec log — reopen the suite's before asserting.
+        _restoreExec11()
+        if BfBot._OpenLogAppend then BfBot._OpenLogAppend(BfBot._logFile) end
+        if not ok11 then _nok("[11.1] run-preset block errored: " .. tostring(err11)) end
+        _check(res.s1 == true and res.p1 == 3,
+            "Start(q, 0, 3) records _runPresetIdx = 3 (started=" .. tostring(res.s1)
+            .. " got " .. tostring(res.p1) .. ")")
+        _check(res.p2 == nil, "_HardReset clears _runPresetIdx")
+        _check(res.s2 == true and res.p3 == nil,
+            "presetIdx-less Start leaves _runPresetIdx nil (raw/console run → "
+            .. "late-join inert, got " .. tostring(res.p3) .. ")")
+    end
+
+    -- [11.2] _AttachCaster inserts a Start-shaped caster record into a
+    -- RUNNING run: _BuildQueue expansion, bookkeeping (_activeCasters,
+    -- _totalEntries), cheatBoundary derived from the NEW entries at attach
+    -- time, late-join log line, watchdog progress note, chain kick.
+    -- Stubs + exec state save/restore OUTSIDE the pcall ([7.8] pattern).
+    do
+        local savedBuild   = BfBot.Exec._BuildQueue
+        local savedProcess = BfBot.Exec._ProcessCasterEntry
+        local saved = {
+            state        = BfBot.Exec._state,
+            casters      = BfBot.Exec._casters,
+            active       = BfBot.Exec._activeCasters,
+            log          = BfBot.Exec._log,
+            total        = BfBot.Exec._totalEntries,
+            qcMode       = BfBot.Exec._qcMode,
+            lastProgress = BfBot.Exec._lastProgressGameTime,
+        }
+        local res = { procCalls = {} }
+        local ok11, err11 = pcall(function()
+            if type(BfBot.Exec._AttachCaster) ~= "function" then
+                error("_AttachCaster is not a function")
+            end
+            local sRef = { kind = "summon", oid = 87001, name = "LateStub" }
+            local entries = {
+                { casterRef = sRef, casterName = "LateStub", resref = "XXLATE1",
+                  spellName = "XXLATE1", targetObj = "Myself",
+                  targetName = "LateStub", splstates = {}, isAoE = false,
+                  cheat = 1 },
+                { casterRef = sRef, casterName = "LateStub", resref = "XXLATE2",
+                  spellName = "XXLATE2", targetObj = "Myself",
+                  targetName = "LateStub", splstates = {}, isAoE = false,
+                  cheat = 0 },
+            }
+            BfBot.Exec._BuildQueue = function(q, qc)
+                res.buildQ, res.buildQc = q, qc
+                return { ["s87001"] = entries }, #entries
+            end
+            BfBot.Exec._ProcessCasterEntry = function(key, index)
+                table.insert(res.procCalls, { key = key, index = index })
+            end
+            -- Synthetic running run: one party caster mid-flight.
+            BfBot.Exec._state = "running"
+            BfBot.Exec._casters = { ["p0"] = {
+                ref = { kind = "party", slot = 0 }, name = "PartyStub",
+                queue = {}, index = 1, done = false,
+                cheatBoundary = 0, cheatApplied = false } }
+            BfBot.Exec._activeCasters = 1
+            BfBot.Exec._totalEntries = 3
+            BfBot.Exec._qcMode = 0
+            BfBot.Exec._log = {}
+            BfBot.Exec._lastProgressGameTime = nil
+            local rawQueue = { { synthetic = 1 } }
+            res.attach = BfBot.Exec._AttachCaster(
+                { oid = 87001, name = "LateStub", identity = "test:late" },
+                rawQueue)
+            res.rawSeen = (res.buildQ == rawQueue)
+            local rec = BfBot.Exec._casters["s87001"]
+            if rec then
+                res.rec = {
+                    refKind = rec.ref and rec.ref.kind,
+                    refOid = rec.ref and rec.ref.oid,
+                    refName = rec.ref and rec.ref.name,
+                    queueIs = (rec.queue == entries),
+                    index = rec.index, done = rec.done, name = rec.name,
+                    cheatBoundary = rec.cheatBoundary,
+                    cheatApplied = rec.cheatApplied,
+                }
+            end
+            res.active = BfBot.Exec._activeCasters
+            res.total  = BfBot.Exec._totalEntries
+            res.noted  = BfBot.Exec._lastProgressGameTime
+            res.lateLog = false
+            for _, le in ipairs(BfBot.Exec._log) do
+                if le.type == "INFO" and type(le.msg) == "string"
+                    and le.msg:find("late-join: LateStub (2 entries)", 1, true) then
+                    res.lateLog = true
+                end
+            end
+        end)
+        BfBot.Exec._BuildQueue           = savedBuild
+        BfBot.Exec._ProcessCasterEntry   = savedProcess
+        BfBot.Exec._state                = saved.state
+        BfBot.Exec._casters              = saved.casters
+        BfBot.Exec._activeCasters        = saved.active
+        BfBot.Exec._log                  = saved.log
+        BfBot.Exec._totalEntries         = saved.total
+        BfBot.Exec._qcMode               = saved.qcMode
+        BfBot.Exec._lastProgressGameTime = saved.lastProgress
+        if not ok11 then _nok("[11.2] attach block errored: " .. tostring(err11)) end
+        _check(res.attach == true and res.rawSeen == true and res.buildQc == 0,
+            "attach expands the builder queue via _BuildQueue (attached="
+            .. tostring(res.attach) .. ")")
+        _check(res.rec ~= nil and res.rec.refKind == "summon"
+            and res.rec.refOid == 87001 and res.rec.refName == "LateStub"
+            and res.rec.queueIs == true and res.rec.index == 0
+            and res.rec.done == false and res.rec.name == "LateStub"
+            and res.rec.cheatApplied == false,
+            "attached record matches the Start-created caster shape")
+        _check(res.rec ~= nil and res.rec.cheatBoundary == 1,
+            "cheatBoundary derived from the attached entries' own cheat flags "
+            .. "(got " .. tostring(res.rec and res.rec.cheatBoundary) .. ")")
+        _check(res.active == 2 and res.total == 5,
+            "bookkeeping: _activeCasters 1→2, _totalEntries 3→5 (got "
+            .. tostring(res.active) .. "/" .. tostring(res.total) .. ")")
+        _check(#res.procCalls == 1 and res.procCalls[1].key == "s87001"
+            and res.procCalls[1].index == 1,
+            "chain kicked once via _ProcessCasterEntry(\"s87001\", 1)")
+        _check(type(res.noted) == "number",
+            "watchdog progress noted at attach time")
+        _check(res.lateLog == true, "late-join INFO line logged")
+    end
+
+    -- [11.3] _OnSpriteLoaded guard order (cheap-first, plan-mandated):
+    -- state → run preset → portrait → already-attached → record. The
+    -- listener NEVER classifies (probe-verified 2026-07-14: fire-time
+    -- name/EA/puppet fields are not set yet — classification is deferred
+    -- to _ProcessLateJoins); a classify call-counter proves that AND the
+    -- early bail-outs. Portrait -1 branches stub the EEex global;
+    -- everything saved/restored OUTSIDE the pcall.
+    if leader then
+        local savedClassify = BfBot.Scan.ClassifySummonSprite
+        local savedPortrait = EEex_Sprite_GetPortraitIndex
+        local saved = {
+            state     = BfBot.Exec._state,
+            casters   = BfBot.Exec._casters,
+            pending   = BfBot.Exec._pendingLateJoin,
+            runPreset = BfBot.Exec._runPresetIdx,
+        }
+        local res = {}
+        local ok11, err11 = pcall(function()
+            if type(BfBot.Exec._OnSpriteLoaded) ~= "function" then
+                error("_OnSpriteLoaded is not a function")
+            end
+            local nClassify = 0
+            BfBot.Scan.ClassifySummonSprite = function()
+                nClassify = nClassify + 1
+                return nil
+            end
+            local leaderOid = leader.m_id
+            BfBot.Exec._casters = {}
+            BfBot.Exec._pendingLateJoin = {}
+
+            -- (a) not running → nothing recorded
+            BfBot.Exec._state = "idle"
+            BfBot.Exec._runPresetIdx = 1
+            BfBot.Exec._OnSpriteLoaded(leader)
+            res.aPending = next(BfBot.Exec._pendingLateJoin) ~= nil
+
+            -- (b) running but no run preset → nothing recorded
+            BfBot.Exec._state = "running"
+            BfBot.Exec._runPresetIdx = nil
+            BfBot.Exec._OnSpriteLoaded(leader)
+            res.bPending = next(BfBot.Exec._pendingLateJoin) ~= nil
+
+            -- (c) running + preset, but the sprite is a PARTY member (the
+            -- real leader, portrait 0 ≠ -1) → nothing recorded
+            BfBot.Exec._runPresetIdx = 1
+            BfBot.Exec._OnSpriteLoaded(leader)
+            res.cPending = next(BfBot.Exec._pendingLateJoin) ~= nil
+
+            -- Remaining branches need portrait -1: stub the EEex global.
+            EEex_Sprite_GetPortraitIndex = function() return -1 end
+
+            -- (d) records the oid with the full retry budget
+            BfBot.Exec._OnSpriteLoaded(leader)
+            res.dTries = BfBot.Exec._pendingLateJoin[leaderOid]
+
+            -- (e) re-fire never RESETS an existing entry's budget
+            BfBot.Exec._pendingLateJoin[leaderOid] = 2
+            BfBot.Exec._OnSpriteLoaded(leader)
+            res.eTries = BfBot.Exec._pendingLateJoin[leaderOid]
+
+            -- (f) already-attached key → not recorded
+            BfBot.Exec._pendingLateJoin = {}
+            BfBot.Exec._casters["s" .. leaderOid] = { done = false }
+            BfBot.Exec._OnSpriteLoaded(leader)
+            res.fPending = next(BfBot.Exec._pendingLateJoin) ~= nil
+            BfBot.Exec._casters["s" .. leaderOid] = nil
+
+            -- (g) CHECKED pcall: a broken body errors → the handler
+            -- survives (WARNs instead of propagating to the engine hook)
+            EEex_Sprite_GetPortraitIndex = function()
+                error("portrait boom (synthetic)")
+            end
+            res.gOk = pcall(BfBot.Exec._OnSpriteLoaded, leader)
+
+            -- classify must never have been consulted by the listener
+            res.classifyCalls = nClassify
+        end)
+        -- Restore OUTSIDE the pcall — the EEex global FIRST.
+        EEex_Sprite_GetPortraitIndex    = savedPortrait
+        BfBot.Scan.ClassifySummonSprite = savedClassify
+        BfBot.Exec._state               = saved.state
+        BfBot.Exec._casters             = saved.casters
+        BfBot.Exec._pendingLateJoin     = saved.pending
+        BfBot.Exec._runPresetIdx        = saved.runPreset
+        if not ok11 then _nok("[11.3] guard-order block errored: " .. tostring(err11)) end
+        _check(res.aPending == false,
+            "state ≠ running: nothing recorded (cheap-first)")
+        _check(res.bPending == false,
+            "nil _runPresetIdx: nothing recorded (raw-run inert)")
+        _check(res.cPending == false,
+            "party sprite (portrait ≠ -1): nothing recorded")
+        _check(res.dTries == BfBot.Exec._LATEJOIN_MAX_TRIES,
+            "summon sprite recorded with the full retry budget (got "
+            .. tostring(res.dTries) .. ")")
+        _check(res.eTries == 2,
+            "re-fire keeps an existing entry's remaining budget (got "
+            .. tostring(res.eTries) .. ")")
+        _check(res.fPending == false,
+            "already-attached key: not recorded")
+        _check(res.gOk == true,
+            "checked pcall: broken listener body WARNs instead of propagating")
+        _check(res.classifyCalls == 0,
+            "listener NEVER classifies — deferred to _ProcessLateJoins "
+            .. "(fire-time sprite fields incomplete, probe 2026-07-14)")
+    else
+        _nok("no leader sprite in slot 0 for late-join guard-order checks")
+    end
+
+    -- [11.4] _TryLateJoin sequence (phase 2): already-attached → resolve →
+    -- portrait → classify → readiness → MP gate → build → attach; returns
+    -- true ONLY for "not initialized yet" (retry), false when finished.
+    -- Counters prove the order; portrait/gate/build/attach stubbed,
+    -- save/restore OUTSIDE the pcall.
+    if leader then
+        local savedClassify = BfBot.Scan.ClassifySummonSprite
+        local savedPortrait = EEex_Sprite_GetPortraitIndex
+        local savedGate     = BfBot.Persist._SummonPassesMpRule
+        local savedBuildS   = BfBot.Persist.BuildQueueForSummon
+        local savedAttach   = BfBot.Exec._AttachCaster
+        local saved = {
+            state     = BfBot.Exec._state,
+            casters   = BfBot.Exec._casters,
+            log       = BfBot.Exec._log,
+            runPreset = BfBot.Exec._runPresetIdx,
+        }
+        local res = {}
+        local ok11, err11 = pcall(function()
+            if type(BfBot.Exec._TryLateJoin) ~= "function" then
+                error("_TryLateJoin is not a function")
+            end
+            local nClassify, nGate, nBuild, nAttach = 0, 0, 0, 0
+            local classifyResult = nil
+            local gateValue = true
+            BfBot.Scan.ClassifySummonSprite = function()
+                nClassify = nClassify + 1
+                return classifyResult
+            end
+            BfBot.Persist._SummonPassesMpRule = function()
+                nGate = nGate + 1
+                return gateValue
+            end
+            BfBot.Persist.BuildQueueForSummon = function(e, idx)
+                nBuild = nBuild + 1
+                res.buildIdx = idx
+                return { { synthetic = 1 } }
+            end
+            BfBot.Exec._AttachCaster = function(e, q)
+                nAttach = nAttach + 1
+                res.attachEntry, res.attachQ = e, q
+                return true
+            end
+            EEex_Sprite_GetPortraitIndex = function() return -1 end
+            local leaderOid = leader.m_id
+            BfBot.Exec._state = "running"
+            BfBot.Exec._runPresetIdx = 1
+            BfBot.Exec._casters = {}
+            BfBot.Exec._log = {}
+
+            -- (a) already-attached key → done, classify never reached
+            BfBot.Exec._casters["s" .. leaderOid] = { done = false }
+            res.a = BfBot.Exec._TryLateJoin(leaderOid)
+            res.aClassify = nClassify
+            BfBot.Exec._casters["s" .. leaderOid] = nil
+
+            -- (b) unresolvable oid → done (gone), classify never reached
+            res.b = BfBot.Exec._TryLateJoin(999999999)
+            res.bClassify = nClassify
+
+            -- (c) resolvable but classify nil (not an allied castable
+            -- summon) → done, gate never reached
+            res.c = BfBot.Exec._TryLateJoin(leaderOid)
+            res.cClassify, res.cGate = nClassify, nGate
+
+            -- (d) classified but name "?" → NOT initialized yet → retry,
+            -- gate never reached
+            classifyResult = { oid = leaderOid, name = "?",
+                               identity = "test:late" }
+            res.d = BfBot.Exec._TryLateJoin(leaderOid)
+            res.dGate = nGate
+
+            -- (e) initialized but MP gate false → done, build never reached
+            classifyResult = { oid = leaderOid, name = "LateStub",
+                               identity = "test:late" }
+            gateValue = false
+            res.e = BfBot.Exec._TryLateJoin(leaderOid)
+            res.eGate, res.eBuild = nGate, nBuild
+
+            -- (f) happy path → build(entry, RUN preset) → attach
+            gateValue = true
+            res.f = BfBot.Exec._TryLateJoin(leaderOid)
+            res.fBuild, res.fAttach = nBuild, nAttach
+            res.fEntryIs = (res.attachEntry == classifyResult)
+            res.fQIs = (type(res.attachQ) == "table" and #res.attachQ == 1)
+        end)
+        -- Restore OUTSIDE the pcall — the EEex global FIRST.
+        EEex_Sprite_GetPortraitIndex      = savedPortrait
+        BfBot.Scan.ClassifySummonSprite   = savedClassify
+        BfBot.Persist._SummonPassesMpRule = savedGate
+        BfBot.Persist.BuildQueueForSummon = savedBuildS
+        BfBot.Exec._AttachCaster          = savedAttach
+        BfBot.Exec._state                 = saved.state
+        BfBot.Exec._casters               = saved.casters
+        BfBot.Exec._log                   = saved.log
+        BfBot.Exec._runPresetIdx          = saved.runPreset
+        if not ok11 then _nok("[11.4] try-late-join block errored: " .. tostring(err11)) end
+        _check(res.a == false and res.aClassify == 0,
+            "already-attached key: done, classify never reached")
+        _check(res.b == false and res.bClassify == 0,
+            "unresolvable oid: done (gone), classify never reached")
+        _check(res.c == false and res.cClassify == 1 and res.cGate == 0,
+            "classify nil: done, MP gate never reached")
+        _check(res.d == true and res.dGate == 0,
+            "name '?': retry requested (half-initialized), gate never reached")
+        _check(res.e == false and res.eGate == 1 and res.eBuild == 0,
+            "MP gate false: done, build never reached")
+        _check(res.f == false and res.fBuild == 1 and res.fAttach == 1
+            and res.buildIdx == 1 and res.fEntryIs == true and res.fQIs == true,
+            "happy path: build(entry, runPreset) → _AttachCaster(entry, queue)")
+        _check(EEex_Sprite_GetPortraitIndex == savedPortrait
+            and BfBot.Scan.ClassifySummonSprite == savedClassify
+            and BfBot.Persist._SummonPassesMpRule == savedGate
+            and BfBot.Persist.BuildQueueForSummon == savedBuildS
+            and BfBot.Exec._AttachCaster == savedAttach,
+            "cleanup: all late-join stubs restored")
+    else
+        _nok("no leader sprite in slot 0 for _TryLateJoin checks")
+    end
+
+    -- [11.5] _ProcessLateJoins retry accounting + checked pcall + the
+    -- _SafetyTick wiring. _TryLateJoin stubbed; exec state save/restore
+    -- OUTSIDE the pcall ([7.6] watchdog-isolation pattern for the tick).
+    do
+        local savedTry = BfBot.Exec._TryLateJoin
+        local saved = {
+            state        = BfBot.Exec._state,
+            casters      = BfBot.Exec._casters,
+            active       = BfBot.Exec._activeCasters,
+            pending      = BfBot.Exec._pendingLateJoin,
+            lastSafety   = BfBot.Exec._lastSafetyTick,
+            lastProgress = BfBot.Exec._lastProgressGameTime,
+            runPreset    = BfBot.Exec._runPresetIdx,
+        }
+        local res = {}
+        local ok11, err11 = pcall(function()
+            if type(BfBot.Exec._ProcessLateJoins) ~= "function" then
+                error("_ProcessLateJoins is not a function")
+            end
+            -- retry decrements, exhaustion drops
+            BfBot.Exec._TryLateJoin = function() return true end
+            BfBot.Exec._pendingLateJoin = { [777] = 2 }
+            BfBot.Exec._ProcessLateJoins()
+            res.afterFirst = BfBot.Exec._pendingLateJoin[777]
+            BfBot.Exec._ProcessLateJoins()
+            res.afterSecond = BfBot.Exec._pendingLateJoin[777]
+            -- done (false) drops immediately even with budget left
+            BfBot.Exec._TryLateJoin = function() return false end
+            BfBot.Exec._pendingLateJoin = { [778] = 5 }
+            BfBot.Exec._ProcessLateJoins()
+            res.doneDropped = BfBot.Exec._pendingLateJoin[778] == nil
+            -- an erroring entry is dropped and does not propagate
+            BfBot.Exec._TryLateJoin = function() error("try boom (synthetic)") end
+            BfBot.Exec._pendingLateJoin = { [779] = 5 }
+            res.errOk = pcall(BfBot.Exec._ProcessLateJoins)
+            res.errDropped = BfBot.Exec._pendingLateJoin[779] == nil
+            -- _SafetyTick wiring: a running tick drains the pending list
+            -- (healthy synthetic run: no casters, fresh progress)
+            local ticked = 0
+            BfBot.Exec._TryLateJoin = function() ticked = ticked + 1 return false end
+            BfBot.Exec._state = "running"
+            BfBot.Exec._casters = {}
+            BfBot.Exec._activeCasters = 0
+            BfBot.Exec._runPresetIdx = 1
+            BfBot.Exec._pendingLateJoin = { [780] = 5 }
+            BfBot.Exec._NoteProgress()
+            BfBot.Exec._lastSafetyTick = 0  -- bypass the 2s rate limit
+            pcall(BfBot.Exec._SafetyTick)
+            res.tickCalls = ticked
+            res.tickDrained = BfBot.Exec._pendingLateJoin[780] == nil
+            res.tickState = BfBot.Exec._state
+        end)
+        BfBot.Exec._TryLateJoin          = savedTry
+        BfBot.Exec._state                = saved.state
+        BfBot.Exec._casters              = saved.casters
+        BfBot.Exec._activeCasters        = saved.active
+        BfBot.Exec._pendingLateJoin      = saved.pending
+        BfBot.Exec._lastSafetyTick       = saved.lastSafety
+        BfBot.Exec._lastProgressGameTime = saved.lastProgress
+        BfBot.Exec._runPresetIdx         = saved.runPreset
+        if not ok11 then _nok("[11.5] process block errored: " .. tostring(err11)) end
+        _check(res.afterFirst == 1, "retry decrements the budget (2 → "
+            .. tostring(res.afterFirst) .. ")")
+        _check(res.afterSecond == nil, "exhausted budget drops the oid")
+        _check(res.doneDropped == true, "finished oid dropped immediately")
+        _check(res.errOk == true and res.errDropped == true,
+            "checked pcall: erroring entry WARNs, drops, never propagates")
+        _check(res.tickCalls == 1 and res.tickDrained == true
+            and res.tickState == "running",
+            "_SafetyTick (running) drains pending late-joins (calls="
+            .. tostring(res.tickCalls) .. ")")
+    end
+
     return _summary("SummonCasters")
 end
 

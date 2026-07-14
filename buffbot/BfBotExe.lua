@@ -19,6 +19,17 @@ BfBot.Exec._logFile = "buffbot_exec.log"
 BfBot.Exec._qcMode = 0              -- quick cast mode (0=off, 1=long, 2=all)
 BfBot.Exec._lastSafetyTick = 0  -- clock ticks of last safety check
 BfBot.Exec._lastProgressGameTime = nil  -- game-time of last forward progress (watchdog; nil until armed)
+BfBot.Exec._runPresetIdx = nil   -- preset driving the current run (late-join summon lookups, issue #19);
+                                 -- nil for raw/console-built queues → late-join inert for that run
+BfBot.Exec._pendingLateJoin = {} -- [oid] = retries left; sprites recorded by the loaded listener,
+                                 -- classified/attached by _ProcessLateJoins once the engine finished
+                                 -- initializing them (see _OnSpriteLoaded for the probe rationale)
+-- Retry budget for a pending late-join oid: probe-verified that a freshly
+-- conjured clone's name/EA/puppet fields are NOT set yet when the loaded
+-- listener fires; they are set moments later. 5 tries at the _SafetyTick's
+-- ~2s cadence = a ~10s readiness window — far shorter than any summon's
+-- lifetime, far longer than the engine needs.
+BfBot.Exec._LATEJOIN_MAX_TRIES = 5
 -- Watchdog timeout in GAME-TIME ticks (m_gameTime), NOT wall-clock. Game time
 -- freezes while the game is paused, so a paused-but-healthy buff run is never
 -- force-killed. ~450 ticks ≈ 30s at the engine's default rate (~15 game-ticks/s);
@@ -724,6 +735,8 @@ function BfBot.Exec._HardReset()
     BfBot.Exec._totalEntries  = 0
     BfBot.Exec._qcMode        = 0
     BfBot.Exec._lastProgressGameTime = nil
+    BfBot.Exec._runPresetIdx  = nil
+    BfBot.Exec._pendingLateJoin = {}
 end
 
 --- Detect stale execution state from a save reload mid-cast.
@@ -860,10 +873,170 @@ function BfBot.Exec._DeriveCheatBoundary(entries)
     return boundary
 end
 
+--- Attach a caster to the RUNNING run for a summon that spawned mid-run
+--- (late-join, issue #19). Expands the builder queue through _BuildQueue
+--- (same normalization, checks and logging as Start) and inserts a caster
+--- record of the exact shape Start creates. cheatBoundary is derived from
+--- the NEW entries at attach time — summon entries carry their identity
+--- preset's OWN precomputed cheat flag, so the late-joiner gets its BFBTCH
+--- toggle regardless of the run's qcMode (same rule as Start). Bumps
+--- _activeCasters (completion accounting) and _totalEntries ("total entries
+--- across all casters" stays true; the DONE summary itself counts
+--- cast+skip and needs no adjustment), logs the late-join, notes watchdog
+--- progress, then kicks the chain at entry 1.
+--- Caller (_OnSpriteLoaded) guarantees: state == "running", the key is not
+--- yet in _casters, and the MP gate passed.
+-- @param summonEntry detection entry (ClassifySummonSprite shape: oid, name)
+-- @param queue builder queue (BfBot.Persist.BuildQueueForSummon shape)
+-- @return true when attached, false when the queue expanded empty (summon
+--     vanished between classify and build — normal churn)
+function BfBot.Exec._AttachCaster(summonEntry, queue)
+    local byCaster = BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
+    if not byCaster then return false end
+    local key = "s" .. summonEntry.oid
+    local entries = byCaster[key]
+    if not entries or #entries == 0 then return false end
+
+    -- Same record shape as Start: no sprite userdata — every exec step
+    -- resolves fresh from the ref (issues #38/#19).
+    BfBot.Exec._casters[key] = {
+        ref = entries[1].casterRef,
+        queue = entries,
+        index = 0,
+        done = false,
+        name = entries[1].casterName,
+        cheatBoundary = BfBot.Exec._DeriveCheatBoundary(entries),
+        cheatApplied = false,
+    }
+    BfBot.Exec._activeCasters = BfBot.Exec._activeCasters + 1
+    BfBot.Exec._totalEntries = BfBot.Exec._totalEntries + #entries
+    BfBot.Exec._LogEntry("INFO", "late-join: "
+        .. tostring(entries[1].casterName) .. " (" .. #entries .. " entries)")
+    BfBot.Exec._NoteProgress()  -- the watchdog must see the attach
+    BfBot.Exec._ProcessCasterEntry(key, 1)
+    return true
+end
+
+--- Late-join listener body (issue #19): a summon spawning MID-RUN attaches
+--- to the running cast as its own caster. Registered in M_BfBot.lua as a
+--- thin namespace-resolving wrapper — this factored body is suite-testable
+--- and hot-reload swappable. EEex_Sprite_AddLoadedListener also fires for
+--- new-game, save load, area transition and party join; the guards below
+--- (cheap-first, plan-mandated order) make everything but a mid-run spawn
+--- a no-op, and a save-load mid-run additionally hits _IsStateStale / the
+--- gone-summon sweep first (verified Task 8 behavior).
+---
+--- TWO-PHASE by engine necessity (probe-verified live 2026-07-14): the
+--- loaded listener fires from OnAfterEffectListUnmarshalled, and for a
+--- freshly CONJURED clone that is BEFORE the engine sets its name ("?"),
+--- EA (still the owner's verbatim 2, not ALLY 4), script name (still the
+--- owner's, not "COPY") and puppet linkage (m_nCopyParent -1, m_bInCopy
+--- false, stat 139 = 0) — only the spellbook is already copied. Immediate
+--- ClassifySummonSprite here would misidentify a clone as a plain summon
+--- with a wrong identity and a nameless ref (which the anti-recycle name
+--- guard would later kill mid-chain). So this listener only RECORDS the
+--- object id; _ProcessLateJoins (driven by _SafetyTick's ~2s cadence)
+--- classifies and attaches once the sprite reports a real name.
+---
+--- The work runs inside a CHECKED pcall — a structurally broken listener
+--- must WARN on every fire, never silently disable late-join forever
+--- (silent-pcall landmine).
+function BfBot.Exec._OnSpriteLoaded(sprite)
+    if BfBot.Exec._state ~= "running" then return end
+    if BfBot.Exec._runPresetIdx == nil then return end
+    local ok, err = pcall(function()
+        if EEex_Sprite_GetPortraitIndex(sprite) ~= -1 then return end
+        local oid = sprite.m_id
+        if type(oid) ~= "number" then return end
+        if BfBot.Exec._casters["s" .. oid] then return end  -- already attached
+        -- Record once; never reset an existing entry's retry budget.
+        if BfBot.Exec._pendingLateJoin[oid] == nil then
+            BfBot.Exec._pendingLateJoin[oid] = BfBot.Exec._LATEJOIN_MAX_TRIES
+        end
+    end)
+    if not ok then
+        BfBot._Warn("[Exec] late-join listener: " .. tostring(err))
+    end
+end
+
+--- Attempt to late-join ONE pending sprite (phase 2, see _OnSpriteLoaded).
+--- Canonical sequence, cheap-first: already-attached -> resolve -> not
+--- party -> classify -> initialized -> MP gate -> build -> attach.
+--- @return true when the sprite is not READY yet (name still unresolved —
+---     caller retries within the budget); false/nil when finished with the
+---     oid (attached, gone, or filtered out — caller drops it).
+function BfBot.Exec._TryLateJoin(oid)
+    if BfBot.Exec._casters["s" .. oid] then return false end
+    -- Direct object-id resolve — no name guard yet: the trustworthy name is
+    -- exactly what initialization has not delivered until classify succeeds
+    -- below. The oid was recorded seconds ago; the classify + readiness
+    -- checks reject anything that is not an allied castable summon.
+    local obj = EEex_GameObject_Get(oid)
+    if not obj or not EEex_GameObject_IsSprite(obj, false) then return false end
+    local sprite = EEex_GameObject_CastUserType(obj)
+    if EEex_Sprite_GetPortraitIndex(sprite) ~= -1 then return false end
+    -- Structural filter shared with the area sweep (allied castable summon
+    -- or nil) — never a second detection rule.
+    local e = BfBot.Scan.ClassifySummonSprite(sprite)
+    if not e then return false end
+    -- Readiness gate: the engine sets name / EA / puppet linkage together
+    -- moments after spawn (probe 2026-07-14); an entry still reporting the
+    -- "?" name fallback was classified off a half-initialized sprite —
+    -- retry next tick instead of attaching a misidentified caster.
+    if e.name == "?" then return true end
+    -- ONE canonical MP gate — the same conservative rule the
+    -- BuildQueueFromPreset sweep applies (Task-13 seam: defers to
+    -- BfBot.Mp.IsSummonLocallyControlled once that exists).
+    if not BfBot.Persist._SummonPassesMpRule(e) then return false end
+    local q = BfBot.Persist.BuildQueueForSummon(e, BfBot.Exec._runPresetIdx)
+    -- The builder queues its SKIP lines for the config panel
+    -- (Persist._pendingSkips) and file-logged them at build time. The run
+    -- is LIVE here, so surface them straight into ITS in-memory panel log
+    -- (same {type, msg} shape as _LogEntry, no second file write — the
+    -- UI._SurfaceBuildSkips rationale) instead of letting them leak into
+    -- the NEXT panel run's log (MINOR-3 class).
+    if BfBot.Persist.DrainBuildSkips then
+        for _, msg in ipairs(BfBot.Persist.DrainBuildSkips()) do
+            table.insert(BfBot.Exec._log, { type = "SKIP", msg = msg })
+        end
+    end
+    if not q or #q == 0 then return false end
+    BfBot.Exec._AttachCaster(e, q)
+    return false
+end
+
+--- Drain the pending late-join list (called from _SafetyTick's running
+--- branch, so rate-limited to its ~2s cadence and only ever active during
+--- a run). Each oid gets _LATEJOIN_MAX_TRIES attempts; _TryLateJoin
+--- returning true means "not initialized yet, retry", anything else
+--- finishes the oid. CHECKED pcall per oid — one broken entry must WARN
+--- and be dropped, never wedge the tick or starve the other pending oids.
+function BfBot.Exec._ProcessLateJoins()
+    local pending = BfBot.Exec._pendingLateJoin
+    for oid, tries in pairs(pending) do
+        local ok, retry = pcall(BfBot.Exec._TryLateJoin, oid)
+        if not ok then
+            pending[oid] = nil
+            BfBot._Warn("[Exec] late-join (oid " .. tostring(oid) .. "): "
+                .. tostring(retry))
+        elseif retry == true and tries > 1 then
+            pending[oid] = tries - 1
+        else
+            pending[oid] = nil
+        end
+    end
+end
+
 --- Start executing a buff queue with parallel per-caster casting.
 -- @param queue array of {caster=0-5, spell="RESREF", target="self"|"all"|1-6}
+-- @param qcMode quick cast mode (0=off, 1=long, 2=all)
+-- @param presetIdx OPTIONAL preset index driving this run — recorded as
+--     _runPresetIdx so a summon spawning MID-RUN can look up ITS summon
+--     preset (late-join listener, issue #19). Raw/console queues pass
+--     nothing → nil → late-join stays inert for that run (correct: there
+--     is no preset to look a summon's config up under).
 -- @return true if started, false + reason string if not
-function BfBot.Exec.Start(queue, qcMode)
+function BfBot.Exec.Start(queue, qcMode, presetIdx)
     if BfBot.Exec._state == "running" then
         BfBot._Print("[BuffBot] Already running. Call BfBot.Exec.Stop() first.")
         return false, "already running"
@@ -882,6 +1055,8 @@ function BfBot.Exec.Start(queue, qcMode)
     BfBot.Exec._totalEntries = 0
     BfBot.Exec._qcMode = qcMode or 0
     BfBot.Exec._lastProgressGameTime = nil
+    BfBot.Exec._runPresetIdx = (type(presetIdx) == "number") and presetIdx or nil
+    BfBot.Exec._pendingLateJoin = {}
 
     -- Build per-caster queues
     local byCaster, totalEntries = BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
@@ -1031,6 +1206,14 @@ function BfBot.Exec._SafetyTick()
         -- The sweep may have finished the LAST caster: _FinishGoneCaster then
         -- ran _Complete and the run is over — nothing left to watchdog.
         if BfBot.Exec._state ~= "running" then return end
+
+        -- Late-join (issue #19): classify-and-attach summons the loaded
+        -- listener recorded, now that the engine has had time to finish
+        -- initializing them (see _OnSpriteLoaded — fire-time fields are
+        -- incomplete). Runs at this tick's ~2s cadence, only while running;
+        -- an attach kicks casts and notes progress, so the watchdog below
+        -- sees it.
+        BfBot.Exec._ProcessLateJoins()
 
         -- Measure progress in GAME time (frozen while paused) so a paused-but-
         -- healthy buff run is never force-killed. Only trip when the game has

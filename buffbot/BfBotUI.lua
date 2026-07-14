@@ -1705,8 +1705,11 @@ end
 --- log, so replaying the skips would append them to the PREVIOUS run's
 --- panel log (review MINOR-2). On refusal the pending skips are discarded
 --- instead — they were file-logged at build time, nothing is lost there.
-function BfBot.UI._StartRun(queue, qcMode)
-    local started = BfBot.Exec.Start(queue, qcMode)
+--- presetIdx tags the run for the late-join listener (issue #19): every
+--- preset-driven entry point passes BfBot.UI._presetIdx so a summon
+--- spawning mid-run can look up its own summon preset.
+function BfBot.UI._StartRun(queue, qcMode, presetIdx)
+    local started = BfBot.Exec.Start(queue, qcMode, presetIdx)
     if started then
         BfBot.UI._SurfaceBuildSkips()
     else
@@ -1739,7 +1742,7 @@ function BfBot.UI.Cast()
         return
     end
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
-    BfBot.UI._StartRun(queue, qcMode)
+    BfBot.UI._StartRun(queue, qcMode, BfBot.UI._presetIdx)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
@@ -1771,7 +1774,7 @@ function BfBot.UI.CastCharacter()
         return
     end
     local qcMode = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    BfBot.UI._StartRun(queue, qcMode)
+    BfBot.UI._StartRun(queue, qcMode, BfBot.UI._presetIdx)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
@@ -1791,7 +1794,7 @@ function BfBot.UI._CastSelectedSummon()
             .. (reason and (" (" .. reason .. ")") or ""))
         return
     end
-    BfBot.UI._StartRun(queue, 0)
+    BfBot.UI._StartRun(queue, 0, BfBot.UI._presetIdx)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 

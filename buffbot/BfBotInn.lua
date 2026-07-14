@@ -708,7 +708,8 @@ function BFBOTGO(param1, param2, special)
         -- Execute
         local qcMode = BfBot.Persist.GetQuickCast(sprite, presetIdx)
         _InnateLog(string.format("Starting: %d entries, qcMode=%d", #queue, qcMode or 0))
-        BfBot.Exec.Start(queue, qcMode)
+        -- presetIdx tags the run for the late-join listener (issue #19)
+        BfBot.Exec.Start(queue, qcMode, presetIdx)
     end)
 
     if not ok then

@@ -22,6 +22,19 @@ Infinity_DoFile("BfBotInn")  -- Innate abilities (depends on Persist, Exec)
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
 BfBot.Innate._EnsureSPLFiles()  -- Write innate SPL files to override (if missing)
 BfBot.Innate.Init()          -- Register sprite-loaded listener for innate grants
+
+-- Late-join listener (issue #19): a summon spawning MID-RUN attaches to the
+-- running cast as its own caster. Thin wrapper — the guarded, testable body
+-- is BfBot.Exec._OnSpriteLoaded; resolving it through the namespace at fire
+-- time means a hot-reloaded BfBotExe swaps in transparently. The guard flag
+-- lives on the BfBot ROOT (module re-execution resets BfBot.Exec, never
+-- BfBot), so a re-run of this file can never stack a second listener.
+if not BfBot._lateJoinListenerRegistered then
+    BfBot._lateJoinListenerRegistered = true
+    EEex_Sprite_AddLoadedListener(function(sprite)
+        BfBot.Exec._OnSpriteLoaded(sprite)
+    end)
+end
 Infinity_DoFile("BfBotUI")   -- UI logic (state, callbacks, .menu integration)
 Infinity_DoFile("BfBotTst")  -- Test suite (remove for release)
 
