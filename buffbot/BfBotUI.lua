@@ -29,7 +29,8 @@ BfBot.UI._SUMMONS_PER_PAGE = 6   -- tab slots per page (mirrors the 6 portrait t
 BfBot.UI._summonList = {}        -- UI-owned copies of GetAlliedSummons entries (no sprites)
 BfBot.UI._summonSlice = {}       -- current page's entries (kept in sync with tab labels)
 BfBot.UI._summonPage = 1         -- 1-based page into _summonList
-BfBot.UI._summonSel = nil        -- selection descriptor {identity, oid, name} — NEVER a row index
+BfBot.UI._summonSel = nil        -- selection descriptor {identity, oid, name, cloneType} — NEVER a row index
+BfBot.UI._summonQc = nil         -- cached summons-view Quick Cast value (see _UpdateSummonQc)
 
 -- Panel geometry (nil = use default 80%-centered)
 BfBot.UI._panelX = nil
@@ -144,7 +145,12 @@ end
 --- Re-establish the selection after a list rebuild — identity-stable, NEVER
 --- by row index (rowNumber-staleness class of bug). Pass 1 matches the exact
 --- sprite (oid+name); pass 2 falls back to the identity (a respawned "same"
---- summon keeps its tab); no match → first entry; empty list → no selection.
+--- summon keeps its tab), PREFERRING an entry of the same clone type — one
+--- owner can have BOTH a Project Image and a Simulacrum alive (shared
+--- identity "clone:<owner>"), and an expired+resummoned selection must not
+--- silently jump to the other clone type (review MINOR-5); first identity
+--- match only when no type match exists. No match → first entry; empty
+--- list → no selection.
 --- Also moves _summonPage to the page containing the selection.
 function BfBot.UI._ReselectSummon()
     local list = BfBot.UI._summonList
@@ -158,18 +164,24 @@ function BfBot.UI._ReselectSummon()
             end
         end
         if not found then
+            local anyIdentity = nil
             for _, e in ipairs(list) do
                 if e.identity == sel.identity then
-                    found = e
-                    break
+                    if e.cloneType == sel.cloneType then
+                        found = e
+                        break
+                    end
+                    anyIdentity = anyIdentity or e
                 end
             end
+            found = found or anyIdentity
         end
     end
     if not found then found = list[1] end
     if found then
         BfBot.UI._summonSel = {
             identity = found.identity, oid = found.oid, name = found.name,
+            cloneType = found.cloneType,
         }
         for i, e in ipairs(list) do
             if e == found then
@@ -241,7 +253,8 @@ end
 function BfBot.UI.SetSummon(n)
     local e = BfBot.UI._summonSlice[n]
     if not e then return end
-    BfBot.UI._summonSel = { identity = e.identity, oid = e.oid, name = e.name }
+    BfBot.UI._summonSel = { identity = e.identity, oid = e.oid, name = e.name,
+        cloneType = e.cloneType }
     BfBot.UI._Refresh()
 end
 
@@ -1197,6 +1210,7 @@ function BfBot.UI._RefreshSummonsView()
     if not entry or not sprite then
         buffbot_spellTable = {}
         buffbot_title = "BuffBot - Summons"
+        BfBot.UI._UpdateSummonQc()  -- per-frame bbQC cache (review MINOR-4)
         return
     end
 
@@ -1208,6 +1222,10 @@ function BfBot.UI._RefreshSummonsView()
     -- owner's same-index preset ∩ the clone's castable set)
     BfBot.UI._EnsureSummonPreset(entry)
     local preset = BfBot.Persist.GetSummonPreset(entry.identity, BfBot.UI._presetIdx)
+    -- Refresh the per-frame bbQC cache AFTER _EnsureSummonPreset — a
+    -- just-created preset must show its (possibly seeded) qc immediately
+    -- (review MINOR-4).
+    BfBot.UI._UpdateSummonQc()
     if not preset or type(preset.spells) ~= "table" then
         buffbot_spellTable = {}
         return
@@ -1666,15 +1684,35 @@ end
 -- Cast / Stop
 -- ============================================================
 
---- Re-append build-time SKIP lines into the run's fresh in-memory log.
---- The builders log SKIPs (file + memory) BEFORE Exec.Start, and Start
---- resets the memory log — without this, the panel-visible log never shows
---- why entries are missing (hand-off 4). Call AFTER a successful Start.
+--- Re-append build-time SKIP lines into the run's fresh IN-MEMORY log
+--- ONLY. The builders log SKIPs (file + memory) BEFORE Exec.Start, and
+--- Start resets the memory log — without this, the panel-visible log never
+--- shows why entries are missing (hand-off 4). The file line was already
+--- written at build time, so this inserts directly into BfBot.Exec._log
+--- (mirroring _LogEntry's { type, msg } entry shape) instead of calling
+--- _LogEntry, which would write the file a second time (review MINOR-1).
+--- Only _StartRun may call this, and only after a successful Start.
 function BfBot.UI._SurfaceBuildSkips()
     if not BfBot.Persist.DrainBuildSkips then return end
     for _, msg in ipairs(BfBot.Persist.DrainBuildSkips()) do
-        BfBot.Exec._LogEntry("SKIP", msg)
+        table.insert(BfBot.Exec._log, { type = "SKIP", msg = msg })
     end
+end
+
+--- Start an exec run and surface the build-time skips into its panel log.
+--- Surfacing happens ONLY on a successful Start: a refused Start (already
+--- running, or a build error inside Start) does NOT reset the in-memory
+--- log, so replaying the skips would append them to the PREVIOUS run's
+--- panel log (review MINOR-2). On refusal the pending skips are discarded
+--- instead — they were file-logged at build time, nothing is lost there.
+function BfBot.UI._StartRun(queue, qcMode)
+    local started = BfBot.Exec.Start(queue, qcMode)
+    if started then
+        BfBot.UI._SurfaceBuildSkips()
+    else
+        BfBot.Persist.DrainBuildSkips()
+    end
+    return started
 end
 
 function BfBot.UI.Cast()
@@ -1701,8 +1739,7 @@ function BfBot.UI.Cast()
         return
     end
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
-    BfBot.Exec.Start(queue, qcMode)
-    BfBot.UI._SurfaceBuildSkips()
+    BfBot.UI._StartRun(queue, qcMode)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
@@ -1734,8 +1771,7 @@ function BfBot.UI.CastCharacter()
         return
     end
     local qcMode = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    BfBot.Exec.Start(queue, qcMode)
-    BfBot.UI._SurfaceBuildSkips()
+    BfBot.UI._StartRun(queue, qcMode)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
@@ -1755,8 +1791,7 @@ function BfBot.UI._CastSelectedSummon()
             .. (reason and (" (" .. reason .. ")") or ""))
         return
     end
-    BfBot.Exec.Start(queue, 0)
-    BfBot.UI._SurfaceBuildSkips()
+    BfBot.UI._StartRun(queue, 0)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
@@ -2385,19 +2420,43 @@ end
 -- ============================================================
 
 --- Quick Cast value (0..2) for the current view: party → the selected
---- character's per-preset qc; summons → the selected summon preset's OWN qc
---- (v8 schema field — the summon follows it even inside a party run).
+--- character's per-preset qc; summons → the CACHED qc of the selected
+--- summon's preset (its OWN v8 qc field — the summon follows it even
+--- inside a party run). The cache exists because this feeds bbQC's
+--- per-frame `text lua` / `text color lua`: resolving the summon preset
+--- live would walk _SelectedSummon → PeekSummonPreset →
+--- _GetProtagonistConfig (up to ~6 GetInPortrait calls + a pcall) several
+--- times EVERY frame (review MINOR-4). Party view is a single portrait
+--- lookup and stays live.
 function BfBot.UI._ViewQuickCast()
     if BfBot.UI._view == "summons" then
-        local sel = BfBot.UI._SelectedSummon()
-        local preset = sel and BfBot.Persist.PeekSummonPreset(
-            sel.identity, BfBot.UI._presetIdx)
-        if not preset then return nil end
-        return tonumber(preset.qc) or 0
+        return BfBot.UI._summonQc
     end
     local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return nil end
     return BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+end
+
+--- Recompute the cached summons-view Quick Cast value (_summonQc). Writer
+--- trace — every path that can change the displayed value refreshes the
+--- cache, so it can never go stale:
+---   * _RefreshSummonsView calls this on EVERY exit; all summons-view
+---     state changes funnel through it via _Refresh (panel open, view
+---     switch, summon tab select, preset switch, page flip, sprite
+---     listeners) — including preset creation by _EnsureSummonPreset.
+---   * CycleQuickCast's summons branch writes the cache inline with its
+---     qc mutation (the one write that happens without a _Refresh).
+--- nil = no selected summon or no preset yet (renders as Off / normal
+--- speed, exactly like the pre-cache nil).
+function BfBot.UI._UpdateSummonQc()
+    local sel = BfBot.UI._SelectedSummon()
+    local preset = sel and BfBot.Persist.PeekSummonPreset(
+        sel.identity, BfBot.UI._presetIdx)
+    if preset then
+        BfBot.UI._summonQc = tonumber(preset.qc) or 0
+    else
+        BfBot.UI._summonQc = nil
+    end
 end
 
 function BfBot.UI.CycleQuickCast()
@@ -2407,6 +2466,7 @@ function BfBot.UI.CycleQuickCast()
             sel.identity, BfBot.UI._presetIdx)
         if not preset then return end
         preset.qc = ((tonumber(preset.qc) or 0) + 1) % 3
+        BfBot.UI._summonQc = preset.qc  -- keep the per-frame cache fresh
         return
     end
     local sprite = BfBot.UI._GetSelectedSprite()

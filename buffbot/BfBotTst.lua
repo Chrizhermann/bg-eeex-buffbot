@@ -4343,6 +4343,33 @@ function BfBot.Test.SummonCasters()
                 and BfBot.UI._summonPage == 1,
                 "reselect: empty list → no selection, page 1")
 
+            -- Review MINOR-5: one owner can have BOTH a Project Image and a
+            -- Simulacrum alive — they share identity "clone:<owner>". When
+            -- the exact oid is gone (expired + resummoned), the identity
+            -- fallback must prefer the entry matching the previously
+            -- selected clone TYPE, not silently jump to the other type.
+            BfBot.UI._summonList = {
+                { oid = 21, name = "COPY", identity = "clone:Imoen",
+                  kind = "clone", cloneType = 2 },
+                { oid = 22, name = "COPY", identity = "clone:Imoen",
+                  kind = "clone", cloneType = 3 },
+            }
+            BfBot.UI._summonSel = { oid = 99, name = "COPY",
+                identity = "clone:Imoen", cloneType = 3 }
+            BfBot.UI._ReselectSummon()
+            sel = BfBot.UI._summonSel
+            _check(sel ~= nil and sel.oid == 22 and sel.cloneType == 3,
+                "reselect: identity fallback prefers the matching clone type")
+            -- The Sim vanished entirely → plain identity fallback (the PI)
+            BfBot.UI._summonList = {
+                { oid = 21, name = "COPY", identity = "clone:Imoen",
+                  kind = "clone", cloneType = 2 },
+            }
+            BfBot.UI._ReselectSummon()
+            sel = BfBot.UI._summonSel
+            _check(sel ~= nil and sel.oid == 21,
+                "reselect: no type match → first identity match")
+
             -- Hand-off 1: clicking a portrait tab always leaves summons view
             BfBot.UI._view = "summons"
             BfBot.UI.SetChar(savedSlot)
@@ -4381,7 +4408,15 @@ function BfBot.Test.SummonCasters()
 
     -- [T10.5] Build-skip surfacing (hand-off 4): _LogBuildSkips accumulates
     -- messages for the panel; DrainBuildSkips hands them over exactly once.
+    -- Review MINOR-1/2: _SurfaceBuildSkips appends to the IN-MEMORY panel
+    -- log only (the builders already wrote the file line — a second
+    -- _LogEntry would double it), and a refused Start discards pending
+    -- skips instead of replaying them into the previous run's panel log.
+    -- Stubs + exec state saved/restored OUTSIDE the pcall ([7.8] pattern).
     do
+        local savedLogEntry = BfBot.Exec._LogEntry
+        local savedLog      = BfBot.Exec._log
+        local savedState    = BfBot.Exec._state
         local ok10, err10 = pcall(function()
             _check(type(BfBot.Persist.DrainBuildSkips) == "function",
                 "DrainBuildSkips is a function")
@@ -4395,9 +4430,115 @@ function BfBot.Test.SummonCasters()
             local again = BfBot.Persist.DrainBuildSkips()
             _check(type(again) == "table" and #again == 0,
                 "drain empties the pending list")
+
+            -- MINOR-1: surfacing must not write the log FILE a second time.
+            -- _LogEntry (file + memory) is stubbed to a counter; the fixed
+            -- surface inserts straight into the in-memory log, mirroring
+            -- _LogEntry's { type, msg } entry shape (the GetLog/panel
+            -- contract).
+            local fileWrites = 0
+            BfBot.Exec._LogEntry = function() fileWrites = fileWrites + 1 end
+            BfBot.Exec._log = {}
+            table.insert(BfBot.Persist._pendingSkips, "T10 surfaced skip")
+            BfBot.UI._SurfaceBuildSkips()
+            _check(fileWrites == 0,
+                "surface: no second file write via _LogEntry")
+            local le = BfBot.Exec._log[1]
+            _check(#BfBot.Exec._log == 1 and type(le) == "table"
+                and le.type == "SKIP" and le.msg == "T10 surfaced skip",
+                "surface: in-memory entry matches the _LogEntry shape")
+            _check(#BfBot.Persist.DrainBuildSkips() == 0,
+                "surface: drains the pending list")
+            BfBot.Exec._LogEntry = savedLogEntry
+
+            -- MINOR-2: a refused Start (already running) must leave the
+            -- previous run's panel log untouched and discard the pending
+            -- skips (they were file-logged at build time — nothing lost).
+            if savedState == "running" then
+                error("exec is running — refused-Start check needs idle state")
+            end
+            BfBot.Exec._log = { { type = "INFO", msg = "previous run line" } }
+            BfBot.Exec._state = "running"
+            table.insert(BfBot.Persist._pendingSkips, "T10 refused skip")
+            local started = BfBot.UI._StartRun({ { synthetic = 1 } }, 0)
+            _check(started == false, "refused Start returns false")
+            _check(#BfBot.Exec._log == 1
+                and BfBot.Exec._log[1].msg == "previous run line",
+                "refused Start: previous panel log untouched")
+            _check(#BfBot.Persist.DrainBuildSkips() == 0,
+                "refused Start: pending skips discarded")
         end)
+        BfBot.Exec._LogEntry = savedLogEntry
+        BfBot.Exec._log      = savedLog
+        BfBot.Exec._state    = savedState
+        BfBot.Persist.DrainBuildSkips()  -- never strand synthetic skips
         if not ok10 then
-            _nok("[T10.5] skip-drain block errored: " .. tostring(err10))
+            _nok("[T10.5] skip-surface block errored: " .. tostring(err10))
+        end
+    end
+
+    -- [T10.6] Summons-view Quick Cast cache (review MINOR-4): the bbQC
+    -- button's `text lua`/`text color lua` run EVERY frame — in summons
+    -- view they must read the cached BfBot.UI._summonQc instead of
+    -- re-resolving _SelectedSummon → PeekSummonPreset → protagonist config
+    -- per frame. _RefreshSummonsView and CycleQuickCast keep it fresh.
+    -- Fully synthetic identity on the protagonist config; purged +
+    -- asserted OUTSIDE the pcall ([7.1] pattern).
+    do
+        local savedView = BfBot.UI._view
+        local savedList = BfBot.UI._summonList
+        local savedSel  = BfBot.UI._summonSel
+        local savedQc   = BfBot.UI._summonQc
+        local savedIdx  = BfBot.UI._presetIdx
+        local savedPeek = BfBot.Persist.PeekSummonPreset
+        local ok10, err10 = pcall(function()
+            local preset = BfBot.Persist.GetSummonPreset("test:qccache", 1)
+            if not preset then error("no protagonist config for qc-cache checks") end
+            preset.qc = 0
+            BfBot.UI._view = "summons"
+            BfBot.UI._presetIdx = 1
+            BfBot.UI._summonList = {
+                { oid = 31, name = "QCCACHE", identity = "test:qccache" } }
+            BfBot.UI._summonSel = {
+                oid = 31, name = "QCCACHE", identity = "test:qccache" }
+            BfBot.UI._UpdateSummonQc()
+            _check(BfBot.UI._summonQc == 0
+                and BfBot.UI._ViewQuickCast() == 0,
+                "qc cache: refresh computes the preset's qc; view reads cache")
+            BfBot.UI.CycleQuickCast()
+            _check(preset.qc == 1 and BfBot.UI._summonQc == 1
+                and BfBot.UI._ViewQuickCast() == 1,
+                "qc cache: CycleQuickCast writes preset AND cache")
+            -- The per-frame read must never touch the config: poison Peek
+            -- and confirm _ViewQuickCast still answers from the cache.
+            BfBot.Persist.PeekSummonPreset = function()
+                error("per-frame read resolved config")
+            end
+            local okRead, qcRead = pcall(BfBot.UI._ViewQuickCast)
+            BfBot.Persist.PeekSummonPreset = savedPeek
+            _check(okRead == true and qcRead == 1,
+                "qc cache: per-frame read never re-resolves config")
+            -- No selection → cache clears (label falls back to Off)
+            BfBot.UI._summonSel = nil
+            BfBot.UI._UpdateSummonQc()
+            _check(BfBot.UI._summonQc == nil,
+                "qc cache: no selection clears the cache")
+        end)
+        BfBot.Persist.PeekSummonPreset = savedPeek
+        BfBot.UI._view = savedView
+        BfBot.UI._summonList = savedList
+        BfBot.UI._summonSel = savedSel
+        BfBot.UI._summonQc = savedQc
+        BfBot.UI._presetIdx = savedIdx
+        -- Purge the synthetic identity OUTSIDE the pcall ([7.1] pattern)
+        local pc = BfBot.Persist._GetProtagonistConfig()
+        local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
+        if pcs then pcs["test:qccache"] = nil end
+        _check(pcs ~= nil and pcs["test:qccache"] == nil
+            and BfBot.Persist.PeekSummonPreset("test:qccache", 1) == nil,
+            "cleanup: test:qccache identity purged")
+        if not ok10 then
+            _nok("[T10.6] qc-cache block errored: " .. tostring(err10))
         end
     end
 

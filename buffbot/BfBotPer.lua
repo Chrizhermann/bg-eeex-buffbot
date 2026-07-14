@@ -1456,7 +1456,8 @@ function BfBot.Persist._LogBuildSkips(skips)
             BfBot.Exec._LogEntry("SKIP", s.msg)
             -- Also queue for the panel: Exec.Start resets the in-memory log
             -- an instant after the builders write it, so the UI drains this
-            -- and re-appends the lines into the fresh run log (Task 10).
+            -- and re-appends the lines into the fresh run's IN-MEMORY log
+            -- only (Task 10) — the file line above is the single file write.
             table.insert(BfBot.Persist._pendingSkips, s.msg)
         end
     end
@@ -1468,7 +1469,9 @@ BfBot.Persist._pendingSkips = BfBot.Persist._pendingSkips or {}
 
 --- Hand over (and clear) the build-time SKIP messages collected since the
 --- last drain. UI cast handlers drain once BEFORE building (discard stale)
---- and once AFTER Exec.Start (surface into the fresh run log).
+--- and once after a SUCCESSFUL Exec.Start (surface into the fresh run's
+--- panel log); a refused Start and the F12 innate path drain-and-discard
+--- (the lines were file-logged at build time).
 -- @return array of message strings (possibly empty)
 function BfBot.Persist.DrainBuildSkips()
     local msgs = BfBot.Persist._pendingSkips

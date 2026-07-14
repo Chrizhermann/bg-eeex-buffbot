@@ -691,6 +691,13 @@ function BFBOTGO(param1, param2, special)
 
         -- Build the queue
         local queue, queueErr = BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
+        -- The builder queues its SKIP lines for the config panel
+        -- (Persist._pendingSkips); the innate path has no panel log to
+        -- surface into, so drain-and-discard here (review MINOR-3). The
+        -- lines were already written to buffbot_exec.log at build time —
+        -- without this drain they would leak until an unrelated panel
+        -- cast replayed them into that run's log.
+        if BfBot.Persist.DrainBuildSkips then BfBot.Persist.DrainBuildSkips() end
         if not queue or #queue == 0 then
             local reason = queueErr or "empty queue"
             _InnateLog("INFO: no spells to cast — " .. reason)
