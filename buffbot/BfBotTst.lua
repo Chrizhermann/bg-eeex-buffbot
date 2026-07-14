@@ -4552,9 +4552,12 @@ function BfBot.Test.SummonCasters()
     P("  [11] Late-join listener (mid-run summon attach)")
 
     -- [11.1] Start records the run's preset; raw/console Starts leave it
-    -- nil (late-join inert); _HardReset clears it. Synthetic Start ([7.8]
-    -- pattern): _BuildQueue + _ProcessCasterEntry stubbed, save/restore
-    -- OUTSIDE the pcall, checks asserted after the restore.
+    -- nil (late-join inert); _HardReset clears it. Start and _HardReset
+    -- must also clear a pre-seeded _pendingLateJoin — Start BEFORE the
+    -- first chain kick (a stale oid from a previous run must never attach
+    -- to the new one). Synthetic Start ([7.8] pattern): _BuildQueue +
+    -- _ProcessCasterEntry stubbed, save/restore OUTSIDE the pcall, checks
+    -- asserted after the restore.
     if BfBot.Exec.GetState() == "running" then
         _warning("exec currently running; skipping late-join checks")
     else
@@ -4597,11 +4600,23 @@ function BfBot.Test.SummonCasters()
                     targetObj = "Myself", targetName = "PartyStub",
                     splstates = {}, isAoE = false } } }, 1
             end
-            BfBot.Exec._ProcessCasterEntry = function() end
+            BfBot.Exec._ProcessCasterEntry = function()
+                -- first chain kick = the run has started; the stale seed
+                -- must already be gone by now (MINOR-5a)
+                if res.pendingAtKick == nil then
+                    res.pendingAtKick =
+                        next(BfBot.Exec._pendingLateJoin) ~= nil
+                end
+            end
+            -- stale oid from a "previous run"
+            BfBot.Exec._pendingLateJoin = { [55501] = 3 }
             res.s1 = BfBot.Exec.Start({ { synthetic = 1 } }, 0, 3)
             res.p1 = BfBot.Exec._runPresetIdx
+            res.pendAfterStart = next(BfBot.Exec._pendingLateJoin) ~= nil
+            BfBot.Exec._pendingLateJoin = { [55502] = 3 }
             BfBot.Exec._HardReset()
             res.p2 = BfBot.Exec._runPresetIdx
+            res.pendAfterReset = next(BfBot.Exec._pendingLateJoin) ~= nil
             res.s2 = BfBot.Exec.Start({ { synthetic = 1 } }, 0)  -- no presetIdx
             res.p3 = BfBot.Exec._runPresetIdx
             BfBot.Exec._HardReset()
@@ -4618,6 +4633,12 @@ function BfBot.Test.SummonCasters()
         _check(res.s2 == true and res.p3 == nil,
             "presetIdx-less Start leaves _runPresetIdx nil (raw/console run → "
             .. "late-join inert, got " .. tostring(res.p3) .. ")")
+        _check(res.pendingAtKick == false and res.pendAfterStart == false,
+            "Start clears a pre-seeded _pendingLateJoin BEFORE the first "
+            .. "chain kick (atKick=" .. tostring(res.pendingAtKick)
+            .. " after=" .. tostring(res.pendAfterStart) .. ")")
+        _check(res.pendAfterReset == false,
+            "_HardReset clears _pendingLateJoin")
     end
 
     -- [11.2] _AttachCaster inserts a Start-shaped caster record into a
@@ -4698,6 +4719,25 @@ function BfBot.Test.SummonCasters()
                     res.lateLog = true
                 end
             end
+
+            -- Expansion FAILURE (nil + reason) is distinct from empty-
+            -- expansion churn: attach refused AND a WARN carrying the
+            -- builder's reason lands in the run log (MINOR-3).
+            BfBot.Exec._BuildQueue = function()
+                return nil, "boom reason (synthetic)"
+            end
+            BfBot.Exec._log = {}
+            res.failAttach = BfBot.Exec._AttachCaster(
+                { oid = 87002, name = "FailStub", identity = "test:late" },
+                { { synthetic = 1 } })
+            res.failNoCaster = BfBot.Exec._casters["s87002"] == nil
+            res.failWarn = false
+            for _, le in ipairs(BfBot.Exec._log) do
+                if le.type == "WARN" and type(le.msg) == "string"
+                    and le.msg:find("boom reason (synthetic)", 1, true) then
+                    res.failWarn = true
+                end
+            end
         end)
         BfBot.Exec._BuildQueue           = savedBuild
         BfBot.Exec._ProcessCasterEntry   = savedProcess
@@ -4730,6 +4770,11 @@ function BfBot.Test.SummonCasters()
         _check(type(res.noted) == "number",
             "watchdog progress noted at attach time")
         _check(res.lateLog == true, "late-join INFO line logged")
+        _check(res.failAttach == false and res.failNoCaster == true
+            and res.failWarn == true,
+            "expansion failure: attach refused + WARN carries the builder "
+            .. "reason (attach=" .. tostring(res.failAttach) .. " warn="
+            .. tostring(res.failWarn) .. ")")
     end
 
     -- [11.3] _OnSpriteLoaded guard order (cheap-first, plan-mandated):
@@ -4969,6 +5014,7 @@ function BfBot.Test.SummonCasters()
             state        = BfBot.Exec._state,
             casters      = BfBot.Exec._casters,
             active       = BfBot.Exec._activeCasters,
+            log          = BfBot.Exec._log,
             pending      = BfBot.Exec._pendingLateJoin,
             lastSafety   = BfBot.Exec._lastSafetyTick,
             lastProgress = BfBot.Exec._lastProgressGameTime,
@@ -4979,18 +5025,36 @@ function BfBot.Test.SummonCasters()
             if type(BfBot.Exec._ProcessLateJoins) ~= "function" then
                 error("_ProcessLateJoins is not a function")
             end
-            -- retry decrements, exhaustion drops
+            -- _ProcessLateJoins only works on a RUNNING run (defensive
+            -- guard, MINOR-4); fresh log so the exhaustion WARN scan below
+            -- sees only this block's entries
+            BfBot.Exec._state = "running"
+            BfBot.Exec._log = {}
+            -- retry decrements, exhaustion drops WITH a WARN (MINOR-1)
             BfBot.Exec._TryLateJoin = function() return true end
             BfBot.Exec._pendingLateJoin = { [777] = 2 }
             BfBot.Exec._ProcessLateJoins()
             res.afterFirst = BfBot.Exec._pendingLateJoin[777]
             BfBot.Exec._ProcessLateJoins()
             res.afterSecond = BfBot.Exec._pendingLateJoin[777]
-            -- done (false) drops immediately even with budget left
+            -- done (false) drops immediately even with budget left — and
+            -- SILENTLY (the exhaustion WARN is for retry-budget drops only)
             BfBot.Exec._TryLateJoin = function() return false end
             BfBot.Exec._pendingLateJoin = { [778] = 5 }
             BfBot.Exec._ProcessLateJoins()
             res.doneDropped = BfBot.Exec._pendingLateJoin[778] == nil
+            res.exhaustWarn, res.doneWarn = false, false
+            for _, le in ipairs(BfBot.Exec._log) do
+                if le.type == "WARN" and type(le.msg) == "string"
+                    and le.msg:find("never initialized", 1, true) then
+                    if le.msg:find("777", 1, true) then
+                        res.exhaustWarn = true
+                    end
+                    if le.msg:find("778", 1, true) then
+                        res.doneWarn = true
+                    end
+                end
+            end
             -- an erroring entry is dropped and does not propagate
             BfBot.Exec._TryLateJoin = function() error("try boom (synthetic)") end
             BfBot.Exec._pendingLateJoin = { [779] = 5 }
@@ -5016,6 +5080,7 @@ function BfBot.Test.SummonCasters()
         BfBot.Exec._state                = saved.state
         BfBot.Exec._casters              = saved.casters
         BfBot.Exec._activeCasters        = saved.active
+        BfBot.Exec._log                  = saved.log
         BfBot.Exec._pendingLateJoin      = saved.pending
         BfBot.Exec._lastSafetyTick       = saved.lastSafety
         BfBot.Exec._lastProgressGameTime = saved.lastProgress
@@ -5024,6 +5089,11 @@ function BfBot.Test.SummonCasters()
         _check(res.afterFirst == 1, "retry decrements the budget (2 → "
             .. tostring(res.afterFirst) .. ")")
         _check(res.afterSecond == nil, "exhausted budget drops the oid")
+        _check(res.exhaustWarn == true and res.doneWarn == false,
+            "retry-budget exhaustion WARNs (never-initialized drop is loud, "
+            .. "finished drop stays silent; got exhaust="
+            .. tostring(res.exhaustWarn) .. " done=" .. tostring(res.doneWarn)
+            .. ")")
         _check(res.doneDropped == true, "finished oid dropped immediately")
         _check(res.errOk == true and res.errDropped == true,
             "checked pcall: erroring entry WARNs, drops, never propagates")
@@ -5031,6 +5101,60 @@ function BfBot.Test.SummonCasters()
             and res.tickState == "running",
             "_SafetyTick (running) drains pending late-joins (calls="
             .. tostring(res.tickCalls) .. ")")
+    end
+
+    -- [11.6] Negative tick (MINOR-5b): a NON-running _SafetyTick never
+    -- drains pending late-joins and attaches nothing — and _ProcessLateJoins
+    -- ITSELF refuses non-running states (defensive guard, MINOR-4: the tick
+    -- call site is gated, but the drain must not rely on that alone).
+    -- _TryLateJoin stubbed with a counter; exec state save/restore OUTSIDE
+    -- the pcall.
+    do
+        local savedTry = BfBot.Exec._TryLateJoin
+        local saved = {
+            state      = BfBot.Exec._state,
+            casters    = BfBot.Exec._casters,
+            pending    = BfBot.Exec._pendingLateJoin,
+            lastSafety = BfBot.Exec._lastSafetyTick,
+            runPreset  = BfBot.Exec._runPresetIdx,
+        }
+        local res = {}
+        local ok11, err11 = pcall(function()
+            local nTry = 0
+            BfBot.Exec._TryLateJoin = function()
+                nTry = nTry + 1
+                return false
+            end
+            BfBot.Exec._state = "done"
+            BfBot.Exec._casters = {}
+            BfBot.Exec._runPresetIdx = 1
+            BfBot.Exec._pendingLateJoin = { [781] = 5 }
+            BfBot.Exec._lastSafetyTick = 0  -- bypass the 2s rate limit
+            pcall(BfBot.Exec._SafetyTick)
+            res.tickTries = nTry
+            res.tickKept = BfBot.Exec._pendingLateJoin[781] == 5
+            res.tickNoAttach = next(BfBot.Exec._casters) == nil
+            -- direct call in a non-running state → no drain either
+            BfBot.Exec._pendingLateJoin = { [782] = 5 }
+            BfBot.Exec._ProcessLateJoins()
+            res.directTries = nTry - res.tickTries
+            res.directKept = BfBot.Exec._pendingLateJoin[782] == 5
+        end)
+        BfBot.Exec._TryLateJoin     = savedTry
+        BfBot.Exec._state           = saved.state
+        BfBot.Exec._casters         = saved.casters
+        BfBot.Exec._pendingLateJoin = saved.pending
+        BfBot.Exec._lastSafetyTick  = saved.lastSafety
+        BfBot.Exec._runPresetIdx    = saved.runPreset
+        if not ok11 then _nok("[11.6] negative-tick block errored: " .. tostring(err11)) end
+        _check(res.tickTries == 0 and res.tickKept == true
+            and res.tickNoAttach == true,
+            "non-running _SafetyTick leaves pending late-joins untouched "
+            .. "(tries=" .. tostring(res.tickTries) .. ")")
+        _check(res.directTries == 0 and res.directKept == true,
+            "_ProcessLateJoins itself refuses a non-running state (tries="
+            .. tostring(res.directTries) .. " kept="
+            .. tostring(res.directKept) .. ")")
     end
 
     return _summary("SummonCasters")

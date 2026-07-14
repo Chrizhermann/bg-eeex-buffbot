@@ -884,15 +884,22 @@ end
 --- across all casters" stays true; the DONE summary itself counts
 --- cast+skip and needs no adjustment), logs the late-join, notes watchdog
 --- progress, then kicks the chain at entry 1.
---- Caller (_OnSpriteLoaded) guarantees: state == "running", the key is not
+--- Caller (_TryLateJoin) guarantees: state == "running", the key is not
 --- yet in _casters, and the MP gate passed.
 -- @param summonEntry detection entry (ClassifySummonSprite shape: oid, name)
 -- @param queue builder queue (BfBot.Persist.BuildQueueForSummon shape)
 -- @return true when attached, false when the queue expanded empty (summon
---     vanished between classify and build — normal churn)
+--     vanished between classify and build — normal churn) or the expansion
+--     FAILED outright (malformed queue — WARNed with the builder's reason)
 function BfBot.Exec._AttachCaster(summonEntry, queue)
-    local byCaster = BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
-    if not byCaster then return false end
+    local byCaster, reason = BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
+    if not byCaster then
+        -- Expansion failure (nil + reason) is a real problem, unlike the
+        -- empty-expansion churn below — never swallow it silently.
+        BfBot.Exec._LogEntry("WARN", "late-join: queue expansion failed for "
+            .. tostring(summonEntry.name) .. ": " .. tostring(reason))
+        return false
+    end
     local key = "s" .. summonEntry.oid
     local entries = byCaster[key]
     if not entries or #entries == 0 then return false end
@@ -983,6 +990,10 @@ function BfBot.Exec._TryLateJoin(oid)
     -- moments after spawn (probe 2026-07-14); an entry still reporting the
     -- "?" name fallback was classified off a half-initialized sprite —
     -- retry next tick instead of attaching a misidentified caster.
+    -- Robustness note (review 93afd9d): readiness keys on the NAME settling.
+    -- If a future engine version settles name BEFORE m_nCopyParent/stat 139,
+    -- a clone could classify as a plain summon and miss its clone: config —
+    -- revisit this gate then.
     if e.name == "?" then return true end
     -- ONE canonical MP gate — the same conservative rule the
     -- BuildQueueFromPreset sweep applies (Task-13 seam: defers to
@@ -1009,9 +1020,14 @@ end
 --- branch, so rate-limited to its ~2s cadence and only ever active during
 --- a run). Each oid gets _LATEJOIN_MAX_TRIES attempts; _TryLateJoin
 --- returning true means "not initialized yet, retry", anything else
---- finishes the oid. CHECKED pcall per oid — one broken entry must WARN
+--- finishes the oid. A retry-budget exhaustion (the sprite NEVER reported
+--- a real name) is WARNed — a summon that mysteriously fails to attach
+--- must leave a trace. CHECKED pcall per oid — one broken entry must WARN
 --- and be dropped, never wedge the tick or starve the other pending oids.
 function BfBot.Exec._ProcessLateJoins()
+    -- Defensive: only a RUNNING run may attach casters. The _SafetyTick
+    -- call site already gates on state — this covers direct/future callers.
+    if BfBot.Exec._state ~= "running" then return end
     local pending = BfBot.Exec._pendingLateJoin
     for oid, tries in pairs(pending) do
         local ok, retry = pcall(BfBot.Exec._TryLateJoin, oid)
@@ -1022,6 +1038,14 @@ function BfBot.Exec._ProcessLateJoins()
         elseif retry == true and tries > 1 then
             pending[oid] = tries - 1
         else
+            if retry == true then
+                -- budget exhausted while still "not initialized" — loud
+                -- drop; the silent path is only for FINISHED oids
+                BfBot.Exec._LogEntry("WARN", "late-join: summon "
+                    .. tostring(oid) .. " never initialized after "
+                    .. tostring(BfBot.Exec._LATEJOIN_MAX_TRIES)
+                    .. " tries — dropped")
+            end
             pending[oid] = nil
         end
     end
