@@ -15,8 +15,9 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **Dynamic spellbook scanning** — discovers buff spells from all sources (memorized, innate, HLAs, kit abilities) in real time. No hardcoded spell lists — works with modded spells automatically
 - **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, duration display, target assignment, priority ordering, sort-by-duration, and per-spell row lock (locked spells stay put when sorting)
 - **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, Undead Prebuff, etc.) with create/rename/delete
+- **Summons and clones as casters** — configure Project Images, Simulacra, and other allied spellcasting summons in a dedicated Summons view; cast one summon alone or let configured summons join Cast All
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for instant casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally
-- **F12 innate abilities** — each character gets one innate per preset in their special abilities, triggering buffing directly from gameplay without opening the panel
+- **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
 - **Skip active buffs** — detects already-active buffs via spell state + effect list checks and skips them. No wasted spell slots
 - **Manual spell override** — "Add Spell" picker to include spells the classifier missed, "Remove" to exclude false positives
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
@@ -78,6 +79,16 @@ Copy all files from `buffbot/` to your game's `override/` directory. Note: innat
 - Create new presets for specific situations (up to 8 per character)
 - Each preset is fully independent — own spell list, targets, priorities, quick cast setting
 
+### Summons and Clones
+
+1. Create the allied summon or clone, then open BuffBot and switch from **Party** to **Summons**.
+2. Select the live summon tab and enable the spells it should cast. Those enabled rows are its cast selection; there is no separate pre-cast queue checkbox.
+3. Use **Cast (this summon)** to run only that summon, or **Cast All** to run the party preset and every configured live summon together. A configured summon created during the run joins automatically.
+
+Clone presets are stored by owner identity and are reused when that owner's clone is created again. On first open they seed from the owner's matching preset, limited to spells the clone can cast. To disable automatic participation globally, set `SummonsJoinCast = 0` under `[BuffBot]` in `baldur.ini`.
+
+Project Image locks its owner while active. BuffBot skips locked owners and drops owner entries placed after Project Image so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported in v1.6.0-alpha; use the Summons panel actions instead.
+
 ### Export / Import
 
 - Click **Export** to save a character's entire config (all presets + overrides) to a file
@@ -93,13 +104,14 @@ This is an alpha release. Everything works, but some things are unfinished:
 - **Panel visuals** — functional but unpolished. The layout works, the aesthetics don't win awards
 - **Spell Revisions sub-spells** — some SR spells (Barkskin, Dispelling Screen) deliver effects via sub-spells, so the classifier may show them as ambiguous. Use "Add Spell" to manually include them
 - **Windows only for export/import listing** — the file picker uses Windows `dir /b` for directory listing. The core export/import file I/O works on any platform, but the picker won't list files on macOS/Linux
+- **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 
 ## Testing & Bug Reports
 
 BuffBot includes a built-in test suite. In the in-game console (the BG:EE / BG2:EE console — toggle with Ctrl-Space when `CLUAConsole=1` is set in `baldur.ini`):
 
 ```
-BfBot.Test.RunAll()         -- full test suite (200+ tests)
+BfBot.Test.RunAll()         -- full test suite (600+ assertions)
 BfBot.Test.ExportImport()   -- export/import tests
 BfBot.UI.Toggle()           -- open/close config panel
 ```
@@ -150,7 +162,7 @@ bg-eeex-buffbot/
 │   ├── BfBotPer.lua      # Persistence (marshal handlers, presets, export/import)
 │   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
 │   ├── BfBotUI.lua       # Config panel logic
-│   ├── BfBotTst.lua      # Test suite (200+ tests)
+│   ├── BfBotTst.lua      # Test suite (600+ assertions)
 │   └── BuffBot.menu      # UI definitions (.menu DSL)
 ├── tools/                # Dev utilities
 │   ├── deploy.sh         # Copy files to game override

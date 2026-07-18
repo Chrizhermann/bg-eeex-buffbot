@@ -490,16 +490,15 @@ Requires: `Start()` records `_runPresetIdx` (pass presetIdx through from the pre
 
 ---
 
-### Task 12: Clone F12 innates (probe verdict: `402_SOURCE_ID_OK` = **YES** → task is a GO)
+### Task 12: Clone F12 innates — DEFERRED TO FOLLOW-UP (2026-07-19)
 
-**Files:**
-- Modify: `buffbot/BfBotInn.lua` — `BFBOTGO` (~line 643)
-
-If probe said yes: before the owner-queue branch, resolve `param1.m_sourceId` → sprite; if it is a live summon (`ClassifySummonSprite`), run `BuildQueueForSummon(e, presetIdx)` + `Exec.Start` instead of `BuildQueueForCharacter(slot, …)`; keep the re-grant `AddSpecialAbility` targeting the OWNER slot exactly as today (the clone's copy vanishes with the clone; never re-grant onto the clone). If probe said no: skip task, note in issue.
-
-**Test:** live — press a BFBT innate on the clone's bar → only the clone casts; `buffbot_innate.log` shows the summon branch. Owner F12 unchanged (regression).
-
-**Commit:** `feat(summon): clone-cast BFBT innates run the clone's own list (#19)`
+The phase-0 probe showed that opcode 402 exposes the clone through
+`param1.m_sourceId`, but the attempted source-routing implementation did not
+work in the live innate-bar test. The synthetic test and implementation were
+removed rather than shipping an unverified path. Per user decision, copied
+BuffBot innates on summons are optional follow-up work and do not block the
+core summon-caster feature (Summons view, standalone cast, joint cast, or
+late-join). The live failure is tracked in follow-up issue #60.
 
 ---
 

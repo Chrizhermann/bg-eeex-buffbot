@@ -11,10 +11,10 @@
     {"id": 8, "nativeId": 14, "subject": "Task 8: Live-clone standalone execution verification", "status": "completed", "blockedBy": [7]},
     {"id": 9, "nativeId": 15, "subject": "Task 9: UI _GetSelectedSprite refactor (behavior-neutral)", "status": "completed", "blockedBy": [3]},
     {"id": 10, "nativeId": 16, "subject": "Task 10: Summons view — button, tab source, paging, empty state", "status": "completed", "blockedBy": [9, 5, 6, 7]},
-    {"id": 11, "nativeId": 17, "subject": "Task 11: Late-join listener", "status": "pending", "blockedBy": [8]},
-    {"id": 12, "nativeId": 18, "subject": "Task 12: Clone F12 innates (conditional on probe)", "status": "pending", "blockedBy": [11]},
+    {"id": 11, "nativeId": 17, "subject": "Task 11: Late-join listener", "status": "completed", "blockedBy": [8]},
+    {"id": 12, "nativeId": 18, "subject": "Task 12: Clone F12 innates (deferred to follow-up)", "status": "completed", "blockedBy": [11]},
     {"id": 13, "nativeId": 19, "subject": "Task 13: Multiplayer rule for summon casters", "status": "completed", "blockedBy": [7]},
-    {"id": 14, "nativeId": 20, "subject": "Task 14: Full regression, docs, close-out", "status": "pending", "blockedBy": [10, 11, 12, 13]}
+    {"id": 14, "nativeId": 20, "subject": "Task 14: Full regression, docs, close-out", "status": "in_progress", "blockedBy": [10, 11, 12, 13]}
   ],
-  "lastUpdated": "2026-07-13"
+  "lastUpdated": "2026-07-19"
 }
