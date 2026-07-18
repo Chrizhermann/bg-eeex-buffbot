@@ -14,7 +14,7 @@
     {"id": 11, "nativeId": 17, "subject": "Task 11: Late-join listener", "status": "completed", "blockedBy": [8]},
     {"id": 12, "nativeId": 18, "subject": "Task 12: Clone F12 innates (deferred to follow-up)", "status": "completed", "blockedBy": [11]},
     {"id": 13, "nativeId": 19, "subject": "Task 13: Multiplayer rule for summon casters", "status": "completed", "blockedBy": [7]},
-    {"id": 14, "nativeId": 20, "subject": "Task 14: Full regression, docs, close-out", "status": "in_progress", "blockedBy": [10, 11, 12, 13]}
+    {"id": 14, "nativeId": 20, "subject": "Task 14: Full regression, docs, close-out", "status": "completed", "blockedBy": [10, 11, 12, 13]}
   ],
   "lastUpdated": "2026-07-19"
 }
