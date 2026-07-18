@@ -20,8 +20,17 @@ end
 -- ============================================================
 
 BfBot.UI._charSlot = 0        -- selected character slot (0-5)
-BfBot.UI._presetIdx = 1       -- selected preset index (1-5)
+BfBot.UI._presetIdx = 1       -- selected preset index (shared across views)
+BfBot.UI._view = "party"      -- active view: "party" (portrait tabs) or "summons"
 BfBot.UI._initialized = false
+
+-- Summons view state (issue #19, Task 10)
+BfBot.UI._SUMMONS_PER_PAGE = 6   -- tab slots per page (mirrors the 6 portrait tabs)
+BfBot.UI._summonList = {}        -- UI-owned copies of GetAlliedSummons entries (no sprites)
+BfBot.UI._summonSlice = {}       -- current page's entries (kept in sync with tab labels)
+BfBot.UI._summonPage = 1         -- 1-based page into _summonList
+BfBot.UI._summonSel = nil        -- selection descriptor {identity, oid, name, cloneType} — NEVER a row index
+BfBot.UI._summonQc = nil         -- cached summons-view Quick Cast value (see _UpdateSummonQc)
 
 -- Panel geometry (nil = use default 80%-centered)
 BfBot.UI._panelX = nil
@@ -57,6 +66,246 @@ function BfBot.UI._ClampPresetIdx(config)
 end
 
 -- ============================================================
+-- Summons View (issue #19, Task 10)
+-- ============================================================
+
+--- PURE: slice a summon list into the visible page (≤ _SUMMONS_PER_PAGE
+--- entries). The requested page is clamped into [1, pageCount] — an empty
+--- list yields an empty slice on page 1/1.
+-- @param list  array of summon entries
+-- @param page  requested 1-based page number (any number; clamped)
+-- @return slice (array), clampedPage, pageCount
+function BfBot.UI._SummonPageSlice(list, page)
+    local per = BfBot.UI._SUMMONS_PER_PAGE
+    local slice = {}
+    if type(list) ~= "table" or #list == 0 then
+        return slice, 1, 1
+    end
+    local pageCount = math.ceil(#list / per)
+    local p = tonumber(page) or 1
+    p = math.floor(p)
+    if p < 1 then p = 1 end
+    if p > pageCount then p = pageCount end
+    local base = (p - 1) * per
+    for i = 1, per do
+        local e = list[base + i]
+        if not e then break end
+        slice[i] = e
+    end
+    return slice, p, pageCount
+end
+
+-- Clone-type display nouns (derived stat 139 PUPPETMASTERTYPE: 1=Mislead,
+-- 2=Project Image, 3=Simulacrum — probe-verified for 2/3).
+local _CLONE_NOUNS = { [1] = "Mislead", [2] = "Image", [3] = "Simulacrum" }
+
+--- PURE: tab label for a summon entry. Clones get an owner-possessive label
+--- ("Imoen's Image"); the owner comes from the entry's ownerName, falling
+--- back to the "clone:<Owner>" identity. Everything else shows its name.
+function BfBot.UI._SummonTabLabel(entry)
+    if type(entry) ~= "table" then return "" end
+    if entry.kind == "clone" then
+        local owner = entry.ownerName
+        if (not owner or owner == "") and type(entry.identity) == "string" then
+            owner = entry.identity:match("^clone:(.+)$")
+        end
+        if owner and owner ~= "" then
+            return owner .. "'s " .. (_CLONE_NOUNS[entry.cloneType] or "Clone")
+        end
+    end
+    return entry.name or ""
+end
+
+--- PURE: build the UI's summon-list model from GetAlliedSummons output.
+--- Every entry is COPIED (the scanner's array and entry tables are
+--- cache-owned — hand-off 5) and the sprite field is dropped (no userdata in
+--- UI state). Entries without a non-empty name are refused: the resolver's
+--- anti-oid-recycle guard is conditional on ref.name, so a nameless entry
+--- would silently degrade to oid-only matching (hand-off 3).
+function BfBot.UI._BuildSummonListModel(raw)
+    local model = {}
+    if type(raw) ~= "table" then return model end
+    for _, e in ipairs(raw) do
+        if type(e) == "table" and type(e.oid) == "number"
+            and type(e.name) == "string" and e.name ~= ""
+            and type(e.identity) == "string" and e.identity ~= "" then
+            model[#model + 1] = {
+                oid = e.oid,
+                name = e.name,
+                kind = e.kind,
+                identity = e.identity,
+                ownerName = e.ownerName,
+                cloneType = e.cloneType,
+            }
+        end
+    end
+    return model
+end
+
+--- Re-establish the selection after a list rebuild — identity-stable, NEVER
+--- by row index (rowNumber-staleness class of bug). Pass 1 matches the exact
+--- sprite (oid+name); pass 2 falls back to the identity (a respawned "same"
+--- summon keeps its tab), PREFERRING an entry of the same clone type — one
+--- owner can have BOTH a Project Image and a Simulacrum alive (shared
+--- identity "clone:<owner>"), and an expired+resummoned selection must not
+--- silently jump to the other clone type (review MINOR-5); first identity
+--- match only when no type match exists. No match → first entry; empty
+--- list → no selection.
+--- Also moves _summonPage to the page containing the selection.
+function BfBot.UI._ReselectSummon()
+    local list = BfBot.UI._summonList
+    local sel = BfBot.UI._summonSel
+    local found = nil
+    if sel then
+        for _, e in ipairs(list) do
+            if e.oid == sel.oid and e.name == sel.name then
+                found = e
+                break
+            end
+        end
+        if not found then
+            local anyIdentity = nil
+            for _, e in ipairs(list) do
+                if e.identity == sel.identity then
+                    if e.cloneType == sel.cloneType then
+                        found = e
+                        break
+                    end
+                    anyIdentity = anyIdentity or e
+                end
+            end
+            found = found or anyIdentity
+        end
+    end
+    if not found then found = list[1] end
+    if found then
+        BfBot.UI._summonSel = {
+            identity = found.identity, oid = found.oid, name = found.name,
+            cloneType = found.cloneType,
+        }
+        for i, e in ipairs(list) do
+            if e == found then
+                BfBot.UI._summonPage =
+                    math.floor((i - 1) / BfBot.UI._SUMMONS_PER_PAGE) + 1
+                break
+            end
+        end
+    else
+        BfBot.UI._summonSel = nil
+        BfBot.UI._summonPage = 1
+    end
+end
+
+--- Rebuild _summonList from a fresh area sweep (cache dropped first), reset
+--- paging, and re-select identity-stably. Called on panel open (summons
+--- view) and on every view switch.
+function BfBot.UI._RefreshSummonList()
+    BfBot.Scan.InvalidateSummons()
+    local ok, raw = pcall(BfBot.Scan.GetAlliedSummons)
+    if not ok then
+        BfBot._Warn("[UI] summon sweep failed: " .. tostring(raw))
+        raw = nil
+    end
+    BfBot.UI._summonList = BfBot.UI._BuildSummonListModel(raw)
+    BfBot.UI._summonPage = 1
+    BfBot.UI._ReselectSummon()
+    -- Keep the visible slice + tab labels in sync with the rebuilt list —
+    -- SetSummon acts on the slice, so it must never lag the list.
+    BfBot.UI._UpdateSummonTabNames()
+end
+
+--- Selected summon entry from the list model, or nil. The descriptor is
+--- matched by oid+name (kept fresh by _ReselectSummon on every rebuild).
+function BfBot.UI._SelectedSummon()
+    local sel = BfBot.UI._summonSel
+    if not sel then return nil end
+    for _, e in ipairs(BfBot.UI._summonList) do
+        if e.oid == sel.oid and e.name == sel.name then return e end
+    end
+    return nil
+end
+
+--- Is the party view active? (menu `enabled` gates for party-only widgets)
+function BfBot.UI._IsPartyView()
+    return BfBot.UI._view ~= "summons"
+end
+
+--- View toggle button caption: offers the OTHER view.
+function BfBot.UI._ViewBtnLabel()
+    if BfBot.UI._IsPartyView() then return "Summons" end
+    return "Party"
+end
+
+--- Toggle between party and summons view. Preset index is a shared axis and
+--- survives the switch; the summon list is re-swept on every switch.
+function BfBot.UI.ToggleView()
+    if BfBot.UI._view == "summons" then
+        BfBot.UI._view = "party"
+    else
+        BfBot.UI._view = "summons"
+    end
+    BfBot.UI._RefreshSummonList()
+    BfBot.UI._Refresh()
+end
+
+--- Select the summon in tab slot n (1-6) of the CURRENT page. Uses the
+--- displayed slice, so what the user clicked is what gets selected.
+function BfBot.UI.SetSummon(n)
+    local e = BfBot.UI._summonSlice[n]
+    if not e then return end
+    BfBot.UI._summonSel = { identity = e.identity, oid = e.oid, name = e.name,
+        cloneType = e.cloneType }
+    BfBot.UI._Refresh()
+end
+
+--- Page the summon tab row by delta (±1). Clamping lives in _SummonPageSlice.
+function BfBot.UI.SummonPage(delta)
+    local _, p = BfBot.UI._SummonPageSlice(BfBot.UI._summonList,
+        BfBot.UI._summonPage + (delta or 0))
+    BfBot.UI._summonPage = p
+    BfBot.UI._Refresh()
+end
+
+--- Summon tab visibility (menu gate): summons view + a label in that slot.
+function BfBot.UI._SummonTabVisible(n)
+    return buffbot_isOpen and BfBot.UI._view == "summons"
+        and buffbot_summonTabNames[n] ~= nil
+end
+
+--- Selected-state for summon tab slot n (frame lua).
+function BfBot.UI._IsSummonSelected(n)
+    local sel = BfBot.UI._summonSel
+    if not sel then return false end
+    local e = BfBot.UI._summonSlice[n]
+    return e ~= nil and e.oid == sel.oid and e.name == sel.name
+end
+
+--- Paging controls visible only when the list overflows one page.
+function BfBot.UI._SummonPagingVisible()
+    return buffbot_isOpen and BfBot.UI._view == "summons"
+        and #BfBot.UI._summonList > BfBot.UI._SUMMONS_PER_PAGE
+end
+
+--- Empty-state label ("No allied summons detected").
+function BfBot.UI._SummonEmptyVisible()
+    return buffbot_isOpen and BfBot.UI._view == "summons"
+        and #BfBot.UI._summonList == 0
+end
+
+--- Current view's selected sprite: party view resolves the portrait slot,
+--- summons view live-resolves the selected summon via oid+name re-validation.
+--- Always a fresh resolve — never cache the returned userdata across frames (#38).
+function BfBot.UI._GetSelectedSprite()
+    if BfBot.UI._view == "summons" then
+        local entry = BfBot.UI._SelectedSummon()
+        return entry and BfBot.Exec._ResolveCaster({
+            kind = "summon", oid = entry.oid, name = entry.name,
+        }) or nil
+    end
+    return EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+end
+
+-- ============================================================
 -- Global Variables (read by .menu expressions every frame)
 -- ============================================================
 
@@ -69,6 +318,10 @@ buffbot_btnFrame = 0             -- 0=normal, 1=active/running
 
 -- Character tabs (1-indexed; nil entries = empty party slot)
 buffbot_charNames = {}           -- {[1]="Charname", [2]="Jaheira", ...}
+
+-- Summon tabs (1-indexed labels for the CURRENT page; nil = empty slot)
+buffbot_summonTabNames = {}      -- {[1]="Imoen's Image", [2]="Deva", ...}
+buffbot_summonPageText = ""      -- "1/2"-style page indicator
 
 -- Preset tabs (1-indexed; nil entries = no preset at that index)
 buffbot_presetNames = {}         -- {[1]="Long Buffs", [2]="Short Buffs"}
@@ -450,14 +703,31 @@ function BfBot.UI._Layout()
     -- Title
     setArea("bbTitle", px, py + 5, pw, 30)
 
-    -- Character tabs (6 buttons, evenly spaced)
+    -- Character tabs (6 buttons, evenly spaced) + view toggle at the right
     local charY = py + 40
     local charH = 24
     local charGap = 4
-    local charW = math.floor((cw - 5 * charGap) / 6)
+    local viewW = 88
+    local rowW = cw - viewW - charGap   -- tab area shared by both views
+    local charW = math.floor((rowW - 5 * charGap) / 6)
     for i = 0, 5 do
         setArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
     end
+    setArea("bbView", cx + cw - viewW, charY, viewW, charH)
+
+    -- Summon tabs (summons view; same row) + paging cluster before the toggle
+    local pageBtnW = 24
+    local pageLblW = 40
+    local pageClusterW = 2 * pageBtnW + pageLblW + 2 * charGap
+    local sumW = math.floor((rowW - pageClusterW - 6 * charGap) / 6)
+    for i = 0, 5 do
+        setArea("bbS" .. i, cx + i * (sumW + charGap), charY, sumW, charH)
+    end
+    local pcX = cx + 6 * (sumW + charGap)
+    setArea("bbSPrev", pcX, charY, pageBtnW, charH)
+    setArea("bbSPage", pcX + pageBtnW + charGap, charY, pageLblW, charH)
+    setArea("bbSNext", pcX + pageBtnW + pageLblW + 2 * charGap, charY, pageBtnW, charH)
+    setArea("bbSEmpty", cx, charY, rowW, charH)
 
     -- Preset tabs (up to MAX_PRESETS buttons + Rename 56px + New 50px)
     local preY = py + 68
@@ -641,8 +911,15 @@ end
 function BfBot.UI._OnOpen()
     buffbot_isOpen = true
     BfBot.UI._Layout()
-    -- Default to first party member if current slot is empty
-    if not EEex_Sprite_GetInPortrait(BfBot.UI._charSlot) then
+    -- Summons view: re-sweep the list on every open (summons come and go
+    -- between opens; the selection re-establishes identity-stably)
+    if BfBot.UI._view == "summons" then
+        BfBot.UI._RefreshSummonList()
+    end
+    -- Selection gone (empty slot / vanished summon) → default to party view,
+    -- first party member
+    if not BfBot.UI._GetSelectedSprite() then
+        BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
     end
     -- Invalidate all scan caches on panel open (party may have changed)
@@ -667,7 +944,8 @@ function BfBot.UI._Refresh()
     buffbot_selectedRow = 0
     buffbot_selectedHasVariants = 0
 
-    -- 1. Update party member names for character tabs
+    -- 1. Update party member names for character tabs (also used by the
+    -- target picker in BOTH views — summon buffs target party members)
     buffbot_charNames = {}
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -676,8 +954,15 @@ function BfBot.UI._Refresh()
         end
     end
 
+    -- 1b. Summons view has its own data path (summon presets live on the
+    -- protagonist's config, NEVER on the summon sprite)
+    if BfBot.UI._view == "summons" then
+        BfBot.UI._RefreshSummonsView()
+        return
+    end
+
     -- 2. Get current character's sprite + config
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
         buffbot_spellTable = {}
         buffbot_presetNames = {}
@@ -769,6 +1054,25 @@ function BfBot.UI._Refresh()
     end
 
     -- 7. Build spell table from preset config, cross-ref with scan data
+    buffbot_spellTable = BfBot.UI._BuildSpellRows(sprite, preset, castable, config.ovr)
+
+    -- 8. Update title, cast labels, status
+    buffbot_title = "BuffBot - " .. (preset.name or "Preset")
+    buffbot_castLabel = "Cast All"
+    buffbot_castCharLabel = BfBot.UI._CastCharLabel()
+    buffbot_status = BfBot.UI._GetStatusText()
+end
+
+--- Build the spell-list rows for one caster's preset, cross-referenced with
+--- scan data. Shared by the party view (ovr = config.ovr) and the summons
+--- view (ovr = nil — no per-summon classification overrides; absent
+--- lock/tgtUnlock fields read as 0, which the v8 summon schema guarantees).
+-- @param sprite    caster sprite (party member or freshly-resolved summon)
+-- @param preset    preset table { spells = { [resref] = entry } }
+-- @param castable  BfBot.Scan.GetCastableSpells(sprite) result
+-- @param ovr       classification-override table or nil
+-- @return rows array sorted by priority
+function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
     local rows = {}
     for resref, spellCfg in pairs(preset.spells) do
         local scan = castable[resref]
@@ -850,7 +1154,7 @@ function BfBot.UI._Refresh()
             tgt      = spellCfg.tgt or "p",
             castable = isCastable,
             pri      = spellCfg.pri or 999,
-            ovr      = (config.ovr and config.ovr[resref]) or 0,
+            ovr      = (ovr and ovr[resref]) or 0,
             isAoE    = scan and scan.isAoE or 0,
             isSelfOnly = scan and scan.isSelfOnly or 0,
             tgtUnlock = spellCfg.tgtUnlock or 0,
@@ -864,13 +1168,164 @@ function BfBot.UI._Refresh()
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(rows, function(a, b) return a.pri < b.pri end)
-    buffbot_spellTable = rows
+    return rows
+end
 
-    -- 7. Update title, cast labels, status
-    buffbot_title = "BuffBot - " .. (preset.name or "Preset")
+--- Summons-view refresh: summon tab labels, preset tabs (names come from the
+--- protagonist's config — the preset axis is shared across views), and the
+--- selected summon's preset spell table. All config reads/writes go to the
+--- summon preset on the protagonist (schema v8: {qc, spells={[res]={on,tgt,
+--- pri,var}}}); the summon SPRITE never gets a config of its own.
+function BfBot.UI._RefreshSummonsView()
+    BfBot.UI._UpdateSummonTabNames()
+
+    -- Preset tabs from the protagonist's config (shared preset axis)
+    local prot = BfBot.Persist._GetProtagonist()
+    local config = prot and BfBot.Persist.GetConfig(prot) or nil
+    buffbot_presetNames = {}
+    buffbot_presetCount = 0
+    if config and config.presets then
+        for idx, preset in pairs(config.presets) do
+            buffbot_presetNames[idx] = preset.name or ("Preset " .. idx)
+            buffbot_presetCount = buffbot_presetCount + 1
+        end
+    end
+    BfBot.UI._ClampPresetIdx(config)
+
     buffbot_castLabel = "Cast All"
     buffbot_castCharLabel = BfBot.UI._CastCharLabel()
     buffbot_status = BfBot.UI._GetStatusText()
+
+    -- Selected summon: fresh oid+name resolve. A vanished selection prunes
+    -- the list once (fresh sweep drops dead entries) and falls forward to
+    -- the first live entry; empty state otherwise (line-666 pattern).
+    local entry = BfBot.UI._SelectedSummon()
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if entry and not sprite then
+        BfBot.UI._RefreshSummonList()
+        BfBot.UI._UpdateSummonTabNames()
+        entry = BfBot.UI._SelectedSummon()
+        sprite = BfBot.UI._GetSelectedSprite()
+    end
+    if not entry or not sprite then
+        buffbot_spellTable = {}
+        buffbot_title = "BuffBot - Summons"
+        BfBot.UI._UpdateSummonQc()  -- per-frame bbQC cache (review MINOR-4)
+        return
+    end
+
+    buffbot_title = "BuffBot - " .. BfBot.UI._SummonTabLabel(entry)
+        .. " - " .. (buffbot_presetNames[BfBot.UI._presetIdx]
+                     or ("Preset " .. BfBot.UI._presetIdx))
+
+    -- First open of this identity+preset creates it (clones seed from the
+    -- owner's same-index preset ∩ the clone's castable set)
+    BfBot.UI._EnsureSummonPreset(entry)
+    local preset = BfBot.Persist.GetSummonPreset(entry.identity, BfBot.UI._presetIdx)
+    -- Refresh the per-frame bbQC cache AFTER _EnsureSummonPreset — a
+    -- just-created preset must show its (possibly seeded) qc immediately
+    -- (review MINOR-4).
+    BfBot.UI._UpdateSummonQc()
+    if not preset or type(preset.spells) ~= "table" then
+        buffbot_spellTable = {}
+        return
+    end
+
+    -- Castable spells (scan cache — invalidated on panel open, as party view)
+    local castable = BfBot.Scan.GetCastableSpells(sprite)
+
+    -- Merge new castable buffs into the preset (disabled, at bottom) — same
+    -- behavior as the party view minus the ovr filter (no per-summon
+    -- classification overrides). New entries follow the v8 spell-entry
+    -- schema: on/tgt/pri only (lock/tgtUnlock do not exist for summons).
+    local maxPri = 0
+    for _, spellCfg in pairs(preset.spells) do
+        if (spellCfg.pri or 0) > maxPri then maxPri = spellCfg.pri end
+    end
+    for resref, scan in pairs(castable) do
+        if not preset.spells[resref] and scan.class and scan.class.isBuff
+           and scan.count > 0 then
+            maxPri = maxPri + 1
+            preset.spells[resref] = {
+                on = 0,
+                tgt = (scan.class.defaultTarget == "s") and "s" or "p",
+                pri = maxPri,
+            }
+        end
+    end
+
+    buffbot_spellTable = BfBot.UI._BuildSpellRows(sprite, preset, castable, nil)
+end
+
+--- Recompute the summon tab labels + page indicator for the current page.
+--- Also caches the visible slice so clicks act on exactly what is displayed.
+function BfBot.UI._UpdateSummonTabNames()
+    local slice, p, pageCount = BfBot.UI._SummonPageSlice(
+        BfBot.UI._summonList, BfBot.UI._summonPage)
+    BfBot.UI._summonPage = p
+    BfBot.UI._summonSlice = slice
+    buffbot_summonTabNames = {}
+    for i, e in ipairs(slice) do
+        buffbot_summonTabNames[i] = BfBot.UI._SummonTabLabel(e)
+    end
+    buffbot_summonPageText = p .. "/" .. pageCount
+end
+
+--- Ensure the selected summon's preset exists for the current preset index.
+--- Creation happens ONCE per identity+preset; a CLONE's create seeds from
+--- its owner's same-index preset filtered to the clone's castable set. The
+--- owner is a FRESH resolve of the live clone's m_nCopyParent — never a
+--- cached sprite (issue-#38 discipline).
+function BfBot.UI._EnsureSummonPreset(entry)
+    if type(entry) ~= "table" then return end
+    if BfBot.Persist.PeekSummonPreset(entry.identity, BfBot.UI._presetIdx) then
+        return  -- already exists — never re-seed
+    end
+    local seedCtx = nil
+    if entry.kind == "clone" then
+        local clone = BfBot.Exec._ResolveCaster({
+            kind = "summon", oid = entry.oid, name = entry.name })
+        if clone then
+            local owner = nil
+            local okCp, cp = pcall(function() return clone.m_nCopyParent end)
+            if okCp and type(cp) == "number" and cp ~= -1 then
+                local okOw, ow = pcall(function()
+                    local obj = EEex_GameObject_Get(cp)
+                    if obj and EEex_GameObject_IsSprite(obj, false) then
+                        return EEex_GameObject_CastUserType(obj)
+                    end
+                    return nil
+                end)
+                if okOw then
+                    owner = ow
+                else
+                    BfBot._Warn("[UI] _EnsureSummonPreset: owner resolve failed: "
+                        .. tostring(ow))
+                end
+            end
+            if owner then
+                seedCtx = { ownerSprite = owner, cloneSprite = clone }
+            end
+        end
+    end
+    BfBot.Persist.GetSummonPreset(entry.identity, BfBot.UI._presetIdx, seedCtx)
+end
+
+--- Summons-view write path: the stored spell entry for `resref` in the
+--- selected summon's current preset (the table IS the persisted config —
+--- mutations stick). Read-only lookup unless `create` is set; created
+--- entries follow the v8 schema (on/tgt/pri).
+function BfBot.UI._SummonSpellEntry(resref, create)
+    local sel = BfBot.UI._SelectedSummon()
+    if not sel then return nil end
+    local preset = BfBot.Persist.PeekSummonPreset(sel.identity, BfBot.UI._presetIdx)
+    if not preset or type(preset.spells) ~= "table" then return nil end
+    local e = preset.spells[resref]
+    if not e and create then
+        e = { on = 0, tgt = "p", pri = 999 }
+        preset.spells[resref] = e
+    end
+    return e
 end
 
 -- ============================================================
@@ -878,6 +1333,7 @@ end
 -- ============================================================
 
 function BfBot.UI.SetChar(slot)
+    BfBot.UI._view = "party"  -- portrait tabs always land in party view
     BfBot.UI._charSlot = slot
     BfBot.UI._Refresh()
 end
@@ -916,11 +1372,17 @@ function BfBot.UI.ToggleSpell(row)
         return
     end
 
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     -- Integer toggle: 1 -> 0, 0 -> 1. NEVER pass boolean to Persist.
     local newState = (entry.on == 1) and 0 or 1
-    BfBot.Persist.SetSpellEnabled(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+    if BfBot.UI._view == "summons" then
+        local se = BfBot.UI._SummonSpellEntry(entry.resref, 1)
+        if not se then return end
+        se.on = newState
+    else
+        BfBot.Persist.SetSpellEnabled(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+    end
     entry.on = newState  -- immediate visual update
 end
 
@@ -1058,13 +1520,24 @@ function BfBot.UI.PickerSelf()
     local row = buffbot_targetRow
     local entry = buffbot_spellTable[row]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
-    BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, "s")
+    BfBot.UI._SetSpellTargetForView(sprite, entry.resref, "s")
     entry.tgt = "s"
     entry.targetText = BfBot.UI._TargetToText("s")
     Infinity_PopMenu("BUFFBOT_TARGETS")
+end
+
+--- View-routed target write: party → Persist setter, summons → the stored
+--- summon spell entry (v8 schema keeps tgt as "s"/"p"/name/ordered table).
+function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
+    if BfBot.UI._view == "summons" then
+        local se = BfBot.UI._SummonSpellEntry(resref, 1)
+        if se then se.tgt = tgt end
+        return
+    end
+    BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, resref, tgt)
 end
 
 --- Quick-set: All Party. Checks all party members, keeps current order.
@@ -1108,7 +1581,7 @@ function BfBot.UI.PickerDone()
         Infinity_PopMenu("BUFFBOT_TARGETS")
         return
     end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
         Infinity_PopMenu("BUFFBOT_TARGETS")
         return
@@ -1133,18 +1606,21 @@ function BfBot.UI.PickerDone()
         end
     end
 
-    BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, entry.resref, tgt)
+    BfBot.UI._SetSpellTargetForView(sprite, entry.resref, tgt)
     entry.tgt = tgt
     entry.targetText = BfBot.UI._TargetToText(tgt)
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
---- Unlock targeting for a locked spell.
+--- Unlock targeting for a locked spell. Party view only: the v8 summon
+--- spell-entry schema has no tgtUnlock field (the picker's Unlock button is
+--- hidden in the summons view).
 function BfBot.UI.PickerUnlock()
+    if BfBot.UI._view == "summons" then return end
     local row = buffbot_targetRow
     local entry = buffbot_spellTable[row]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, entry.resref, 1)
@@ -1157,7 +1633,13 @@ end
 -- Preset Management (Rename, Create, Delete)
 -- ============================================================
 
+-- Preset management, overrides, and export/import are party-view-only
+-- operations (they act on per-CHARACTER configs). Their buttons are gated on
+-- _IsPartyView() in the .menu; the guards below are defense in depth so a
+-- stray call can never touch a summon sprite's (non-existent) config.
+
 function BfBot.UI.OpenRename()
+    if BfBot.UI._view == "summons" then return end
     local name = buffbot_presetNames[BfBot.UI._presetIdx]
     buffbot_renameInput = name or ""
     Infinity_PushMenu("BUFFBOT_RENAME")
@@ -1173,6 +1655,7 @@ end
 
 --- Create a new preset for all party members and switch to it.
 function BfBot.UI.CreateNewPreset()
+    if BfBot.UI._view == "summons" then return end
     local idx = BfBot.Persist.CreatePresetAll()
     if idx then
         BfBot.UI._presetIdx = idx
@@ -1183,10 +1666,11 @@ end
 
 --- Delete the current preset for all party members and switch to nearest.
 function BfBot.UI.DeleteCurrentPreset()
+    if BfBot.UI._view == "summons" then return end
     local result = BfBot.Persist.DeletePresetAll(BfBot.UI._presetIdx)
     if result then
         -- Clamp to first valid preset for the current character
-        local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+        local sprite = BfBot.UI._GetSelectedSprite()
         if sprite then
             local config = BfBot.Persist.GetConfig(sprite)
             BfBot.UI._ClampPresetIdx(config)
@@ -1200,46 +1684,124 @@ end
 -- Cast / Stop
 -- ============================================================
 
+--- Re-append build-time SKIP lines into the run's fresh IN-MEMORY log
+--- ONLY. The builders log SKIPs (file + memory) BEFORE Exec.Start, and
+--- Start resets the memory log — without this, the panel-visible log never
+--- shows why entries are missing (hand-off 4). The file line was already
+--- written at build time, so this inserts directly into BfBot.Exec._log
+--- (mirroring _LogEntry's { type, msg } entry shape) instead of calling
+--- _LogEntry, which would write the file a second time (review MINOR-1).
+--- Only _StartRun may call this, and only after a successful Start.
+function BfBot.UI._SurfaceBuildSkips()
+    if not BfBot.Persist.DrainBuildSkips then return end
+    for _, msg in ipairs(BfBot.Persist.DrainBuildSkips()) do
+        table.insert(BfBot.Exec._log, { type = "SKIP", msg = msg })
+    end
+end
+
+--- Start an exec run and surface the build-time skips into its panel log.
+--- Surfacing happens ONLY on a successful Start: a refused Start (already
+--- running, or a build error inside Start) does NOT reset the in-memory
+--- log, so replaying the skips would append them to the PREVIOUS run's
+--- panel log (review MINOR-2). On refusal the pending skips are discarded
+--- instead — they were file-logged at build time, nothing is lost there.
+--- presetIdx tags the run for the late-join listener (issue #19): every
+--- preset-driven entry point passes BfBot.UI._presetIdx so a summon
+--- spawning mid-run can look up its own summon preset.
+function BfBot.UI._StartRun(queue, qcMode, presetIdx)
+    local started = BfBot.Exec.Start(queue, qcMode, presetIdx)
+    if started then
+        BfBot.UI._SurfaceBuildSkips()
+    else
+        BfBot.Persist.DrainBuildSkips()
+    end
+    return started
+end
+
 function BfBot.UI.Cast()
-    -- Validate preset index before building queue
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    -- Cast All stays PARTY-preset-driven in BOTH views: BuildQueueFromPreset
+    -- already sweeps configured allied summons into the run (Task 7), so the
+    -- summons view needs no all-variant of its own (deliberate Task-10
+    -- decision). Validate the preset index against a PARTY config — in the
+    -- summons view that's the protagonist (never GetConfig a summon sprite).
+    local sprite
+    if BfBot.UI._view == "summons" then
+        sprite = BfBot.Persist._GetProtagonist()
+    else
+        sprite = BfBot.UI._GetSelectedSprite()
+    end
     if sprite then
         local config = BfBot.Persist.GetConfig(sprite)
         BfBot.UI._ClampPresetIdx(config)
     end
 
+    BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds
     local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
         BfBot._Display("BuffBot: No spells to cast in this preset")
         return
     end
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
-    BfBot.Exec.Start(queue, qcMode)
+    BfBot.UI._StartRun(queue, qcMode, BfBot.UI._presetIdx)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
 function BfBot.UI.CastCharacter()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    -- Summons view: this button is "Cast (this summon)" (hand-off 2)
+    if BfBot.UI._view == "summons" then
+        BfBot.UI._CastSelectedSummon()
+        return
+    end
+
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     BfBot.UI._ClampPresetIdx(config)
 
+    BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds
     local queue, reason = BfBot.Persist.BuildQueueForCharacter(BfBot.UI._charSlot, BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
         if reason == "not locally controlled" then
             Infinity_DisplayString("BuffBot: " .. BfBot._GetName(sprite)
                 .. " is controlled by another player")
+        elseif reason == "puppet-locked" then
+            Infinity_DisplayString("BuffBot: " .. BfBot._GetName(sprite)
+                .. " is puppet-locked by Project Image — cast again after the"
+                .. " image expires")
         else
             Infinity_DisplayString("BuffBot: No spells to cast for this character")
         end
         return
     end
     local qcMode = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
-    BfBot.Exec.Start(queue, qcMode)
+    BfBot.UI._StartRun(queue, qcMode, BfBot.UI._presetIdx)
+    buffbot_status = BfBot.UI._GetStatusText()
+end
+
+--- Standalone cast for the selected summon (issue #19). Queue entries carry
+--- their own per-entry cheat flag from the summon preset's qc, so the run
+--- qcMode is always 0 here.
+function BfBot.UI._CastSelectedSummon()
+    local entry = BfBot.UI._SelectedSummon()
+    if not entry then
+        Infinity_DisplayString("BuffBot: No summon selected")
+        return
+    end
+    BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds
+    local queue, reason = BfBot.Persist.BuildQueueForSummon(entry, BfBot.UI._presetIdx)
+    if not queue or #queue == 0 then
+        Infinity_DisplayString("BuffBot: No spells to cast for this summon"
+            .. (reason and (" (" .. reason .. ")") or ""))
+        return
+    end
+    BfBot.UI._StartRun(queue, 0, BfBot.UI._presetIdx)
     buffbot_status = BfBot.UI._GetStatusText()
 end
 
 function BfBot.UI._CastCharLabel()
+    if BfBot.UI._view == "summons" then
+        return "Cast (this summon)"
+    end
     local name = buffbot_charNames[BfBot.UI._charSlot + 1]
     if name then return "Cast " .. name end
     return "Cast Character"
@@ -1290,7 +1852,9 @@ end
 -- ============================================================
 
 --- Character tab selected state (returns boolean for frame lua).
+--- In the summons view no portrait tab is selected (hand-off 2).
 function BfBot.UI._IsCharSelected(slot)
+    if BfBot.UI._view == "summons" then return false end
     return BfBot.UI._charSlot == slot
 end
 
@@ -1311,8 +1875,11 @@ function BfBot.UI._CanCastAll()
     if BfBot.Exec.GetState() == "running" then return false end
     if #buffbot_spellTable > 0 then return true end
     local presetIdx = BfBot.UI._presetIdx
+    -- The visible spell table already covered the selected PARTY member; in
+    -- the summons view it covered a summon instead, so check all six slots.
+    local skipSlot = BfBot.UI._IsPartyView() and BfBot.UI._charSlot or -1
     for slot = 0, 5 do
-        if slot ~= BfBot.UI._charSlot then
+        if slot ~= skipSlot then
             local sprite = EEex_Sprite_GetInPortrait(slot)
             if sprite then
                 local config = BfBot.Persist.GetConfig(sprite)
@@ -1341,11 +1908,16 @@ end
 --- Renumber all spell priorities contiguously (1, 2, 3, ...) based on
 --- current buffbot_spellTable order. Writes back to Persist.
 function BfBot.UI._RenumberPriorities()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     for i, entry in ipairs(buffbot_spellTable) do
         entry.pri = i
-        BfBot.Persist.SetSpellPriority(sprite, BfBot.UI._presetIdx, entry.resref, i)
+        if BfBot.UI._view == "summons" then
+            local se = BfBot.UI._SummonSpellEntry(entry.resref, 1)
+            if se then se.pri = i end
+        else
+            BfBot.Persist.SetSpellPriority(sprite, BfBot.UI._presetIdx, entry.resref, i)
+        end
     end
 end
 
@@ -1465,7 +2037,7 @@ end
 function BfBot.UI._BuildPickerList()
     buffbot_pickerSpells = {}
     buffbot_pickerSelected = 0
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local config = BfBot.Persist.GetConfig(sprite)
     if not config then return end
@@ -1503,6 +2075,7 @@ end
 
 --- Open the spell picker sub-menu.
 function BfBot.UI.OpenSpellPicker()
+    if BfBot.UI._view == "summons" then return end
     BfBot.UI._BuildPickerList()
     if #buffbot_pickerSpells == 0 then
         BfBot._Display("BuffBot: No additional spells to add")
@@ -1513,9 +2086,10 @@ end
 
 --- Add the selected spell from the picker (include override).
 function BfBot.UI.AddPickedSpell()
+    if BfBot.UI._view == "summons" then return end
     local entry = buffbot_pickerSpells[buffbot_pickerSelected]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     -- Set include override (classification-level)
@@ -1532,10 +2106,11 @@ end
 --- Exclude the selected spell from the buff list.
 -- Sets exclude override, removes from ALL presets for this character.
 function BfBot.UI.ExcludeSelected()
+    if BfBot.UI._view == "summons" then return end
     if not BfBot.UI._HasSelection() then return end
     local entry = buffbot_spellTable[buffbot_selectedRow]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     -- Set exclude override
@@ -1570,7 +2145,8 @@ end
 
 --- Export current character's config.
 function BfBot.UI.ExportConfig()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if BfBot.UI._view == "summons" then return end
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     local ok, result = BfBot.Persist.ExportConfig(sprite)
@@ -1596,6 +2172,7 @@ end
 
 --- Open the import picker sub-menu.
 function BfBot.UI.OpenImportPicker()
+    if BfBot.UI._view == "summons" then return end
     BfBot.UI._BuildImportList()
     if #buffbot_importList == 0 then
         BfBot._Display("BuffBot: No configs found in bfbot_presets/")
@@ -1606,9 +2183,10 @@ end
 
 --- Import the selected config from the picker.
 function BfBot.UI.ImportSelected()
+    if BfBot.UI._view == "summons" then return end
     local entry = buffbot_importList[buffbot_importSelected]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
     local ok, presets, skipped = BfBot.Persist.ImportConfig(sprite, entry.filename)
@@ -1673,14 +2251,19 @@ function BfBot.UI.SelectVariant(row)
         return
     end
 
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
         Infinity_PopMenu("BUFFBOT_VARIANTS")
         return
     end
 
-    -- Store the variant
-    BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref)
+    -- Store the variant (summons view → the stored summon spell entry)
+    if BfBot.UI._view == "summons" then
+        local se = BfBot.UI._SummonSpellEntry(entry.resref, 1)
+        if se then se.var = vEntry.resref end
+    else
+        BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref)
+    end
     entry.var = vEntry.resref
     entry.variantName = vEntry.name
 
@@ -1764,8 +2347,10 @@ function BfBot.UI._CheckboxText(row)
     return "[ ]"
 end
 
---- Lock column display text.
+--- Lock column display text. The summons view has no lock feature (the v8
+--- summon spell-entry schema has no lock field) — the column stays blank.
 function BfBot.UI._LockText(row)
+    if BfBot.UI._view == "summons" then return "" end
     local entry = buffbot_spellTable[row]
     if entry and entry.lock == 1 then return "[L]" end
     return "[ ]"
@@ -1778,11 +2363,12 @@ function BfBot.UI._LockColor(row)
     return _parseColor(BfBot.UI._T("lockInactive"))
 end
 
---- Toggle the lock state on a spell row.
+--- Toggle the lock state on a spell row. Party view only (see _LockText).
 function BfBot.UI.ToggleLock(row)
+    if BfBot.UI._view == "summons" then return end
     local entry = buffbot_spellTable[row]
     if not entry then return end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local newState = (entry.lock == 1) and 0 or 1
     entry.lock = newState  -- immediate visual update
@@ -1836,8 +2422,57 @@ end
 -- Quick Cast Cycling Button
 -- ============================================================
 
+--- Quick Cast value (0..2) for the current view: party → the selected
+--- character's per-preset qc; summons → the CACHED qc of the selected
+--- summon's preset (its OWN v8 qc field — the summon follows it even
+--- inside a party run). The cache exists because this feeds bbQC's
+--- per-frame `text lua` / `text color lua`: resolving the summon preset
+--- live would walk _SelectedSummon → PeekSummonPreset →
+--- _GetProtagonistConfig (up to ~6 GetInPortrait calls + a pcall) several
+--- times EVERY frame (review MINOR-4). Party view is a single portrait
+--- lookup and stays live.
+function BfBot.UI._ViewQuickCast()
+    if BfBot.UI._view == "summons" then
+        return BfBot.UI._summonQc
+    end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return nil end
+    return BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+end
+
+--- Recompute the cached summons-view Quick Cast value (_summonQc). Writer
+--- trace — every path that can change the displayed value refreshes the
+--- cache, so it can never go stale:
+---   * _RefreshSummonsView calls this on EVERY exit; all summons-view
+---     state changes funnel through it via _Refresh (panel open, view
+---     switch, summon tab select, preset switch, page flip, sprite
+---     listeners) — including preset creation by _EnsureSummonPreset.
+---   * CycleQuickCast's summons branch writes the cache inline with its
+---     qc mutation (the one write that happens without a _Refresh).
+--- nil = no selected summon or no preset yet (renders as Off / normal
+--- speed, exactly like the pre-cache nil).
+function BfBot.UI._UpdateSummonQc()
+    local sel = BfBot.UI._SelectedSummon()
+    local preset = sel and BfBot.Persist.PeekSummonPreset(
+        sel.identity, BfBot.UI._presetIdx)
+    if preset then
+        BfBot.UI._summonQc = tonumber(preset.qc) or 0
+    else
+        BfBot.UI._summonQc = nil
+    end
+end
+
 function BfBot.UI.CycleQuickCast()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
+    if BfBot.UI._view == "summons" then
+        local sel = BfBot.UI._SelectedSummon()
+        local preset = sel and BfBot.Persist.PeekSummonPreset(
+            sel.identity, BfBot.UI._presetIdx)
+        if not preset then return end
+        preset.qc = ((tonumber(preset.qc) or 0) + 1) % 3
+        BfBot.UI._summonQc = preset.qc  -- keep the per-frame cache fresh
+        return
+    end
+    local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
     local current = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
     local next = (current + 1) % 3
@@ -1846,27 +2481,22 @@ end
 
 function BfBot.UI._QuickCastLabel()
     if not buffbot_isOpen then return "" end
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return "Quick Cast: Off" end
-    local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    local qc = BfBot.UI._ViewQuickCast()
     if qc == 1 then return "Quick Cast: Long" end
     if qc == 2 then return "Quick Cast: All" end
     return "Quick Cast: Off"
 end
 
 function BfBot.UI._QuickCastColor()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return _parseColor(BfBot.UI._T("qcOff")) end
-    local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    local qc = BfBot.UI._ViewQuickCast()
     if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
     if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
     return _parseColor(BfBot.UI._T("qcOff"))
 end
 
 function BfBot.UI._QuickCastTooltip()
-    local sprite = EEex_Sprite_GetInPortrait(BfBot.UI._charSlot)
-    if not sprite then return "Normal casting speed" end
-    local qc = BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx)
+    local qc = BfBot.UI._ViewQuickCast()
+    if qc == nil then return "Normal casting speed" end
     if qc == 1 then return "Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle." end
     if qc == 2 then return "Fast casting for ALL buffs regardless of duration (cheat). Click to cycle." end
     return "Normal casting speed — spells respect aura cooldown. Click to cycle."

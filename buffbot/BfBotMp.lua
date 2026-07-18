@@ -126,6 +126,133 @@ function BfBot.Mp.IsLocallyControlled(sprite)
     return owner == myId
 end
 
+-- ============================================================
+-- Summon-caster gate (issue #19, Task 13)
+-- ============================================================
+
+--- Is an ESTABLISHED multiplayer session active? Same connection-flag read
+--- IsLocallyControlled short-circuits on (probe-verified 2026-07-05: reads 0
+--- in single-player). Reflection failure → false, i.e. treat as
+--- single-player — matches _SummonPassesMpRule's documented fallback and
+--- never breaks the SP path. Module-level (not a local) so the test suite
+--- can stub MP state without a live session.
+--- @return boolean
+function BfBot.Mp._IsMpSession()
+    local chitin = _getChitin()
+    if not chitin then return false end
+    local ok, conn = pcall(function()
+        return chitin.cNetwork.m_bConnectionEstablished
+    end)
+    if not ok then
+        -- Warn-once latch: a broken reflection degrades to single-player
+        -- permanently (same fallback as IsLocallyControlled's inline read);
+        -- surface the first failure instead of spamming per-entry per-sweep.
+        if not BfBot.Mp._warnedMpReflect then
+            BfBot.Mp._warnedMpReflect = true
+            BfBot._Warn("[Mp] connection-flag read failed — treating session as"
+                .. " single-player from here on: " .. tostring(conn))
+        end
+        return false
+    end
+    -- `not conn` covers a BOOL reflected as Lua false; `conn == 0` as int 0.
+    return not (not conn or conn == 0)
+end
+
+--- May BuffBot queue casts on `summonEntry`'s summon from THIS machine?
+--- CONSERVATIVE RULE, PENDING A 2-MACHINE PROBE (issue #19 tracks the
+--- host+client verification session; only SP + MP host are probe-verified):
+---   1. Single-player → always true (connection-flag short-circuit; first
+---      and cheapest check — the entry is never inspected in SP).
+---   2. MP, clone summon (fresh-resolved sprite carries an owner object id
+---      in m_nCopyParent — Project Image / Simulacrum, probe-verified;
+---      Mislead per IESDP, unverified — a Mislead clone without the field
+---      would fall to rule 3, still conservative): the clone
+---      follows its OWNER's control → IsLocallyControlled(ownerSprite). The
+---      owner must be a party member (portrait index 0-5) — the only class
+---      of sprite IsLocallyControlled is trustworthy on.
+---   3. MP, ownerless summon (Planetar, elementals, ...): host heuristic —
+---      this machine is authoritative iff it controls portrait slot 0.
+---   4. FAIL-CLOSED: in an established MP session, ANY error or resolution
+---      failure (malformed entry, summon gone, owner gone or non-party,
+---      engine read error) → false. Better a summon silently not joining on
+---      one machine than two machines double-queuing the same summon.
+--- Control-mode semantics (auto/manual/all, baldur.ini [BuffBot]) are
+--- inherited through the IsLocallyControlled delegation on the owner /
+--- slot-0 sprite. Engine reads are pcall-guarded with _Warn on unexpected
+--- failure; only a gone summon / gone owner stays silent (normal churn).
+--- HAZARD (verified, Task-5 quality review): NEVER call IsLocallyControlled
+--- on the SUMMON sprite itself — its EEex_Sprite_GetCharacterIndex failure
+--- path degrades to TRUE for non-party sprites in MP auto mode, which would
+--- double-queue summons on every machine.
+--- @param summonEntry table detection entry ({oid, name, ...}); any sprite
+---        field is IGNORED — the sprite is fresh-resolved by oid+name
+---        (issue-#38 freed-pointer discipline)
+--- @return boolean
+function BfBot.Mp.IsSummonLocallyControlled(summonEntry)
+    -- Rule 1: single-player short-circuit — BEFORE any entry inspection.
+    if not BfBot.Mp._IsMpSession() then return true end
+
+    -- Established MP session: fail-closed from here down (rule 4).
+    if type(summonEntry) ~= "table" then return false end
+    if not (BfBot.Exec and BfBot.Exec._ResolveCaster) then
+        BfBot._Warn("[Mp] IsSummonLocallyControlled: resolver unavailable")
+        return false
+    end
+    -- A gone/recycled oid resolves nil silently (normal summon churn);
+    -- structural resolver errors _Warn inside _ResolveCaster.
+    local sprite = BfBot.Exec._ResolveCaster({
+        kind = "summon", oid = summonEntry.oid, name = summonEntry.name })
+    if not sprite then return false end
+
+    local okCp, copyParent = pcall(function() return sprite.m_nCopyParent end)
+    if not okCp then
+        BfBot._Warn("[Mp] IsSummonLocallyControlled: m_nCopyParent read "
+            .. "failed: " .. tostring(copyParent))
+        return false
+    end
+
+    if type(copyParent) == "number" and copyParent ~= -1 then
+        -- Rule 2: clone — control follows the owner.
+        local okOw, owner = pcall(function()
+            local obj = EEex_GameObject_Get(copyParent)
+            if obj and EEex_GameObject_IsSprite(obj, false) then
+                return EEex_GameObject_CastUserType(obj)
+            end
+            return nil
+        end)
+        if not okOw then
+            BfBot._Warn("[Mp] IsSummonLocallyControlled: owner resolve failed"
+                .. " (id=" .. tostring(copyParent) .. "): " .. tostring(owner))
+            return false
+        end
+        if not owner then return false end  -- owner gone → fail closed
+        local okPi, pIdx = pcall(EEex_Sprite_GetPortraitIndex, owner)
+        if not okPi then
+            BfBot._Warn("[Mp] IsSummonLocallyControlled: owner portrait read"
+                .. " failed: " .. tostring(pIdx))
+            return false
+        end
+        if type(pIdx) ~= "number" or pIdx < 0 then
+            -- Owner is not a party member — IsLocallyControlled is only
+            -- trustworthy on party sprites (see HAZARD above). Fail closed.
+            BfBot._Warn("[Mp] IsSummonLocallyControlled: clone owner "
+                .. tostring(copyParent) .. " is not a party member")
+            return false
+        end
+        return BfBot.Mp.IsLocallyControlled(owner) and true or false
+    end
+
+    -- Rule 3: ownerless summon — host heuristic via portrait slot 0.
+    local okLead, leader = pcall(EEex_Sprite_GetInPortrait, 0)
+    if not okLead then
+        BfBot._Warn("[Mp] IsSummonLocallyControlled: GetInPortrait(0) "
+            .. "failed: " .. tostring(leader))
+        return false
+    end
+    if not leader then return false end
+    return BfBot.Mp.IsLocallyControlled(leader) and true or false
+end
+
 --- MP ownership probe. Run on EACH machine in a live multiplayer session
 --- (world screen), then diff the two buffbot_mp_probe.log files. The field whose
 --- value tracks the local machine is the per-client discriminator (verified for

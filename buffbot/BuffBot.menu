@@ -156,7 +156,7 @@ menu
 	button
 	{
 		name    "bbC0"
-		enabled "buffbot_charNames[1] ~= nil"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[1] ~= nil"
 		action  "BfBot.UI.SetChar(0)"
 		text lua "buffbot_charNames[1]"
 		text style "bb_button"
@@ -169,7 +169,7 @@ menu
 	button
 	{
 		name    "bbC1"
-		enabled "buffbot_charNames[2] ~= nil"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[2] ~= nil"
 		action  "BfBot.UI.SetChar(1)"
 		text lua "buffbot_charNames[2]"
 		text style "bb_button"
@@ -182,7 +182,7 @@ menu
 	button
 	{
 		name    "bbC2"
-		enabled "buffbot_charNames[3] ~= nil"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[3] ~= nil"
 		action  "BfBot.UI.SetChar(2)"
 		text lua "buffbot_charNames[3]"
 		text style "bb_button"
@@ -195,7 +195,7 @@ menu
 	button
 	{
 		name    "bbC3"
-		enabled "buffbot_charNames[4] ~= nil"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[4] ~= nil"
 		action  "BfBot.UI.SetChar(3)"
 		text lua "buffbot_charNames[4]"
 		text style "bb_button"
@@ -208,7 +208,7 @@ menu
 	button
 	{
 		name    "bbC4"
-		enabled "buffbot_charNames[5] ~= nil"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[5] ~= nil"
 		action  "BfBot.UI.SetChar(4)"
 		text lua "buffbot_charNames[5]"
 		text style "bb_button"
@@ -221,7 +221,7 @@ menu
 	button
 	{
 		name    "bbC5"
-		enabled "buffbot_charNames[6] ~= nil"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[6] ~= nil"
 		action  "BfBot.UI.SetChar(5)"
 		text lua "buffbot_charNames[6]"
 		text style "bb_button"
@@ -229,6 +229,150 @@ menu
 		frame lua "BfBot.UI._IsCharSelected(5) and 1 or 0"
 		scaleToClip
 		area 760 90 80 24
+	}
+
+	-- ======================================================
+	-- Summons view (issue #19): view toggle at the row's right
+	-- end, 6 summon tabs sharing the character-tab row, paging
+	-- cluster (< 1/2 >) and an empty-state label. All areas are
+	-- repositioned by _Layout(); only one view's tabs render.
+	-- ======================================================
+
+	button
+	{
+		name    "bbView"
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.ToggleView()"
+		text lua "BfBot.UI._ViewBtnLabel()"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsPartyView() and 0 or 1"
+		scaleToClip
+		area 760 90 80 24
+	}
+
+	button
+	{
+		name    "bbS0"
+		enabled "BfBot.UI._SummonTabVisible(1)"
+		action  "BfBot.UI.SetSummon(1)"
+		text lua "buffbot_summonTabNames[1]"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsSummonSelected(1) and 1 or 0"
+		scaleToClip
+		area 350 90 80 24
+	}
+
+	button
+	{
+		name    "bbS1"
+		enabled "BfBot.UI._SummonTabVisible(2)"
+		action  "BfBot.UI.SetSummon(2)"
+		text lua "buffbot_summonTabNames[2]"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsSummonSelected(2) and 1 or 0"
+		scaleToClip
+		area 432 90 80 24
+	}
+
+	button
+	{
+		name    "bbS2"
+		enabled "BfBot.UI._SummonTabVisible(3)"
+		action  "BfBot.UI.SetSummon(3)"
+		text lua "buffbot_summonTabNames[3]"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsSummonSelected(3) and 1 or 0"
+		scaleToClip
+		area 514 90 80 24
+	}
+
+	button
+	{
+		name    "bbS3"
+		enabled "BfBot.UI._SummonTabVisible(4)"
+		action  "BfBot.UI.SetSummon(4)"
+		text lua "buffbot_summonTabNames[4]"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsSummonSelected(4) and 1 or 0"
+		scaleToClip
+		area 596 90 80 24
+	}
+
+	button
+	{
+		name    "bbS4"
+		enabled "BfBot.UI._SummonTabVisible(5)"
+		action  "BfBot.UI.SetSummon(5)"
+		text lua "buffbot_summonTabNames[5]"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsSummonSelected(5) and 1 or 0"
+		scaleToClip
+		area 678 90 80 24
+	}
+
+	button
+	{
+		name    "bbS5"
+		enabled "BfBot.UI._SummonTabVisible(6)"
+		action  "BfBot.UI.SetSummon(6)"
+		text lua "buffbot_summonTabNames[6]"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		frame lua "BfBot.UI._IsSummonSelected(6) and 1 or 0"
+		scaleToClip
+		area 760 90 80 24
+	}
+
+	-- Paging cluster: visible only when more than 6 summons
+	button
+	{
+		name    "bbSPrev"
+		enabled "BfBot.UI._SummonPagingVisible()"
+		action  "BfBot.UI.SummonPage(-1)"
+		text    "<"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 700 90 24 24
+	}
+
+	label
+	{
+		name    "bbSPage"
+		enabled "BfBot.UI._SummonPagingVisible()"
+		text lua "buffbot_summonPageText"
+		text style "bb_normal_parchment"
+		text align center center
+		area 728 90 40 24
+	}
+
+	button
+	{
+		name    "bbSNext"
+		enabled "BfBot.UI._SummonPagingVisible()"
+		action  "BfBot.UI.SummonPage(1)"
+		text    ">"
+		text style "bb_button"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 772 90 24 24
+	}
+
+	-- Empty state: no allied summons in the leader's area
+	label
+	{
+		name    "bbSEmpty"
+		enabled "BfBot.UI._SummonEmptyVisible()"
+		text    "No allied summons detected"
+		text style "bb_normal_parchment"
+		text align center center
+		area 350 90 520 24
 	}
 
 	-- ======================================================
@@ -343,7 +487,7 @@ menu
 	button
 	{
 		name    "bbRen"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenRename()"
 		text    "Rename"
 		text style "bb_button"
@@ -356,7 +500,7 @@ menu
 	button
 	{
 		name    "bbNew"
-		enabled "BfBot.UI._CanCreatePreset()"
+		enabled "BfBot.UI._CanCreatePreset() and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.CreateNewPreset()"
 		text    "New"
 		text style "bb_button"
@@ -485,7 +629,7 @@ menu
 	button
 	{
 		name    "bbAdd"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenSpellPicker()"
 		text    "Add Spell"
 		text style "bb_button"
@@ -498,7 +642,7 @@ menu
 	button
 	{
 		name    "bbRmv"
-		enabled "BfBot.UI._HasSelection()"
+		enabled "BfBot.UI._HasSelection() and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ExcludeSelected()"
 		text    "Remove"
 		text style "bb_button"
@@ -511,7 +655,7 @@ menu
 	button
 	{
 		name    "bbExp"
-		enabled "buffbot_isOpen and not BfBot._noIO"
+		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ExportConfig()"
 		text    "Export"
 		text style "bb_button"
@@ -524,7 +668,7 @@ menu
 	button
 	{
 		name    "bbImp"
-		enabled "buffbot_isOpen and not BfBot._noIO"
+		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenImportPicker()"
 		text    "Import"
 		text style "bb_button"
@@ -607,7 +751,7 @@ menu
 	button
 	{
 		name    "bbDel"
-		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants ~= 1"
+		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text    "Delete Preset"
 		text style "bb_button"
@@ -703,7 +847,7 @@ menu
 	button
 	{
 		name    "bbVDel"
-		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text    "Del Preset"
 		text style "bb_button"
@@ -1091,10 +1235,11 @@ menu
 		area 581 435 95 26
 	}
 
-	-- Unlock Targeting button (visible only when locked)
+	-- Unlock Targeting button (visible only when locked; party view only —
+	-- the summon spell-entry schema has no tgtUnlock field)
 	button
 	{
-		enabled "buffbot_targetLocked == 1"
+		enabled "buffbot_targetLocked == 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.PickerUnlock()"
 		text    "Unlock Targeting"
 		text style "bb_button"
