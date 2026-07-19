@@ -171,18 +171,21 @@ class BuffBotGame:
         self._write("EEex/loader/LuaJIT/lua51.dll", SOURCE_LUA51)
         self._write("EEex/loader/LuaJIT/LuaProvider.dll", SOURCE_PROVIDER)
 
-    def _write_active_loader(self, version: str) -> None:
+    def _write_active_loader(self, version: str, newline: str = "\r\n") -> None:
         self._write(
             "InfinityLoader.ini",
             (
-                "[Loader]\r\n"
-                "LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL\r\n"
-                "LuaLibrary=lua51.dll\r\n"
-                f"LuaVersionExternal={version}\r\n"
+                f"[Loader]{newline}"
+                f"LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL{newline}"
+                f"LuaLibrary=lua51.dll{newline}"
+                f"LuaVersionExternal={version}{newline}"
             ).encode("ascii"),
         )
         self._write("lua51.dll", SOURCE_LUA51)
         self._write("LuaProvider.dll", SOURCE_PROVIDER)
+
+    def set_exact_active_loader(self, newline: str) -> None:
+        self._write_active_loader(self.expected_version, newline)
 
     def _build_layout(self, layout: str, *, with_log: bool) -> None:
         if layout == "none":
@@ -425,14 +428,56 @@ def test_installer_source_does_not_gate_on_eeex_component_numbers() -> None:
     )
 
 
+@pytest.mark.parametrize("newline", ("\n", "\r\n"), ids=("lf", "crlf"))
 @pytest.mark.parametrize("layout", ("v011", "v1"))
-def test_luajit_exact_active_state_is_byte_identical(game_factory, layout: str) -> None:
+def test_luajit_exact_active_state_is_byte_identical(
+    game_factory, layout: str, newline: str
+) -> None:
     game = game_factory(layout)
+    game.set_exact_active_loader(newline)
     before = game.snapshot()
     process = game.install(1)
     _assert_installed(game, process)
     assert "LuaJIT is already active" in game.transcript(process)
     assert game.snapshot() == before
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_commented_library_decoy_does_not_satisfy_active_state(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        "; LuaLibrary=lua51.dll\n"
+        "[Loader]\n"
+        "LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL\n"
+        f"LuaVersionExternal={game.expected_version}\n",
+        root_lua51=SOURCE_LUA51,
+        root_provider=SOURCE_PROVIDER,
+    )
+    before = game.snapshot()
+    assert before.loader_ini is not None
+    before_ini = before.loader_ini.decode("ascii")
+    assert "; LuaLibrary=lua51.dll" in before_ini
+    assert not re.search(r"(?m)^LuaLibrary=", before_ini)
+
+    process = game.install(1)
+    transcript = _assert_installed(game, process)
+    assert "LuaJIT is already active" not in transcript
+    assert "Installing EEex LuaJIT component" in transcript
+    game.assert_luajit_state(game.expected_version)
+
+    after = game.snapshot()
+    assert after.loader_ini != before.loader_ini
+    assert after.key == before.key
+    assert after.bif == before.bif
+    assert after.root_tlk == before.root_tlk
+    assert after.lang_tlk == before.lang_tlk
+    assert after.override == before.override
+    assert after.eeex == before.eeex
+    assert after.eeex_scripts == before.eeex_scripts
+    assert after.root_lua51 == before.root_lua51
+    assert after.root_provider == before.root_provider
 
 
 @pytest.mark.parametrize(
