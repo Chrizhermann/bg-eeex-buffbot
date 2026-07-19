@@ -14,7 +14,7 @@
     {
       "id": 2,
       "subject": "Task 3: Checked EEex callback boundaries",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": 3,
@@ -41,5 +41,5 @@
       "blockedBy": [5]
     }
   ],
-  "lastUpdated": "2026-07-20T05:40:48+09:00"
+  "lastUpdated": "2026-07-20T06:01:28+09:00"
 }
