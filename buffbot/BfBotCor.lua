@@ -6,7 +6,7 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.6.0-alpha"
+BfBot.VERSION = "1.6.1-alpha"
 BfBot.MAX_PRESETS = 8
 
 -- ============================================================

@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.6.1-alpha (2026-07-20)
+
+### Compatibility
+- **Restored EEex v0.11.0-alpha support with full BuffBot feature parity.** EEex v1 remains recommended. The installer now detects the EEex bootstrap, required Lua API, and one complete old or new script layout instead of relying on version-specific WeiDU component IDs.
+- **LuaJIT setup follows the detected EEex layout.** BuffBot recognizes the legacy `5.1` loader used by v0.11 and the `5.1-LuaJIT` loader used by v1, while validating and repairing incomplete loader state when the required files are available.
+- **Save downgrade boundary.** Downgrading an arbitrary save to v0.11 after EEex v1 and other EEex mods have written it is unsupported.
+
+### Safety
+- **Marshal-safe, non-mutating persistence export.** BuffBot now exports a sanitized copy of its saved configuration, converting booleans and dropping unsupported values, keys, and cyclic branches without modifying the live UDAux table.
+- **Checked EEex callback boundaries.** BuffBot-owned event callbacks now contain Lua errors, preserve successful return values, and deduplicate repeated diagnostics instead of allowing failures to propagate through EEex.
+
+### Testing
+- **Synthetic installer coverage now exercises v0.11 and v1 acceptance, with v0.10 explicitly serving as the rejection floor.** The matrix also covers incomplete and ambiguous layouts, LuaJIT activation and repair, rollback, uninstall, and component-number independence.
+
 ## v1.6.0-alpha (2026-07-19)
 
 ### Added

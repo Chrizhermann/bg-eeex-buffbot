@@ -6,7 +6,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 
 > **Alpha Release** — fully functional but rough around the edges. [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
 
-> **BuffBot v1.4.0+ requires EEex v1.0.0 or later.** If you're upgrading from an older BuffBot version on EEex v0.x, [upgrade EEex first](https://github.com/Bubb13/EEex/releases). The BuffBot installer will refuse to run against pre-v1.0.0 EEex.
+> **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**
 
 [![BuffBot Showcase](https://img.youtube.com/vi/9fjnUKG1tfQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=9fjnUKG1tfQ)
 
@@ -28,14 +28,18 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ## Requirements
 
 - **BG:EE**, **BG2:EE**, or **EET**
-- **[EEex](https://github.com/Bubb13/EEex)** v1.0.0 or later
+- **[EEex](https://github.com/Bubb13/EEex)** v0.11.0-alpha or later (v1 recommended)
 
-Any EEex install tier works — Minimal, Full, or Experimental. BuffBot's WeiDU installer detects whether EEex's LuaJIT support is active, and turns it on automatically if it isn't. You don't have to pick the "right" EEex tier; pick whatever you want.
+EEex v0.11 and v1 have full BuffBot feature parity. BuffBot's LuaJIT installer recognizes both the older `5.1` layout and the newer `5.1-LuaJIT` layout, and activates the matching runtime when needed. On EEex v1, any install tier works — Minimal, Full, or Experimental.
+
+EEex v0.11 keeps its internal Lua files in `override/`. When using v0.11, install EEex and BuffBot late in the mod order — after generalized biffing and any later file-replacement step — so those files cannot be consumed or replaced.
+
+Do not assume an arbitrary save can be downgraded to v0.11 after EEex v1 and other EEex mods have written it; that downgrade is not guaranteed safe.
 
 <details>
-<summary><strong>For the curious: how EEex tiers and LuaJIT interact</strong></summary>
+<summary><strong>For the curious: how EEex tiers and LuaJIT layouts interact</strong></summary>
 
-EEex ships several install tiers. Minimal and Full leave LuaJIT off by default; only Experimental enables it. **EEex's Lua scripting needs LuaJIT to work** — without it, the game silently fails to launch (no error, just no window). BuffBot's installer flips the LuaJIT switch on your behalf regardless of which EEex tier you picked, so all three tiers end up equivalent for BuffBot. The "EEex LuaJIT Support" component is auto-skipped when EEex already has LuaJIT active.
+EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enables it. BuffBot checks the loader state and required DLLs instead of relying on EEex component numbers, then enables or repairs LuaJIT as needed. It uses `LuaVersionExternal=5.1` for v0.11's older layout and `LuaVersionExternal=5.1-LuaJIT` for v1's newer layout. The "EEex LuaJIT Support" component is auto-skipped when the matching runtime is already active.
 
 </details>
 
@@ -87,7 +91,7 @@ Copy all files from `buffbot/` to your game's `override/` directory. Note: innat
 
 Clone presets are stored by owner identity and are reused when that owner's clone is created again. On first open they seed from the owner's matching preset, limited to spells the clone can cast. To disable automatic participation globally, set `SummonsJoinCast = 0` under `[BuffBot]` in `baldur.ini`.
 
-Project Image locks its owner while active. BuffBot skips locked owners and drops owner entries placed after Project Image so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported in v1.6.0-alpha; use the Summons panel actions instead.
+Project Image locks its owner while active. BuffBot skips locked owners and drops owner entries placed after Project Image so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported in v1.6.1-alpha; use the Summons panel actions instead.
 
 ### Export / Import
 
