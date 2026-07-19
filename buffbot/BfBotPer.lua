@@ -520,7 +520,9 @@ function BfBot.Persist._Export(sprite)
         return {}
     end)
     if ok then return result end
-    pcall(BfBot._Warn, "[Persist] Save export failed: " .. tostring(result))
+    pcall(function()
+        BfBot._Warn("[Persist] Save export failed: " .. tostring(result))
+    end)
     return {}  -- on error, return empty (don't crash save)
 end
 

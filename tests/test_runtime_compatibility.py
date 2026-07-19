@@ -529,3 +529,37 @@ def test_export_contains_udaux_errors_and_returns_empty(lua: LuaRuntime) -> None
     assert facts["warningCount"] == 1
     assert "synthetic UDAux failure" in facts["warning"]
     assert facts["warningFailureContained"]
+
+
+def test_export_contains_error_objects_whose_tostring_throws(
+    lua: LuaRuntime,
+) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = lua.execute(
+            """
+            local errorObject = setmetatable({}, {
+                __tostring = function()
+                    error("synthetic tostring failure")
+                end,
+            })
+            EEex = { IsMarshallingCopy = function() return false end }
+            EEex_GetUDAux = function() error(errorObject) end
+
+            local exportOk, exported = pcall(
+                BfBot.Persist._Export, "sprite")
+            return {
+                contained = exportOk,
+                empty = exportOk and type(exported) == "table"
+                    and next(exported) == nil,
+            }
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["contained"]
+    assert facts["empty"]
