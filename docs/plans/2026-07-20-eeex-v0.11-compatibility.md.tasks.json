@@ -31,15 +31,15 @@
     {
       "id": 5,
       "subject": "Task 6: Disposable live v0.11 and v1 acceptance",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [4]
     },
     {
       "id": 6,
       "subject": "Task 7: Record verified learning and hand off publication",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [5]
     }
   ],
-  "lastUpdated": "2026-07-20T06:34:41+09:00"
+  "lastUpdated": "2026-07-20T07:29:54+09:00"
 }
