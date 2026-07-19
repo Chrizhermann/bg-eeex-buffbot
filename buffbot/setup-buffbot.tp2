@@ -10,13 +10,52 @@ LABEL ~BuffBot-Main~
 REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
   ~BuffBot requires BG:EE, BG2:EE, or EET.~
 
-REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
-
-// v1.0.0 moved EEex's Lua scripts from EEex/ to game-root EEex_scripts/.
-// Use this as the v1.0.0+ marker — earlier releases don't have this path.
-REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
-  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+// EEex component numbers changed in v1.0.0. Detect the runtime capability
+// BuffBot needs instead: v0.11 keeps EEex scripts in override, while v1 puts
+// them under EEex_scripts. Reject dual layouts because their loader family is
+// ambiguous (upgrade residue or an unsafe manual downgrade).
+REQUIRE_PREDICATE (
+  FILE_EXISTS ~override/M___EEex.lua~
+  AND (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    OR
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+  AND NOT (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    AND
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+)
+  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
 
 // ---- TLK strings for innate ability tooltips ----
 // One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
@@ -97,18 +136,96 @@ LABEL ~BuffBot-LuaJIT~
 REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
   ~BuffBot requires BG:EE, BG2:EE, or EET.~
 
-REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+REQUIRE_PREDICATE (
+  FILE_EXISTS ~override/M___EEex.lua~
+  AND (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    OR
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+  AND NOT (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    AND
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+)
+  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
 
-REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
-  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+// The one capable script layout determines the loader's Lua version. Do not
+// infer this from EEex.tp2: that file can be absent or left behind by an
+// upgrade, and its component numbers/version strings are not runtime state.
+OUTER_SPRINT lua_version ~5.1-LuaJIT~
+OUTER_SPRINT lua_version_pattern ~5[.]1-LuaJIT~
+ACTION_IF (
+  FILE_EXISTS ~override/EEex_Sprite.lua~
+  AND FILE_EXISTS ~override/EEex_Options.lua~
+  AND FILE_CONTAINS_EVALUATED(
+    ~override/EEex_Sprite.lua~
+    ~EEex_Sprite_GetCharacterIndex~
+  )
+) BEGIN
+  OUTER_SPRINT lua_version ~5.1~
+  OUTER_SPRINT lua_version_pattern ~5[.]1~
+END
 
-// Check if LuaJIT is already active
+// LuaJIT is active only when the complete, exact loader state is observable.
 OUTER_SET luajit_active = 0
-ACTION_IF FILE_EXISTS ~InfinityLoader.ini~ THEN BEGIN
+ACTION_IF (
+  FILE_EXISTS ~InfinityLoader.ini~
+  AND FILE_EXISTS ~lua51.dll~
+  AND FILE_EXISTS ~LuaProvider.dll~
+) BEGIN
   COPY - ~InfinityLoader.ini~ ~InfinityLoader.ini~
-    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ num_matches
-    PATCH_IF (num_matches > 0) THEN BEGIN
+    // Test exact key/value lines without relying on $ behavior around CRLF:
+    // require one key, one expected prefix, and no non-newline suffix.
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~ mode_keys
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ mode_matches
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL[^%WNL%%MNL%%LNL%]~ mode_suffixes
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=~ library_keys
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=lua51[.]dll~ library_matches
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=lua51[.]dll[^%WNL%%MNL%%LNL%]~ library_suffixes
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=~ version_keys
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%~ version_matches
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%[^%WNL%%MNL%%LNL%]~ version_suffixes
+    PATCH_IF (
+      mode_keys = 1
+      AND mode_matches = 1
+      AND mode_suffixes = 0
+      AND library_keys = 1
+      AND library_matches = 1
+      AND library_suffixes = 0
+      AND version_keys = 1
+      AND version_matches = 1
+      AND version_suffixes = 0
+    ) BEGIN
       SET luajit_active = 1
     END
   BUT_ONLY
@@ -117,23 +234,20 @@ END
 ACTION_IF (luajit_active = 1) THEN BEGIN
   PRINT ~LuaJIT is already active. Skipping installation.~
 END ELSE BEGIN
-  // Check if EEex ships the LuaJIT files
-  ACTION_IF NOT FILE_EXISTS ~EEex/loader/LuaJIT/lua51.dll~ THEN BEGIN
-    FAIL ~EEex LuaJIT files not found at EEex/loader/LuaJIT/. Please reinstall EEex (v0.10.0-alpha or later) with the LuaJIT / Experimental component selected, or upgrade EEex.~
+  // Preflight every required input before the first copy/patch mutation.
+  ACTION_IF NOT FILE_EXISTS ~InfinityLoader.ini~ THEN BEGIN
+    FAIL ~InfinityLoader.ini was not found. Reinstall EEex before activating BuffBot's LuaJIT support.~
   END
 
-  // Detect LuaVersionExternal from EEex's own tp2
-  OUTER_SPRINT lua_version ~5.1~
-  ACTION_IF FILE_EXISTS ~EEex/EEex.tp2~ THEN BEGIN
-    COPY - ~EEex/EEex.tp2~ ~EEex/EEex.tp2~
-      PATCH_IF (INDEX_BUFFER (~5.1-LuaJIT~) >= 0) THEN BEGIN
-        SPRINT lua_version ~5.1-LuaJIT~
-      END
-    BUT_ONLY
+  ACTION_IF (
+    NOT FILE_EXISTS ~EEex/loader/LuaJIT/lua51.dll~
+    OR NOT FILE_EXISTS ~EEex/loader/LuaJIT/LuaProvider.dll~
+  ) THEN BEGIN
+    FAIL ~EEex LuaJIT source DLLs were not found at EEex/loader/LuaJIT/. Reinstall EEex with its LuaJIT / Experimental files before activating BuffBot's LuaJIT support.~
   END
 
   PRINT ~Installing EEex LuaJIT component (normally installed by EEex setup).~
-  PRINT ~Detected LuaVersionExternal: %lua_version%~
+  PRINT ~Required LuaVersionExternal: %lua_version%~
 
   // Copy DLLs from EEex's own install folder
   COPY ~EEex/loader/LuaJIT/lua51.dll~        ~lua51.dll~
@@ -141,9 +255,51 @@ END ELSE BEGIN
 
   // Patch InfinityLoader.ini
   COPY ~InfinityLoader.ini~ ~InfinityLoader.ini~
-    REPLACE_TEXTUALLY ~^\(LuaPatchMode=\).*~ ~\1REPLACE_INTERNAL_WITH_EXTERNAL~
-    REPLACE_TEXTUALLY ~^\(LuaLibrary=\).*~ ~\1lua51.dll~
-    REPLACE_TEXTUALLY ~^\(LuaVersionExternal=\).*~ ~\1%lua_version%~
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~ repair_mode_keys
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=~ repair_library_keys
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=~ repair_version_keys
+    REPLACE_TEXTUALLY ~^LuaPatchMode=.*$~ ~LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~
+    REPLACE_TEXTUALLY ~^LuaLibrary=.*$~ ~LuaLibrary=lua51.dll~
+    REPLACE_TEXTUALLY ~^LuaVersionExternal=.*$~ ~LuaVersionExternal=%lua_version%~
+    PATCH_IF (repair_mode_keys = 0) BEGIN
+      SET repair_pos = BUFFER_LENGTH
+      SPRINT repair_prefix ~~
+      PATCH_IF (repair_pos > 0) BEGIN
+        READ_BYTE (repair_pos - 1) repair_last_byte
+        PATCH_IF (repair_last_byte != 10 AND repair_last_byte != 13) BEGIN
+          SPRINT repair_prefix ~%WNL%~
+        END
+      END
+      SPRINT repair_line ~%repair_prefix%LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL%WNL%~
+      INSERT_BYTES repair_pos (STRING_LENGTH ~%repair_line%~)
+      WRITE_ASCIIE repair_pos ~%repair_line%~
+    END
+    PATCH_IF (repair_library_keys = 0) BEGIN
+      SET repair_pos = BUFFER_LENGTH
+      SPRINT repair_prefix ~~
+      PATCH_IF (repair_pos > 0) BEGIN
+        READ_BYTE (repair_pos - 1) repair_last_byte
+        PATCH_IF (repair_last_byte != 10 AND repair_last_byte != 13) BEGIN
+          SPRINT repair_prefix ~%WNL%~
+        END
+      END
+      SPRINT repair_line ~%repair_prefix%LuaLibrary=lua51.dll%WNL%~
+      INSERT_BYTES repair_pos (STRING_LENGTH ~%repair_line%~)
+      WRITE_ASCIIE repair_pos ~%repair_line%~
+    END
+    PATCH_IF (repair_version_keys = 0) BEGIN
+      SET repair_pos = BUFFER_LENGTH
+      SPRINT repair_prefix ~~
+      PATCH_IF (repair_pos > 0) BEGIN
+        READ_BYTE (repair_pos - 1) repair_last_byte
+        PATCH_IF (repair_last_byte != 10 AND repair_last_byte != 13) BEGIN
+          SPRINT repair_prefix ~%WNL%~
+        END
+      END
+      SPRINT repair_line ~%repair_prefix%LuaVersionExternal=%lua_version%%WNL%~
+      INSERT_BYTES repair_pos (STRING_LENGTH ~%repair_line%~)
+      WRITE_ASCIIE repair_pos ~%repair_line%~
+    END
   BUT_ONLY
 
   PRINT ~LuaJIT installed successfully. BuffBot will have full functionality.~

@@ -1,0 +1,565 @@
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import struct
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from tests.ie_formats import write_minimal_bg2ee_key_biff, write_minimal_tlk
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FALLBACK_WEIDU = Path(r"C:\src\private\chriz-bg-rebalance\weidu.exe")
+KEEP_BYTES = b"unrelated override sentinel\n"
+SOURCE_LUA51 = b"synthetic EEex lua51.dll\0"
+SOURCE_PROVIDER = b"synthetic EEex LuaProvider.dll\0"
+REQUIREMENT_TEXT = "BuffBot requires EEex v0.11.0-alpha or later"
+TOOLTIP_STRINGS = tuple(f"BuffBot {index}" for index in range(1, 9))
+
+MAIN_OUTPUT_FILES = {
+    "m_bfbot.lua",
+    "bfbotcor.lua",
+    "bfbotcls.lua",
+    "bfbotscn.lua",
+    "bfbotexe.lua",
+    "bfbotmp.lua",
+    "bfbotper.lua",
+    "bfbotinn.lua",
+    "bfbotui.lua",
+    "bfbotthm.lua",
+    "bfbottst.lua",
+    "buffbot.menu",
+    "bfbotib.bam",
+    "bfbotbg.mos",
+    "mos9900.pvrz",
+    "mos9901.pvrz",
+    "mos9902.pvrz",
+    "mos9903.pvrz",
+    "bfbotfr.pvrz",
+    "bfbotab.bam",
+    "mos9910.pvrz",
+    "mos9911.pvrz",
+    "mos9912.pvrz",
+    "mos9913.pvrz",
+    "bfbotfr2.pvrz",
+    "mos9920.pvrz",
+    "mos9921.pvrz",
+    "mos9922.pvrz",
+    "mos9923.pvrz",
+    "bfbotfr3.pvrz",
+    "bfbot_strrefs.txt",
+}
+
+CAPABILITY_CASES = (
+    ("none", False),
+    ("log_only", False),
+    ("v010", False),
+    ("v010_stale_options", False),
+    ("v011", True),
+    ("v1", True),
+    ("ambiguous", False),
+)
+
+
+def _weidu() -> Path:
+    configured = os.environ.get("WEIDU_EXE")
+    result = Path(configured) if configured else FALLBACK_WEIDU
+    if not result.is_file():
+        pytest.fail(f"WeiDU executable not found: {result}")
+    return result
+
+
+def _file_bytes(path: Path) -> bytes | None:
+    return path.read_bytes() if path.is_file() else None
+
+
+def _file_tree(path: Path) -> dict[str, bytes]:
+    if not path.is_dir():
+        return {}
+    result: dict[str, bytes] = {}
+    for candidate in sorted(item for item in path.rglob("*") if item.is_file()):
+        relative = candidate.relative_to(path).as_posix().casefold()
+        if relative in result:
+            raise AssertionError(f"case-colliding synthetic file: {relative}")
+        result[relative] = candidate.read_bytes()
+    return result
+
+
+def _read_tlk_strings(path: Path) -> list[str]:
+    data = path.read_bytes()
+    if data[:8] != b"TLK V1  ":
+        raise AssertionError(f"not a TLK V1 file: {path}")
+    count = struct.unpack_from("<I", data, 0x0A)[0]
+    strings_offset = struct.unpack_from("<I", data, 0x0E)[0]
+    strings: list[str] = []
+    for index in range(count):
+        entry = 0x12 + index * 26
+        offset, length = struct.unpack_from("<II", data, entry + 18)
+        strings.append(
+            data[strings_offset + offset : strings_offset + offset + length].decode(
+                "utf-8", errors="replace"
+            )
+        )
+    return strings
+
+
+@dataclass(frozen=True)
+class ProductState:
+    key: bytes
+    bif: bytes
+    root_tlk: bytes
+    lang_tlk: bytes
+    override: dict[str, bytes]
+    eeex: dict[str, bytes]
+    eeex_scripts: dict[str, bytes]
+    loader_ini: bytes | None
+    root_lua51: bytes | None
+    root_provider: bytes | None
+
+
+class BuffBotGame:
+    def __init__(self, root: Path, layout: str, *, with_log: bool = True) -> None:
+        self.root = root
+        self.root.mkdir()
+        self.override = root / "override"
+        self.override.mkdir()
+        self.bif = write_minimal_bg2ee_key_biff(root)
+        self.root_tlk = root / "dialog.tlk"
+        self.lang_tlk = root / "lang/en_US/dialog.tlk"
+        write_minimal_tlk(self.root_tlk)
+        write_minimal_tlk(self.lang_tlk)
+        shutil.copytree(ROOT / "buffbot", root / "buffbot")
+        (self.override / "KEEP.ME").write_bytes(KEEP_BYTES)
+        self._build_layout(layout, with_log=with_log)
+
+    @property
+    def expected_version(self) -> str:
+        old = (self.override / "EEex_Sprite.lua").is_file()
+        new = (self.root / "EEex_scripts/EEex_Sprite.lua").is_file()
+        if old == new:
+            raise AssertionError("fixture does not have exactly one EEex family")
+        return "5.1" if old else "5.1-LuaJIT"
+
+    @property
+    def source_lua51(self) -> Path:
+        return self.root / "EEex/loader/LuaJIT/lua51.dll"
+
+    @property
+    def source_provider(self) -> Path:
+        return self.root / "EEex/loader/LuaJIT/LuaProvider.dll"
+
+    def _write(self, relative: str, data: str | bytes) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(data, str):
+            path.write_text(data, encoding="ascii", newline="\n")
+        else:
+            path.write_bytes(data)
+
+    def _write_log(self, component: int) -> None:
+        self._write(
+            "WeiDU.log",
+            f"~EEEX/EEEX.TP2~ #0 #{component} // synthetic EEex fixture\n",
+        )
+
+    def _write_sources(self) -> None:
+        self._write("EEex/loader/LuaJIT/lua51.dll", SOURCE_LUA51)
+        self._write("EEex/loader/LuaJIT/LuaProvider.dll", SOURCE_PROVIDER)
+
+    def _write_active_loader(self, version: str) -> None:
+        self._write(
+            "InfinityLoader.ini",
+            (
+                "[Loader]\r\n"
+                "LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL\r\n"
+                "LuaLibrary=lua51.dll\r\n"
+                f"LuaVersionExternal={version}\r\n"
+            ).encode("ascii"),
+        )
+        self._write("lua51.dll", SOURCE_LUA51)
+        self._write("LuaProvider.dll", SOURCE_PROVIDER)
+
+    def _build_layout(self, layout: str, *, with_log: bool) -> None:
+        if layout == "none":
+            return
+        if layout == "log_only":
+            if with_log:
+                self._write_log(0)
+            return
+
+        self._write("override/M___EEex.lua", "-- synthetic EEex bootstrap\n")
+        if layout in {"v010", "v010_stale_options"}:
+            self._write("override/EEex_Sprite.lua", "-- no required API here\n")
+            if layout == "v010_stale_options":
+                self._write("override/EEex_Options.lua", "-- stale options\n")
+            if with_log:
+                self._write_log(0)
+            return
+
+        if layout in {"v011", "ambiguous"}:
+            self._write(
+                "override/EEex_Sprite.lua",
+                "function EEex_Sprite_GetCharacterIndex(sprite) return 0 end\n",
+            )
+            self._write("override/EEex_Options.lua", "-- v0.11 options\n")
+        if layout in {"v1", "ambiguous"}:
+            self._write(
+                "EEex_scripts/EEex_Sprite.lua",
+                "function EEex_Sprite_GetCharacterIndex(sprite) return 0 end\n",
+            )
+            self._write("EEex_scripts/EEex_Options.lua", "-- v1 options\n")
+
+        if layout not in {"v011", "v1", "ambiguous"}:
+            raise ValueError(f"unknown EEex layout: {layout}")
+
+        self._write_sources()
+        if layout == "v011":
+            self._write("EEex/EEex.tp2", "// old fixture: LuaVersionExternal=5.1\n")
+            self._write_active_loader("5.1")
+            if with_log:
+                self._write_log(0)
+        else:
+            self._write(
+                "EEex/EEex.tp2", "// v1 fixture: LuaVersionExternal=5.1-LuaJIT\n"
+            )
+            self._write_active_loader("5.1-LuaJIT")
+            if with_log:
+                self._write_log(1)
+
+    def set_tp2(self, contents: str | None) -> None:
+        path = self.root / "EEex/EEex.tp2"
+        if contents is None:
+            path.unlink(missing_ok=True)
+        else:
+            self._write("EEex/EEex.tp2", contents)
+
+    def configure_loader(
+        self,
+        ini: str | None,
+        *,
+        root_lua51: bytes | None = None,
+        root_provider: bytes | None = None,
+    ) -> None:
+        ini_path = self.root / "InfinityLoader.ini"
+        if ini is None:
+            ini_path.unlink(missing_ok=True)
+        else:
+            self._write("InfinityLoader.ini", ini)
+        for name, payload in (
+            ("lua51.dll", root_lua51),
+            ("LuaProvider.dll", root_provider),
+        ):
+            path = self.root / name
+            if payload is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(payload)
+
+    def snapshot(self) -> ProductState:
+        return ProductState(
+            key=(self.root / "chitin.key").read_bytes(),
+            bif=self.bif.read_bytes(),
+            root_tlk=self.root_tlk.read_bytes(),
+            lang_tlk=self.lang_tlk.read_bytes(),
+            override=_file_tree(self.override),
+            eeex=_file_tree(self.root / "EEex"),
+            eeex_scripts=_file_tree(self.root / "EEex_scripts"),
+            loader_ini=_file_bytes(self.root / "InfinityLoader.ini"),
+            root_lua51=_file_bytes(self.root / "lua51.dll"),
+            root_provider=_file_bytes(self.root / "LuaProvider.dll"),
+        )
+
+    def run(self, operation: str, component: int) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                str(_weidu()),
+                r".\buffbot\setup-buffbot.tp2",
+                "--game",
+                str(self.root),
+                operation,
+                str(component),
+                "--language",
+                "0",
+                "--use-lang",
+                "en_US",
+                "--no-exit-pause",
+                "--quick-log",
+                "--noautoupdate",
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+        )
+
+    def install(self, component: int) -> subprocess.CompletedProcess[str]:
+        return self.run("--force-install-list", component)
+
+    def uninstall(self, component: int) -> subprocess.CompletedProcess[str]:
+        return self.run("--force-uninstall-list", component)
+
+    @staticmethod
+    def transcript(process: subprocess.CompletedProcess[str]) -> str:
+        return f"{process.stdout}\n{process.stderr}".strip()
+
+    def assert_no_main_payload(self) -> None:
+        override = _file_tree(self.override)
+        assert MAIN_OUTPUT_FILES.isdisjoint(override)
+
+    def assert_main_installed(self, before: ProductState) -> None:
+        after = self.snapshot()
+        assert after.key == before.key
+        assert after.bif == before.bif
+        assert after.root_tlk == before.root_tlk
+        assert after.eeex == before.eeex
+        assert after.eeex_scripts == before.eeex_scripts
+        assert after.loader_ini == before.loader_ini
+        assert after.root_lua51 == before.root_lua51
+        assert after.root_provider == before.root_provider
+        assert after.lang_tlk != before.lang_tlk
+        assert _read_tlk_strings(self.lang_tlk) == ["", *TOOLTIP_STRINGS]
+        assert after.override.keys() == before.override.keys() | MAIN_OUTPUT_FILES
+        for name, payload in before.override.items():
+            assert after.override[name] == payload
+        assert (self.override / "bfbot_presets").is_dir()
+        assert (self.override / "KEEP.ME").read_bytes() == KEEP_BYTES
+
+    def assert_luajit_state(self, version: str) -> None:
+        ini = (self.root / "InfinityLoader.ini").read_text(encoding="ascii")
+        expected = {
+            "LuaPatchMode": "REPLACE_INTERNAL_WITH_EXTERNAL",
+            "LuaLibrary": "lua51.dll",
+            "LuaVersionExternal": version,
+        }
+        for key, value in expected.items():
+            matches = re.findall(rf"(?m)^{re.escape(key)}=(.*)$", ini)
+            assert matches == [value]
+        assert (self.root / "lua51.dll").read_bytes() == self.source_lua51.read_bytes()
+        assert (
+            self.root / "LuaProvider.dll"
+        ).read_bytes() == self.source_provider.read_bytes()
+
+
+@pytest.fixture
+def game_factory(tmp_path: Path):
+    count = 0
+
+    def make(layout: str, *, with_log: bool = True) -> BuffBotGame:
+        nonlocal count
+        count += 1
+        return BuffBotGame(tmp_path / f"game-{count}", layout, with_log=with_log)
+
+    return make
+
+
+def _assert_installed(game: BuffBotGame, process: subprocess.CompletedProcess[str]) -> str:
+    transcript = game.transcript(process)
+    assert process.returncode == 0, transcript
+    assert "SUCCESSFULLY INSTALLED" in transcript, transcript
+    return transcript
+
+
+def _assert_rejected(
+    game: BuffBotGame,
+    process: subprocess.CompletedProcess[str],
+    before: ProductState,
+) -> None:
+    transcript = game.transcript(process)
+    assert "SUCCESSFULLY INSTALLED" not in transcript, transcript
+    assert "SKIPPING" in transcript, transcript
+    assert REQUIREMENT_TEXT in transcript, transcript
+    assert game.snapshot() == before
+    game.assert_no_main_payload()
+    assert (game.override / "KEEP.ME").read_bytes() == KEEP_BYTES
+
+
+@pytest.mark.parametrize("component", (0, 1))
+@pytest.mark.parametrize(("layout", "accepted"), CAPABILITY_CASES)
+def test_components_require_eeex_v011_capabilities(
+    game_factory, component: int, layout: str, accepted: bool
+) -> None:
+    game = game_factory(layout)
+    before = game.snapshot()
+    process = game.install(component)
+    if not accepted:
+        _assert_rejected(game, process, before)
+    elif component == 0:
+        _assert_installed(game, process)
+        game.assert_main_installed(before)
+    else:
+        _assert_installed(game, process)
+        game.assert_luajit_state(game.expected_version)
+        assert game.snapshot() == before
+
+
+@pytest.mark.parametrize("component", (0, 1))
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_capable_layouts_do_not_require_weidu_log(
+    game_factory, component: int, layout: str
+) -> None:
+    game = game_factory(layout, with_log=False)
+    before = game.snapshot()
+    process = game.install(component)
+    _assert_installed(game, process)
+    if component == 0:
+        game.assert_main_installed(before)
+    else:
+        game.assert_luajit_state(game.expected_version)
+        assert game.snapshot() == before
+
+
+def test_installer_source_does_not_gate_on_eeex_component_numbers() -> None:
+    source = (ROOT / "buffbot/setup-buffbot.tp2").read_text(encoding="utf-8")
+    assert not re.search(
+        r"MOD_IS_INSTALLED(?:(?!MOD_IS_INSTALLED).){0,200}EEex[/\\]EEex[.]tp2",
+        source,
+        re.IGNORECASE | re.DOTALL,
+    )
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_luajit_exact_active_state_is_byte_identical(game_factory, layout: str) -> None:
+    game = game_factory(layout)
+    before = game.snapshot()
+    process = game.install(1)
+    _assert_installed(game, process)
+    assert "LuaJIT is already active" in game.transcript(process)
+    assert game.snapshot() == before
+
+
+@pytest.mark.parametrize(
+    ("layout", "tp2_contents"),
+    (
+        ("v011", None),
+        ("v1", None),
+        ("v1", "// stale metadata says LuaVersionExternal=5.1\n"),
+    ),
+)
+def test_luajit_inactive_state_uses_capability_family_not_tp2_text(
+    game_factory, layout: str, tp2_contents: str | None
+) -> None:
+    game = game_factory(layout)
+    game.set_tp2(tp2_contents)
+    game.configure_loader(
+        "[Loader]\n"
+        "LuaPatchMode=INTERNAL\n"
+        "LuaLibrary=lua52.dll\n"
+        "LuaVersionExternal=5.2\n"
+    )
+    before = game.snapshot()
+    process = game.install(1)
+    _assert_installed(game, process)
+    game.assert_luajit_state(game.expected_version)
+    after = game.snapshot()
+    assert after.key == before.key
+    assert after.bif == before.bif
+    assert after.root_tlk == before.root_tlk
+    assert after.lang_tlk == before.lang_tlk
+    assert after.override == before.override
+    assert after.eeex == before.eeex
+    assert after.eeex_scripts == before.eeex_scripts
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_luajit_patch_mode_without_complete_state_is_repaired(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        "; LuaLibrary=lua51.dll must not satisfy the active check\n"
+        "[Loader]\n"
+        "LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL\n",
+        root_lua51=SOURCE_LUA51,
+        root_provider=None,
+    )
+    before = game.snapshot()
+    process = game.install(1)
+    _assert_installed(game, process)
+    game.assert_luajit_state(game.expected_version)
+    after = game.snapshot()
+    assert after.lang_tlk == before.lang_tlk
+    assert after.root_tlk == before.root_tlk
+    assert after.override == before.override
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+@pytest.mark.parametrize("missing", ("lua51", "provider", "ini"))
+def test_luajit_missing_prerequisite_fails_before_mutation_and_rolls_back(
+    game_factory, layout: str, missing: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        None
+        if missing == "ini"
+        else (
+            "[Loader]\n"
+            "LuaPatchMode=INTERNAL\n"
+            "LuaLibrary=lua52.dll\n"
+            "LuaVersionExternal=5.2\n"
+        )
+    )
+    if missing == "lua51":
+        game.source_lua51.unlink()
+    elif missing == "provider":
+        game.source_provider.unlink()
+    before = game.snapshot()
+    process = game.install(1)
+    transcript = game.transcript(process)
+    assert "SUCCESSFULLY INSTALLED" not in transcript, transcript
+    assert "NOT INSTALLED" in transcript, transcript
+    expected = "InfinityLoader.ini" if missing == "ini" else "source DLLs"
+    assert expected in transcript, transcript
+    assert game.snapshot() == before
+    assert _read_tlk_strings(game.lang_tlk) == [""]
+
+
+def test_v1_component_one_log_without_component_eight_still_activates(
+    game_factory,
+) -> None:
+    game = game_factory("v1")
+    assert "#1" in (game.root / "WeiDU.log").read_text(encoding="ascii")
+    assert "#8" not in (game.root / "WeiDU.log").read_text(encoding="ascii")
+    game.configure_loader(
+        "[Loader]\n"
+        "LuaPatchMode=INTERNAL\n"
+        "LuaLibrary=lua52.dll\n"
+        "LuaVersionExternal=5.2\n"
+    )
+    process = game.install(1)
+    _assert_installed(game, process)
+    game.assert_luajit_state("5.1-LuaJIT")
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_main_component_uninstall_leaves_stable_tlk_residue_and_reuses_it(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    before = game.snapshot()
+    first_install = game.install(0)
+    _assert_installed(game, first_install)
+    game.assert_main_installed(before)
+    first_tlk = game.lang_tlk.read_bytes()
+
+    uninstall = game.uninstall(0)
+    transcript = game.transcript(uninstall)
+    assert uninstall.returncode == 0, transcript
+    assert "NOT UNINSTALLED" not in transcript, transcript
+    assert _file_tree(game.override) == before.override
+    game.assert_no_main_payload()
+    assert game.lang_tlk.read_bytes() == first_tlk
+    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    assert game.root_tlk.read_bytes() == before.root_tlk
+
+    second_install = game.install(0)
+    _assert_installed(game, second_install)
+    assert game.lang_tlk.read_bytes() == first_tlk
+    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
