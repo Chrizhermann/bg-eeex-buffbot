@@ -5454,6 +5454,86 @@ function BfBot.Test.Persist()
     if not hasBool then _ok("No booleans in default config")
     else _nok("Boolean found at " .. tostring(boolPath)) end
 
+    -- ---- Test 2b: Marshal-safe copy and export boundary ----
+    P("")
+    P("  [2b] Marshal-safe, non-mutating export")
+
+    do
+        local shared = { enabled = true, label = "shared" }
+        local unsafeFunction = function() return "live" end
+        local unsafeThread = coroutine.create(function() end)
+        local source = {
+            enabled = true,
+            nested = { disabled = false },
+            left = shared,
+            right = shared,
+            unsafeFunction = unsafeFunction,
+            unsafeUserdata = sprite,
+            unsafeThread = unsafeThread,
+            [1] = "numeric key survives",
+            [true] = "boolean key drops",
+        }
+        source.self = source
+
+        local safe, dropped = BfBot.Persist._MarshalSafeCopy(source)
+        _check(type(safe) == "table" and safe.enabled == 1
+            and safe.nested.disabled == 0,
+            "Marshal copy converts nested booleans to 1/0")
+        _check(safe[1] == "numeric key survives" and safe[true] == nil,
+            "Marshal copy drops boolean key without colliding with numeric key 1")
+        _check(safe.unsafeFunction == nil and safe.unsafeUserdata == nil
+            and safe.unsafeThread == nil and safe.self == nil and dropped >= 5,
+            "Marshal copy drops unsafe values, keys, and cycles")
+        _check(type(safe.left) == "table" and type(safe.right) == "table"
+            and safe.left.enabled == 1 and safe.right.enabled == 1
+            and safe.left ~= safe.right,
+            "Marshal copy preserves shared acyclic child on both paths")
+        _check(source.enabled == true and source.nested.disabled == false
+            and source.left == shared and source.right == shared
+            and shared.enabled == true and source.unsafeFunction == unsafeFunction
+            and source.unsafeUserdata == sprite and source.unsafeThread == unsafeThread
+            and source.self == source and source[true] == "boolean key drops",
+            "Marshal copy leaves hostile source deeply unchanged")
+
+        -- Exercise the real export boundary while guaranteeing restoration of
+        -- the player's live UDAux config and every temporarily replaced hook.
+        local auxOk, aux = pcall(EEex_GetUDAux, sprite)
+        if not auxOk or type(aux) ~= "table" then
+            _nok("Could not access UDAux for protected export fixture")
+        else
+            local savedConfig = aux[BfBot.Persist._KEY]
+            local savedWarn = BfBot._Warn
+            local savedIsCopy = EEex and EEex.IsMarshallingCopy
+            local warnings = {}
+            local exportOk, exported = pcall(function()
+                aux[BfBot.Persist._KEY] = source
+                BfBot._Warn = function(message)
+                    warnings[#warnings + 1] = message
+                end
+                if EEex then
+                    EEex.IsMarshallingCopy = function() return false end
+                end
+                return BfBot.Persist._Export(sprite)
+            end)
+
+            -- Cleanup is unconditional and happens before any assertions.
+            aux[BfBot.Persist._KEY] = savedConfig
+            BfBot._Warn = savedWarn
+            if EEex then EEex.IsMarshallingCopy = savedIsCopy end
+
+            _check(exportOk and type(exported) == "table"
+                and type(exported.cfg) == "table"
+                and exported.cfg ~= source and exported.cfg.enabled == 1
+                and exported.cfg.unsafeFunction == nil and exported.cfg.self == nil,
+                "Export returns a fresh marshal-safe cfg copy")
+            _check(#warnings == 1,
+                "Export warns once when marshal-unsafe data is dropped")
+            _check(aux[BfBot.Persist._KEY] == savedConfig
+                and source.enabled == true and source.self == source,
+                "Export fixture restores UDAux and does not mutate live source")
+        end
+    end
+
     -- ---- Test 3: Create default config for sprite (with auto-population) ----
     P("")
     P("  [3] CreateDefaultConfig + auto-population")

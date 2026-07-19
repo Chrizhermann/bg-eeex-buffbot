@@ -439,6 +439,43 @@ end
 
 -- ---- Marshal handlers ----
 
+--- Return a fresh copy containing only values supported by the pre-v1 EEex
+--- marshal: numbers, strings, and tables. Boolean values become 1/0. Table
+--- keys must already be numbers or strings; unsupported values, keys, and
+--- ancestor cycles are dropped. The second return value counts drops so the
+--- export boundary can issue one concise warning without touching live data.
+-- @param value      value to copy
+-- @param ancestors  internal recursion stack (path-local, not global visited)
+-- @return safe copy (or nil), number of dropped entries
+function BfBot.Persist._MarshalSafeCopy(value, ancestors)
+    local valueType = type(value)
+    if valueType == "nil" then return nil, 0 end
+    if valueType == "number" or valueType == "string" then return value, 0 end
+    if valueType == "boolean" then return value and 1 or 0, 0 end
+    if valueType ~= "table" then return nil, 1 end
+
+    ancestors = ancestors or {}
+    if ancestors[value] then return nil, 1 end
+
+    ancestors[value] = true
+    local copy = {}
+    local dropped = 0
+    for key, child in pairs(value) do
+        local keyType = type(key)
+        if keyType == "number" or keyType == "string" then
+            local childCopy, childDropped =
+                BfBot.Persist._MarshalSafeCopy(child, ancestors)
+            dropped = dropped + childDropped
+            if childCopy ~= nil then copy[key] = childCopy end
+        else
+            dropped = dropped + 1
+        end
+    end
+    ancestors[value] = nil
+
+    return copy, dropped
+end
+
 --- Exporter: called by EEex during save.
 function BfBot.Persist._Export(sprite)
     local ok, result = pcall(function()
@@ -449,7 +486,12 @@ function BfBot.Persist._Export(sprite)
         end
         local config = EEex_GetUDAux(sprite)[BfBot.Persist._KEY]
         if config then
-            return { cfg = config }
+            local safe, dropped = BfBot.Persist._MarshalSafeCopy(config)
+            if dropped > 0 then
+                pcall(BfBot._Warn, "[Persist] Save export dropped " .. dropped
+                    .. " marshal-unsafe entries")
+            end
+            if safe then return { cfg = safe } end
         end
         return {}
     end)
