@@ -593,28 +593,35 @@ function BfBot.UI._OnMenusLoaded()
     local actionbarMenu = EEex_Menu_Find("WORLD_ACTIONBAR")
 
     local oldOnOpen = EEex_Menu_GetItemFunction(actionbarMenu.reference_onOpen)
-    EEex_Menu_SetItemFunction(actionbarMenu.reference_onOpen, function()
+    EEex_Menu_SetItemFunction(actionbarMenu.reference_onOpen,
+        BfBot._SafeCallback("ui.world_actionbar_open", function()
         local result = oldOnOpen()
         BfBot.UI._OpenActionbarBtn()
         return result
-    end)
+    end))
 
     local oldOnClose = EEex_Menu_GetItemFunction(actionbarMenu.reference_onClose)
-    EEex_Menu_SetItemFunction(actionbarMenu.reference_onClose, function()
+    EEex_Menu_SetItemFunction(actionbarMenu.reference_onClose,
+        BfBot._SafeCallback("ui.world_actionbar_close", function()
         BfBot.UI._CloseActionbarBtn()
         return oldOnClose()
-    end)
+    end))
 
     -- F11 hotkey
-    EEex_Key_AddPressedListener(BfBot.UI._OnKeyPressed)
+    EEex_Key_AddPressedListener(BfBot._SafeCallback(
+        "ui.key_pressed", BfBot.UI._OnKeyPressed))
 
     -- Sprite listeners for auto-refresh (invalidate cache, then refresh panel)
-    EEex_Sprite_AddQuickListsCheckedListener(BfBot.UI._OnSpellListChanged)
-    EEex_Sprite_AddQuickListCountsResetListener(BfBot.UI._OnSpellCountsReset)
-    EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot.UI._OnSpellRemoved)
+    EEex_Sprite_AddQuickListsCheckedListener(BfBot._SafeCallback(
+        "ui.quick_lists_checked", BfBot.UI._OnSpellListChanged))
+    EEex_Sprite_AddQuickListCountsResetListener(BfBot._SafeCallback(
+        "ui.quick_list_counts_reset", BfBot.UI._OnSpellCountsReset))
+    EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot._SafeCallback(
+        "ui.quick_list_notify_removed", BfBot.UI._OnSpellRemoved))
 
     -- Resolution change: regenerate MOS for every theme, clamp stored geometry, re-layout
-    EEex_Menu_AddWindowSizeChangedListener(function(w, h)
+    EEex_Menu_AddWindowSizeChangedListener(BfBot._SafeCallback(
+        "ui.window_size_changed", function(w, h)
         for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
             BfBot.UI._GenerateBgMOS(resref)
         end
@@ -635,7 +642,7 @@ function BfBot.UI._OnMenusLoaded()
         if buffbot_isOpen then
             BfBot.UI._Layout()
         end
-    end)
+    end))
 
     -- Load debug mode preference from INI
     local debugPref = Infinity_GetINIValue("BuffBot", "Debug", 0)

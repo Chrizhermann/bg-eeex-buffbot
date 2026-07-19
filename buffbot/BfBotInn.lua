@@ -609,12 +609,13 @@ function BfBot.Innate.Init()
     if BfBot._noIO then return end
     if BfBot.Innate._initDone then return end
     BfBot.Innate._initDone = true
-    EEex_Sprite_AddLoadedListener(function(sprite)
+    EEex_Sprite_AddLoadedListener(BfBot._SafeCallback(
+        "innate.sprite_loaded", function(sprite)
         if not sprite then return end
         local slot = EEex_Sprite_GetPortraitIndex(sprite)
         if slot < 0 or slot > 5 then return end
-        pcall(BfBot.Innate.Refresh, slot)
-    end)
+        BfBot.Innate.Refresh(slot)
+    end))
 end
 
 -- ============================================================
@@ -678,7 +679,7 @@ function BFBOTGO(param1, param2, special)
             -- Trigger refresh so next attempt works, and tell the player.
             _InnateLog("ERROR: no sprite in slot " .. slot .. " — party may have changed")
             BfBot._Display("BuffBot: Party changed — refreshing innates, try again")
-            pcall(BfBot.Innate.RefreshAll)
+            pcall(function() BfBot.Innate.RefreshAll() end)
             return
         end
 

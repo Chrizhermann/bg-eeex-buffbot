@@ -5161,6 +5161,85 @@ function BfBot.Test.SummonCasters()
 end
 
 -- ============================================================
+-- BfBot.Test.EEexCompatibility -- pure v0.11 boundary checks
+-- ============================================================
+
+function BfBot.Test.EEexCompatibility()
+    _reset()
+    P("")
+    P("========================================")
+    P("  EEex v0.11 Compatibility Tests")
+    P("========================================")
+    P("")
+
+    local savedError = BfBot._Error
+    local savedCallbackErrors = BfBot._callbackErrors
+    local facts = {}
+
+    local fixtureOk, fixtureError = pcall(function()
+        local diagnostics = {}
+        BfBot._Error = function(message)
+            diagnostics[#diagnostics + 1] = message
+        end
+        BfBot._callbackErrors = {}
+
+        local function pack(...)
+            return { n = select("#", ...), ... }
+        end
+        local success = BfBot._SafeCallback("test.success", function(value)
+            return value, nil, "tail", nil
+        end)
+        local values = pack(success(7))
+        facts.multiReturn = values.n == 4 and values[1] == 7
+            and values[2] == nil and values[3] == "tail"
+            and values[4] == nil
+
+        local failure = BfBot._SafeCallback("test.failure", function()
+            error("synthetic callback failure")
+        end)
+        local firstOk, firstResult = pcall(failure)
+        local secondOk, secondResult = pcall(failure)
+        facts.failureContained = firstOk and firstResult == nil
+            and secondOk and secondResult == nil
+        facts.diagnosticDedup = #diagnostics == 1
+            and string.find(diagnostics[1], "test.failure", 1, true) ~= nil
+            and string.find(diagnostics[1], "synthetic callback failure", 1, true) ~= nil
+
+        local source = {
+            enabled = true,
+            nested = { disabled = false },
+            keep = 7,
+        }
+        local safe, dropped = BfBot.Persist._MarshalSafeCopy(source)
+        facts.marshalSafe = safe ~= source and safe.enabled == 1
+            and safe.nested ~= source.nested and safe.nested.disabled == 0
+            and safe.keep == 7 and dropped == 0
+            and source.enabled == true and source.nested.disabled == false
+    end)
+
+    -- Restore shared diagnostics state before reporting any assertion, even if
+    -- the fixture itself failed, so this phase cannot affect later tests.
+    BfBot._Error = savedError
+    BfBot._callbackErrors = savedCallbackErrors
+
+    if not fixtureOk then
+        _nok("Compatibility fixture errored: " .. tostring(fixtureError))
+        return _summary("EEex Compatibility")
+    end
+
+    _check(facts.multiReturn,
+        "Safe callback preserves multiple return values and nil slots")
+    _check(facts.failureContained,
+        "Safe callback contains callback failures")
+    _check(facts.diagnosticDedup,
+        "Safe callback reports labeled diagnostics once")
+    _check(facts.marshalSafe,
+        "Marshal-safe copy converts booleans without mutating source")
+
+    return _summary("EEex Compatibility")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 
@@ -5192,6 +5271,10 @@ function BfBot.Test.RunAll()
 
     -- Phase 4: Persistence
     local persistOk = BfBot.Test.Persist()
+    P("")
+
+    -- Phase: EEex v0.11 callback and marshal compatibility
+    local eeexCompatOk = BfBot.Test.EEexCompatibility()
     P("")
 
     -- Phase 5: Quick Cast
@@ -5272,6 +5355,7 @@ function BfBot.Test.RunAll()
     P("  Classification: " .. (classOk and "PASS" or "FAIL"))
     P("  Party scan: " .. (scanOk and "PASS" or "FAIL"))
     P("  Persistence: " .. (persistOk and "PASS" or "FAIL"))
+    P("  EEex Compatibility: " .. (eeexCompatOk and "PASS" or "FAIL"))
     P("  Quick Cast: " .. (qcOk and "PASS" or "FAIL"))
     P("  Overrides: " .. (ovrOk and "PASS" or "FAIL"))
     P("  Export/Import: " .. (exportOk and "PASS" or "FAIL"))
@@ -5294,7 +5378,7 @@ function BfBot.Test.RunAll()
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk and eeexCompatOk
 end
 
 -- ============================================================

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import faulthandler
 from pathlib import Path
+import re
 import sys
 
 import pytest
@@ -9,7 +10,12 @@ from lupa.luajit21 import LuaRuntime
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CORE_SOURCE = (ROOT / "buffbot/BfBotCor.lua").read_text(encoding="utf-8")
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
+MAIN_SOURCE = (ROOT / "buffbot/M_BfBot.lua").read_text(encoding="utf-8")
+INNATE_SOURCE = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
+UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
+TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
 
 
 class _OpaqueUserData:
@@ -33,6 +39,239 @@ def lua() -> LuaRuntime:
     )
     runtime.execute(PERSIST_SOURCE)
     return runtime
+
+
+@pytest.fixture
+def core_lua() -> LuaRuntime:
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute("Infinity_DisplayString = function(_) end")
+    runtime.execute(CORE_SOURCE)
+    return runtime
+
+
+def test_safe_callback_preserves_interior_and_trailing_nil_returns(
+    core_lua: LuaRuntime,
+) -> None:
+    facts = core_lua.execute(
+        """
+        local function pack(...)
+            return { n = select("#", ...), ... }
+        end
+        local wrapped = BfBot._SafeCallback("test.success", function(value)
+            return value, nil, "tail", nil
+        end)
+        local result = pack(wrapped(7))
+        return {
+            count = result.n,
+            first = result[1],
+            secondIsNil = result[2] == nil,
+            third = result[3],
+            fourthIsNil = result[4] == nil,
+        }
+        """
+    )
+
+    assert facts["count"] == 4
+    assert facts["first"] == 7
+    assert facts["secondIsNil"]
+    assert facts["third"] == "tail"
+    assert facts["fourthIsNil"]
+
+
+def test_safe_callback_contains_reports_and_deduplicates_failures(
+    core_lua: LuaRuntime,
+) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = core_lua.execute(
+            """
+            local diagnostics = {}
+            BfBot._Error = function(message)
+                diagnostics[#diagnostics + 1] = message
+            end
+            BfBot._callbackErrors = {}
+            local wrapped = BfBot._SafeCallback("test.failure", function()
+                error("synthetic callback failure")
+            end)
+            local firstOk, firstResult = pcall(wrapped)
+            local secondOk, secondResult = pcall(wrapped)
+            return {
+                firstContained = firstOk and firstResult == nil,
+                secondContained = secondOk and secondResult == nil,
+                diagnosticCount = #diagnostics,
+                diagnostic = diagnostics[1],
+            }
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["firstContained"]
+    assert facts["secondContained"]
+    assert facts["diagnosticCount"] == 1
+    assert "test.failure" in facts["diagnostic"]
+    assert "synthetic callback failure" in facts["diagnostic"]
+
+
+def test_safe_callback_contains_reporting_failures(core_lua: LuaRuntime) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        contained = core_lua.execute(
+            """
+            BfBot._callbackErrors = {}
+            BfBot._Error = function()
+                error("synthetic reporting failure")
+            end
+            local wrapped = BfBot._SafeCallback("test.reporting", function()
+                error("synthetic callback failure")
+            end)
+            local ok, result = pcall(wrapped)
+            return ok and result == nil
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert contained
+
+
+def test_safe_callback_contains_throwing_tostring_and_reports_fallback(
+    core_lua: LuaRuntime,
+) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = core_lua.execute(
+            """
+            local diagnostics = {}
+            local label = setmetatable({}, {
+                __tostring = function() error("label tostring failure") end,
+            })
+            local callbackError = setmetatable({}, {
+                __tostring = function() error("error tostring failure") end,
+            })
+            BfBot._callbackErrors = {}
+            BfBot._Error = function(message)
+                diagnostics[#diagnostics + 1] = message
+            end
+            local wrapped = BfBot._SafeCallback(label, function()
+                error(callbackError)
+            end)
+            local firstOk, firstResult = pcall(wrapped)
+            local secondOk, secondResult = pcall(wrapped)
+            return {
+                firstContained = firstOk and firstResult == nil,
+                secondContained = secondOk and secondResult == nil,
+                diagnosticCount = #diagnostics,
+                diagnostic = diagnostics[1],
+            }
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["firstContained"]
+    assert facts["secondContained"]
+    assert facts["diagnosticCount"] == 1
+    assert "unprintable callback label" in facts["diagnostic"]
+    assert "unprintable callback error" in facts["diagnostic"]
+
+
+def _assert_registration_is_wrapped(
+    source: str,
+    registration: str,
+    label: str,
+) -> None:
+    pattern = (
+        rf"{re.escape(registration)}\s*\(\s*"
+        rf"BfBot\._SafeCallback\s*\(\s*{re.escape(chr(34) + label + chr(34))}"
+    )
+    assert re.search(pattern, source), f"{registration} is not wrapped as {label}"
+
+
+def test_main_callback_registrations_are_wrapped_after_core_load() -> None:
+    core_load = MAIN_SOURCE.index('Infinity_DoFile("BfBotCor")')
+    no_io_assignment = MAIN_SOURCE.index("BfBot._noIO = 1")
+    no_io_notice = MAIN_SOURCE.index('"main.no_luajit_notice"')
+
+    assert no_io_assignment < core_load < no_io_notice
+    _assert_registration_is_wrapped(
+        MAIN_SOURCE,
+        "EEex_Menu_AddAfterMainFileLoadedListener",
+        "main.no_luajit_notice",
+    )
+    _assert_registration_is_wrapped(
+        MAIN_SOURCE,
+        "EEex_Sprite_AddLoadedListener",
+        "main.late_join",
+    )
+    assert re.search(
+        r"EEex_Menu_AddAfterMainFileLoadedListener\s*\(\s*"
+        r"BfBot\._SafeCallback\s*\(\s*\"main\.menu_loaded\"",
+        MAIN_SOURCE,
+    )
+
+
+def test_innate_sprite_loaded_registration_is_wrapped_without_silent_pcall() -> None:
+    _assert_registration_is_wrapped(
+        INNATE_SOURCE,
+        "EEex_Sprite_AddLoadedListener",
+        "innate.sprite_loaded",
+    )
+    assert "pcall(BfBot.Innate.Refresh" not in INNATE_SOURCE
+
+
+@pytest.mark.parametrize(
+    ("registration", "label"),
+    [
+        ("EEex_Key_AddPressedListener", "ui.key_pressed"),
+        ("EEex_Sprite_AddQuickListsCheckedListener", "ui.quick_lists_checked"),
+        (
+            "EEex_Sprite_AddQuickListCountsResetListener",
+            "ui.quick_list_counts_reset",
+        ),
+        (
+            "EEex_Sprite_AddQuickListNotifyRemovedListener",
+            "ui.quick_list_notify_removed",
+        ),
+        ("EEex_Menu_AddWindowSizeChangedListener", "ui.window_size_changed"),
+    ],
+)
+def test_ui_listener_registration_is_wrapped(registration: str, label: str) -> None:
+    _assert_registration_is_wrapped(UI_SOURCE, registration, label)
+
+
+@pytest.mark.parametrize(
+    ("reference", "label"),
+    [
+        ("reference_onOpen", "ui.world_actionbar_open"),
+        ("reference_onClose", "ui.world_actionbar_close"),
+    ],
+)
+def test_world_actionbar_item_function_is_wrapped(reference: str, label: str) -> None:
+    assert re.search(
+        rf"EEex_Menu_SetItemFunction\s*\(\s*actionbarMenu\.{reference}\s*,\s*"
+        rf"BfBot\._SafeCallback\s*\(\s*{re.escape(chr(34) + label + chr(34))}",
+        UI_SOURCE,
+    )
+
+
+def test_in_game_eeex_compatibility_phase_is_wired_into_run_all() -> None:
+    assert "function BfBot.Test.EEexCompatibility()" in TEST_SOURCE
+    assert re.search(
+        r"local\s+eeexCompatOk\s*=\s*BfBot\.Test\.EEexCompatibility\(\)",
+        TEST_SOURCE,
+    )
+    assert re.search(r"EEex Compatibility:.*eeexCompatOk", TEST_SOURCE)
+    assert re.search(r"return .*and eeexCompatOk", TEST_SOURCE)
 
 
 def test_marshal_safe_copy_converts_nested_boolean_values(lua: LuaRuntime) -> None:
