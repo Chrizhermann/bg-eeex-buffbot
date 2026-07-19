@@ -439,6 +439,23 @@ end
 
 -- ---- Marshal handlers ----
 
+--- Whether a Lua number round-trips through EEex v0.11's selected integer
+--- writer. Its signed writer thresholds contain gaps that would overflow the
+--- chosen width, so finite/integral/range checks alone are not sufficient.
+function BfBot.Persist._IsV011MarshalSafeNumber(value)
+    if type(value) ~= "number" or value ~= value
+        or value == math.huge or value == -math.huge
+        or value ~= math.floor(value) then
+        return false
+    end
+
+    if value >= 0 then return value < (2 ^ 64) end
+    return value >= -128
+        or (value < -256 and value >= -32768)
+        or (value < -65536 and value >= -(2 ^ 31))
+        or (value < -4294967296 and value >= -(2 ^ 63))
+end
+
 --- Return a fresh copy containing only values supported by the pre-v1 EEex
 --- marshal: numbers, strings, and tables. Boolean values become 1/0. Table
 --- keys must already be numbers or strings; unsupported values, keys, and
@@ -450,7 +467,11 @@ end
 function BfBot.Persist._MarshalSafeCopy(value, ancestors)
     local valueType = type(value)
     if valueType == "nil" then return nil, 0 end
-    if valueType == "number" or valueType == "string" then return value, 0 end
+    if valueType == "number" then
+        if BfBot.Persist._IsV011MarshalSafeNumber(value) then return value, 0 end
+        return nil, 1
+    end
+    if valueType == "string" then return value, 0 end
     if valueType == "boolean" then return value and 1 or 0, 0 end
     if valueType ~= "table" then return nil, 1 end
 
@@ -462,7 +483,10 @@ function BfBot.Persist._MarshalSafeCopy(value, ancestors)
     local dropped = 0
     for key, child in pairs(value) do
         local keyType = type(key)
-        if keyType == "number" or keyType == "string" then
+        local keyIsSafe = keyType == "string"
+            or (keyType == "number"
+                and BfBot.Persist._IsV011MarshalSafeNumber(key))
+        if keyIsSafe then
             local childCopy, childDropped =
                 BfBot.Persist._MarshalSafeCopy(child, ancestors)
             dropped = dropped + childDropped
@@ -496,6 +520,7 @@ function BfBot.Persist._Export(sprite)
         return {}
     end)
     if ok then return result end
+    pcall(BfBot._Warn, "[Persist] Save export failed: " .. tostring(result))
     return {}  -- on error, return empty (don't crash save)
 end
 

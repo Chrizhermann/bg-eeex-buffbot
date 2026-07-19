@@ -62,7 +62,7 @@ def test_marshal_safe_copy_preserves_scalars_arrays_and_mixed_keys(
             [2] = "second",
             [7] = "sparse",
             label = "preserved exactly",
-            number = -123.75,
+            number = -123,
             nested = { [-2] = "negative", name = "mixed" },
         }
         return BfBot.Persist._MarshalSafeCopy(source)
@@ -73,10 +73,201 @@ def test_marshal_safe_copy_preserves_scalars_arrays_and_mixed_keys(
     assert safe[2] == "second"
     assert safe[7] == "sparse"
     assert safe["label"] == "preserved exactly"
-    assert safe["number"] == -123.75
+    assert safe["number"] == -123
     assert safe["nested"][-2] == "negative"
     assert safe["nested"]["name"] == "mixed"
     assert dropped == 0
+
+
+def test_marshal_safe_copy_preserves_v011_round_trip_safe_numeric_values(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local source = {
+            ordinary = 42,
+            schemaMinusOne = -1,
+            u8Min = 0,
+            u8Max = 255,
+            u16Min = 256,
+            u16Max = 65535,
+            u32Min = 65536,
+            u32Max = 4294967295,
+            u64Min = 4294967296,
+            u64LastRepresentable = (2 ^ 64) - 2048,
+            i8Min = -128,
+            i16Near = -257,
+            i16Min = -32768,
+            i32Near = -65537,
+            i32Min = -(2 ^ 31),
+            i64Near = -4294967297,
+            i64Min = -(2 ^ 63),
+        }
+        local safe, dropped = BfBot.Persist._MarshalSafeCopy(source)
+        local preserved = true
+        local sourceCount, safeCount = 0, 0
+        for key, value in pairs(source) do
+            sourceCount = sourceCount + 1
+            if safe[key] ~= value then preserved = false end
+        end
+        for _ in pairs(safe) do safeCount = safeCount + 1 end
+        return {
+            preserved = preserved,
+            sameCount = safeCount == sourceCount,
+            fresh = safe ~= source,
+            dropped = dropped,
+        }
+        """
+    )
+
+    assert facts["preserved"]
+    assert facts["sameCount"]
+    assert facts["fresh"]
+    assert facts["dropped"] == 0
+
+
+def test_marshal_safe_copy_drops_v011_unsafe_numeric_values(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local source = {
+            fraction = 1.5,
+            negativeFraction = -1.5,
+            nan = 0 / 0,
+            positiveInfinity = math.huge,
+            negativeInfinity = -math.huge,
+            positiveOutside = 2 ^ 64,
+            negativeOutside = -(2 ^ 63) - 2048,
+            i8GapHigh = -129,
+            i8GapLow = -256,
+            i16GapHigh = -32769,
+            i16GapLow = -65536,
+            i32GapHigh = -2147483649,
+            i32GapLow = -4294967296,
+            keep = 7,
+        }
+        local safe, dropped = BfBot.Persist._MarshalSafeCopy(source)
+        return {
+            unsafeDropped = safe.fraction == nil
+                and safe.negativeFraction == nil
+                and safe.nan == nil
+                and safe.positiveInfinity == nil
+                and safe.negativeInfinity == nil
+                and safe.positiveOutside == nil
+                and safe.negativeOutside == nil
+                and safe.i8GapHigh == nil and safe.i8GapLow == nil
+                and safe.i16GapHigh == nil and safe.i16GapLow == nil
+                and safe.i32GapHigh == nil and safe.i32GapLow == nil,
+            safePreserved = safe.keep == 7,
+            sourceUnchanged = source.fraction == 1.5
+                and source.negativeFraction == -1.5
+                and source.nan ~= source.nan
+                and source.positiveInfinity == math.huge
+                and source.negativeInfinity == -math.huge
+                and source.keep == 7,
+            dropped = dropped,
+        }
+        """
+    )
+
+    assert facts["unsafeDropped"]
+    assert facts["safePreserved"]
+    assert facts["sourceUnchanged"]
+    assert facts["dropped"] == 13
+
+
+def test_marshal_safe_copy_filters_numeric_keys_by_v011_round_trip_safety(
+    lua: LuaRuntime,
+) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = lua.execute(
+            """
+            local source = {}
+            local entries = {
+                { 0, "zero" },
+                { 255, "u8 max" },
+                { 256, "u16 min" },
+                { 65535, "u16 max" },
+                { 65536, "u32 min" },
+                { 4294967295, "u32 max" },
+                { 4294967296, "u64 min" },
+                { (2 ^ 64) - 2048, "u64 last representable" },
+                { -1, "schema minus one" },
+                { -128, "i8 min" },
+                { -257, "i16 near" },
+                { -32768, "i16 min" },
+                { -65537, "i32 near" },
+                { -(2 ^ 31), "i32 min" },
+                { -4294967297, "i64 near" },
+                { -(2 ^ 63), "i64 min" },
+                { 1.5, "fraction" },
+                { -1.5, "negative fraction" },
+                { 0 / 0, "nan" },
+                { math.huge, "positive infinity" },
+                { -math.huge, "negative infinity" },
+                { 2 ^ 64, "positive outside" },
+                { -(2 ^ 63) - 2048, "negative outside" },
+                { -129, "i8 gap high" },
+                { -256, "i8 gap low" },
+                { -32769, "i16 gap high" },
+                { -65536, "i16 gap low" },
+                { -2147483649, "i32 gap high" },
+                { -4294967296, "i32 gap low" },
+            }
+            local originalPairs = pairs
+            pairs = function(tbl)
+                if tbl ~= source then return originalPairs(tbl) end
+                local index = 0
+                return function()
+                    index = index + 1
+                    local entry = entries[index]
+                    if entry then return entry[1], entry[2] end
+                end
+            end
+            local copyOk, safe, dropped = pcall(
+                BfBot.Persist._MarshalSafeCopy, source)
+            pairs = originalPairs
+            if not copyOk then
+                return { completed = false, error = tostring(safe) }
+            end
+
+            local copied = 0
+            for _ in originalPairs(safe) do copied = copied + 1 end
+            return {
+                completed = true,
+                validBoundaries = safe[0] == "zero"
+                    and safe[255] == "u8 max"
+                    and safe[256] == "u16 min"
+                    and safe[65535] == "u16 max"
+                    and safe[65536] == "u32 min"
+                    and safe[4294967295] == "u32 max"
+                    and safe[4294967296] == "u64 min"
+                    and safe[(2 ^ 64) - 2048] == "u64 last representable"
+                    and safe[-1] == "schema minus one"
+                    and safe[-128] == "i8 min"
+                    and safe[-257] == "i16 near"
+                    and safe[-32768] == "i16 min"
+                    and safe[-65537] == "i32 near"
+                    and safe[-(2 ^ 31)] == "i32 min"
+                    and safe[-4294967297] == "i64 near"
+                    and safe[-(2 ^ 63)] == "i64 min",
+                copied = copied,
+                dropped = dropped,
+            }
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["completed"], facts["error"]
+    assert facts["validBoundaries"]
+    assert facts["copied"] == 16
+    assert facts["dropped"] == 13
 
 
 def test_marshal_safe_copy_drops_unsupported_keys_without_key_collisions(
@@ -279,16 +470,22 @@ def test_export_keeps_temporary_marshalling_copies_empty(lua: LuaRuntime) -> Non
     facts = lua.execute(
         """
         EEex = { IsMarshallingCopy = function() return true end }
-        EEex_GetUDAux = function() error("must not read UDAux for a copy") end
-        local copyOk, copyResult = pcall(BfBot.Persist._Export, "sprite")
+        local udauxReads = 0
+        EEex_GetUDAux = function()
+            udauxReads = udauxReads + 1
+            return { BB = { value = 7 } }
+        end
+        local copyResult = BfBot.Persist._Export("sprite")
         return {
-            copyContained = copyOk and type(copyResult) == "table"
+            empty = type(copyResult) == "table"
                 and next(copyResult) == nil,
+            udauxReads = udauxReads,
         }
         """
     )
 
-    assert facts["copyContained"]
+    assert facts["empty"]
+    assert facts["udauxReads"] == 0
 
 
 def test_export_contains_udaux_errors_and_returns_empty(lua: LuaRuntime) -> None:
@@ -301,12 +498,25 @@ def test_export_contains_udaux_errors_and_returns_empty(lua: LuaRuntime) -> None
     try:
         facts = lua.execute(
             """
+            local warnings = {}
+            BfBot._Warn = function(message)
+                warnings[#warnings + 1] = message
+            end
             EEex = { IsMarshallingCopy = function() return false end }
             EEex_GetUDAux = function() error("synthetic UDAux failure") end
             local exportOk, exported = pcall(BfBot.Persist._Export, "sprite")
+
+            BfBot._Warn = function() error("synthetic warning failure") end
+            local warningOk, warningResult = pcall(
+                BfBot.Persist._Export, "sprite")
             return {
                 contained = exportOk,
                 empty = type(exported) == "table" and next(exported) == nil,
+                warningCount = #warnings,
+                warning = warnings[1],
+                warningFailureContained = warningOk
+                    and type(warningResult) == "table"
+                    and next(warningResult) == nil,
             }
             """
         )
@@ -316,3 +526,6 @@ def test_export_contains_udaux_errors_and_returns_empty(lua: LuaRuntime) -> None
 
     assert facts["contained"]
     assert facts["empty"]
+    assert facts["warningCount"] == 1
+    assert "synthetic UDAux failure" in facts["warning"]
+    assert facts["warningFailureContained"]
