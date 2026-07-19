@@ -209,10 +209,8 @@ ACTION_IF (
     // three assignments inside the first [General] section.
     COUNT_REGEXP_INSTANCES ~^\[General\]~ general_headers
     COUNT_REGEXP_INSTANCES ~^\[General\][^%WNL%%MNL%%LNL%]~ general_header_suffixes
-    COUNT_REGEXP_INSTANCES ~^\[[^%WNL%%MNL%%LNL%]*\]~ section_headers
     SET general_pos = INDEX_BUFFER (~^\[General\]~)
     SET first_section_pos = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
-    SET auto_generated_pos = INDEX_BUFFER (~^\[Auto-Generated\]~)
     COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~ mode_keys
     COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ mode_matches
     COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL[^%WNL%%MNL%%LNL%]~ mode_suffixes
@@ -226,11 +224,27 @@ ACTION_IF (
     COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%[^%WNL%%MNL%%LNL%]~ version_suffixes
     SET version_pos = INDEX_BUFFER (~^LuaVersionExternal=%lua_version_pattern%~)
 
-    // Official InfinityLoader.ini files place [Auto-Generated] immediately
-    // after [General]. A one-section custom file instead ends at EOF.
-    SET next_section_pos = auto_generated_pos
-    PATCH_IF (section_headers = 1) BEGIN
-      SET next_section_pos = BUFFER_LENGTH
+    // Bound [General] by its immediate next section, whatever that section is.
+    // Search a substring after the [General] header so INDEX_BUFFER cannot
+    // rediscover the first header itself.
+    SET next_section_pos = 0
+    PATCH_IF (
+      general_headers = 1
+      AND general_header_suffixes = 0
+      AND general_pos = first_section_pos
+    ) BEGIN
+      SET after_general_pos = general_pos + STRING_LENGTH ~[General]~
+      SET after_general_length = BUFFER_LENGTH - after_general_pos
+      READ_ASCII after_general_pos after_general (after_general_length)
+      SET next_section_relative = 0
+      INNER_PATCH ~%after_general%~ BEGIN
+        SET next_section_relative = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
+      END
+      PATCH_IF (next_section_relative < 0) BEGIN
+        SET next_section_pos = BUFFER_LENGTH
+      END ELSE BEGIN
+        SET next_section_pos = after_general_pos + next_section_relative
+      END
     END
     PATCH_IF (
       general_headers = 1
