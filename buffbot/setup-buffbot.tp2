@@ -205,26 +205,52 @@ ACTION_IF (
 ) BEGIN
   COPY - ~InfinityLoader.ini~ ~InfinityLoader.ini~
     // Test exact key/value lines without relying on $ behavior around CRLF:
-    // require one key, one expected prefix, and no non-newline suffix.
+    // require one key, one expected prefix, no non-newline suffix, and all
+    // three assignments inside the first [General] section.
+    COUNT_REGEXP_INSTANCES ~^\[General\]~ general_headers
+    COUNT_REGEXP_INSTANCES ~^\[General\][^%WNL%%MNL%%LNL%]~ general_header_suffixes
+    COUNT_REGEXP_INSTANCES ~^\[[^%WNL%%MNL%%LNL%]*\]~ section_headers
+    SET general_pos = INDEX_BUFFER (~^\[General\]~)
+    SET first_section_pos = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
+    SET auto_generated_pos = INDEX_BUFFER (~^\[Auto-Generated\]~)
     COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~ mode_keys
     COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ mode_matches
     COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL[^%WNL%%MNL%%LNL%]~ mode_suffixes
+    SET mode_pos = INDEX_BUFFER (~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~)
     COUNT_REGEXP_INSTANCES ~^LuaLibrary=~ library_keys
     COUNT_REGEXP_INSTANCES ~^LuaLibrary=lua51[.]dll~ library_matches
     COUNT_REGEXP_INSTANCES ~^LuaLibrary=lua51[.]dll[^%WNL%%MNL%%LNL%]~ library_suffixes
+    SET library_pos = INDEX_BUFFER (~^LuaLibrary=lua51[.]dll~)
     COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=~ version_keys
     COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%~ version_matches
     COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%[^%WNL%%MNL%%LNL%]~ version_suffixes
+    SET version_pos = INDEX_BUFFER (~^LuaVersionExternal=%lua_version_pattern%~)
+
+    // Official InfinityLoader.ini files place [Auto-Generated] immediately
+    // after [General]. A one-section custom file instead ends at EOF.
+    SET next_section_pos = auto_generated_pos
+    PATCH_IF (section_headers = 1) BEGIN
+      SET next_section_pos = BUFFER_LENGTH
+    END
     PATCH_IF (
-      mode_keys = 1
+      general_headers = 1
+      AND general_header_suffixes = 0
+      AND general_pos = first_section_pos
+      AND mode_keys = 1
       AND mode_matches = 1
       AND mode_suffixes = 0
+      AND mode_pos > general_pos
+      AND mode_pos < next_section_pos
       AND library_keys = 1
       AND library_matches = 1
       AND library_suffixes = 0
+      AND library_pos > general_pos
+      AND library_pos < next_section_pos
       AND version_keys = 1
       AND version_matches = 1
       AND version_suffixes = 0
+      AND version_pos > general_pos
+      AND version_pos < next_section_pos
     ) BEGIN
       SET luajit_active = 1
     END
@@ -246,6 +272,26 @@ END ELSE BEGIN
     FAIL ~EEex LuaJIT source DLLs were not found at EEex/loader/LuaJIT/. Reinstall EEex with its LuaJIT / Experimental files before activating BuffBot's LuaJIT support.~
   END
 
+  // Only patch a well-formed, first [General] section. This read-only
+  // preflight keeps malformed/custom files byte-identical on failure.
+  OUTER_SET loader_general_valid = 0
+  COPY - ~InfinityLoader.ini~ ~InfinityLoader.ini~
+    COUNT_REGEXP_INSTANCES ~^\[General\]~ repair_general_headers
+    COUNT_REGEXP_INSTANCES ~^\[General\][^%WNL%%MNL%%LNL%]~ repair_general_header_suffixes
+    SET repair_general_pos = INDEX_BUFFER (~^\[General\]~)
+    SET repair_first_section_pos = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
+    PATCH_IF (
+      repair_general_headers = 1
+      AND repair_general_header_suffixes = 0
+      AND repair_general_pos = repair_first_section_pos
+    ) BEGIN
+      SET loader_general_valid = 1
+    END
+  BUT_ONLY
+  ACTION_IF (loader_general_valid = 0) THEN BEGIN
+    FAIL ~InfinityLoader.ini has no single, well-formed first [General] section. Reinstall EEex before activating BuffBot's LuaJIT support.~
+  END
+
   PRINT ~Installing EEex LuaJIT component (normally installed by EEex setup).~
   PRINT ~Required LuaVersionExternal: %lua_version%~
 
@@ -255,51 +301,13 @@ END ELSE BEGIN
 
   // Patch InfinityLoader.ini
   COPY ~InfinityLoader.ini~ ~InfinityLoader.ini~
-    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~ repair_mode_keys
-    COUNT_REGEXP_INSTANCES ~^LuaLibrary=~ repair_library_keys
-    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=~ repair_version_keys
-    REPLACE_TEXTUALLY ~^LuaPatchMode=.*$~ ~LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~
-    REPLACE_TEXTUALLY ~^LuaLibrary=.*$~ ~LuaLibrary=lua51.dll~
-    REPLACE_TEXTUALLY ~^LuaVersionExternal=.*$~ ~LuaVersionExternal=%lua_version%~
-    PATCH_IF (repair_mode_keys = 0) BEGIN
-      SET repair_pos = BUFFER_LENGTH
-      SPRINT repair_prefix ~~
-      PATCH_IF (repair_pos > 0) BEGIN
-        READ_BYTE (repair_pos - 1) repair_last_byte
-        PATCH_IF (repair_last_byte != 10 AND repair_last_byte != 13) BEGIN
-          SPRINT repair_prefix ~%WNL%~
-        END
-      END
-      SPRINT repair_line ~%repair_prefix%LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL%WNL%~
-      INSERT_BYTES repair_pos (STRING_LENGTH ~%repair_line%~)
-      WRITE_ASCIIE repair_pos ~%repair_line%~
-    END
-    PATCH_IF (repair_library_keys = 0) BEGIN
-      SET repair_pos = BUFFER_LENGTH
-      SPRINT repair_prefix ~~
-      PATCH_IF (repair_pos > 0) BEGIN
-        READ_BYTE (repair_pos - 1) repair_last_byte
-        PATCH_IF (repair_last_byte != 10 AND repair_last_byte != 13) BEGIN
-          SPRINT repair_prefix ~%WNL%~
-        END
-      END
-      SPRINT repair_line ~%repair_prefix%LuaLibrary=lua51.dll%WNL%~
-      INSERT_BYTES repair_pos (STRING_LENGTH ~%repair_line%~)
-      WRITE_ASCIIE repair_pos ~%repair_line%~
-    END
-    PATCH_IF (repair_version_keys = 0) BEGIN
-      SET repair_pos = BUFFER_LENGTH
-      SPRINT repair_prefix ~~
-      PATCH_IF (repair_pos > 0) BEGIN
-        READ_BYTE (repair_pos - 1) repair_last_byte
-        PATCH_IF (repair_last_byte != 10 AND repair_last_byte != 13) BEGIN
-          SPRINT repair_prefix ~%WNL%~
-        END
-      END
-      SPRINT repair_line ~%repair_prefix%LuaVersionExternal=%lua_version%%WNL%~
-      INSERT_BYTES repair_pos (STRING_LENGTH ~%repair_line%~)
-      WRITE_ASCIIE repair_pos ~%repair_line%~
-    END
+    // Remove active assignments from every section, then add one canonical
+    // set immediately below [General]. This handles absent and duplicate keys
+    // without ever appending them beneath later [Hardcoded_*] sections.
+    REPLACE_TEXTUALLY ~^LuaPatchMode=[^%WNL%%MNL%%LNL%]*~ ~~
+    REPLACE_TEXTUALLY ~^LuaLibrary=[^%WNL%%MNL%%LNL%]*~ ~~
+    REPLACE_TEXTUALLY ~^LuaVersionExternal=[^%WNL%%MNL%%LNL%]*~ ~~
+    REPLACE_TEXTUALLY ~^\[General\]~ ~[General]%WNL%LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL%WNL%LuaLibrary=lua51.dll%WNL%LuaVersionExternal=%lua_version%~
   BUT_ONLY
 
   PRINT ~LuaJIT installed successfully. BuffBot will have full functionality.~
