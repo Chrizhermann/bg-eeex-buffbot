@@ -4,7 +4,7 @@
     {
       "id": 0,
       "subject": "Task 1: Capability-based WeiDU gate and LuaJIT state repair",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": 1,
@@ -41,5 +41,5 @@
       "blockedBy": [5]
     }
   ],
-  "lastUpdated": "2026-07-20T03:45:33+09:00"
+  "lastUpdated": "2026-07-20T04:46:17+09:00"
 }
