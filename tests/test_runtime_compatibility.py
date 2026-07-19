@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import faulthandler
 from pathlib import Path
+import sys
 
 import pytest
 from lupa.luajit21 import LuaRuntime
@@ -289,11 +291,28 @@ def test_export_keeps_temporary_marshalling_copies_empty(lua: LuaRuntime) -> Non
     assert facts["copyContained"]
 
 
-def test_export_retains_outer_save_error_containment() -> None:
-    exporter = PERSIST_SOURCE.split(
-        "function BfBot.Persist._Export(sprite)", maxsplit=1
-    )[1].split("--- Importer:", maxsplit=1)[0]
+def test_export_contains_udaux_errors_and_returns_empty(lua: LuaRuntime) -> None:
+    # LuaJIT implements caught Lua errors with Windows SEH. Python's fault
+    # handler otherwise prints a misleading fatal-exception stack even though
+    # both Lua pcalls succeed, so suppress it only around this intentional fault.
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = lua.execute(
+            """
+            EEex = { IsMarshallingCopy = function() return false end }
+            EEex_GetUDAux = function() error("synthetic UDAux failure") end
+            local exportOk, exported = pcall(BfBot.Persist._Export, "sprite")
+            return {
+                contained = exportOk,
+                empty = type(exported) == "table" and next(exported) == nil,
+            }
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
 
-    assert "local ok, result = pcall(function()" in exporter
-    assert "if ok then return result end" in exporter
-    assert "return {}  -- on error, return empty (don't crash save)" in exporter
+    assert facts["contained"]
+    assert facts["empty"]
