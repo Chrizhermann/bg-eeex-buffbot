@@ -9,7 +9,7 @@
     {
       "id": 1,
       "subject": "Task 2: Marshal-safe, non-mutating export",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": 2,
@@ -41,5 +41,5 @@
       "blockedBy": [5]
     }
   ],
-  "lastUpdated": "2026-07-20T04:46:17+09:00"
+  "lastUpdated": "2026-07-20T05:40:48+09:00"
 }
