@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.6.1-alpha (2026-07-20)
+
+### Compatibility
+- **Restored EEex v0.11.0-alpha support with full BuffBot feature parity.** EEex v1 remains recommended. The installer now detects the EEex bootstrap, required Lua API, and one complete old or new script layout instead of relying on version-specific WeiDU component IDs.
+- **LuaJIT setup follows the detected EEex layout.** BuffBot recognizes the legacy `5.1` loader used by v0.11 and the `5.1-LuaJIT` loader used by v1, while validating and repairing incomplete loader state when the required files are available.
+- **Save downgrade boundary.** Downgrading an arbitrary save to v0.11 after EEex v1 and other EEex mods have written it is unsupported.
+
+### Safety
+- **Marshal-safe, non-mutating persistence export.** BuffBot now exports a sanitized copy of its saved configuration, converting booleans and dropping unsupported values, keys, and cyclic branches without modifying the live UDAux table.
+- **Checked EEex callback boundaries.** BuffBot-owned event callbacks now contain Lua errors, preserve successful return values, and deduplicate repeated diagnostics instead of allowing failures to propagate through EEex.
+
+### Testing
+- **Synthetic installer coverage now exercises v0.11 and v1 acceptance, with v0.10 explicitly serving as the rejection floor.** The matrix also covers incomplete and ambiguous layouts, LuaJIT activation and repair, rollback, uninstall, and component-number independence.
+
+## v1.6.0-alpha (2026-07-19)
+
+### Added
+- **Allied summons and clones can now cast BuffBot presets.** Project Images, Simulacra, and other allied non-party spellcasters with castable spellbooks appear in a new **Summons** view. Each stable summon identity has its own per-preset spell selection, targets, priority order, and Quick Cast setting. Use **Cast (this summon)** for a standalone run; configured live summons also join **Cast All** automatically.
+- **Mid-run late join.** A summon created by an active party preset can attach to that same run as soon as it finishes spawning. Verified live with Imoen casting Project Image: the image joined, cast Stoneskin and Strength from its own preset, and the run completed with 3/3 casts and no skips.
+- **Clone preset seeding.** Opening a clone identity for the first time seeds its preset from the owner's same-index preset, filtered to spells the live clone can cast. Subsequent edits belong to the summon identity and persist in the protagonist's save data.
+
+### Safety and compatibility
+- **Project Image owner-lock protection.** The engine prevents a Project Image's owner from acting while the image exists; queued actions otherwise become delayed "zombie casts" after expiry. BuffBot skips already-locked owners and drops owner entries ordered after a Project Image cast without reordering the user's priorities.
+- Summon detection is structural and mod-friendly: alive, allied (`EA` 2–30), not a party portrait, and possessing a castable spellbook. Object IDs are resolved fresh by ID + name before every action, allegiance is revalidated, and vanished summons complete their chains cleanly instead of waiting for the watchdog.
+- Multiplayer summon support is conservative pending a two-machine probe: clones join only when their owner is locally controlled; ownerless summons use the host-control heuristic. Set `[BuffBot] SummonsJoinCast = 0` in `baldur.ini` to disable automatic summon participation.
+
+### Persistence
+- **Config schema v8** adds per-identity summon presets under the protagonist's `summons` table. Existing saves upgrade lazily on first access. Downgrading a save after it has been written by schema v8 is unsupported.
+
+### Known limitation
+- Copied BuffBot F12 innates on clones do not route reliably to the clone and are deferred to follow-up work (#60). Configure and cast summons through the Summons view or let them join Cast All.
+
 ## v1.5.0-alpha (2026-07-05)
 
 ### Added
