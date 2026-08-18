@@ -31,6 +31,7 @@ def lua() -> LuaRuntime:
         assert(type(python_userdata) == "userdata")
         BfBot = {
             MAX_PRESETS = 8,
+            MAX_SPELL_REPEATS = 5,
             Scan = {}, Class = {}, Innate = {}, Mp = {},
             _Warn = function(_) end,
             _StripColorEscape = function(s) return s end,
@@ -56,6 +57,7 @@ def ui_test_lua() -> LuaRuntime:
         """
         BfBot = {
             MAX_PRESETS = 8,
+            MAX_SPELL_REPEATS = 5,
             Scan = {}, Class = {}, Innate = {}, Mp = {}, Exec = {}, Persist = {},
             _cache = { class = {}, scan = {} },
             _Warn = function(_) end,
@@ -66,6 +68,492 @@ def ui_test_lua() -> LuaRuntime:
     runtime.execute(UI_SOURCE)
     runtime.execute(TEST_SOURCE)
     return runtime
+
+
+def test_spell_repeat_normalizer_is_strict_and_bounded(lua: LuaRuntime) -> None:
+    facts = lua.execute(
+        """
+        local normalize = BfBot.Persist._NormalizeSpellRepeat
+        if type(normalize) ~= "function" then
+            return { available = false }
+        end
+        return {
+            available = true,
+            nilValue = normalize(nil),
+            one = normalize(1),
+            five = normalize(5),
+            zero = normalize(0),
+            six = normalize(6),
+            negative = normalize(-1),
+            fraction = normalize(2.5),
+            stringValue = normalize("2"),
+            booleanValue = normalize(true),
+            nan = normalize(0 / 0),
+            positiveInfinity = normalize(math.huge),
+            negativeInfinity = normalize(-math.huge),
+        }
+        """
+    )
+
+    assert facts["available"]
+    assert facts["nilValue"] == 1
+    assert facts["one"] == 1
+    assert facts["five"] == 5
+    for key in (
+        "zero",
+        "six",
+        "negative",
+        "fraction",
+        "stringValue",
+        "booleanValue",
+        "nan",
+        "positiveInfinity",
+        "negativeInfinity",
+    ):
+        assert facts[key] == 1
+
+
+def test_core_defines_the_spell_repeat_cap(core_lua: LuaRuntime) -> None:
+    assert core_lua.eval("BfBot.MAX_SPELL_REPEATS") == 5
+
+
+def test_default_spell_entries_start_with_one_repeat(lua: LuaRuntime) -> None:
+    facts = lua.execute(
+        """
+        local enabled = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        local disabled = BfBot.Persist._MakeDefaultSpellEntry(
+            { defaultTarget = "s" }, 0)
+        return {
+            enabledRepeat = enabled.rep,
+            disabledRepeat = disabled.rep,
+            disabledTarget = disabled.tgt,
+        }
+        """
+    )
+
+    assert facts["enabledRepeat"] == 1
+    assert facts["disabledRepeat"] == 1
+    assert facts["disabledTarget"] == "s"
+
+
+def test_v8_to_v9_migration_initializes_party_and_summon_repeats(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local config = {
+            v = 8,
+            ap = 1,
+            presets = {
+                [1] = { name = "Party", cat = "custom", qc = 0, spells = {
+                    SPWI101 = { on = 1, tgt = "s", pri = 1 },
+                    SPWI102 = { on = 1, tgt = "s", pri = 2, rep = 4 },
+                    SPWI103 = { on = 1, tgt = "s", pri = 3, rep = 6 },
+                } },
+            },
+            opts = { skip = 1 },
+            ovr = {},
+            summons = {
+                skeleton = { presets = {
+                    [1] = { qc = 0, spells = {
+                        SPIN101 = { on = 1, tgt = "s", pri = 1 },
+                        SPIN102 = { on = 1, tgt = "s", pri = 2, rep = 5 },
+                        SPIN103 = { on = 1, tgt = "s", pri = 3, rep = "3" },
+                    } },
+                } },
+            },
+        }
+        local migrated = BfBot.Persist._MigrateConfig(config, 8)
+        return {
+            version = migrated.v,
+            partyMissing = migrated.presets[1].spells.SPWI101.rep,
+            partyValid = migrated.presets[1].spells.SPWI102.rep,
+            partyInvalid = migrated.presets[1].spells.SPWI103.rep,
+            summonMissing = migrated.summons.skeleton.presets[1]
+                .spells.SPIN101.rep,
+            summonValid = migrated.summons.skeleton.presets[1]
+                .spells.SPIN102.rep,
+            summonInvalid = migrated.summons.skeleton.presets[1]
+                .spells.SPIN103.rep,
+        }
+        """
+    )
+
+    assert facts["version"] == 9
+    assert facts["partyMissing"] == 1
+    assert facts["partyValid"] == 4
+    assert facts["partyInvalid"] == 1
+    assert facts["summonMissing"] == 1
+    assert facts["summonValid"] == 5
+    assert facts["summonInvalid"] == 1
+
+
+def test_current_schema_validation_repairs_malformed_repeats_without_migration(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local config = {
+            v = 9,
+            ap = 1,
+            presets = {
+                [1] = { name = "Current", cat = "custom", qc = 0, spells = {
+                    MISSING = { on = 1, tgt = "s", pri = 1 },
+                    VALID = { on = 1, tgt = "s", pri = 2, rep = 3 },
+                    BAD = { on = 1, tgt = "s", pri = 3, rep = 1 / 0 },
+                } },
+            },
+            opts = { skip = 1 },
+            ovr = {},
+            summons = {
+                wolf = { presets = {
+                    [1] = { qc = 0, spells = {
+                        MISSING = { on = 1, tgt = "s", pri = 1 },
+                        VALID = { on = 1, tgt = "s", pri = 2, rep = 2 },
+                        BAD = { on = 1, tgt = "s", pri = 3, rep = false },
+                    } },
+                } },
+            },
+        }
+        local repaired = BfBot.Persist._ValidateConfig(config)
+        return {
+            version = repaired.v,
+            partyMissing = repaired.presets[1].spells.MISSING.rep,
+            partyValid = repaired.presets[1].spells.VALID.rep,
+            partyBad = repaired.presets[1].spells.BAD.rep,
+            summonMissing = repaired.summons.wolf.presets[1]
+                .spells.MISSING.rep,
+            summonValid = repaired.summons.wolf.presets[1]
+                .spells.VALID.rep,
+            summonBad = repaired.summons.wolf.presets[1]
+                .spells.BAD.rep,
+        }
+        """
+    )
+
+    assert facts["version"] == 9
+    assert facts["partyMissing"] == 1
+    assert facts["partyValid"] == 3
+    assert facts["partyBad"] == 1
+    assert facts["summonMissing"] == 1
+    assert facts["summonValid"] == 2
+    assert facts["summonBad"] == 1
+
+
+def test_summon_validation_whitelists_and_normalizes_repeat(lua: LuaRuntime) -> None:
+    facts = lua.execute(
+        """
+        local summons = {
+            skeleton = { presets = {
+                [1] = { qc = 0, spells = {
+                    VALID = {
+                        on = 1, tgt = "s", pri = 1, var = "SPIN001",
+                        rep = 5, unknown = "drop me",
+                    },
+                    INVALID = {
+                        on = 1, tgt = "p", pri = 2, rep = 2.5,
+                        extra = 17,
+                    },
+                } },
+            }, unknownIdentityField = 1 },
+        }
+        local clean = BfBot.Persist._ValidateSummons(summons)
+        local valid = clean.skeleton.presets[1].spells.VALID
+        local invalid = clean.skeleton.presets[1].spells.INVALID
+        return {
+            validRepeat = valid.rep,
+            invalidRepeat = invalid.rep,
+            unknownSpellDropped = valid.unknown == nil and invalid.extra == nil,
+            unknownIdentityDropped = clean.skeleton.unknownIdentityField == nil,
+        }
+        """
+    )
+
+    assert facts["validRepeat"] == 5
+    assert facts["invalidRepeat"] == 1
+    assert facts["unknownSpellDropped"]
+    assert facts["unknownIdentityDropped"]
+
+
+def test_repeat_accessors_create_and_strictly_normalize_entries(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        if type(BfBot.Persist.SetSpellRepeat) ~= "function"
+            or type(BfBot.Persist.GetSpellRepeat) ~= "function" then
+            return { available = false }
+        end
+        local config = BfBot.Persist.GetDefaultConfig()
+        BfBot.Persist.GetConfig = function(sprite)
+            assert(sprite == "sprite")
+            return config
+        end
+        BfBot.Persist.SetSpellRepeat("sprite", 1, "NEW", 5)
+        local valid = BfBot.Persist.GetSpellRepeat("sprite", 1, "NEW")
+        BfBot.Persist.SetSpellRepeat("sprite", 1, "NEW", "4")
+        local invalid = BfBot.Persist.GetSpellRepeat("sprite", 1, "NEW")
+        return {
+            available = true,
+            valid = valid,
+            invalid = invalid,
+            createdDefaultFields = config.presets[1].spells.NEW.on == 1
+                and config.presets[1].spells.NEW.tgt == "p",
+            missing = BfBot.Persist.GetSpellRepeat(
+                "sprite", 1, "DOES_NOT_EXIST"),
+        }
+        """
+    )
+
+    assert facts["available"]
+    assert facts["valid"] == 5
+    assert facts["invalid"] == 1
+    assert facts["createdDefaultFields"]
+    assert facts["missing"] == 1
+
+
+def test_clone_seeding_deep_copies_and_normalizes_repeat(lua: LuaRuntime) -> None:
+    facts = lua.execute(
+        """
+        local targetList = { "Imoen", "Jaheira" }
+        local owner = { spells = {
+            VALID = { on = 1, tgt = targetList, pri = 1, rep = 4 },
+            INVALID = { on = 1, tgt = "s", pri = 2, rep = "4" },
+        } }
+        local seeded = BfBot.Persist._SeedCloneSpells(owner, {
+            VALID = { count = 1 },
+            INVALID = { count = 1 },
+        })
+        seeded.VALID.tgt[1] = "Changed"
+        return {
+            validRepeat = seeded.VALID.rep,
+            invalidRepeat = seeded.INVALID.rep,
+            targetDeepCopied = targetList[1] == "Imoen"
+                and seeded.VALID.tgt ~= targetList,
+        }
+        """
+    )
+
+    assert facts["validRepeat"] == 4
+    assert facts["invalidRepeat"] == 1
+    assert facts["targetDeepCopied"]
+
+
+def test_marshal_and_serializer_round_trips_preserve_valid_repeats(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local config = {
+            v = 9,
+            presets = { [1] = { spells = {
+                PARTY = { on = 1, tgt = "s", pri = 1, rep = 4 },
+            } } },
+            summons = { skeleton = { presets = { [1] = { qc = 0, spells = {
+                SUMMON = { on = 1, tgt = "s", pri = 1, rep = 5 },
+            } } } } },
+        }
+        local safe, dropped = BfBot.Persist._MarshalSafeCopy(config)
+        local serialized = BfBot.Persist._Serialize(config)
+        local chunk = assert(loadstring("return " .. serialized))
+        local parsed = chunk()
+        return {
+            marshalParty = safe.presets[1].spells.PARTY.rep,
+            marshalSummon = safe.summons.skeleton.presets[1]
+                .spells.SUMMON.rep,
+            marshalDropped = dropped,
+            serializedParty = parsed.presets[1].spells.PARTY.rep,
+            serializedSummon = parsed.summons.skeleton.presets[1]
+                .spells.SUMMON.rep,
+        }
+        """
+    )
+
+    assert facts["marshalParty"] == 4
+    assert facts["marshalSummon"] == 5
+    assert facts["marshalDropped"] == 0
+    assert facts["serializedParty"] == 4
+    assert facts["serializedSummon"] == 5
+
+
+def test_external_export_import_round_trip_preserves_valid_repeats(
+    lua: LuaRuntime,
+    tmp_path: Path,
+) -> None:
+    lua.globals().repeat_presets_dir = tmp_path.as_posix()
+    facts = lua.execute(
+        """
+        local live = {
+            v = 9,
+            ap = 1,
+            presets = { [1] = {
+                name = "Repeat", cat = "custom", qc = 0,
+                spells = {
+                    PARTY = { on = 1, tgt = "s", pri = 1, rep = 4 },
+                },
+            } },
+            opts = { skip = 1 },
+            ovr = {},
+            summons = { skeleton = { presets = { [1] = { qc = 0, spells = {
+                SUMMON = { on = 1, tgt = "s", pri = 1, rep = 5 },
+            } } } } },
+        }
+        local aux = { BB = live }
+        EEex_GetUDAux = function(sprite)
+            assert(sprite == "sprite")
+            return aux
+        end
+        BfBot._GetName = function() return "Repeat Tester" end
+        BfBot.Persist._PRESETS_DIR = repeat_presets_dir
+        BfBot.Persist._EnsurePresetsDir = function() end
+        BfBot.Scan.GetCastableSpells = function()
+            return { PARTY = { count = 1 } }
+        end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Class.SetOverride = function() end
+
+        local exportOk, safeName = BfBot.Persist.ExportConfig("sprite")
+        aux.BB = BfBot.Persist.GetDefaultConfig()
+        local importOk, presetCount, skipped = BfBot.Persist.ImportConfig(
+            "sprite", safeName .. ".lua")
+        return {
+            exportOk = exportOk,
+            importOk = importOk,
+            presetCount = presetCount,
+            skipped = skipped,
+            partyRepeat = aux.BB.presets[1].spells.PARTY.rep,
+            summonRepeat = aux.BB.summons.skeleton.presets[1]
+                .spells.SUMMON.rep,
+        }
+        """
+    )
+
+    assert facts["exportOk"]
+    assert facts["importOk"]
+    assert facts["presetCount"] == 1
+    assert facts["skipped"] == 0
+    assert facts["partyRepeat"] == 4
+    assert facts["summonRepeat"] == 5
+
+
+def test_create_preset_and_create_preset_all_initialize_repeat(
+    lua: LuaRuntime,
+) -> None:
+    single = lua.execute(
+        """
+        local config = BfBot.Persist.GetDefaultConfig()
+        config.presets[1].spells.TEST = {
+            on = 1, tgt = "s", pri = 7, rep = 5,
+        }
+        EEex_Resource_Demand = function() return nil end
+        BfBot.Persist.GetConfig = function() return config end
+        local idx = BfBot.Persist.CreatePreset("sprite", "New")
+        return { idx = idx, rep = config.presets[idx].spells.TEST.rep }
+        """
+    )
+
+    assert single["idx"] == 3
+    assert single["rep"] == 1
+
+    party = lua.execute(
+        """
+        local configs = {
+            A = BfBot.Persist.GetDefaultConfig(),
+            B = BfBot.Persist.GetDefaultConfig(),
+        }
+        configs.A.presets[1].spells.ASPELL = {
+            on = 1, tgt = "s", pri = 1, rep = 5,
+        }
+        configs.B.presets[1].spells.BSPELL = {
+            on = 1, tgt = "s", pri = 1, rep = 4,
+        }
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return "A" end
+            if slot == 1 then return "B" end
+            return nil
+        end
+        BfBot.Persist.GetConfig = function(sprite) return configs[sprite] end
+        local idx = BfBot.Persist.CreatePresetAll("Party New")
+        return {
+            idx = idx,
+            aRepeat = configs.A.presets[idx].spells.ASPELL.rep,
+            bRepeat = configs.B.presets[idx].spells.BSPELL.rep,
+        }
+        """
+    )
+
+    assert party["idx"] == 3
+    assert party["aRepeat"] == 1
+    assert party["bRepeat"] == 1
+
+
+def test_summon_entry_creation_initializes_repeat(
+    ui_test_lua: LuaRuntime,
+) -> None:
+    facts = ui_test_lua.execute(
+        """
+        local preset = { qc = 0, spells = {} }
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._SelectedSummon = function()
+            return { identity = "skeleton" }
+        end
+        BfBot.Persist.PeekSummonPreset = function(identity, presetIdx)
+            assert(identity == "skeleton" and presetIdx == 1)
+            return preset
+        end
+        local entry = BfBot.UI._SummonSpellEntry("SUMMON", 1)
+        return { repeatCount = entry.rep, stored = preset.spells.SUMMON == entry }
+        """
+    )
+
+    assert facts["repeatCount"] == 1
+    assert facts["stored"]
+
+
+def test_summon_refresh_merge_initializes_repeat(
+    ui_test_lua: LuaRuntime,
+) -> None:
+    facts = ui_test_lua.execute(
+        """
+        local preset = { qc = 0, spells = {} }
+        local config = {
+            presets = { [1] = { name = "Long Buffs" } },
+        }
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._UpdateSummonTabNames = function() end
+        BfBot.UI._ClampPresetIdx = function() end
+        BfBot.UI._UpdateSummonQc = function() end
+        BfBot.UI._CastCharLabel = function() return "Cast Skeleton" end
+        BfBot.UI._GetStatusText = function() return "" end
+        BfBot.UI._SelectedSummon = function()
+            return { identity = "skeleton", name = "Skeleton" }
+        end
+        BfBot.UI._GetSelectedSprite = function() return "summon-sprite" end
+        BfBot.UI._SummonTabLabel = function() return "Skeleton" end
+        BfBot.UI._EnsureSummonPreset = function() end
+        BfBot.UI._BuildSpellRows = function() return {} end
+        BfBot.Persist._GetProtagonist = function() return "protagonist" end
+        BfBot.Persist.GetConfig = function() return config end
+        BfBot.Persist.GetSummonPreset = function() return preset end
+        BfBot.Scan.GetCastableSpells = function(sprite)
+            assert(sprite == "summon-sprite")
+            return {
+                NEWSUMMON = {
+                    count = 1,
+                    class = { isBuff = true, defaultTarget = "s" },
+                },
+            }
+        end
+        BfBot.UI._RefreshSummonsView()
+        return {
+            repeatCount = preset.spells.NEWSUMMON.rep,
+            target = preset.spells.NEWSUMMON.tgt,
+        }
+        """
+    )
+
+    assert facts["repeatCount"] == 1
+    assert facts["target"] == "s"
 
 
 def test_in_game_spell_picker_sort_phase(ui_test_lua: LuaRuntime) -> None:

@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 8
+BfBot.Persist._SCHEMA_VERSION = 9
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -50,6 +50,21 @@ function BfBot.Persist.GetDefaultConfig()
     }
 end
 
+--- Return a safe per-spell repeat count. Only finite integer Lua numbers in
+--- the configured range are accepted; missing or malformed values reset to 1.
+--- This is deliberately strict: imported strings are never coerced or clamped.
+-- @param value  candidate repeat count
+-- @return number: value in 1..BfBot.MAX_SPELL_REPEATS, otherwise 1
+function BfBot.Persist._NormalizeSpellRepeat(value)
+    if type(value) ~= "number" or value ~= value
+        or value == math.huge or value == -math.huge
+        or value ~= math.floor(value)
+        or value < 1 or value > BfBot.MAX_SPELL_REPEATS then
+        return 1
+    end
+    return value
+end
+
 --- Create a default spell entry from classification data.
 -- @param classResult  classification table (may be nil)
 -- @param enabled      optional 0 or 1 (default 1)
@@ -58,7 +73,13 @@ function BfBot.Persist._MakeDefaultSpellEntry(classResult, enabled)
     if classResult and classResult.defaultTarget == "s" then
         tgt = "s"
     end
-    return { on = (enabled == 0) and 0 or 1, tgt = tgt, pri = 999, lock = 0 }
+    return {
+        on = (enabled == 0) and 0 or 1,
+        tgt = tgt,
+        pri = 999,
+        rep = 1,
+        lock = 0,
+    }
 end
 
 --- Scan a character's spells and create a populated default config.
@@ -227,6 +248,7 @@ function BfBot.Persist._ValidateConfig(config)
                             entry.tgt = "p"
                         end
                         if type(entry.pri) ~= "number" then entry.pri = 999 end
+                        entry.rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
                         if type(entry.lock) ~= "number" or (entry.lock ~= 0 and entry.lock ~= 1) then
                             entry.lock = 0
                         end
@@ -254,7 +276,7 @@ function BfBot.Persist._ValidateConfig(config)
         end
     end
 
-    -- Summons (schema v8): full subtree scrub — see _ValidateSummons. This
+    -- Summons (schema v9): full subtree scrub — see _ValidateSummons. This
     -- is NOT left to the runtime accessor (GetSummonPreset): hand-edited
     -- preset files enter through ImportConfig → _ValidateConfig, and a single
     -- marshal-unsafe value (boolean/userdata) parked anywhere in the config
@@ -270,7 +292,7 @@ function BfBot.Persist._ValidateConfig(config)
     return config
 end
 
---- Scrub the summons subtree in place (schema v8). Whitelist by construction:
+--- Scrub the summons subtree in place (schema v9). Whitelist by construction:
 --- identity entries must be { presets = { [1..MAX_PRESETS] = { qc, spells } } };
 --- unknown keys are dropped, known fields are type-enforced, malformed
 --- identities/presets/entries are removed. Guarantees the subtree holds only
@@ -307,10 +329,11 @@ function BfBot.Persist._ValidateSummons(summons)
                         if type(resref) ~= "string" or type(se) ~= "table" then
                             preset.spells[resref] = nil
                         else
-                            -- Spell entry: whitelist { on, tgt, pri, var }
+                            -- Spell entry: whitelist { on, tgt, pri, rep, var }
                             for k in pairs(se) do
                                 if k ~= "on" and k ~= "tgt"
-                                    and k ~= "pri" and k ~= "var" then
+                                    and k ~= "pri" and k ~= "rep"
+                                    and k ~= "var" then
                                     se[k] = nil
                                 end
                             end
@@ -332,6 +355,7 @@ function BfBot.Persist._ValidateSummons(summons)
                                 se.tgt = "p"
                             end
                             if type(se.pri) ~= "number" then se.pri = 999 end
+                            se.rep = BfBot.Persist._NormalizeSpellRepeat(se.rep)
                             if se.var ~= nil and type(se.var) ~= "string" then
                                 se.var = nil
                             end
@@ -408,6 +432,39 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
         -- table is ever read or written — see _GetProtagonistConfig /
         -- GetSummonPreset.
         config.summons = config.summons or {}
+    end
+    if fromVersion < 9 then
+        -- v9: bounded per-spell repeat attempts (#66). Normalize explicitly
+        -- across both party and summon presets so v8 saves have a complete
+        -- shape before they are stamped current.
+        if type(config.presets) == "table" then
+            for _, preset in pairs(config.presets) do
+                if type(preset) == "table" and type(preset.spells) == "table" then
+                    for _, entry in pairs(preset.spells) do
+                        if type(entry) == "table" then
+                            entry.rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
+                        end
+                    end
+                end
+            end
+        end
+        if type(config.summons) == "table" then
+            for _, summon in pairs(config.summons) do
+                if type(summon) == "table" and type(summon.presets) == "table" then
+                    for _, preset in pairs(summon.presets) do
+                        if type(preset) == "table"
+                            and type(preset.spells) == "table" then
+                            for _, entry in pairs(preset.spells) do
+                                if type(entry) == "table" then
+                                    entry.rep = BfBot.Persist._NormalizeSpellRepeat(
+                                        entry.rep)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end
     config.v = BfBot.Persist._SCHEMA_VERSION
     return config
@@ -592,8 +649,9 @@ function BfBot.Persist.GetConfig(sprite)
         and config.v < BfBot.Persist._SCHEMA_VERSION then
         config = BfBot.Persist._MigrateConfig(config, config.v)
     end
-    -- Shape guarantee (v8): a config can carry the current version yet miss
-    -- the summons table (stamped by an intermediate module state, or a table
+    -- Summons shape guarantee (introduced in v8): a config can carry the
+    -- current version yet miss the summons table (stamped by an intermediate
+    -- module state, or a table
     -- lost across a round-trip under an older module). The migration gate
     -- can't catch that — v is already current — so repair at the read path;
     -- _ValidateConfig does the same at import/SetConfig time.
@@ -644,6 +702,27 @@ function BfBot.Persist.SetSpellEnabled(sprite, presetIndex, resref, enabled)
         preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
     end
     preset.spells[resref].on = (enabled == 1) and 1 or 0
+end
+
+--- Get the bounded repeat count for a spell (default 1). Repairs malformed
+--- live values on read so current-version mid-session mutations stay safe.
+function BfBot.Persist.GetSpellRepeat(sprite, presetIndex, resref)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset or not preset.spells or not preset.spells[resref] then return 1 end
+    local entry = preset.spells[resref]
+    entry.rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
+    return entry.rep
+end
+
+--- Set the bounded repeat count for a spell. Creates a default entry when
+--- needed; invalid values reset to 1 rather than being coerced or clamped.
+function BfBot.Persist.SetSpellRepeat(sprite, presetIndex, resref, value)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset then return end
+    if not preset.spells[resref] then
+        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+    end
+    preset.spells[resref].rep = BfBot.Persist._NormalizeSpellRepeat(value)
 end
 
 --- Set the target for a spell in a preset.
@@ -718,7 +797,7 @@ function BfBot.Persist.GetSpellConfig(sprite, presetIndex, resref)
     return preset.spells[resref]
 end
 
--- ---- Summon config accessors (schema v8, issue #19) ----
+-- ---- Summon config accessors (schema v9, issue #19) ----
 -- Summon/clone presets are keyed by summon IDENTITY (BfBot.Scan._SummonIdentity)
 -- and live ONLY on the protagonist's config:
 --     config.summons[identity] = { presets = { [n] = { qc, spells } } }
@@ -757,7 +836,7 @@ end
 
 --- PURE (no engine calls): seed a clone's spell table from its owner's
 --- preset, filtered to the spells the clone can actually cast. Deep-copies
---- on/tgt/pri/var — tgt may be an ordered TABLE of names, which must be
+--- on/tgt/pri/rep/var — tgt may be an ordered TABLE of names, which must be
 --- copied, never aliased, so edits to the summon config can never mutate the
 --- owner's preset (or vice versa). Output holds numbers/strings/tables only
 --- (marshal constraint: no booleans, no userdata).
@@ -778,6 +857,7 @@ function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
             local copy = {
                 on  = (type(entry.on) == "number") and entry.on or 0,
                 pri = (type(entry.pri) == "number") and entry.pri or 999,
+                rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep),
             }
             if type(entry.var) == "string" then copy.var = entry.var end
             if type(entry.tgt) == "table" then
@@ -920,6 +1000,12 @@ function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
                     .. " — reset to empty")
             end
             preset.spells = {}
+        end
+        for _, spellEntry in pairs(preset.spells) do
+            if type(spellEntry) == "table" then
+                spellEntry.rep = BfBot.Persist._NormalizeSpellRepeat(
+                    spellEntry.rep)
+            end
         end
         -- qc: same 0..2 contract as _ValidateSummons — out-of-range values
         -- from hand-imported files must never reach consumers
@@ -1909,7 +1995,7 @@ function BfBot.Persist.CreatePreset(sprite, name)
     -- Build spell table for new preset — all disabled
     local spells = {}
     for resref, info in pairs(allSpells) do
-        spells[resref] = { on = 0, tgt = info.tgt, pri = info.pri }
+        spells[resref] = { on = 0, tgt = info.tgt, pri = info.pri, rep = 1 }
     end
 
     config.presets[idx] = {
@@ -1995,7 +2081,9 @@ function BfBot.Persist.CreatePresetAll(name)
                 end
                 local spells = {}
                 for resref, info in pairs(allSpells) do
-                    spells[resref] = { on = 0, tgt = info.tgt, pri = info.pri }
+                    spells[resref] = {
+                        on = 0, tgt = info.tgt, pri = info.pri, rep = 1,
+                    }
                 end
                 config.presets[idx] = {
                     name = name or ("Preset " .. idx),

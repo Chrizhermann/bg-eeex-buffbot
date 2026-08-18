@@ -1181,8 +1181,8 @@ end
 --- Summons-view refresh: summon tab labels, preset tabs (names come from the
 --- protagonist's config — the preset axis is shared across views), and the
 --- selected summon's preset spell table. All config reads/writes go to the
---- summon preset on the protagonist (schema v8: {qc, spells={[res]={on,tgt,
---- pri,var}}}); the summon SPRITE never gets a config of its own.
+--- summon preset on the protagonist (schema v9: {qc, spells={[res]={on,tgt,
+--- pri,rep,var}}}); the summon SPRITE never gets a config of its own.
 function BfBot.UI._RefreshSummonsView()
     BfBot.UI._UpdateSummonTabNames()
 
@@ -1243,8 +1243,8 @@ function BfBot.UI._RefreshSummonsView()
 
     -- Merge new castable buffs into the preset (disabled, at bottom) — same
     -- behavior as the party view minus the ovr filter (no per-summon
-    -- classification overrides). New entries follow the v8 spell-entry
-    -- schema: on/tgt/pri only (lock/tgtUnlock do not exist for summons).
+    -- classification overrides). New entries follow the v9 spell-entry
+    -- schema: on/tgt/pri/rep (lock/tgtUnlock do not exist for summons).
     local maxPri = 0
     for _, spellCfg in pairs(preset.spells) do
         if (spellCfg.pri or 0) > maxPri then maxPri = spellCfg.pri end
@@ -1257,6 +1257,7 @@ function BfBot.UI._RefreshSummonsView()
                 on = 0,
                 tgt = (scan.class.defaultTarget == "s") and "s" or "p",
                 pri = maxPri,
+                rep = 1,
             }
         end
     end
@@ -1321,7 +1322,7 @@ end
 --- Summons-view write path: the stored spell entry for `resref` in the
 --- selected summon's current preset (the table IS the persisted config —
 --- mutations stick). Read-only lookup unless `create` is set; created
---- entries follow the v8 schema (on/tgt/pri).
+--- entries follow the v9 schema (on/tgt/pri/rep).
 function BfBot.UI._SummonSpellEntry(resref, create)
     local sel = BfBot.UI._SelectedSummon()
     if not sel then return nil end
@@ -1329,7 +1330,7 @@ function BfBot.UI._SummonSpellEntry(resref, create)
     if not preset or type(preset.spells) ~= "table" then return nil end
     local e = preset.spells[resref]
     if not e and create then
-        e = { on = 0, tgt = "p", pri = 999 }
+        e = { on = 0, tgt = "p", pri = 999, rep = 1 }
         preset.spells[resref] = e
     end
     return e

@@ -3172,19 +3172,20 @@ function BfBot.Test.SummonCasters()
         BfBot.Scan.InvalidateSummons()  -- leave no synthetic cache behind
     end
 
-    -- ---- Task 6: schema v8 — summon config accessors + clone seeding ----
+    -- ---- Task 6: summon config accessors + clone seeding ----
     -- Migration: mid-session configs are lazily migrated on read (GetConfig),
     -- so the leader reports the current schema without a save/load cycle.
     if leader then
         local cfg = BfBot.Persist.GetConfig(leader)
-        _check(cfg ~= nil and cfg.v == 8,
-            "schema v8 (leader cfg.v=" .. tostring(cfg and cfg.v) .. ")")
+        _check(cfg ~= nil and cfg.v == BfBot.Persist._SCHEMA_VERSION,
+            "current schema (leader cfg.v=" .. tostring(cfg and cfg.v) .. ")")
     else
         _nok("no leader sprite in slot 0 for schema version check")
     end
 
-    -- v7→v8 migration contract (direct, mirrors the v5/v6 migration tests):
-    -- summons table added, version bumped, unrelated fields preserved.
+    -- v7→current migration contract (direct, mirrors the v5/v6 migration
+    -- tests): summons table and repeat defaults added, version bumped,
+    -- unrelated fields preserved.
     local v7cfg = {
         v = 7, ap = 1,
         presets = {
@@ -3196,10 +3197,11 @@ function BfBot.Test.SummonCasters()
     local mig = BfBot.Persist._MigrateConfig(v7cfg, v7cfg.v)
     _check(mig.v == BfBot.Persist._SCHEMA_VERSION
         and type(mig.summons) == "table" and next(mig.summons) == nil,
-        "v7→v8 migration adds empty summons table and bumps version")
+        "v7→current migration adds empty summons table and bumps version")
     _check(mig.presets[1].spells.TSTMIG.on == 1
-        and mig.presets[1].spells.TSTMIG.pri == 3,
-        "v7→v8 migration preserves preset spell fields")
+        and mig.presets[1].spells.TSTMIG.pri == 3
+        and mig.presets[1].spells.TSTMIG.rep == 1,
+        "v7→current migration preserves fields and adds rep=1")
 
     -- Protagonist: join-order character index 0, NOT portrait slot 0.
     local protSprite = BfBot.Persist._GetProtagonist()
@@ -3233,8 +3235,9 @@ function BfBot.Test.SummonCasters()
     -- Second read: the SAME stored table — no re-create, no re-seed.
     if sp then sp.spells["SPWI999X"] = { on = 1, tgt = "s", pri = 1 } end
     local sp2 = BfBot.Persist.GetSummonPreset("test:fake", 1)
-    _check(sp2 ~= nil and sp2 == sp and sp2.spells["SPWI999X"] ~= nil,
-        "second read returns the same stored table (no re-seed)")
+    _check(sp2 ~= nil and sp2 == sp and sp2.spells["SPWI999X"] ~= nil
+        and sp2.spells["SPWI999X"].rep == 1,
+        "second read returns stored table, repairs rep=1 (no re-seed)")
     -- seedCtx on an EXISTING preset must NOT re-seed (create-only contract):
     -- a re-seed would replace the spells table and wipe the marker.
     if leader then
@@ -3252,14 +3255,15 @@ function BfBot.Test.SummonCasters()
 
     -- _SeedCloneSpells is PURE: filter owner's preset to the clone's castable set.
     local ownerPre = { spells = {
-        SPWI305 = { on = 1, tgt = "p", pri = 1 },
+        SPWI305 = { on = 1, tgt = "p", pri = 1, rep = 4 },
         SPWI999 = { on = 1, tgt = "s", pri = 2 },
     } }
     local seeded = BfBot.Persist._SeedCloneSpells(ownerPre, { SPWI305 = { count = 1 } })
     _check(seeded.SPWI305 ~= nil and seeded.SPWI305.on == 1
         and seeded.SPWI305.tgt == "p" and seeded.SPWI305.pri == 1
+        and seeded.SPWI305.rep == 4
         and seeded.SPWI999 == nil,
-        "seed filters to castable: SPWI305 copied, SPWI999 dropped")
+        "seed filters to castable and copies rep: SPWI305 kept, SPWI999 dropped")
     _check(seeded.SPWI305 ~= ownerPre.spells.SPWI305,
         "seeded entry is a fresh table, not the owner's")
 
@@ -3335,8 +3339,8 @@ function BfBot.Test.SummonCasters()
     _check(ab ~= nil and ab.qc == 0 and ab.junk == nil,
         "validator: boolean qc reset, unknown preset key dropped")
     _check(ab ~= nil and ab.spells.GOOD1 ~= nil and ab.spells.GOOD1.bogus == nil
-        and ab.spells.BAD1 == nil,
-        "validator: spell-entry whitelist enforced, non-table entry dropped")
+        and ab.spells.GOOD1.rep == 1 and ab.spells.BAD1 == nil,
+        "validator: spell whitelist/default rep, non-table entry dropped")
     _check(vc.summons["c:d"] == nil, "validator: non-table identity dropped")
     local ef = vc.summons["e:f"] and vc.summons["e:f"].presets[1]
     _check(ef ~= nil and ef.qc == 0 and ef.spells.T1.pri == 999
