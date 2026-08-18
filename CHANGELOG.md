@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.6.3-alpha (2026-08-19)
+
+### Added
+- **Per-spell repeat counts from R1 through R5 are available for party and summon presets.** Click the repeat cell in a spell row to increase it, or use the selected row's **Repeat: N** button: left-click increases and right-click decreases, with wrap-around in both directions. Repeat settings remain editable while a spell has zero available uses.
+- **Repeat execution is target-major and preserves spell priority.** At R2, targets A and B run as A, A, B, B. A party-wide AoE at R2 casts twice total rather than twice for every party member.
+
+### Safety and compatibility
+- **Every repeat is independently checked before casting.** BuffBot rechecks spell availability, target state, and active effects each time. An attempt that reaches the cast path consumes one available use and observes normal aura and casting time unless the preset's Quick Cast mode applies; attempts skipped for no remaining use, a dead caster or target, or an active buff consume nothing. Ordinary summoning spells can continue while uses remain, but repeats never grant free casts.
+- **Project Image remains owner-lock safe.** Its retained queue entry is forced to one attempt even if configured higher, and entries after it are still dropped rather than delayed until the image expires.
+
+### Persistence
+- **Config schema v9 stores bounded repeat counts in both party and summon spell entries.** v8 saves migrate lazily across both subtrees, while missing, non-integer, non-finite, or out-of-range values reset to R1. Downgrading a save after schema v9 has written it is unsupported.
+
+### Testing
+- Added automated runtime compatibility and queue coverage for schema migration, strict normalization, target-major and AoE expansion, spell-use and active-effect rechecks, Quick Cast, variants, late summons, cancellation, and Project Image safety. Dedicated UI tests cover wrapping, party/summon write routing, menu bindings, and minimum-size geometry. The full pytest suite passes (124 tests).
+
 ## v1.6.2-alpha (2026-08-19)
 
 ### Improved

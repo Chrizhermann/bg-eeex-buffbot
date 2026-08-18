@@ -13,7 +13,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ## Features
 
 - **Dynamic spellbook scanning** — discovers buff spells from all sources (memorized, innate, HLAs, kit abilities) in real time. No hardcoded spell lists — works with modded spells automatically
-- **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, duration display, target assignment, priority ordering, sort-by-duration, and per-spell row lock (locked spells stay put when sorting)
+- **In-game config panel** — per-character tabs, scrollable spell list with enable/disable, duration display, target assignment, per-spell R1–R5 repeat counts, priority ordering, sort-by-duration, and per-spell row lock (locked spells stay put when sorting)
 - **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, Undead Prebuff, etc.) with create/rename/delete
 - **Summons and clones as casters** — configure Project Images, Simulacra, and other allied spellcasting summons in a dedicated Summons view; cast one summon alone or let configured summons join Cast All
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for instant casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally
@@ -73,27 +73,33 @@ Copy all files from `buffbot/` to your game's `override/` directory. Note: innat
 3. Select a preset tab (default: "Long Buffs" / "Short Buffs")
 4. Enable/disable spells with the checkbox column
 5. Set targets for each spell (Self, Party, or a specific character)
-6. Reorder spells with the Up/Down buttons
-7. Click **Cast** to start buffing — or use the F12 innate for that preset
-8. **Quick Cast** button cycles Off → Long → All for fast casting
+6. Set each spell's repeat count from R1 to R5
+7. Reorder spells with the Up/Down buttons
+8. Click **Cast** to start buffing — or use the F12 innate for that preset
+9. **Quick Cast** button cycles Off → Long → All for fast casting
 
 ### Presets
 
 - Default presets auto-populate from scanned spells: long/permanent buffs enabled in preset 1, short buffs in preset 2
 - Create new presets for specific situations (up to 8 per character)
-- Each preset is fully independent — own spell list, targets, priorities, quick cast setting
+- Each preset is fully independent — own spell list, targets, repeat counts, priorities, and Quick Cast setting
 
-> **Temporary user-reported workaround for multiple summons:** Until per-spell repeat counts ship, put the summoning spell in its own preset, select the desired **Quick Cast** mode, then trigger that preset once for each summon you want. Every trigger still requires a currently available use of the spell.
+### Repeat Casts
+
+Each spell row shows R1–R5. Click its repeat cell to increase the count, or select the row and use **Repeat: N**: left-click increases and right-click decreases. Both controls wrap between 1 and 5, and remain editable when the spell currently has zero uses.
+
+Repeats are target-major. With targets A and B at R2, BuffBot attempts A, A, B, B. A party-wide AoE at R2 is cast twice total, not twice per party member. Every repeat rechecks spell availability, target state, and active effects. An attempt that reaches the cast path consumes one available use and follows normal aura and casting-time rules; the preset's Quick Cast mode applies normally, but never creates free casts. Attempts skipped for no remaining use, a dead caster or target, or an active buff consume nothing. Ordinary summoning spells can continue while uses remain.
 
 ### Summons and Clones
 
 1. Create the allied summon or clone, then open BuffBot and switch from **Party** to **Summons**.
 2. Select the live summon tab and enable the spells it should cast. Those enabled rows are its cast selection; there is no separate pre-cast queue checkbox.
 3. Use **Cast (this summon)** to run only that summon, or **Cast All** to run the party preset and every configured live summon together. A configured summon created during the run joins automatically.
+4. To create multiple ordinary summons, set R2–R5 on the summoning spell in its caster's party preset. Project Image is always limited to one attempt for owner-lock safety. Repeat counts in a summon tab instead control spells cast by that summon.
 
 Clone presets are stored by owner identity and are reused when that owner's clone is created again. On first open they seed from the owner's matching preset, limited to spells the clone can cast. To disable automatic participation globally, set `SummonsJoinCast = 0` under `[BuffBot]` in `baldur.ini`.
 
-Project Image locks its owner while active. BuffBot skips locked owners and drops owner entries placed after Project Image so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported; use the Summons panel actions instead.
+Project Image locks its owner while active. BuffBot limits the Project Image cast itself to one attempt, skips locked owners, and drops owner entries placed after it so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported; use the Summons panel actions instead.
 
 ### Export / Import
 
