@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.6.2-alpha (2026-08-19)
+
+### Improved
+- **The Add Spell picker now surfaces spells with the most currently available casts first.** Previously removed spells retain recovery precedence; within each group, spells sort by available count descending, then localized name and resource reference for deterministic ties. Known spells with zero available casts remain selectable. Preset priority and cast order are unchanged. (#63)
+
+### Testing
+- Added an in-game `SpellPickerSort` phase covering recovery precedence, descending counts, nil-as-zero handling, localized-name ordering, deterministic resource-reference ties, and exact ties. The full automated suite passes, and the picker behavior was verified live on BG2:EE 2.6.6.0 with EEex v1.2.0.
+
 ## v1.6.1-alpha (2026-07-20)
 
 ### Compatibility

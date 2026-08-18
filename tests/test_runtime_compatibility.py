@@ -49,6 +49,29 @@ def core_lua() -> LuaRuntime:
     return runtime
 
 
+@pytest.fixture
+def ui_test_lua() -> LuaRuntime:
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute(
+        """
+        BfBot = {
+            MAX_PRESETS = 8,
+            Scan = {}, Class = {}, Innate = {}, Mp = {}, Exec = {}, Persist = {},
+            _cache = { class = {}, scan = {} },
+            _Warn = function(_) end,
+            _Print = function(_) end,
+        }
+        """
+    )
+    runtime.execute(UI_SOURCE)
+    runtime.execute(TEST_SOURCE)
+    return runtime
+
+
+def test_in_game_spell_picker_sort_phase(ui_test_lua: LuaRuntime) -> None:
+    assert ui_test_lua.eval("BfBot.Test.SpellPickerSort()")
+
+
 def test_safe_callback_preserves_interior_and_trailing_nil_returns(
     core_lua: LuaRuntime,
 ) -> None:

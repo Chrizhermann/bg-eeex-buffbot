@@ -2038,6 +2038,25 @@ end
 -- Spell Override (Add / Remove)
 -- ============================================================
 
+--- PURE: order Add Spell picker rows by recovery precedence, then current
+--- available count, localized name, and resref. Full ties compare false so
+--- the function is a strict comparator for table.sort.
+function BfBot.UI._SpellPickerLess(a, b)
+    local aExcluded = a.excluded or 0
+    local bExcluded = b.excluded or 0
+    if aExcluded ~= bExcluded then return aExcluded > bExcluded end
+
+    local aCount = a.count or 0
+    local bCount = b.count or 0
+    if aCount ~= bCount then return aCount > bCount end
+
+    local aName = a.name or a.resref or ""
+    local bName = b.name or b.resref or ""
+    if aName ~= bName then return aName < bName end
+
+    return (a.resref or "") < (b.resref or "")
+end
+
 --- Build the picker list: castable spells the user can add to the preset.
 --- Includes non-buff spells (manual inclusion) and previously-excluded buffs
 --- (recovery from accidental Remove). Excluded spells sort to the top.
@@ -2073,11 +2092,8 @@ function BfBot.UI._BuildPickerList()
         ::nextSpell::
     end
     -- Sort excluded spells first (recently-removed → prominent for undo),
-    -- then alphabetical within each group.
-    table.sort(buffbot_pickerSpells, function(a, b)
-        if a.excluded ~= b.excluded then return a.excluded > b.excluded end
-        return a.name < b.name
-    end)
+    -- then available count descending, localized name, and resref.
+    table.sort(buffbot_pickerSpells, BfBot.UI._SpellPickerLess)
 end
 
 --- Open the spell picker sub-menu.

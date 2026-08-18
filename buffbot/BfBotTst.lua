@@ -1034,6 +1034,64 @@ function BfBot.Test.SpellLockOrder()
 end
 
 -- ============================================================
+-- BfBot.Test.SpellPickerSort — Add Spell picker ordering (#63)
+-- ============================================================
+
+function BfBot.Test.SpellPickerSort()
+    P("=== SpellPickerSort: excluded, available count, name, resref ===")
+    _reset()
+
+    local less = BfBot.UI and BfBot.UI._SpellPickerLess
+    if type(less) ~= "function" then
+        _nok("_SpellPickerLess comparator exists")
+        return _summary("SpellPickerSort")
+    end
+    _ok("_SpellPickerLess comparator exists")
+
+    local rows = {
+        { resref = "SAMEB", name = "Same",         count = 2, excluded = 0 },
+        { resref = "ZERO",  name = "Zero",         count = 0, excluded = 0 },
+        { resref = "EXZERO",name = "Removed Zero", count = 0, excluded = 1 },
+        { resref = "TWO_B", name = "Beta",         count = 2, excluded = 0 },
+        { resref = "NIL",   name = "Nil",                     excluded = 0 },
+        { resref = "FOUR",  name = "Top",          count = 4, excluded = 0 },
+        { resref = "SAMEA", name = "Same",         count = 2, excluded = 0 },
+        { resref = "EXFOUR",name = "Removed Four", count = 4, excluded = 1 },
+        { resref = "TWO_A", name = "Alpha",        count = 2, excluded = 0 },
+    }
+    table.sort(rows, less)
+
+    local refs = {}
+    for i, row in ipairs(rows) do refs[i] = row.resref end
+    local order = table.concat(refs, ",")
+    local expected = "EXFOUR,EXZERO,FOUR,TWO_A,TWO_B,SAMEA,SAMEB,NIL,ZERO"
+    _check(order == expected,
+        "Sort order expected " .. expected .. "; got " .. order)
+
+    _check(less(
+            { resref = "REM", name = "Removed", count = 0, excluded = 1 },
+            { resref = "TOP", name = "Top",     count = 4, excluded = 0 }),
+        "Excluded recovery group precedes higher-count normal rows")
+
+    _check(less(
+            { resref = "NILA", name = "Alpha", count = nil, excluded = 0 },
+            { resref = "ZEROB", name = "Beta", count = 0, excluded = 0 }),
+        "Nil count is treated as zero and falls through to name")
+
+    _check(less(
+            { resref = "SAMEA", name = "Same", count = 2, excluded = 0 },
+            { resref = "SAMEB", name = "Same", count = 2, excluded = 0 }),
+        "Equal count and name break ties by resref")
+
+    local tieA = { resref = "TIE", name = "Tie", count = 2, excluded = 0 }
+    local tieB = { resref = "TIE", name = "Tie", count = 2, excluded = 0 }
+    _check(not less(tieA, tieB) and not less(tieB, tieA),
+        "Exact ties compare false in both directions")
+
+    return _summary("SpellPickerSort")
+end
+
+-- ============================================================
 -- BfBot.Test.ExportImport — Config export/import tests
 -- ============================================================
 
@@ -5321,6 +5379,10 @@ function BfBot.Test.RunAll()
     local lockOrderOk = BfBot.Test.SpellLockOrder()
     P("")
 
+    -- Phase: Add Spell picker ordering (issue #63)
+    local pickerSortOk = BfBot.Test.SpellPickerSort()
+    P("")
+
     -- Phase 12: Movable Panel
     local movPanelOk = BfBot.Test.MovablePanel()
     P("")
@@ -5367,6 +5429,7 @@ function BfBot.Test.RunAll()
     P("  Summon Casters:     " .. (summonOk and "PASS" or "FAIL"))
     P("  Name Strip:         " .. (nameStripOk and "PASS" or "FAIL"))
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
+    P("  Spell Picker Sort:  " .. (pickerSortOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
@@ -5378,7 +5441,7 @@ function BfBot.Test.RunAll()
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk and eeexCompatOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk and eeexCompatOk
 end
 
 -- ============================================================

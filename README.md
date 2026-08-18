@@ -19,7 +19,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for instant casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally
 - **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
 - **Skip active buffs** — detects already-active buffs via spell state + effect list checks and skips them. No wasted spell slots
-- **Manual spell override** — "Add Spell" picker to include spells the classifier missed, "Remove" to exclude false positives
+- **Manual spell override** — "Add Spell" picker to include spells the classifier missed, ordered by current available casts while keeping removed spells easy to recover; "Remove" excludes false positives
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
 - **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
 - **Subwindow selection spells** — spells like Protection from Elemental Energy that normally open a selection popup are handled seamlessly. Pre-configure which variant to cast, and BuffBot bypasses the popup entirely
@@ -91,7 +91,7 @@ Copy all files from `buffbot/` to your game's `override/` directory. Note: innat
 
 Clone presets are stored by owner identity and are reused when that owner's clone is created again. On first open they seed from the owner's matching preset, limited to spells the clone can cast. To disable automatic participation globally, set `SummonsJoinCast = 0` under `[BuffBot]` in `baldur.ini`.
 
-Project Image locks its owner while active. BuffBot skips locked owners and drops owner entries placed after Project Image so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported in v1.6.1-alpha; use the Summons panel actions instead.
+Project Image locks its owner while active. BuffBot skips locked owners and drops owner entries placed after Project Image so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported; use the Summons panel actions instead.
 
 ### Export / Import
 
