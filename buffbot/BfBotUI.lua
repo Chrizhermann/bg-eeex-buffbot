@@ -765,35 +765,41 @@ function BfBot.UI._Layout()
     local r6Y = r5Y + 32                -- Action buttons
     local r7Y = r6Y + 32                -- Status
 
-    -- Override buttons: Add Spell + Remove (left) + Export + Import (right)
-    setArea("bbAdd", cx, r4Y, 120, btnH)
-    setArea("bbRmv", cx + 126, r4Y, 120, btnH)
-    setArea("bbImp", cx + cw - 90, r4Y, 90, btnH)
-    setArea("bbExp", cx + cw - 90 - 96, r4Y, 90, btnH)
+    -- Override row. Keep the selected-spell Repeat control between the
+    -- Add/Remove cluster and the right-aligned import/export cluster.
+    local overrideGap = 6
+    local addW, removeW, repeatW, ioW = 110, 100, 90, 80
+    setArea("bbAdd", cx, r4Y, addW, btnH)
+    setArea("bbRmv", cx + addW + overrideGap, r4Y, removeW, btnH)
+    setArea("bbRepeat", cx + addW + removeW + 2 * overrideGap,
+        r4Y, repeatW, btnH)
+    setArea("bbImp", cx + cw - ioW, r4Y, ioW, btnH)
+    setArea("bbExp", cx + cw - 2 * ioW - overrideGap, r4Y, ioW, btnH)
 
-    -- Spell action buttons: Toggle, Target, Up, Down, Sort, Delete Preset (normal layout)
-    setArea("bbTog", cx, r5Y, 120, btnH)
-    setArea("bbTgt", cx + 126, r5Y, 160, btnH)
-    setArea("bbUp", cx + 292, r5Y, 48, btnH)
-    setArea("bbDn", cx + 344, r5Y, 48, btnH)
-    setArea("bbSort", cx + 398, r5Y, 48, btnH)
-    setArea("bbDel", cx + cw - 130, r5Y, 130, btnH)
+    -- Spell action buttons: normal layout. The right-aligned delete button
+    -- leaves a flexible gap after Sort at the 550px minimum panel width.
+    setArea("bbTog", cx, r5Y, 100, btnH)
+    setArea("bbTgt", cx + 105, r5Y, 130, btnH)
+    setArea("bbUp", cx + 240, r5Y, 44, btnH)
+    setArea("bbDn", cx + 288, r5Y, 44, btnH)
+    setArea("bbSort", cx + 336, r5Y, 44, btnH)
+    setArea("bbDel", cx + cw - 110, r5Y, 110, btnH)
 
-    -- Spell action buttons: variant layout (squeezed with Variant button)
-    setArea("bbVTog", cx, r5Y, 90, btnH)
-    setArea("bbVTgt", cx + 94, r5Y, 110, btnH)
-    setArea("bbVVar", cx + 208, r5Y, 110, btnH)
-    setArea("bbVUp", cx + 322, r5Y, 44, btnH)
-    setArea("bbVDn", cx + 370, r5Y, 44, btnH)
-    setArea("bbVSort", cx + 418, r5Y, 44, btnH)
-    setArea("bbVDel", cx + cw - 102, r5Y, 102, btnH)
+    -- Spell action buttons: variant layout (includes the Variant picker).
+    setArea("bbVTog", cx, r5Y, 80, btnH)
+    setArea("bbVTgt", cx + 84, r5Y, 100, btnH)
+    setArea("bbVVar", cx + 188, r5Y, 100, btnH)
+    setArea("bbVUp", cx + 292, r5Y, 40, btnH)
+    setArea("bbVDn", cx + 336, r5Y, 40, btnH)
+    setArea("bbVSort", cx + 380, r5Y, 40, btnH)
+    setArea("bbVDel", cx + cw - 90, r5Y, 90, btnH)
 
     -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
-    local closeW = 80
-    local qcW = 180
-    local castAllW = 100
-    local castCharW = 140
-    local stopW = 60
+    local closeW = 70
+    local qcW = 170
+    local castAllW = 85
+    local castCharW = 115
+    local stopW = 55
     setArea("bbCast", cx, r6Y, castAllW, btnH)
     setArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
     setArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
@@ -1073,7 +1079,7 @@ end
 --- Build the spell-list rows for one caster's preset, cross-referenced with
 --- scan data. Shared by the party view (ovr = config.ovr) and the summons
 --- view (ovr = nil — no per-summon classification overrides; absent
---- lock/tgtUnlock fields read as 0, which the v8 summon schema guarantees).
+--- lock/tgtUnlock fields read as 0, which the v9 summon schema guarantees).
 -- @param sprite    caster sprite (party member or freshly-resolved summon)
 -- @param preset    preset table { spells = { [resref] = entry } }
 -- @param castable  BfBot.Scan.GetCastableSpells(sprite) result
@@ -1082,6 +1088,7 @@ end
 function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
     local rows = {}
     for resref, spellCfg in pairs(preset.spells) do
+        local rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
         local scan = castable[resref]
         local name = resref
         local icon = ""
@@ -1156,6 +1163,8 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             durCat   = durCat,
             count    = count,
             countText = count > 0 and ("x" .. count) or "--",
+            rep      = rep,
+            repeatText = "R" .. rep,
             on       = spellCfg.on or 0,
             targetText = BfBot.UI._TargetToText(spellCfg.tgt),
             tgt      = spellCfg.tgt or "p",
@@ -1367,6 +1376,51 @@ function BfBot.UI._UpdateVariantState()
 end
 
 -- ============================================================
+-- Spell Repeat Count (integer-only persistence)
+-- ============================================================
+
+--- PURE: normalize a repeat count, then move one step with wrap-around.
+--- Only the UI's supported directions (+1 / -1) are accepted; any other
+--- delta follows the primary left-click direction (+1).
+function BfBot.UI._StepSpellRepeat(current, delta)
+    local rep = BfBot.Persist._NormalizeSpellRepeat(current)
+    local step = (delta == -1) and -1 or 1
+    local cap = BfBot.MAX_SPELL_REPEATS
+    return ((rep - 1 + step) % cap) + 1
+end
+
+--- Change the selected spell's repeat count without rebuilding the table.
+--- This deliberately ignores castability / remaining slots: an exhausted
+--- row is still configuration that the player may edit for a later rest.
+function BfBot.UI.StepSelectedRepeat(delta)
+    local row = buffbot_selectedRow
+    if row < 1 or row > #buffbot_spellTable then return end
+    local entry = buffbot_spellTable[row]
+    if not entry then return end
+
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return end
+    local rep = BfBot.UI._StepSpellRepeat(entry.rep, delta)
+
+    if BfBot.UI._view == "summons" then
+        local summonEntry = BfBot.UI._SummonSpellEntry(entry.resref, 1)
+        if not summonEntry then return end
+        summonEntry.rep = rep
+    else
+        BfBot.Persist.SetSpellRepeat(
+            sprite, BfBot.UI._presetIdx, entry.resref, rep)
+        rep = BfBot.Persist._NormalizeSpellRepeat(
+            BfBot.Persist.GetSpellRepeat(
+                sprite, BfBot.UI._presetIdx, entry.resref))
+    end
+
+    -- Immediate visual update preserves buffbot_selectedRow; _Refresh()
+    -- would clear the selection and is intentionally not used here.
+    entry.rep = rep
+    entry.repeatText = "R" .. rep
+end
+
+-- ============================================================
 -- Spell Toggle (integer path — NO booleans)
 -- ============================================================
 
@@ -1538,7 +1592,7 @@ function BfBot.UI.PickerSelf()
 end
 
 --- View-routed target write: party → Persist setter, summons → the stored
---- summon spell entry (v8 schema keeps tgt as "s"/"p"/name/ordered table).
+--- summon spell entry (v9 schema keeps tgt as "s"/"p"/name/ordered table).
 function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
     if BfBot.UI._view == "summons" then
         local se = BfBot.UI._SummonSpellEntry(resref, 1)
@@ -1620,7 +1674,7 @@ function BfBot.UI.PickerDone()
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
---- Unlock targeting for a locked spell. Party view only: the v8 summon
+--- Unlock targeting for a locked spell. Party view only: the v9 summon
 --- spell-entry schema has no tgtUnlock field (the picker's Unlock button is
 --- hidden in the summons view).
 function BfBot.UI.PickerUnlock()
@@ -2333,6 +2387,26 @@ function BfBot.UI._TargetBtnText()
     return "Target"
 end
 
+--- Normalized repeat count for the selected row (safe while the button is
+--- disabled and the menu still evaluates its text / tooltip expressions).
+function BfBot.UI._SelectedSpellRepeat()
+    local entry = buffbot_spellTable[buffbot_selectedRow]
+    return BfBot.Persist._NormalizeSpellRepeat(entry and entry.rep or nil)
+end
+
+--- Repeat footer-button text for the selected spell.
+function BfBot.UI._RepeatButtonText()
+    return "Repeat: " .. BfBot.UI._SelectedSpellRepeat()
+end
+
+--- Repeat footer-button tooltip for the selected spell.
+function BfBot.UI._RepeatTooltip()
+    return "Cast this spell " .. BfBot.UI._SelectedSpellRepeat()
+        .. " times per resolved target. Each attempt uses a spell slot and "
+        .. "normal casting rules. Left-click increases; right-click decreases. "
+        .. "Range 1–" .. BfBot.MAX_SPELL_REPEATS .. "."
+end
+
 --- Format a duration in seconds to a human-readable string.
 --- Returns mixed format: "1h 30m", "5m", "1m 30s", "45s", "Perm", "Inst", "?"
 function BfBot.UI._FormatDuration(seconds)
@@ -2364,6 +2438,17 @@ function BfBot.UI._SpellNameColor(row)
     return _parseColor(BfBot.UI._T("text"))
 end
 
+--- Repeat column color: repeated casts use the theme accent. A single cast
+--- follows the normal spell-row color, including muted unavailable rows.
+function BfBot.UI._RepeatColor(row)
+    local entry = buffbot_spellTable[row]
+    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    local rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
+    if rep > 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
+    return _parseColor(BfBot.UI._T("text"))
+end
+
 --- Checkbox display: "+" for enabled, empty for disabled.
 function BfBot.UI._CheckboxText(row)
     local entry = buffbot_spellTable[row]
@@ -2371,7 +2456,7 @@ function BfBot.UI._CheckboxText(row)
     return "[ ]"
 end
 
---- Lock column display text. The summons view has no lock feature (the v8
+--- Lock column display text. The summons view has no lock feature (the v9
 --- summon spell-entry schema has no lock field) — the column stays blank.
 function BfBot.UI._LockText(row)
     if BfBot.UI._view == "summons" then return "" end
@@ -2448,7 +2533,7 @@ end
 
 --- Quick Cast value (0..2) for the current view: party → the selected
 --- character's per-preset qc; summons → the CACHED qc of the selected
---- summon's preset (its OWN v8 qc field — the summon follows it even
+--- summon's preset (its OWN v9 qc field — the summon follows it even
 --- inside a party run). The cache exists because this feeds bbQC's
 --- per-frame `text lua` / `text color lua`: resolving the summon preset
 --- live would walk _SelectedSummon → PeekSummonPreset →

@@ -547,7 +547,7 @@ menu
 		-- Column 3: Spell name
 		column
 		{
-			width 28
+			width 26
 			label
 			{
 				area 0 0 -1 36
@@ -561,7 +561,7 @@ menu
 		-- Column 4: Duration
 		column
 		{
-			width 12
+			width 10
 			label
 			{
 				area 0 0 -1 36
@@ -574,7 +574,7 @@ menu
 		-- Column 5: Memorized count
 		column
 		{
-			width 12
+			width 10
 			label
 			{
 				area 0 0 -1 36
@@ -584,10 +584,24 @@ menu
 			}
 		}
 
-		-- Column 6: Target display
+		-- Column 6: Repeat count (click cell to increment with wrap)
 		column
 		{
-			width 26
+			width 8
+			label
+			{
+				area 0 0 -1 36
+				text lua "buffbot_spellTable[rowNumber] and buffbot_spellTable[rowNumber].repeatText or 'R1'"
+				text style "bb_normal_parchment"
+				text align center center
+				text color lua "BfBot.UI._RepeatColor(rowNumber)"
+			}
+		}
+
+		-- Column 7: Target display
+		column
+		{
+			width 24
 			label
 			{
 				area 0 0 -1 36
@@ -597,7 +611,7 @@ menu
 			}
 		}
 
-		-- Column 7: Lock toggle ([L] / [ ])
+		-- Column 8: Lock toggle ([L] / [ ])
 		column
 		{
 			width 6
@@ -613,7 +627,7 @@ menu
 
 		area 350 148 520 250
 		name    "bbList"
-		action      "BfBot.UI._UpdateVariantState(); if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) elseif cellNumber == 7 then BfBot.UI.ToggleLock(buffbot_selectedRow) end"
+		action      "BfBot.UI._UpdateVariantState(); if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) elseif cellNumber == 6 then BfBot.UI.StepSelectedRepeat(1) elseif cellNumber == 8 then BfBot.UI.ToggleLock(buffbot_selectedRow) end"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
 		var         "buffbot_selectedRow"
@@ -635,7 +649,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 350 402 120 28
+		area 350 402 110 28
 	}
 
 	-- Remove selected spell from buff list (exclude override)
@@ -648,7 +662,23 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 476 402 120 28
+		area 466 402 100 28
+	}
+
+	-- Repeat selected spell per resolved target. This remains editable even
+	-- while the spell is exhausted; each attempt still follows normal rules.
+	button
+	{
+		name    "bbRepeat"
+		enabled "BfBot.UI._HasSelection()"
+		action  "BfBot.UI.StepSelectedRepeat(1)"
+		actionAlt "BfBot.UI.StepSelectedRepeat(-1)"
+		text lua "BfBot.UI._RepeatButtonText()"
+		text style "bb_button"
+		tooltip lua "BfBot.UI._RepeatTooltip()"
+		bam     "GUIOSTUL"
+		scaleToClip
+		area 572 402 90 28
 	}
 
 	-- Export current character's config
@@ -661,7 +691,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 610 402 90 28
+		area 704 402 80 28
 	}
 
 	-- Import config from file
@@ -674,7 +704,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 706 402 90 28
+		area 790 402 80 28
 	}
 
 	-- ======================================================
@@ -692,7 +722,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 350 434 120 28
+		area 350 434 100 28
 	}
 
 	-- Change target for selected spell
@@ -705,7 +735,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 476 434 160 28
+		area 455 434 130 28
 	}
 
 	-- Move selected spell up in cast order
@@ -718,7 +748,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 642 434 48 28
+		area 590 434 44 28
 	}
 
 	-- Move selected spell down in cast order
@@ -731,7 +761,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 694 434 48 28
+		area 638 434 44 28
 	}
 
 	-- Sort preset by duration (longest first)
@@ -744,7 +774,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 748 434 48 28
+		area 686 434 44 28
 	}
 
 	-- Delete current preset
@@ -757,7 +787,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 800 434 130 28
+		area 760 434 110 28
 	}
 
 	-- ======================================================
@@ -775,7 +805,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 350 434 90 28
+		area 350 434 80 28
 	}
 
 	-- Target (variant layout)
@@ -788,7 +818,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 444 434 110 28
+		area 434 434 100 28
 	}
 
 	-- Variant picker button
@@ -801,7 +831,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 558 434 110 28
+		area 538 434 100 28
 	}
 
 	-- Up (variant layout)
@@ -814,7 +844,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 672 434 44 28
+		area 642 434 40 28
 	}
 
 	-- Down (variant layout)
@@ -827,7 +857,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 720 434 44 28
+		area 686 434 40 28
 	}
 
 	-- Sort (variant layout)
@@ -840,7 +870,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 768 434 44 28
+		area 730 434 40 28
 	}
 
 	-- Delete Preset (variant layout)
@@ -853,7 +883,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 816 434 102 28
+		area 780 434 90 28
 	}
 
 	-- ======================================================
@@ -871,7 +901,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 350 468 100 28
+		area 350 468 85 28
 	}
 
 	-- Cast Character button
@@ -885,7 +915,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 454 468 140 28
+		area 439 468 115 28
 	}
 
 	-- Stop button (only visible when running)
@@ -898,7 +928,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 536 468 80 28
+		area 558 468 55 28
 	}
 
 	-- Quick Cast cycling button (text element: supports both action + text color lua)
@@ -914,7 +944,7 @@ menu
 		tooltip lua "BfBot.UI._QuickCastTooltip()"
 		rectangle 5
 		rectangle opacity 160
-		area 622 468 162 28
+		area 624 468 170 28
 	}
 
 	-- Close button
@@ -927,7 +957,7 @@ menu
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
-		area 790 468 80 28
+		area 800 468 70 28
 	}
 
 	-- Status line
