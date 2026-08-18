@@ -83,6 +83,8 @@ Copy all files from `buffbot/` to your game's `override/` directory. Note: innat
 - Create new presets for specific situations (up to 8 per character)
 - Each preset is fully independent — own spell list, targets, priorities, quick cast setting
 
+> **Temporary user-reported workaround for multiple summons:** Until per-spell repeat counts ship, put the summoning spell in its own preset, select the desired **Quick Cast** mode, then trigger that preset once for each summon you want. Every trigger still requires a currently available use of the spell.
+
 ### Summons and Clones
 
 1. Create the allied summon or clone, then open BuffBot and switch from **Party** to **Summons**.
