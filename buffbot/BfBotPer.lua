@@ -1551,7 +1551,9 @@ end
 -- @param entries    ONE caster's priority-sorted entry list; each entry
 --                   carries `spellName` (display name, rule-2 match)
 -- @param liveClones array of { cloneType, ownerOid|nil, ownerName|nil }
--- @return kept (array, same entry tables), skips (array of { msg = string })
+-- @return kept array using the original entry tables, except a retained
+--              Project Image entry is a shallow copy with rep=1;
+--         skips array of { msg = string }
 function BfBot.Persist._ApplyPuppetLockPolicy(caster, entries, liveClones)
     local kept, skips = {}, {}
     if type(entries) ~= "table" then return kept, skips end
@@ -1580,16 +1582,25 @@ function BfBot.Persist._ApplyPuppetLockPolicy(caster, entries, liveClones)
     end
 
     -- Rule 2: drop trailing entries after a Project Image cast in the chain.
+    -- A retained PI is always ONE attempt: once it resolves the owner locks,
+    -- so expanding another attempt would only create a delayed zombie cast.
+    -- Copy the entry before forcing rep=1 so queue building never mutates the
+    -- caller's persisted/config-derived table.
     for i, e in ipairs(entries) do
-        kept[#kept + 1] = e
         local nm = type(e.spellName) == "string" and e.spellName:lower() or ""
         if nm:find("project image", 1, true) then
+            local retained = {}
+            for k, v in pairs(e) do retained[k] = v end
+            retained.rep = 1
+            kept[#kept + 1] = retained
             if #entries > i then
                 skips[#skips + 1] = { msg = tostring(caster.name) .. ": "
                     .. (#entries - i) .. " entries after Project Image skipped"
                     .. " — owner locked while image is active" }
             end
             break
+        else
+            kept[#kept + 1] = e
         end
     end
     return kept, skips
@@ -1641,7 +1652,7 @@ end
 --- Mirrors the per-character builder's spells walk exactly: honors on
 --- (enabled), pri (priority order), tgt (via _ResolveConfigTarget with a
 --- summon caster ref: "s" → the summon itself, names/tables → party slots
---- as today) and var (variant).
+--- as today), var (variant), and rep (bounded repeat attempts).
 --- Quick Cast: the summon preset carries its OWN qc (0..2); the cheat flag
 --- is computed here per entry with the same duration-boundary rule
 --- Exec._BuildQueue applies to qcMode, and attached as entry.cheat (1/0) so
@@ -1702,6 +1713,7 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do
+                    e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
                     -- Display name rides along for the puppet-lock rule-2
                     -- name match; never copied onto the final queue entry.
                     e.spellName = scanData.name or resref
@@ -1728,8 +1740,8 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
         entries = kept
     end
 
-    -- Append to queue (strip pri/spellName ride-alongs — exec rebuilds its
-    -- own entries from the scan)
+    -- Append to queue (strip pri/spellName ride-alongs, retain normalized rep
+    -- for Exec's per-attempt expansion).
     local qc = (type(preset.qc) == "number") and preset.qc or 0
     local queue = {}
     for _, e in ipairs(entries) do
@@ -1744,6 +1756,7 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
             target = e.target,
             durCat = durCat,
             var    = spellCfg and spellCfg.var or nil,
+            rep    = BfBot.Persist._NormalizeSpellRepeat(e.rep),
             cheat  = isCheat and 1 or 0,  -- explicit 0: own qc beats run qcMode
         })
     end
@@ -1802,6 +1815,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                     local resolved = BfBot.Persist._ResolveConfigTarget(
                         spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                     for _, e in ipairs(resolved) do
+                        e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
                         -- Display name rides along for the puppet-lock rule-2
                         -- name match; never copied onto the final queue entry.
                         e.spellName = scanData.name or resref
@@ -1827,7 +1841,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
             entries = kept
         end
 
-        -- Append to queue (strip pri field — exec engine doesn't use it)
+        -- Append to queue (strip pri/spellName ride-alongs, retain rep).
         for _, e in ipairs(entries) do
             local scanData = castable[e.spell]
             local spellCfg = preset.spells[e.spell]
@@ -1837,6 +1851,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                 target = e.target,
                 durCat = scanData and scanData.durCat or "short",
                 var    = spellCfg and spellCfg.var or nil,
+                rep    = BfBot.Persist._NormalizeSpellRepeat(e.rep),
             })
         end
 
@@ -2157,6 +2172,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do
+                    e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
                     -- Display name rides along for the puppet-lock rule-2
                     -- name match; never copied onto the final queue entry.
                     e.spellName = scanData.name or resref
@@ -2193,7 +2209,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
         entries = kept
     end
 
-    -- Strip pri/spellName ride-alongs — exec engine doesn't use them
+    -- Strip pri/spellName ride-alongs; retain normalized rep for Exec.
     local queue = {}
     for _, e in ipairs(entries) do
         local scanData = castable[e.spell]
@@ -2204,6 +2220,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             target = e.target,
             durCat = scanData and scanData.durCat or "short",
             var    = spellCfg and spellCfg.var or nil,
+            rep    = BfBot.Persist._NormalizeSpellRepeat(e.rep),
         })
     end
 

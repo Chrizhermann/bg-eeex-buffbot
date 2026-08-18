@@ -12,6 +12,7 @@ from lupa.luajit21 import LuaRuntime
 ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE = (ROOT / "buffbot/BfBotCor.lua").read_text(encoding="utf-8")
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
+EXEC_SOURCE = (ROOT / "buffbot/BfBotExe.lua").read_text(encoding="utf-8")
 MAIN_SOURCE = (ROOT / "buffbot/M_BfBot.lua").read_text(encoding="utf-8")
 INNATE_SOURCE = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
@@ -47,6 +48,63 @@ def core_lua() -> LuaRuntime:
     runtime = LuaRuntime(unpack_returned_tuples=True)
     runtime.execute("Infinity_DisplayString = function(_) end")
     runtime.execute(CORE_SOURCE)
+    return runtime
+
+
+@pytest.fixture
+def exec_lua() -> LuaRuntime:
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute(
+        """
+        BfBot = {
+            MAX_PRESETS = 8,
+            MAX_SPELL_REPEATS = 5,
+            Scan = {}, Class = {}, Innate = {}, Mp = {},
+            _cache = { class = {}, scan = {} },
+            _Warn = function(_) end,
+            _Print = function(_) end,
+            _OpenLogAppend = function(_) end,
+            _CloseLog = function() end,
+            _GetName = function(sprite)
+                if type(sprite) == "table" then
+                    return sprite.name or "?"
+                end
+                return tostring(sprite)
+            end,
+        }
+        EEex_BAnd = function() return 0 end
+        EEex_Sprite_DisplayStringHead = function() end
+        """
+    )
+    runtime.execute(PERSIST_SOURCE)
+    runtime.execute(EXEC_SOURCE)
+    runtime.execute(
+        """
+        -- Install a deterministic two-member party and spellbook for pure
+        -- _BuildQueue tests. Callers may replace any seam afterwards.
+        function BfBot_TestQueueWorld(spells, partySize)
+            local sprites = {
+                { name = "A", m_id = 100, m_baseStats = { m_generalState = 0 } },
+                { name = "B", m_id = 101, m_baseStats = { m_generalState = 0 } },
+            }
+            partySize = partySize or 1
+            BfBot.Exec._ResolveCaster = function() return sprites[1] end
+            BfBot.Scan.GetCastableSpells = function() return spells end
+            BfBot.Scan.Invalidate = function() end
+            BfBot.Exec._IsAlive = function(sprite) return sprite ~= nil end
+            EEex_Sprite_GetInPortrait = function(slot)
+                if slot < partySize then return sprites[slot + 1] end
+                return nil
+            end
+            EEex_Sprite_GetCharacterIndex = function(sprite)
+                if sprite == sprites[1] then return 0 end
+                if sprite == sprites[2] then return 1 end
+                error("unknown synthetic sprite")
+            end
+            return sprites
+        end
+        """
+    )
     return runtime
 
 
@@ -554,6 +612,724 @@ def test_summon_refresh_merge_initializes_repeat(
 
     assert facts["repeatCount"] == 1
     assert facts["target"] == "s"
+
+
+def test_repeat_builders_propagate_normalized_counts_without_slot_capping(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local sprite = {
+            name = "Caster", m_id = 41,
+            m_baseStats = { m_generalState = 0 },
+        }
+        local config = BfBot.Persist.GetDefaultConfig()
+        config.presets[1].spells = {
+            FIRST = { on = 1, tgt = "s", pri = 1, rep = 5 },
+            SECOND = { on = 1, tgt = "s", pri = 2, rep = "4" },
+        }
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return sprite end
+            return nil
+        end
+        BfBot.Persist.GetConfig = function(seen)
+            assert(seen == sprite)
+            return config
+        end
+        BfBot.Persist.GetPref = function(key)
+            if key == "SummonsJoinCast" then return 0 end
+            return BfBot.Persist._INI_DEFAULTS[key]
+        end
+        BfBot.Persist._CollectLiveCloneDescriptors = function() return {} end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function(seen)
+            assert(seen == sprite)
+            return {
+                FIRST = { count = 1, name = "First", durCat = "long" },
+                SECOND = { count = 1, name = "Second", durCat = "short" },
+            }
+        end
+
+        local party = assert(BfBot.Persist.BuildQueueFromPreset(1))
+        local character = assert(BfBot.Persist.BuildQueueForCharacter(0, 1))
+        return {
+            partyCount = #party,
+            partyFirst = party[1].rep,
+            partyMalformed = party[2].rep,
+            characterCount = #character,
+            characterFirst = character[1].rep,
+            characterMalformed = character[2].rep,
+        }
+        """
+    )
+
+    assert facts["partyCount"] == 2
+    assert facts["partyFirst"] == 5
+    assert facts["partyMalformed"] == 1
+    assert facts["characterCount"] == 2
+    assert facts["characterFirst"] == 5
+    assert facts["characterMalformed"] == 1
+
+
+def test_repeat_summon_builder_propagates_counts_and_own_quick_cast(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local sprite = {
+            name = "Skeleton", m_id = 77,
+            m_baseStats = { m_generalState = 0 },
+        }
+        local preset = { qc = 2, spells = {
+            FIRST = { on = 1, tgt = "s", pri = 1, rep = 5,
+                      var = "FIRSTV" },
+            SECOND = { on = 1, tgt = "s", pri = 2, rep = 9 },
+        } }
+        BfBot.Persist.PeekSummonPreset = function(identity, presetIdx)
+            assert(identity == "summon:test" and presetIdx == 1)
+            return preset
+        end
+        BfBot.Exec._ResolveCaster = function(ref)
+            assert(ref.kind == "summon" and ref.oid == 77
+                and ref.name == "Skeleton")
+            return sprite
+        end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function(seen)
+            assert(seen == sprite)
+            return {
+                FIRST = { count = 1, name = "First", durCat = "long" },
+                SECOND = { count = 1, name = "Second", durCat = "short" },
+            }
+        end
+
+        local queue = assert(BfBot.Persist.BuildQueueForSummon({
+            identity = "summon:test", oid = 77, name = "Skeleton",
+        }, 1))
+        return {
+            count = #queue,
+            firstRepeat = queue[1].rep,
+            malformedRepeat = queue[2].rep,
+            variant = queue[1].var,
+            firstCheat = queue[1].cheat,
+            secondCheat = queue[2].cheat,
+        }
+        """
+    )
+
+    assert facts["count"] == 2
+    assert facts["firstRepeat"] == 5
+    assert facts["malformedRepeat"] == 1
+    assert facts["variant"] == "FIRSTV"
+    assert facts["firstCheat"] == 1
+    assert facts["secondCheat"] == 1
+
+
+def test_project_image_repeat_is_copied_and_forced_to_one(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local caster = { oid = 100, name = "Mage" }
+        local image = {
+            caster = 0, spell = "PI", spellName = "Project Image",
+            target = "self", pri = 1, rep = 5,
+        }
+        local tail = {
+            caster = 0, spell = "TAIL", spellName = "Stoneskin",
+            target = "self", pri = 2, rep = 4,
+        }
+        local kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(
+            caster, { image, tail }, {})
+        local locked = BfBot.Persist._ApplyPuppetLockPolicy(
+            caster, { image }, {
+                { cloneType = 2, ownerOid = 100, ownerName = "Mage" },
+            })
+        return {
+            keptCount = #kept,
+            retainedRepeat = kept[1] and kept[1].rep,
+            copied = kept[1] ~= image,
+            sourceRepeat = image.rep,
+            tailRepeat = tail.rep,
+            skipCount = #skips,
+            lockedCount = #locked,
+        }
+        """
+    )
+
+    assert facts["keptCount"] == 1
+    assert facts["retainedRepeat"] == 1
+    assert facts["copied"]
+    assert facts["sourceRepeat"] == 5
+    assert facts["tailRepeat"] == 4
+    assert facts["skipCount"] == 1
+    assert facts["lockedCount"] == 0
+
+
+def test_repeat_expansion_normalizes_values_and_keeps_distinct_entries(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            MISSING = { count = 1, name = "Missing", class = {} },
+            ONE = { count = 1, name = "One", class = {} },
+            FIVE = { count = 1, name = "Five", class = {} },
+            STRING = { count = 1, name = "String", class = {} },
+            HIGH = { count = 1, name = "High", class = {} },
+        }, 1)
+        local byCaster, total = BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "MISSING", target = "self" },
+            { caster = 0, spell = "ONE", target = "self", rep = 1 },
+            { caster = 0, spell = "FIVE", target = "self", rep = 5 },
+            { caster = 0, spell = "STRING", target = "self", rep = "5" },
+            { caster = 0, spell = "HIGH", target = "self", rep = 6 },
+        }, 0)
+        local queue = assert(byCaster.p0)
+        local distinct = true
+        for i = 1, #queue do
+            for j = i + 1, #queue do
+                if queue[i] == queue[j] then distinct = false end
+            end
+        end
+
+        -- Exec must remain defensive when persistence was not loaded or its
+        -- normalizer is replaced by a non-callable value.
+        BfBot.Persist._NormalizeSpellRepeat = nil
+        local fallback, fallbackTotal = BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "FIVE", target = "self", rep = 5 },
+            { caster = 0, spell = "STRING", target = "self", rep = "5" },
+        }, 0)
+        return {
+            total = total,
+            queueCount = #queue,
+            oneCount = (function()
+                local n = 0
+                for _, entry in ipairs(queue) do
+                    if entry.resref == "ONE" then n = n + 1 end
+                end
+                return n
+            end)(),
+            missingCount = (function()
+                local n = 0
+                for _, entry in ipairs(queue) do
+                    if entry.resref == "MISSING" then n = n + 1 end
+                end
+                return n
+            end)(),
+            fiveCount = (function()
+                local n = 0
+                for _, entry in ipairs(queue) do
+                    if entry.resref == "FIVE" then n = n + 1 end
+                end
+                return n
+            end)(),
+            distinct = distinct,
+            fallbackTotal = fallbackTotal,
+            fallbackCount = fallback and #fallback.p0 or 0,
+        }
+        """
+    )
+
+    assert facts["total"] == 9
+    assert facts["queueCount"] == 9
+    assert facts["missingCount"] == 1
+    assert facts["oneCount"] == 1
+    assert facts["fiveCount"] == 5
+    assert facts["distinct"]
+    assert facts["fallbackTotal"] == 6
+    assert facts["fallbackCount"] == 6
+
+
+def test_repeat_expansion_keeps_spell_priority_contiguous(
+    exec_lua: LuaRuntime,
+) -> None:
+    sequence = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            S = { count = 1, name = "S", class = {} },
+            B = { count = 1, name = "B", class = {} },
+        }, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "S", target = "self", rep = 5 },
+            { caster = 0, spell = "B", target = "self", rep = 1 },
+        }, 0))
+        local out = {}
+        for _, entry in ipairs(byCaster.p0) do
+            out[#out + 1] = entry.resref
+        end
+        return table.concat(out, ",")
+        """
+    )
+
+    assert sequence == "S,S,S,S,S,B"
+
+
+def test_repeat_expansion_is_target_outer_for_explicit_targets(
+    exec_lua: LuaRuntime,
+) -> None:
+    sequence = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            BUFF = { count = 1, name = "Buff", class = {} },
+        }, 2)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "BUFF", target = 1, rep = 2 },
+            { caster = 0, spell = "BUFF", target = 2, rep = 2 },
+        }, 0))
+        local out = {}
+        for _, entry in ipairs(byCaster.p0) do
+            out[#out + 1] = entry.targetObj
+        end
+        return table.concat(out, ",")
+        """
+    )
+
+    assert sequence == "Player1,Player1,Player2,Player2"
+
+
+def test_repeat_expansion_is_target_outer_for_non_aoe_all(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            BUFF = {
+                count = 1, name = "Buff",
+                class = { isAoE = false, splstates = {} },
+            },
+        }, 2)
+        local byCaster, total = BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "BUFF", target = "all", rep = 2 },
+        }, 0)
+        local out = {}
+        for _, entry in ipairs(byCaster.p0) do
+            out[#out + 1] = entry.targetObj
+        end
+        return { total = total, sequence = table.concat(out, ",") }
+        """
+    )
+
+    assert facts["total"] == 4
+    assert facts["sequence"] == "Player1,Player1,Player2,Player2"
+
+
+def test_repeat_expansion_casts_aoe_all_only_repeat_count_times(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            AOE = {
+                count = 1, name = "Area Buff",
+                class = { isAoE = true, splstates = {} },
+            },
+        }, 2)
+        local byCaster, total = BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "AOE", target = "all", rep = 2 },
+        }, 0)
+        return {
+            total = total,
+            queueCount = #byCaster.p0,
+            firstTarget = byCaster.p0[1].targetObj,
+            secondTarget = byCaster.p0[2] and byCaster.p0[2].targetObj,
+        }
+        """
+    )
+
+    assert facts["total"] == 2
+    assert facts["queueCount"] == 2
+    assert facts["firstTarget"] == "Myself"
+    assert facts["secondTarget"] == "Myself"
+
+
+def test_repeat_expansion_preserves_quick_cast_modes_and_summon_override(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            SHORT = { count = 1, name = "Short", class = {} },
+            LONG = { count = 1, name = "Long", class = {} },
+            PERM = { count = 1, name = "Permanent", class = {} },
+        }, 1)
+        local raw = {
+            { caster = 0, spell = "SHORT", target = "self",
+              durCat = "short", rep = 2 },
+            { caster = 0, spell = "LONG", target = "self",
+              durCat = "long", rep = 2 },
+            { caster = 0, spell = "PERM", target = "self",
+              durCat = "permanent", rep = 2 },
+        }
+        local function flags(qc)
+            local by = assert(BfBot.Exec._BuildQueue(raw, qc))
+            local out = {}
+            for _, entry in ipairs(by.p0) do
+                out[#out + 1] = entry.cheat and "1" or "0"
+            end
+            return table.concat(out), #by.p0
+        end
+        local off, offCount = flags(0)
+        local long, longCount = flags(1)
+        local all, allCount = flags(2)
+
+        local summonRef = { kind = "summon", oid = 77, name = "Skeleton" }
+        local forcedOff = assert(BfBot.Exec._BuildQueue({ {
+            casterRef = summonRef, spell = "LONG", target = "self",
+            durCat = "long", rep = 2, cheat = 0,
+        } }, 2))
+        local forcedOn = assert(BfBot.Exec._BuildQueue({ {
+            casterRef = summonRef, spell = "SHORT", target = "self",
+            durCat = "short", rep = 2, cheat = 1,
+        } }, 0))
+        local key = "s77"
+        return {
+            off = off, offCount = offCount,
+            long = long, longCount = longCount,
+            all = all, allCount = allCount,
+            forcedOffCount = #forcedOff[key],
+            forcedOff = (forcedOff[key][1].cheat and "1" or "0")
+                .. (forcedOff[key][2] and
+                    (forcedOff[key][2].cheat and "1" or "0") or "x"),
+            forcedOnCount = #forcedOn[key],
+            forcedOn = (forcedOn[key][1].cheat and "1" or "0")
+                .. (forcedOn[key][2] and
+                    (forcedOn[key][2].cheat and "1" or "0") or "x"),
+        }
+        """
+    )
+
+    assert facts["offCount"] == 6
+    assert facts["off"] == "000000"
+    assert facts["longCount"] == 6
+    assert facts["long"] == "001111"
+    assert facts["allCount"] == 6
+    assert facts["all"] == "111111"
+    assert facts["forcedOffCount"] == 2
+    assert facts["forcedOff"] == "00"
+    assert facts["forcedOnCount"] == 2
+    assert facts["forcedOn"] == "11"
+
+
+def test_repeat_attempts_recheck_slots_and_continue_to_later_priority(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local spells = {
+            S = { count = 1, name = "S", class = { splstates = {} } },
+            B = { count = 1, name = "B", class = { splstates = {} } },
+        }
+        local sprites = BfBot_TestQueueWorld(spells, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "S", target = "self", rep = 5 },
+            { caster = 0, spell = "B", target = "self", rep = 1 },
+        }, 0))
+        local actions = {}
+        EEex_Action_QueueResponseStringOnAIBase = function(action, sprite)
+            assert(sprite == sprites[1])
+            actions[#actions + 1] = action
+        end
+        BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
+        BfBot.Exec._DetectCombat = function() return false end
+        BfBot.Exec._HasActiveEffect = function() return false end
+        BfBot.Exec._NoteProgress = function() end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._castCount = 0
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 },
+            queue = byCaster.p0, index = 0, done = false,
+            name = "A", cheatBoundary = 0, cheatApplied = false,
+        } }
+
+        BfBot.Exec._ProcessCasterEntry("p0", 1)
+        spells.S.count = 0
+        BfBot.Exec._Advance("p0")
+        local spellActions = {}
+        for _, action in ipairs(actions) do
+            if action:find("SpellRES", 1, true) == 1 then
+                spellActions[#spellActions + 1] = action
+            end
+        end
+        return {
+            queueCount = #byCaster.p0,
+            castCount = BfBot.Exec._castCount,
+            skipCount = BfBot.Exec._skipCount,
+            spellActions = table.concat(spellActions, "|"),
+            currentIndex = BfBot.Exec._casters.p0.index,
+        }
+        """
+    )
+
+    assert facts["queueCount"] == 6
+    assert facts["castCount"] == 2
+    assert facts["skipCount"] == 4
+    assert 'SpellRES("S",Myself)' in facts["spellActions"]
+    assert 'SpellRES("B",Myself)' in facts["spellActions"]
+    assert facts["currentIndex"] == 6
+
+
+def test_repeat_attempts_recheck_active_effects_after_first_cast(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local spells = {
+            BUFF = {
+                count = 3, name = "Buff", class = { splstates = {} },
+            },
+        }
+        local sprites = BfBot_TestQueueWorld(spells, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "BUFF", target = "self", rep = 3 },
+        }, 0))
+        local active = false
+        EEex_Action_QueueResponseStringOnAIBase = function() end
+        BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
+        BfBot.Exec._DetectCombat = function() return false end
+        BfBot.Exec._HasActiveEffect = function() return active end
+        BfBot.Exec._NoteProgress = function() end
+        BfBot.Exec._Complete = function()
+            BfBot.Exec._state = "done"
+        end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._castCount = 0
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 },
+            queue = byCaster.p0, index = 0, done = false,
+            name = "A", cheatBoundary = 0, cheatApplied = false,
+        } }
+
+        BfBot.Exec._ProcessCasterEntry("p0", 1)
+        active = true
+        BfBot.Exec._Advance("p0")
+        return {
+            queueCount = #byCaster.p0,
+            castCount = BfBot.Exec._castCount,
+            skipCount = BfBot.Exec._skipCount,
+            state = BfBot.Exec._state,
+        }
+        """
+    )
+
+    assert facts["queueCount"] == 3
+    assert facts["castCount"] == 1
+    assert facts["skipCount"] == 2
+    assert facts["state"] == "done"
+
+
+def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local spells = {
+            PARENT = {
+                count = 3, name = "Parent", class = { splstates = {} },
+            },
+        }
+        local sprites = BfBot_TestQueueWorld(spells, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "PARENT", target = "self",
+              rep = 3, var = "VARIANT" },
+        }, 0))
+        local actions = {}
+        local consumeCalls = 0
+        BfBot.Exec._ConsumeSpellSlot = function(sprite, resref)
+            assert(sprite == sprites[1] and resref == "PARENT")
+            consumeCalls = consumeCalls + 1
+            return consumeCalls ~= 2
+        end
+        EEex_Action_QueueResponseStringOnAIBase = function(action)
+            actions[#actions + 1] = action
+        end
+        BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
+        BfBot.Exec._DetectCombat = function() return false end
+        BfBot.Exec._HasActiveEffect = function() return false end
+        BfBot.Exec._NoteProgress = function() end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._castCount = 0
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 },
+            queue = byCaster.p0, index = 0, done = false,
+            name = "A", cheatBoundary = 0, cheatApplied = false,
+        } }
+
+        BfBot.Exec._ProcessCasterEntry("p0", 1)
+        BfBot.Exec._Advance("p0")
+        BfBot.Exec._Advance("p0")
+        local variantCasts = 0
+        for _, action in ipairs(actions) do
+            if action == 'ReallyForceSpellRES("VARIANT",Myself)' then
+                variantCasts = variantCasts + 1
+            end
+        end
+        return {
+            queueCount = #byCaster.p0,
+            consumeCalls = consumeCalls,
+            variantCasts = variantCasts,
+            castCount = BfBot.Exec._castCount,
+            skipCount = BfBot.Exec._skipCount,
+        }
+        """
+    )
+
+    assert facts["queueCount"] == 3
+    assert facts["consumeCalls"] == 3
+    assert facts["variantCasts"] == 2
+    assert facts["castCount"] == 2
+    assert facts["skipCount"] == 1
+
+
+def test_late_summon_attachment_uses_repeat_expansion(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        BfBot_TestQueueWorld({
+            BUFF = { count = 1, name = "Buff", class = {} },
+        }, 1)
+        local kickedKey, kickedIndex
+        BfBot.Exec._ProcessCasterEntry = function(key, index)
+            kickedKey, kickedIndex = key, index
+        end
+        BfBot.Exec._NoteProgress = function() end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._qcMode = 0
+        BfBot.Exec._casters = {}
+        BfBot.Exec._activeCasters = 0
+        BfBot.Exec._totalEntries = 0
+        local attached = BfBot.Exec._AttachCaster(
+            { oid = 77, name = "Skeleton" },
+            { {
+                casterRef = { kind = "summon", oid = 77, name = "Skeleton" },
+                spell = "BUFF", target = "self", rep = 3, cheat = 1,
+            } })
+        local caster = BfBot.Exec._casters.s77
+        return {
+            attached = attached,
+            queueCount = caster and #caster.queue or 0,
+            totalEntries = BfBot.Exec._totalEntries,
+            cheatBoundary = caster and caster.cheatBoundary or 0,
+            kickedKey = kickedKey,
+            kickedIndex = kickedIndex,
+        }
+        """
+    )
+
+    assert facts["attached"]
+    assert facts["queueCount"] == 3
+    assert facts["totalEntries"] == 3
+    assert facts["cheatBoundary"] == 3
+    assert facts["kickedKey"] == "s77"
+    assert facts["kickedIndex"] == 1
+
+
+def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local sprites = BfBot_TestQueueWorld({
+            BUFF = {
+                count = 3, name = "Buff", class = { splstates = {} },
+            },
+        }, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "BUFF", target = "self", rep = 3 },
+        }, 0))
+        local actions = {}
+        EEex_Action_QueueResponseStringOnAIBase = function(action)
+            actions[#actions + 1] = action
+        end
+        BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
+        BfBot.Exec._DetectCombat = function() return false end
+        BfBot.Exec._HasActiveEffect = function() return false end
+        BfBot.Exec._NoteProgress = function() end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._castCount = 0
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 },
+            queue = byCaster.p0, index = 0, done = false,
+            name = "A", cheatBoundary = 0, cheatApplied = false,
+        } }
+        BfBot.Exec._ProcessCasterEntry("p0", 1)
+        BfBot.Exec._state = "stopped"
+        BfBot.Exec._Advance("p0")
+        local stoppedCastCount = BfBot.Exec._castCount
+        local stoppedIndex = BfBot.Exec._casters.p0.index
+        local stoppedActions = #actions
+
+        -- A vanished summon between repeat attempts finishes only its chain.
+        local completed = false
+        BfBot.Exec._state = "running"
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._casters = { s77 = {
+            ref = { kind = "summon", oid = 77, name = "Skeleton" },
+            queue = byCaster.p0, index = 1, done = false,
+            name = "Skeleton", cheatBoundary = 0, cheatApplied = false,
+        } }
+        BfBot.Exec._ResolveCasterForStep = function() return nil end
+        BfBot.Exec._Complete = function()
+            completed = true
+            BfBot.Exec._state = "done"
+        end
+        BfBot.Exec._Advance("s77")
+        local summonDone = BfBot.Exec._casters.s77.done
+        local activeAfterGone = BfBot.Exec._activeCasters
+
+        -- The watchdog remains a whole-run safety net after expansion.
+        local watchdogReason
+        Infinity_GetClockTicks = function() return 3000 end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 }, queue = byCaster.p0,
+            index = 1, done = false, name = "A", cheatBoundary = 0,
+            cheatApplied = false,
+        } }
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._lastSafetyTick = 0
+        BfBot.Exec._lastProgressGameTime = 0
+        BfBot.Exec._IsStateStale = function() return false end
+        BfBot.Exec._ProcessLateJoins = function() end
+        BfBot.Exec._GetGameTime = function() return 1000 end
+        BfBot.Exec._ForceComplete = function(reason)
+            watchdogReason = reason
+            BfBot.Exec._state = "done"
+        end
+        BfBot.Exec._SafetyTick()
+        return {
+            queueCount = #byCaster.p0,
+            stoppedCastCount = stoppedCastCount,
+            stoppedIndex = stoppedIndex,
+            stoppedActions = stoppedActions,
+            summonDone = summonDone,
+            activeAfterGone = activeAfterGone,
+            completed = completed,
+            watchdogFired = type(watchdogReason) == "string"
+                and watchdogReason:find("Watchdog", 1, true) ~= nil,
+            watchdogState = BfBot.Exec._state,
+        }
+        """
+    )
+
+    assert facts["queueCount"] == 3
+    assert facts["stoppedCastCount"] == 1
+    assert facts["stoppedIndex"] == 1
+    assert facts["stoppedActions"] == 2
+    assert facts["summonDone"]
+    assert facts["activeAfterGone"] == 0
+    assert facts["completed"]
+    assert facts["watchdogFired"]
+    assert facts["watchdogState"] == "done"
 
 
 def test_in_game_spell_picker_sort_phase(ui_test_lua: LuaRuntime) -> None:

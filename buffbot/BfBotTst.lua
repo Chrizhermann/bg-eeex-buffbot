@@ -2968,6 +2968,15 @@ function BfBot.Test.SummonCasters()
             _check(byCaster ~= nil and refsOk,
                 "entries carry casterRef {kind=party, slot} matching their key")
 
+            local repeated, repeatedTotal = BfBot.Exec._BuildQueue(
+                { { caster = 0, spell = anyRes, target = "self", rep = 2 } }, 0)
+            _check(repeated ~= nil and repeatedTotal == 2
+                and repeated.p0 ~= nil and #repeated.p0 == 2,
+                "rep=2 expands to two per-attempt entries")
+            _check(repeated ~= nil and repeated.p0 ~= nil
+                and repeated.p0[1] ~= repeated.p0[2],
+                "repeat expansion emits distinct entry tables")
+
             -- Forward-compat seam (Task 7): an entry with a pre-built summon
             -- ref and NO caster slot groups under "s<oid>". The leader's own
             -- oid doubles as the summon — a party sprite is a valid game
@@ -3516,7 +3525,7 @@ function BfBot.Test.SummonCasters()
 
                 -- Configure: resB pri 1, resA pri 2, resC disabled.
                 local sp = BfBot.Persist.GetSummonPreset("test:fake", 1)
-                sp.spells[resA] = { on = 1, tgt = "s", pri = 2 }
+                sp.spells[resA] = { on = 1, tgt = "s", pri = 2, rep = 5 }
                 if resB then sp.spells[resB] = { on = 1, tgt = "s", pri = 1 } end
                 if resC then sp.spells[resC] = { on = 0, tgt = "s", pri = 3 } end
 
@@ -3537,6 +3546,12 @@ function BfBot.Test.SummonCasters()
                 _check(refsOk, "entries carry casterRef {kind=summon, oid, name}")
                 _check(noSlotField, "entries carry no party caster slot")
                 _check(selfTargets, "tgt='s' resolved to the summon itself")
+                local repeatSeen = false
+                for _, e in ipairs(q or {}) do
+                    if e.spell == resA and e.rep == 5 then repeatSeen = true end
+                end
+                _check(repeatSeen,
+                    "summon builder preserves rep=5 despite one castable slot")
                 if resB then
                     _check(q ~= nil and q[1] and q[1].spell == resB
                         and q[2] and q[2].spell == resA,
@@ -3701,8 +3716,8 @@ function BfBot.Test.SummonCasters()
         local ok7, err7 = pcall(function()
             _check(type(BfBot.Persist._ApplyPuppetLockPolicy) == "function",
                 "_ApplyPuppetLockPolicy is a function")
-            local function mk(name) return { caster = 0, spell = "X" .. name,
-                spellName = name, target = "self", pri = 1 } end
+            local function mk(name, rep) return { caster = 0, spell = "X" .. name,
+                spellName = name, target = "self", pri = 1, rep = rep or 1 } end
             local caster = { oid = 100, name = "Testmage" }
             local plain = { mk("Stoneskin"), mk("Blur") }
 
@@ -3735,11 +3750,15 @@ function BfBot.Test.SummonCasters()
 
             -- Rule 2: trailing entries after a "Project Image" cast drop; the
             -- PI entry itself and everything before it stay (case-insensitive).
-            local chain = { mk("Stoneskin"), mk("PROJECT IMAGE"), mk("Blur"), mk("Haste") }
+            local chain = { mk("Stoneskin"), mk("PROJECT IMAGE", 5),
+                mk("Blur"), mk("Haste") }
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, chain, {})
             _check(#kept == 2 and kept[1].spellName == "Stoneskin"
                 and kept[2].spellName == "PROJECT IMAGE",
                 "rule 2: entries before + the PI cast retained")
+            _check(kept[2] ~= chain[2] and kept[2].rep == 1
+                and chain[2].rep == 5,
+                "rule 2: retained PI is copied with rep=1; source is unchanged")
             _check(#skips == 1 and skips[1].msg:find(
                 "entries after Project Image skipped", 1, true) ~= nil,
                 "rule 2: trailing entries dropped with the documented skip line")
@@ -3991,7 +4010,7 @@ function BfBot.Test.SummonCasters()
             local savedScan     = BfBot.Scan.GetCastableSpells
             local savedSpellCfg = pre1.spells.XXTSTA  -- restore EXACTLY (nil or table)
             local ok7, err7 = pcall(function()
-                pre1.spells.XXTSTA = { on = 1, tgt = "s", pri = 1 }
+                pre1.spells.XXTSTA = { on = 1, tgt = "s", pri = 1, rep = 5 }
                 BfBot.Scan.GetCastableSpells = function()
                     return { XXTSTA = { count = 1, name = "Armor",
                                         durCat = "long" } }
@@ -4006,8 +4025,9 @@ function BfBot.Test.SummonCasters()
                     .. " err=" .. tostring(qcErr) .. ")")
                 local e1 = qc and qc[1]
                 _check(e1 ~= nil and e1.caster == 0 and e1.spell == "XXTSTA"
-                    and e1.target == "self" and e1.durCat == "long",
-                    "control build: entry fields {caster=0, spell, self, durCat}")
+                    and e1.target == "self" and e1.durCat == "long"
+                    and e1.rep == 5,
+                    "control build: entry fields include normalized rep=5")
                 _check(e1 ~= nil and e1.spellName == nil and e1.pri == nil,
                     "control build: spellName/pri ride-alongs stripped")
 
@@ -4075,7 +4095,7 @@ function BfBot.Test.SummonCasters()
             local sp = BfBot.Persist.GetSummonPreset("test:fake", 1)
             sp.spells = {
                 XXTSTA = { on = 1, tgt = "s", pri = 1 },
-                XXTSTP = { on = 1, tgt = "s", pri = 2 },
+                XXTSTP = { on = 1, tgt = "s", pri = 2, rep = 5 },
                 XXTSTB = { on = 1, tgt = "s", pri = 3 },
             }
             BfBot.Scan.GetCastableSpells = function()
@@ -4097,6 +4117,9 @@ function BfBot.Test.SummonCasters()
             _check(q ~= nil and q[1] ~= nil and q[1].spell == "XXTSTA"
                 and q[2] ~= nil and q[2].spell == "XXTSTP",
                 "summon chain: pre-PI entry + the PI cast itself retained")
+            _check(q ~= nil and q[2] ~= nil and q[2].rep == 1
+                and sp.spells.XXTSTP.rep == 5,
+                "summon chain: retained PI forced to rep=1 without config mutation")
             local stripOk = true
             for _, e in ipairs(q or {}) do
                 if e.spellName ~= nil or e.pri ~= nil then stripOk = false end

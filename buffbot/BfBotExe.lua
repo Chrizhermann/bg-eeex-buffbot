@@ -305,8 +305,28 @@ function BfBot.Exec._ResolveTargets(target, casterSprite, casterSlot, isAoE)
     return results
 end
 
+--- Normalize a raw builder entry's repeat count at the execution boundary.
+--- Persist owns the canonical validator; the local strict fallback keeps
+--- raw/console queues safe if that module or helper is unavailable.
+local function _normalizeSpellRepeat(value)
+    if BfBot.Persist
+        and type(BfBot.Persist._NormalizeSpellRepeat) == "function" then
+        return BfBot.Persist._NormalizeSpellRepeat(value)
+    end
+    local maxRepeats = BfBot.MAX_SPELL_REPEATS
+    if type(value) ~= "number" or value ~= value
+        or type(maxRepeats) ~= "number"
+        or value == math.huge or value == -math.huge
+        or value ~= math.floor(value)
+        or value < 1 or value > maxRepeats then
+        return 1
+    end
+    return value
+end
+
 --- Build per-caster execution queues from user input.
--- userQueue: array of {caster=0-5, spell="RESREF", target="self"|"all"|1-6}.
+-- userQueue: array of {caster=0-5, spell="RESREF",
+-- target="self"|"all"|1-6, rep=1..BfBot.MAX_SPELL_REPEATS}.
 -- Entries may alternatively carry a pre-built caster ref instead of a slot:
 -- {casterRef={kind="party",slot=N} | {kind="summon",oid=N,name=S}, ...} —
 -- the seam the summon queue builders use (issue #19).
@@ -420,6 +440,14 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             goto continue
         end
 
+        -- Resolve final targets before expanding attempts. This makes the
+        -- order target-major (A,A,B,B for two targets at rep=2), while an
+        -- AoE "all" target still resolves once and therefore casts exactly
+        -- rep times total. Repeat count is deliberately independent of the
+        -- scanner's current slot count: every attempt reaches _CheckEntry at
+        -- execution time and can skip individually as slots/effects change.
+        local repeatCount = _normalizeSpellRepeat(entry.rep)
+
         -- Group by caster key
         byCaster[casterKey] = byCaster[casterKey] or {}
 
@@ -439,23 +467,28 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         end
 
         for _, tgt in ipairs(targets) do
-            -- No casterSprite on the entry: exec-time code must resolve fresh
-            -- via _ResolveCaster every step, never through build-time userdata.
-            table.insert(byCaster[casterKey], {
-                casterRef = casterRef,
-                casterName = casterName,
-                resref = resref,
-                spellName = spellName,
-                targetObj = tgt.targetObj,
-                targetSlot = tgt.targetSlot,
-                targetSprite = tgt.targetSprite,
-                targetName = tgt.targetName,
-                splstates = splstates,
-                isAoE = isAoE,
-                cheat = isCheat,
-                var = entry.var,
-            })
-            totalEntries = totalEntries + 1
+            for _ = 1, repeatCount do
+                -- No casterSprite on the entry: exec-time code must resolve
+                -- fresh via _ResolveCaster every step, never through
+                -- build-time userdata. The literal creates a distinct
+                -- top-level table for every attempt; read-only casterRef,
+                -- targetSprite, and splstates references may be shared.
+                table.insert(byCaster[casterKey], {
+                    casterRef = casterRef,
+                    casterName = casterName,
+                    resref = resref,
+                    spellName = spellName,
+                    targetObj = tgt.targetObj,
+                    targetSlot = tgt.targetSlot,
+                    targetSprite = tgt.targetSprite,
+                    targetName = tgt.targetName,
+                    splstates = splstates,
+                    isAoE = isAoE,
+                    cheat = isCheat,
+                    var = entry.var,
+                })
+                totalEntries = totalEntries + 1
+            end
         end
 
         ::continue::
@@ -1052,7 +1085,9 @@ function BfBot.Exec._ProcessLateJoins()
 end
 
 --- Start executing a buff queue with parallel per-caster casting.
--- @param queue array of {caster=0-5, spell="RESREF", target="self"|"all"|1-6}
+-- @param queue array of {caster=0-5, spell="RESREF",
+--     target="self"|"all"|1-6, rep=1..BfBot.MAX_SPELL_REPEATS (optional;
+--     defaults to 1)}
 -- @param qcMode quick cast mode (0=off, 1=long, 2=all)
 -- @param presetIdx OPTIONAL preset index driving this run — recorded as
 --     _runPresetIdx so a summon spawning MID-RUN can look up ITS summon
@@ -1130,7 +1165,7 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
         casterCount = casterCount + 1
 
         -- Log this caster's plan
-        BfBot._Print("[BuffBot]   " .. name .. " (" .. #entries .. " spells):")
+        BfBot._Print("[BuffBot]   " .. name .. " (" .. #entries .. " attempts):")
         for i, e in ipairs(entries) do
             BfBot._Print("[BuffBot]     " .. i .. ". " .. e.spellName .. " -> " .. e.targetName)
         end
