@@ -5,7 +5,7 @@
 -- ============================================================
 
 -- v1.6.1 stored the sprite-loaded listener guard on this module table. Preserve
--- that fact when force-loading v1.6.2 into the same game process; the legacy
+-- that fact when force-loading a newer module into the same game process; the legacy
 -- callback already late-binds BfBot.Innate.Refresh and remains usable.
 local _previousInnate = BfBot.Innate
 BfBot.Innate = {}
