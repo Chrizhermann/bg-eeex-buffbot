@@ -643,8 +643,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
 
     -- Pre-flight checks — skip immediately recurses to next
     if not BfBot.Exec._CheckEntry(entry, sprite) then
-        BfBot.Exec._ProcessCasterEntry(key, index + 1)
-        return
+        return BfBot.Exec._ProcessCasterEntry(key, index + 1)
     end
 
     -- Safety: variant spell with no variant configured — skip
@@ -656,8 +655,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
                 entry.casterName .. " -> " .. entry.spellName
                 .. " (variant spell — no variant configured)")
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
-            BfBot.Exec._ProcessCasterEntry(key, index + 1)
-            return
+            return BfBot.Exec._ProcessCasterEntry(key, index + 1)
         end
     end
 
@@ -696,8 +694,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
                 entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
                 .. " (no slot for variant)")
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
-            BfBot.Exec._ProcessCasterEntry(key, index + 1)
-            return
+            return BfBot.Exec._ProcessCasterEntry(key, index + 1)
         end
         local varAction = string.format('ReallyForceSpellRES("%s",%s)', entry.var, entry.targetObj)
         EEex_Action_QueueResponseStringOnAIBase(varAction, sprite)

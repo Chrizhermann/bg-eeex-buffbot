@@ -1122,6 +1122,114 @@ def test_repeat_attempts_recheck_active_effects_after_first_cast(
     assert facts["state"] == "done"
 
 
+def test_many_already_active_repeat_attempts_complete_without_stack_growth(
+    exec_lua: LuaRuntime,
+) -> None:
+    # Lupa implements protected Lua calls with Windows SEH signals. Suppress
+    # pytest's faulthandler while this regression intentionally crosses the
+    # old overflow threshold; the Lua pcall result remains fully asserted.
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = exec_lua.execute(
+            """
+        local sprites = {}
+        for i = 1, 6 do
+            sprites[i] = {
+                name = "P" .. i,
+                m_id = 100 + i,
+                m_baseStats = { m_generalState = 0 },
+            }
+        end
+
+        local spells = {}
+        local rawQueue = {}
+        for i = 1, 400 do
+            local resref = string.format("R%04d", i)
+            spells[resref] = {
+                count = 1,
+                name = resref,
+                class = { isAoE = false, splstates = {} },
+            }
+            rawQueue[i] = {
+                caster = 0,
+                spell = resref,
+                target = "all",
+                rep = 5,
+            }
+        end
+
+        BfBot.Exec._ResolveCaster = function() return sprites[1] end
+        BfBot.Scan.GetCastableSpells = function() return spells end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Exec._IsAlive = function(sprite) return sprite ~= nil end
+        EEex_Sprite_GetInPortrait = function(slot)
+            return sprites[slot + 1]
+        end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            for i = 1, #sprites do
+                if sprite == sprites[i] then return i - 1 end
+            end
+            error("unknown synthetic sprite")
+        end
+
+        local byCaster, total = BfBot.Exec._BuildQueue(rawQueue, 0)
+        assert(total == 12000 and #byCaster.p0 == 12000)
+
+        local actionCount = 0
+        EEex_Action_QueueResponseStringOnAIBase = function()
+            actionCount = actionCount + 1
+        end
+        BfBot.Exec._HasActiveEffect = function() return true end
+        -- Keep the production skip/check/resolve/completion paths, but avoid
+        -- retaining 12,000 log messages in this stack-safety regression.
+        BfBot.Exec._LogEntry = function() end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._castCount = 0
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._totalEntries = total
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 },
+            queue = byCaster.p0,
+            index = 0,
+            done = false,
+            name = "P1",
+            cheatBoundary = 0,
+            cheatApplied = false,
+        } }
+
+        local ok, err = pcall(BfBot.Exec._ProcessCasterEntry, "p0", 1)
+        return {
+            ok = ok,
+            error = tostring(err),
+            state = BfBot.Exec._state,
+            skipCount = BfBot.Exec._skipCount,
+            castCount = BfBot.Exec._castCount,
+            activeCasters = BfBot.Exec._activeCasters,
+            casterDone = BfBot.Exec._casters.p0.done,
+            casterIndex = BfBot.Exec._casters.p0.index,
+            actionCount = actionCount,
+            total = total,
+        }
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["ok"], facts["error"]
+    assert facts["total"] == 12_000
+    assert facts["skipCount"] == 12_000
+    assert facts["castCount"] == 0
+    assert facts["actionCount"] == 0
+    assert facts["activeCasters"] == 0
+    assert facts["casterDone"] is True
+    assert facts["casterIndex"] == 12_000
+    assert facts["state"] == "done"
+
+
 def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
     exec_lua: LuaRuntime,
 ) -> None:

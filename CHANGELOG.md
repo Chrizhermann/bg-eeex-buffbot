@@ -14,7 +14,7 @@
 - **Config schema v9 stores bounded repeat counts in both party and summon spell entries.** v8 saves migrate lazily across both subtrees, while missing, non-integer, non-finite, or out-of-range values reset to R1. Downgrading a save after schema v9 has written it is unsupported.
 
 ### Testing
-- Added automated runtime compatibility and queue coverage for schema migration, strict normalization, target-major and AoE expansion, spell-use and active-effect rechecks, Quick Cast, variants, late summons, cancellation, and Project Image safety. Dedicated UI tests cover wrapping, party/summon write routing, menu bindings, and minimum-size geometry. The full pytest suite passes (124 tests).
+- Added automated runtime compatibility and queue coverage for schema migration, strict normalization, target-major and AoE expansion, spell-use and active-effect rechecks, Quick Cast, variants, late summons, cancellation, and Project Image safety. Dedicated UI tests cover wrapping, party/summon write routing, menu bindings, and minimum-size geometry. The full pytest suite passes (125 tests).
 
 ## v1.6.2-alpha (2026-08-19)
 
