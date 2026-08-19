@@ -1621,6 +1621,11 @@ def test_innate_sprite_loaded_registration_is_wrapped_without_silent_pcall() -> 
         "EEex_Sprite_AddLoadedListener",
         "innate.sprite_loaded",
     )
+    _assert_registration_is_wrapped(
+        INNATE_SOURCE,
+        "EEex_Sprite_AddQuickListsCheckedListener",
+        "innate.quick_lists_checked",
+    )
     assert "pcall(BfBot.Innate.Refresh" not in INNATE_SOURCE
 
 

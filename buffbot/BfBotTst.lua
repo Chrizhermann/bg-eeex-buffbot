@@ -2230,8 +2230,8 @@ function BfBot.Test.PlanReconciliation()
     -- saves (opcode 171 grants bypassed dedup). On a clean engine, every
     -- AddSpecialAbility call dedupes — calling it twice yields count=1, not 2.
     -- This case is a tripwire: if engine behavior ever changes, we want to
-    -- catch it because the rest of the codebase relies on this assumption
-    -- (BFBOTGO's re-grant after opcode 172 cleanup, for example).
+    -- catch it because the reconciliation grants rely on this assumption
+    -- when adding missing entries or rebuilding after opcode 172 cleanup.
     EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
         'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
     p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
@@ -6165,11 +6165,48 @@ function BfBot.Test.Innate()
             local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""
 
             if #bfbtInnates > 0 then
-                P(string.format("[BuffBot] Slot %d (%s): %d BuffBot innates: %s  (+%d other)%s",
+                P(string.format("[BuffBot] Slot %d (%s): Known: %d BuffBot innates: %s  (+%d other)%s",
                     slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount, accNote))
             else
-                P(string.format("[BuffBot] Slot %d (%s): NO BuffBot innates  (%d other innates)",
+                P(string.format("[BuffBot] Slot %d (%s): Known: 0 BuffBot innates  (%d other innates)",
                     slot, name, otherCount))
+            end
+
+            -- Innates have exactly one memorized-spell container regardless
+            -- of the SPL header level used to group presets in the F12 UI.
+            -- Show the raw entry flags so issue #64 recharge failures are
+            -- distinguishable from missing/duplicate known-spell entries.
+            local memorizedCount, availableCount = 0, 0
+            local rawFlags = {}
+            local memorizedOk, memorizedErr = pcall(function()
+                if not sprite.m_memorizedSpellsInnate then
+                    error("missing innate memorization array")
+                end
+                local memorized = sprite.m_memorizedSpellsInnate:getReference(0)
+                if not memorized then error("container 0 unavailable") end
+                EEex_Utility_IterateCPtrList(memorized, function(mem)
+                    local resref = mem.m_spellId:get()
+                    if type(resref) == "string"
+                            and resref:match("^BFBT[0-5][1-8]$") then
+                        local flags = mem.m_flags
+                        memorizedCount = memorizedCount + 1
+                        if not EEex_IsBitUnset(flags, 0) then
+                            availableCount = availableCount + 1
+                        end
+                        rawFlags[#rawFlags + 1] = resref .. "=" .. tostring(flags)
+                    end
+                end)
+            end)
+
+            if memorizedOk then
+                P(string.format("[BuffBot]   Memorized container 0: %d BuffBot entries, %d available",
+                    memorizedCount, availableCount))
+                P("[BuffBot]   Raw flags: "
+                    .. (#rawFlags > 0 and table.concat(rawFlags, ", ") or "(none)"))
+            else
+                P("[BuffBot]   Memorized container 0: unavailable ("
+                    .. tostring(memorizedErr) .. ")")
+                P("[BuffBot]   Raw flags: unavailable")
             end
 
             -- Check config
@@ -6324,16 +6361,15 @@ function BfBot.Test.QuickCast()
     if removerData:sub(1, 4) == "SPL " then _ok("BFBTCR signature OK")
     else _nok("BFBTCR bad signature: " .. removerData:sub(1, 4)) end
 
-    -- ---- Test 6: Innate SPL structure (no opcode 171, has opcode 172 cleanup) ----
+    -- ---- Test 6: Innate SPL structure (single opcode 402 dispatch) ----
     P("")
-    P("  [6] Innate SPL structure (opcode 172 cleanup)")
+    P("  [6] Innate SPL structure (single opcode 402 dispatch)")
 
     local innateData = BfBot.Innate._BuildSPL(0, 1)
-    -- Expected size: Header(114) + Ability(40) + 1*feat402(48) + N*feat172(48 each)
-    local numCleanup = BfBot.Innate._CLEANUP_PASSES
-    local expectedSize = 114 + 40 + 48 + (numCleanup * 48)
+    -- Header(114) + Ability(40) + one opcode-402 feature(48).
+    local expectedSize = 114 + 40 + 48
     if type(innateData) == "string" and #innateData == expectedSize then
-        _ok("BFBT01.SPL: " .. expectedSize .. " bytes (1 + " .. numCleanup .. " effects)")
+        _ok("BFBT01.SPL: " .. expectedSize .. " bytes")
     else
         _nok("BFBT01.SPL: expected " .. expectedSize .. " got "
             .. tostring(innateData and #innateData))
@@ -6342,21 +6378,18 @@ function BfBot.Test.QuickCast()
     if innateData:sub(1, 4) == "SPL " then _ok("BFBT01 signature OK")
     else _nok("BFBT01 bad signature") end
 
-    -- Verify opcode 171 is NOT present (was the accumulation source)
-    local has171 = false
-    -- Scan all feature blocks starting after header+ability (offset 154)
-    local featStart = 114 + 40
-    for i = 0, (1 + numCleanup - 1) do
-        local off = featStart + (i * 48) + 1  -- +1 for Lua 1-based indexing
-        local lo = innateData:byte(off)
-        local hi = innateData:byte(off + 1)
-        if lo and hi then
-            local opcode = lo + hi * 256
-            if opcode == 171 then has171 = true end
-        end
+    local function _wordAt(data, offset)
+        local lo, hi = data:byte(offset + 1, offset + 2)
+        return lo and hi and (lo + hi * 256) or nil
     end
-    if not has171 then _ok("No opcode 171 (Give Innate) — accumulation source removed")
-    else _nok("Opcode 171 still present — innates will accumulate!") end
+    local featureCount = _wordAt(innateData, 114 + 0x1E)
+    local opcode = _wordAt(innateData, 114 + 40)
+    if featureCount == 1 and opcode == 402 then
+        _ok("Exactly one effect: opcode 402 BFBOTGO dispatch")
+    else
+        _nok("Expected one opcode 402 effect, got count="
+            .. tostring(featureCount) .. " opcode=" .. tostring(opcode))
+    end
 
     -- ---- Summary ----
     P("")

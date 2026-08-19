@@ -4,7 +4,15 @@
 -- abilities to party members for F12 / special abilities access.
 -- ============================================================
 
+-- v1.6.1 stored the sprite-loaded listener guard on this module table. Preserve
+-- that fact when force-loading v1.6.2 into the same game process; the legacy
+-- callback already late-binds BfBot.Innate.Refresh and remains usable.
+local _previousInnate = BfBot.Innate
 BfBot.Innate = {}
+if type(_previousInnate) == "table" and _previousInnate._initDone
+        and not BfBot._innateLoadedListenerRegistered then
+    BfBot._innateLoadedListenerRegistered = true
+end
 
 -- Read per-preset strrefs from file (written by WeiDU at install time, or by
 -- tools/patch_tlk.py during dev deploy). One strref per line, indexed by
@@ -43,20 +51,12 @@ local function _splResref(s)
 end
 local function _splPad(n) return string.rep("\0", n) end
 
---- Number of opcode 172 (Remove Innate) cleanup effects per BFBT SPL.
--- Each cast removes up to this many accumulated known+memorized duplicates.
--- Refresh's mismatch branch (up to 50 BFBTRM passes) handles heavier
--- accumulation.
-BfBot.Innate._CLEANUP_PASSES = 5
-
 --- Build a minimal SPL binary for a BuffBot innate ability.
 -- @param slot number: party slot (0-5), baked into opcode 402 param1
 -- @param preset number: preset index (1-8), baked into opcode 402 param2
 -- @return string: raw SPL binary data
 function BfBot.Innate._BuildSPL(slot, preset)
-    local selfRef = string.format("BFBT%d%d", slot, preset)
-    local numCleanup = BfBot.Innate._CLEANUP_PASSES
-    local numFeats = 1 + numCleanup  -- 1 opcode 402 + N opcode 172
+    local numFeats = 1  -- opcode 402 dispatch only
 
     -- Name strref: look up by preset index, fall back to "no name" if the
     -- TLK patcher didn't run or this preset's strref wasn't written.
@@ -138,31 +138,7 @@ function BfBot.Innate._BuildSPL(slot, preset)
         .. _splDword(0)                         -- 0x0028: Save bonus
         .. _splDword(0)                         -- 0x002C: Stacking ID
 
-    -- Feature Blocks 2..N+1: Opcode 172 (Remove Innate — cleanup duplicates)
-    -- Removes up to _CLEANUP_PASSES accumulated known+memorized entries of this
-    -- innate. Fires as spell effects (immediate) before the Lua-queued re-grant
-    -- action executes. Prevents opcode 171 accumulation from old versions.
-    local cleanupEffects = {}
-    for i = 1, numCleanup do
-        cleanupEffects[i] = _splWord(172)       -- 0x0000: Opcode = Remove Innate
-            .. _splByte(1)                      -- 0x0002: Target = self
-            .. _splByte(0)                      -- 0x0003: Power
-            .. _splDword(0)                     -- 0x0004: Param1
-            .. _splDword(0)                     -- 0x0008: Param2
-            .. _splByte(1)                      -- 0x000C: Timing = 1 (instant/permanent)
-            .. _splByte(0)                      -- 0x000D: Dispel/resistance
-            .. _splDword(0)                     -- 0x000E: Duration
-            .. _splByte(100)                    -- 0x0012: Probability1
-            .. _splByte(0)                      -- 0x0013: Probability2
-            .. _splResref(selfRef)              -- 0x0014: Resource = self (innate to remove)
-            .. _splDword(0)                     -- 0x001C: Dice thrown
-            .. _splDword(0)                     -- 0x0020: Dice sides
-            .. _splDword(0)                     -- 0x0024: Save type
-            .. _splDword(0)                     -- 0x0028: Save bonus
-            .. _splDword(0)                     -- 0x002C: Stacking ID
-    end
-
-    return header .. ability .. feat402 .. table.concat(cleanupEffects)
+    return header .. ability .. feat402
 end
 
 --- Build a cheat-mode helper SPL (BFBTCH.SPL) that grants Improved Alacrity
@@ -353,7 +329,7 @@ end
 --- Write all SPL files to the override folder (always overwrites).
 -- Called once at mod init time (before menus load).
 -- SPL version tag lets us detect when binary format changes.
-BfBot.Innate._SPL_VERSION = 6  -- bump this when _BuildSPL format changes (v6: replaced opcode 171 with 172 cleanup)
+BfBot.Innate._SPL_VERSION = 7  -- v7: preset SPLs contain only opcode 402; recharge is Lua-side
 
 function BfBot.Innate._EnsureSPLFiles()
     if BfBot._noIO then return 0 end
@@ -598,24 +574,107 @@ function BfBot.Innate.RefreshAll()
     end
 end
 
+--- Restore one spent use on the existing memorized innate entry.
+-- BuffBot preset SPLs use levels 1-8 for F12 grouping, but the engine stores
+-- every innate in the single level-0 innate memorization container.
+function BfBot.Innate._RestoreSpent(sprite, resref)
+    local innateLists = sprite and sprite.m_memorizedSpellsInnate
+    if not innateLists then return false, "missing_container" end
+    local memList = innateLists:getReference(0)
+    if not memList then return false, "missing_container" end
+
+    local found = false
+    local restored = false
+    EEex_Utility_IterateCPtrList(memList, function(mem)
+        if mem.m_spellId:get() ~= resref then return false end
+        found = true
+        local flags = mem.m_flags
+        if EEex_IsBitUnset(flags, 0) then
+            mem.m_flags = EEex_SetBit(flags, 0)
+            restored = true
+            return true
+        end
+        -- A legacy duplicate may already be available while the entry the
+        -- engine just spent appears later. Keep searching, but restore only
+        -- one spent entry for this one negative quick-list change.
+        return false
+    end)
+
+    if restored then return true, "restored" end
+    return false, found and "already_available" or "not_found"
+end
+
+local function _WarnRechargeOnce(resref, status)
+    local warned = BfBot._innateRechargeWarnings
+    if type(warned) ~= "table" then
+        warned = {}
+        BfBot._innateRechargeWarnings = warned
+    end
+    local key = tostring(resref) .. ":" .. tostring(status)
+    if warned[key] then return end
+    warned[key] = true
+    BfBot._Warn("[Innate] Could not recharge " .. tostring(resref)
+        .. " in place (" .. tostring(status) .. ")")
+end
+
+--- Recharge a consumed BuffBot F12 innate in place.
+-- This hook runs independently of BFBOTGO, so busy/empty/error paths all leave
+-- the one-use innate immediately available without action 279 re-grant noise.
+function BfBot.Innate._OnQuickListsChecked(sprite, resref, changeAmount)
+    if not sprite or type(resref) ~= "string"
+            or type(changeAmount) ~= "number" or changeAmount >= 0 then
+        return false, "ignored"
+    end
+
+    local slotText = resref:match("^BFBT([0-5])[1-8]$")
+    if not slotText then return false, "ignored" end
+    if EEex_Sprite_GetPortraitIndex(sprite) ~= tonumber(slotText) then
+        return false, "identity_mismatch"
+    end
+
+    local restored, status = BfBot.Innate._RestoreSpent(sprite, resref)
+    if status == "missing_container" or status == "not_found" then
+        _WarnRechargeOnce(resref, status)
+    end
+    return restored, status
+end
+
 --- Register the sprite-loaded listener so innates get granted/refreshed as
 -- party members are loaded (new game, save load, area transition, party join).
 -- The listener fires from EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled,
 -- i.e. AFTER marshal restoration — so EEex_GetUDAux has the user's saved
 -- config by the time Refresh queries it.
--- Idempotent: subsequent calls no-op, so re-invoking Init from a hot reload
--- doesn't double-register the listener.
+function BfBot.Innate._OnSpriteLoaded(sprite)
+    if not sprite then return end
+    local slot = EEex_Sprite_GetPortraitIndex(sprite)
+    if slot < 0 or slot > 5 then return end
+    BfBot.Innate.Refresh(slot)
+end
+
+--- Register innate listeners once per game process.
+-- Root-level guards survive force-reloading this module (which replaces the
+-- BfBot.Innate table), and the listener closures late-bind the current module
+-- functions so a reload updates behavior without adding callbacks.
 function BfBot.Innate.Init()
     if BfBot._noIO then return end
-    if BfBot.Innate._initDone then return end
-    BfBot.Innate._initDone = true
-    EEex_Sprite_AddLoadedListener(BfBot._SafeCallback(
-        "innate.sprite_loaded", function(sprite)
-        if not sprite then return end
-        local slot = EEex_Sprite_GetPortraitIndex(sprite)
-        if slot < 0 or slot > 5 then return end
-        BfBot.Innate.Refresh(slot)
-    end))
+
+    if not BfBot._innateLoadedListenerRegistered then
+        EEex_Sprite_AddLoadedListener(BfBot._SafeCallback(
+            "innate.sprite_loaded", function(...)
+                local callback = BfBot.Innate and BfBot.Innate._OnSpriteLoaded
+                if callback then return callback(...) end
+            end))
+        BfBot._innateLoadedListenerRegistered = true
+    end
+
+    if not BfBot._innateQuickListsListenerRegistered then
+        EEex_Sprite_AddQuickListsCheckedListener(BfBot._SafeCallback(
+            "innate.quick_lists_checked", function(...)
+                local callback = BfBot.Innate and BfBot.Innate._OnQuickListsChecked
+                if callback then return callback(...) end
+            end))
+        BfBot._innateQuickListsListenerRegistered = true
+    end
 end
 
 -- ============================================================
@@ -636,32 +695,11 @@ end
 --- Opcode 402 Invoke Lua handler — triggers a specific preset for a specific character.
 -- param1 is a CGameEffect userdata: m_effectAmount = party slot, m_dWFlags = preset index.
 -- Wrapped in pcall so Lua errors produce diagnostics instead of engine "panic".
---
--- Re-grant flow: the SPL's opcode 172 effects fire as spell effects (immediate),
--- removing the known+memorized entries. Then the AddSpecialAbility action queued
--- here executes next tick, adding back exactly one clean copy. This replaces the
--- old opcode 171 approach which created duplicate known entries on every cast.
 function BFBOTGO(param1, param2, special)
     local slot = param1 and param1.m_effectAmount or 0
     local presetIdx = param1 and param1.m_dWFlags or 1
 
     _InnateLog(string.format("BFBOTGO: slot=%d preset=%d", slot, presetIdx))
-
-    -- Re-grant the innate BEFORE main logic (outside pcall — always runs).
-    -- The SPL's opcode 172 effects remove the known+memorized entries as
-    -- immediate spell effects. This AddSpecialAbility queues for next tick,
-    -- adding back exactly one clean copy. No duplicate-check needed because
-    -- opcode 172 has already removed the entry by the time this fires.
-    pcall(function()
-        if slot >= 0 and slot <= 5 and presetIdx >= 1 and presetIdx <= BfBot.MAX_PRESETS then
-            local sprite = EEex_Sprite_GetInPortrait(slot)
-            if sprite then
-                local resref = string.format("BFBT%d%d", slot, presetIdx)
-                EEex_Action_QueueResponseStringOnAIBase(
-                    'AddSpecialAbility("' .. resref .. '")', sprite)
-            end
-        end
-    end)
 
     local ok, err = pcall(function()
         -- Validate slot range
