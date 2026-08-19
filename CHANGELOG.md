@@ -9,12 +9,14 @@
 ### Safety and compatibility
 - **Every repeat is independently checked before casting.** BuffBot rechecks spell availability, target state, and active effects each time. An attempt that reaches the cast path consumes one available use and observes normal aura and casting time unless the preset's Quick Cast mode applies; attempts skipped for no remaining use, a dead caster or target, or an active buff consume nothing. Ordinary summoning spells can continue while uses remain, but repeats never grant free casts.
 - **Project Image remains owner-lock safe.** Its retained queue entry is forced to one attempt even if configured higher, and entries after it are still dropped rather than delayed until the image expires.
+- **F12 preset innates now recharge in place without a per-use ability re-grant.** An EEex quick-list listener restores only availability bit 0 on the consumed memorized entry, preserving every other flag and avoiding the `AddSpecialAbility` ability-gained feedback path. Generated `BFBT{slot}{preset}.SPL` files now contain only the opcode-402 dispatch. Initial grants and structural reconciliation remain unchanged. (#64)
+- **The new recharge listener is bounded to the matching party portrait and the engine's single innate memorization container.** Copied Project Image/Simulacrum innates remain excluded, listener registration is idempotent across new and legacy module reloads, and `BFBTRM` remains responsible for missing grants and duplicate/orphan cleanup without restoring opcode 171.
 
 ### Persistence
 - **Config schema v9 stores bounded repeat counts in both party and summon spell entries.** v8 saves migrate lazily across both subtrees, while missing, non-integer, non-finite, or out-of-range values reset to R1. Downgrading a save after schema v9 has written it is unsupported.
 
 ### Testing
-- Added automated runtime compatibility and queue coverage for schema migration, strict normalization, target-major and AoE expansion, spell-use and active-effect rechecks, Quick Cast, variants, late summons, cancellation, and Project Image safety. Dedicated UI tests cover wrapping, party/summon write routing, menu bindings, and minimum-size geometry. The full pytest suite passes (125 tests).
+- Added automated runtime compatibility and queue coverage for schema migration, strict normalization, target-major and AoE expansion, spell-use and active-effect rechecks, Quick Cast, variants, late summons, cancellation, and Project Image safety. Dedicated UI tests cover wrapping, party/summon write routing, menu bindings, and minimum-size geometry. Innate recharge coverage checks all 48 generated preset spells, all 48 remover effects, flag preservation, duplicate handling, listener reloads, rejection paths, and every preset-execution outcome. The full pytest suite passes (195 tests).
 
 ## v1.6.2-alpha (2026-08-19)
 
