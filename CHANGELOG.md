@@ -1,5 +1,75 @@
 # Changelog
 
+## v1.6.4-alpha (2026-08-20)
+
+### Fixed
+- **Spell-row selection no longer disappears during event-driven spellbook refreshes.** BuffBot now tracks the selected spell by resource reference plus the exact caster, preset, and Party/Summons context, then restores its current row and variant state after count or list rebuilds. Selection clears safely when the spell disappears or the user changes context instead of transferring to whichever spell occupies the old numeric row. (#67)
+- **Selection-dependent actions remain anchored to the intended spell across refreshes and reordering.** Target and variant dialogs retain the parent spell identity, Sort by Duration follows the selected spell, and repeat, lock, priority, target, variant, and remove actions cannot drift onto another row during a native list-widget update.
+
+### Performance and compatibility
+- **Quick-list events rebuild only the relevant visible caster while preserving per-sprite cache invalidation.** Internal `BFBT` events and unrelated sprites no longer cause unnecessary visible refreshes. Listener registration is idempotent across F5/menu reloads and dispatches through the current BuffBot namespace after a development hot reload.
+
+### Testing
+- Added an in-game `SelectionRefresh` phase and automated coverage for reordered rebuilds, disappearance and exact-caster replacement, Party/Summons context switches, target and variant anchors, duration sorting, one-frame widget clobbers, event filtering, and listener reloads. The full automated suite passes (232 tests). The #67 patch also passed the in-game suite and manual unpaused selection checks on BG2:EE 2.6.6.0 with EEex v1.2.0 before integration with the v1.6.3 changes.
+
+## v1.6.3-alpha (2026-08-19)
+
+### Added
+- **Per-spell repeat counts from R1 through R5 are available for party and summon presets.** Click the repeat cell in a spell row to increase it, or use the selected row's **Repeat: N** button: left-click increases and right-click decreases, with wrap-around in both directions. Repeat settings remain editable while a spell has zero available uses.
+- **Repeat execution is target-major and preserves spell priority.** At R2, targets A and B run as A, A, B, B. A party-wide AoE at R2 casts twice total rather than twice for every party member.
+
+### Safety and compatibility
+- **Every repeat is independently checked before casting.** BuffBot rechecks spell availability, target state, and active effects each time. An attempt that reaches the cast path consumes one available use and observes normal aura and casting time unless the preset's Quick Cast mode applies; attempts skipped for no remaining use, a dead caster or target, or an active buff consume nothing. Ordinary summoning spells can continue while uses remain, but repeats never grant free casts.
+- **Project Image remains owner-lock safe.** Its retained queue entry is forced to one attempt even if configured higher, and entries after it are still dropped rather than delayed until the image expires.
+- **F12 preset innates now recharge in place without a per-use ability re-grant.** An EEex quick-list listener restores only availability bit 0 on the consumed memorized entry, preserving every other flag and avoiding the `AddSpecialAbility` ability-gained feedback path. Generated `BFBT{slot}{preset}.SPL` files now contain only the opcode-402 dispatch. Initial grants and structural reconciliation remain unchanged. (#64)
+- **The new recharge listener is bounded to the matching party portrait and the engine's single innate memorization container.** Copied Project Image/Simulacrum innates remain excluded, listener registration is idempotent across new and legacy module reloads, and `BFBTRM` remains responsible for missing grants and duplicate/orphan cleanup without restoring opcode 171.
+
+### Persistence
+- **Config schema v9 stores bounded repeat counts in both party and summon spell entries.** v8 saves migrate lazily across both subtrees, while missing, non-integer, non-finite, or out-of-range values reset to R1. Downgrading a save after schema v9 has written it is unsupported.
+
+### Testing
+- Added automated runtime compatibility and queue coverage for schema migration, strict normalization, target-major and AoE expansion, spell-use and active-effect rechecks, Quick Cast, variants, late summons, cancellation, and Project Image safety. Dedicated UI tests cover wrapping, party/summon write routing, menu bindings, and minimum-size geometry. Innate recharge coverage checks all 48 generated preset spells, all 48 remover effects, flag preservation, duplicate handling, listener reloads, rejection paths, and every preset-execution outcome. The full pytest suite passes (195 tests).
+
+## v1.6.2-alpha (2026-08-19)
+
+### Improved
+- **The Add Spell picker now surfaces spells with the most currently available casts first.** Previously removed spells retain recovery precedence; within each group, spells sort by available count descending, then localized name and resource reference for deterministic ties. Known spells with zero available casts remain selectable. Preset priority and cast order are unchanged. (#63)
+
+### Testing
+- Added an in-game `SpellPickerSort` phase covering recovery precedence, descending counts, nil-as-zero handling, localized-name ordering, deterministic resource-reference ties, and exact ties. The full automated suite passes, and the picker behavior was verified live on BG2:EE 2.6.6.0 with EEex v1.2.0.
+
+## v1.6.1-alpha (2026-07-20)
+
+### Compatibility
+- **Restored EEex v0.11.0-alpha support with full BuffBot feature parity.** EEex v1 remains recommended. The installer now detects the EEex bootstrap, required Lua API, and one complete old or new script layout instead of relying on version-specific WeiDU component IDs.
+- **LuaJIT setup follows the detected EEex layout.** BuffBot recognizes the legacy `5.1` loader used by v0.11 and the `5.1-LuaJIT` loader used by v1, while validating and repairing incomplete loader state when the required files are available.
+- **Save downgrade boundary.** Downgrading an arbitrary save to v0.11 after EEex v1 and other EEex mods have written it is unsupported.
+
+### Safety
+- **Marshal-safe, non-mutating persistence export.** BuffBot now exports a sanitized copy of its saved configuration, converting booleans and dropping unsupported values, keys, and cyclic branches without modifying the live UDAux table.
+- **Checked EEex callback boundaries.** BuffBot-owned event callbacks now contain Lua errors, preserve successful return values, and deduplicate repeated diagnostics instead of allowing failures to propagate through EEex.
+
+### Testing
+- **Synthetic installer coverage now exercises v0.11 and v1 acceptance, with v0.10 explicitly serving as the rejection floor.** The matrix also covers incomplete and ambiguous layouts, LuaJIT activation and repair, rollback, uninstall, and component-number independence.
+
+## v1.6.0-alpha (2026-07-19)
+
+### Added
+- **Allied summons and clones can now cast BuffBot presets.** Project Images, Simulacra, and other allied non-party spellcasters with castable spellbooks appear in a new **Summons** view. Each stable summon identity has its own per-preset spell selection, targets, priority order, and Quick Cast setting. Use **Cast (this summon)** for a standalone run; configured live summons also join **Cast All** automatically.
+- **Mid-run late join.** A summon created by an active party preset can attach to that same run as soon as it finishes spawning. Verified live with Imoen casting Project Image: the image joined, cast Stoneskin and Strength from its own preset, and the run completed with 3/3 casts and no skips.
+- **Clone preset seeding.** Opening a clone identity for the first time seeds its preset from the owner's same-index preset, filtered to spells the live clone can cast. Subsequent edits belong to the summon identity and persist in the protagonist's save data.
+
+### Safety and compatibility
+- **Project Image owner-lock protection.** The engine prevents a Project Image's owner from acting while the image exists; queued actions otherwise become delayed "zombie casts" after expiry. BuffBot skips already-locked owners and drops owner entries ordered after a Project Image cast without reordering the user's priorities.
+- Summon detection is structural and mod-friendly: alive, allied (`EA` 2–30), not a party portrait, and possessing a castable spellbook. Object IDs are resolved fresh by ID + name before every action, allegiance is revalidated, and vanished summons complete their chains cleanly instead of waiting for the watchdog.
+- Multiplayer summon support is conservative pending a two-machine probe: clones join only when their owner is locally controlled; ownerless summons use the host-control heuristic. Set `[BuffBot] SummonsJoinCast = 0` in `baldur.ini` to disable automatic summon participation.
+
+### Persistence
+- **Config schema v8** adds per-identity summon presets under the protagonist's `summons` table. Existing saves upgrade lazily on first access. Downgrading a save after it has been written by schema v8 is unsupported.
+
+### Known limitation
+- Copied BuffBot F12 innates on clones do not route reliably to the clone and are deferred to follow-up work (#60). Configure and cast summons through the Summons view or let them join Cast All.
+
 ## v1.5.0-alpha (2026-07-05)
 
 ### Added

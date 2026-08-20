@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.5.0-alpha~
+VERSION ~v1.6.4-alpha~
 
 BEGIN ~BuffBot: In-Game Buff Automation~
 DESIGNATED 0
@@ -10,13 +10,52 @@ LABEL ~BuffBot-Main~
 REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
   ~BuffBot requires BG:EE, BG2:EE, or EET.~
 
-REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
-
-// v1.0.0 moved EEex's Lua scripts from EEex/ to game-root EEex_scripts/.
-// Use this as the v1.0.0+ marker — earlier releases don't have this path.
-REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
-  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+// EEex component numbers changed in v1.0.0. Detect the runtime capability
+// BuffBot needs instead: v0.11 keeps EEex scripts in override, while v1 puts
+// them under EEex_scripts. Reject dual layouts because their loader family is
+// ambiguous (upgrade residue or an unsafe manual downgrade).
+REQUIRE_PREDICATE (
+  FILE_EXISTS ~override/M___EEex.lua~
+  AND (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    OR
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+  AND NOT (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    AND
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+)
+  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
 
 // ---- TLK strings for innate ability tooltips ----
 // One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
@@ -97,18 +136,136 @@ LABEL ~BuffBot-LuaJIT~
 REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
   ~BuffBot requires BG:EE, BG2:EE, or EET.~
 
-REQUIRE_PREDICATE (MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~0~ OR MOD_IS_INSTALLED ~EEex/EEex.tp2~ ~1~)
-  ~BuffBot requires EEex. Install EEex first: https://github.com/Bubb13/EEex/releases~
+REQUIRE_PREDICATE (
+  FILE_EXISTS ~override/M___EEex.lua~
+  AND (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    OR
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+  AND NOT (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    AND
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+)
+  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
 
-REQUIRE_PREDICATE (FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~)
-  ~BuffBot v1.4.0+ requires EEex v1.0.0 or later. Upgrade EEex from https://github.com/Bubb13/EEex/releases~
+// The one capable script layout determines the loader's Lua version. Do not
+// infer this from EEex.tp2: that file can be absent or left behind by an
+// upgrade, and its component numbers/version strings are not runtime state.
+OUTER_SPRINT lua_version ~5.1-LuaJIT~
+OUTER_SPRINT lua_version_pattern ~5[.]1-LuaJIT~
+ACTION_IF (
+  FILE_EXISTS ~override/EEex_Sprite.lua~
+  AND FILE_EXISTS ~override/EEex_Options.lua~
+  AND FILE_CONTAINS_EVALUATED(
+    ~override/EEex_Sprite.lua~
+    ~EEex_Sprite_GetCharacterIndex~
+  )
+) BEGIN
+  OUTER_SPRINT lua_version ~5.1~
+  OUTER_SPRINT lua_version_pattern ~5[.]1~
+END
 
-// Check if LuaJIT is already active
+// LuaJIT is active only when the complete, exact loader state is observable.
 OUTER_SET luajit_active = 0
-ACTION_IF FILE_EXISTS ~InfinityLoader.ini~ THEN BEGIN
+ACTION_IF (
+  FILE_EXISTS ~InfinityLoader.ini~
+  AND FILE_EXISTS ~lua51.dll~
+  AND FILE_EXISTS ~LuaProvider.dll~
+) BEGIN
   COPY - ~InfinityLoader.ini~ ~InfinityLoader.ini~
-    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ num_matches
-    PATCH_IF (num_matches > 0) THEN BEGIN
+    // Test exact key/value lines without relying on $ behavior around CRLF:
+    // require one key, one expected prefix, no non-newline suffix, and all
+    // three assignments inside the first [General] section.
+    COUNT_REGEXP_INSTANCES ~^\[General\]~ general_headers
+    COUNT_REGEXP_INSTANCES ~^\[General\][^%WNL%%MNL%%LNL%]~ general_header_suffixes
+    SET general_pos = INDEX_BUFFER (~^\[General\]~)
+    SET first_section_pos = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~ mode_keys
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~ mode_matches
+    COUNT_REGEXP_INSTANCES ~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL[^%WNL%%MNL%%LNL%]~ mode_suffixes
+    SET mode_pos = INDEX_BUFFER (~^LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL~)
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=~ library_keys
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=lua51[.]dll~ library_matches
+    COUNT_REGEXP_INSTANCES ~^LuaLibrary=lua51[.]dll[^%WNL%%MNL%%LNL%]~ library_suffixes
+    SET library_pos = INDEX_BUFFER (~^LuaLibrary=lua51[.]dll~)
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=~ version_keys
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%~ version_matches
+    COUNT_REGEXP_INSTANCES ~^LuaVersionExternal=%lua_version_pattern%[^%WNL%%MNL%%LNL%]~ version_suffixes
+    SET version_pos = INDEX_BUFFER (~^LuaVersionExternal=%lua_version_pattern%~)
+
+    // Bound [General] by its immediate next section, whatever that section is.
+    // Search a substring after the [General] header so INDEX_BUFFER cannot
+    // rediscover the first header itself.
+    SET next_section_pos = 0
+    PATCH_IF (
+      general_headers = 1
+      AND general_header_suffixes = 0
+      AND general_pos = first_section_pos
+    ) BEGIN
+      SET after_general_pos = general_pos + STRING_LENGTH ~[General]~
+      SET after_general_length = BUFFER_LENGTH - after_general_pos
+      READ_ASCII after_general_pos after_general (after_general_length)
+      SET next_section_relative = 0
+      INNER_PATCH ~%after_general%~ BEGIN
+        SET next_section_relative = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
+      END
+      PATCH_IF (next_section_relative < 0) BEGIN
+        SET next_section_pos = BUFFER_LENGTH
+      END ELSE BEGIN
+        SET next_section_pos = after_general_pos + next_section_relative
+      END
+    END
+    PATCH_IF (
+      general_headers = 1
+      AND general_header_suffixes = 0
+      AND general_pos = first_section_pos
+      AND mode_keys = 1
+      AND mode_matches = 1
+      AND mode_suffixes = 0
+      AND mode_pos > general_pos
+      AND mode_pos < next_section_pos
+      AND library_keys = 1
+      AND library_matches = 1
+      AND library_suffixes = 0
+      AND library_pos > general_pos
+      AND library_pos < next_section_pos
+      AND version_keys = 1
+      AND version_matches = 1
+      AND version_suffixes = 0
+      AND version_pos > general_pos
+      AND version_pos < next_section_pos
+    ) BEGIN
       SET luajit_active = 1
     END
   BUT_ONLY
@@ -117,23 +274,40 @@ END
 ACTION_IF (luajit_active = 1) THEN BEGIN
   PRINT ~LuaJIT is already active. Skipping installation.~
 END ELSE BEGIN
-  // Check if EEex ships the LuaJIT files
-  ACTION_IF NOT FILE_EXISTS ~EEex/loader/LuaJIT/lua51.dll~ THEN BEGIN
-    FAIL ~EEex LuaJIT files not found at EEex/loader/LuaJIT/. Please reinstall EEex (v0.10.0-alpha or later) with the LuaJIT / Experimental component selected, or upgrade EEex.~
+  // Preflight every required input before the first copy/patch mutation.
+  ACTION_IF NOT FILE_EXISTS ~InfinityLoader.ini~ THEN BEGIN
+    FAIL ~InfinityLoader.ini was not found. Reinstall EEex before activating BuffBot's LuaJIT support.~
   END
 
-  // Detect LuaVersionExternal from EEex's own tp2
-  OUTER_SPRINT lua_version ~5.1~
-  ACTION_IF FILE_EXISTS ~EEex/EEex.tp2~ THEN BEGIN
-    COPY - ~EEex/EEex.tp2~ ~EEex/EEex.tp2~
-      PATCH_IF (INDEX_BUFFER (~5.1-LuaJIT~) >= 0) THEN BEGIN
-        SPRINT lua_version ~5.1-LuaJIT~
-      END
-    BUT_ONLY
+  ACTION_IF (
+    NOT FILE_EXISTS ~EEex/loader/LuaJIT/lua51.dll~
+    OR NOT FILE_EXISTS ~EEex/loader/LuaJIT/LuaProvider.dll~
+  ) THEN BEGIN
+    FAIL ~EEex LuaJIT source DLLs were not found at EEex/loader/LuaJIT/. Reinstall EEex with its LuaJIT / Experimental files before activating BuffBot's LuaJIT support.~
+  END
+
+  // Only patch a well-formed, first [General] section. This read-only
+  // preflight keeps malformed/custom files byte-identical on failure.
+  OUTER_SET loader_general_valid = 0
+  COPY - ~InfinityLoader.ini~ ~InfinityLoader.ini~
+    COUNT_REGEXP_INSTANCES ~^\[General\]~ repair_general_headers
+    COUNT_REGEXP_INSTANCES ~^\[General\][^%WNL%%MNL%%LNL%]~ repair_general_header_suffixes
+    SET repair_general_pos = INDEX_BUFFER (~^\[General\]~)
+    SET repair_first_section_pos = INDEX_BUFFER (~^\[[^%WNL%%MNL%%LNL%]*\]~)
+    PATCH_IF (
+      repair_general_headers = 1
+      AND repair_general_header_suffixes = 0
+      AND repair_general_pos = repair_first_section_pos
+    ) BEGIN
+      SET loader_general_valid = 1
+    END
+  BUT_ONLY
+  ACTION_IF (loader_general_valid = 0) THEN BEGIN
+    FAIL ~InfinityLoader.ini has no single, well-formed first [General] section. Reinstall EEex before activating BuffBot's LuaJIT support.~
   END
 
   PRINT ~Installing EEex LuaJIT component (normally installed by EEex setup).~
-  PRINT ~Detected LuaVersionExternal: %lua_version%~
+  PRINT ~Required LuaVersionExternal: %lua_version%~
 
   // Copy DLLs from EEex's own install folder
   COPY ~EEex/loader/LuaJIT/lua51.dll~        ~lua51.dll~
@@ -141,9 +315,13 @@ END ELSE BEGIN
 
   // Patch InfinityLoader.ini
   COPY ~InfinityLoader.ini~ ~InfinityLoader.ini~
-    REPLACE_TEXTUALLY ~^\(LuaPatchMode=\).*~ ~\1REPLACE_INTERNAL_WITH_EXTERNAL~
-    REPLACE_TEXTUALLY ~^\(LuaLibrary=\).*~ ~\1lua51.dll~
-    REPLACE_TEXTUALLY ~^\(LuaVersionExternal=\).*~ ~\1%lua_version%~
+    // Remove active assignments from every section, then add one canonical
+    // set immediately below [General]. This handles absent and duplicate keys
+    // without ever appending them beneath later [Hardcoded_*] sections.
+    REPLACE_TEXTUALLY ~^LuaPatchMode=[^%WNL%%MNL%%LNL%]*~ ~~
+    REPLACE_TEXTUALLY ~^LuaLibrary=[^%WNL%%MNL%%LNL%]*~ ~~
+    REPLACE_TEXTUALLY ~^LuaVersionExternal=[^%WNL%%MNL%%LNL%]*~ ~~
+    REPLACE_TEXTUALLY ~^\[General\]~ ~[General]%WNL%LuaPatchMode=REPLACE_INTERNAL_WITH_EXTERNAL%WNL%LuaLibrary=lua51.dll%WNL%LuaVersionExternal=%lua_version%~
   BUT_ONLY
 
   PRINT ~LuaJIT installed successfully. BuffBot will have full functionality.~

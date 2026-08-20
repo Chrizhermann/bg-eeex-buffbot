@@ -653,19 +653,24 @@ end
 --- Set a user override classification for a spell.
 function BfBot.Class.SetOverride(resref, value)
     BfBot._overrides[resref] = value
-    -- Invalidate classification cache for this resref
+    -- SPL and ITM resources may legally share a resref while exposing
+    -- unrelated abilities. Overrides apply to the mixed catalog identity,
+    -- so invalidate both source-specific classifier cache entries.
     BfBot._cache.class[resref] = nil
+    BfBot._cache.class["itm:" .. resref] = nil
 end
 
 -- ============================================================
 -- Main Classification Function
 -- ============================================================
 
---- Full classification of a spell. Returns a ClassResult table.
---- Results are cached by resref (SPL data does not change in-session).
-function BfBot.Class.Classify(resref, header, ability)
+--- Full classification of a spell or item ability. Returns a ClassResult table.
+--- SPL results retain the legacy bare-resref cache key; ITM callers pass
+--- sourceKind="itm" so a same-resref SPL can never supply the item verdict.
+function BfBot.Class.Classify(resref, header, ability, sourceKind)
+    local cacheKey = sourceKind == "itm" and ("itm:" .. resref) or resref
     -- Check cache
-    local cached = BfBot._cache.class[resref]
+    local cached = BfBot._cache.class[cacheKey]
     if cached then return cached end
 
     local result = {}
@@ -713,7 +718,7 @@ function BfBot.Class.Classify(resref, header, ability)
             result.variants = nil
         end
 
-        BfBot._cache.class[resref] = result
+        BfBot._cache.class[cacheKey] = result
         return result
     end
 
@@ -793,6 +798,6 @@ function BfBot.Class.Classify(resref, header, ability)
     end
 
     -- Cache and return
-    BfBot._cache.class[resref] = result
+    BfBot._cache.class[cacheKey] = result
     return result
 end

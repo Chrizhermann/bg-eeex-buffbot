@@ -4,7 +4,7 @@
     {"id": 1, "subject": "Cut feature branch feat/items-and-potions", "status": "completed"},
     {"id": 2, "subject": "Probe — EEex inventory + quickitem field paths", "status": "completed", "blockedBy": [1]},
     {"id": 3, "subject": "Probe — UseItem BCS + Item:getAbility(i)", "status": "completed", "blockedBy": [1]},
-    {"id": 4, "subject": "Schema v8 — bump, migrate, validate", "status": "completed", "blockedBy": [1]},
+    {"id": 4, "subject": "Schema v10 — bump, migrate, validate", "status": "completed", "blockedBy": [1]},
     {"id": 5, "subject": "Rename _MakeDefaultSpellEntry → _MakeDefaultEntry", "status": "completed", "blockedBy": [4]},
     {"id": 6, "subject": "ImportConfig — kind-aware filtering", "status": "completed", "blockedBy": [5]},
     {"id": 7, "subject": "Classifier — collect leafResrefs in GetDuration", "status": "completed", "blockedBy": [1]},
@@ -15,12 +15,12 @@
     {"id": 12, "subject": "Exec — UseItem cast path", "status": "completed", "blockedBy": [11]},
     {"id": 13, "subject": "Theme — itemColor palette key for 6 themes", "status": "completed", "blockedBy": [1]},
     {"id": 14, "subject": "UI — mixed list rendering (itemColor + variant hidden)", "status": "completed", "blockedBy": [9, 13]},
-    {"id": 15, "subject": "UI — picker sub-sections (Spells / Items)", "status": "pending", "blockedBy": [9]},
+    {"id": 15, "subject": "UI — picker sub-sections (Spells / Items)", "status": "completed", "blockedBy": [9]},
     {"id": 16, "subject": "BfBotTst — Items() test phase", "status": "completed", "blockedBy": [12]},
     {"id": 17, "subject": "Manual QA on representative items", "status": "pending", "blockedBy": [14, 15, 16]},
-    {"id": 18, "subject": "bg-modding-learn — capture verified knowledge", "status": "pending", "blockedBy": [17]},
-    {"id": 19, "subject": "Version bump v1.4.2-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
-    {"id": 20, "subject": "Push branch + open PR (#21 partial)", "status": "pending", "blockedBy": [19]}
+    {"id": 18, "subject": "bg-modding-learn — capture any new live-QA knowledge", "status": "pending", "blockedBy": [17]},
+    {"id": 19, "subject": "Version bump v1.7.0-alpha + CHANGELOG", "status": "pending", "blockedBy": [17, 18]},
+    {"id": 20, "subject": "Push branch + open PR for #21", "status": "pending", "blockedBy": [19]}
   ],
-  "lastUpdated": "2026-07-03T00:00:00Z"
+  "lastUpdated": "2026-08-20T00:00:00Z"
 }

@@ -6,8 +6,9 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.5.0-alpha"
+BfBot.VERSION = "1.6.4-alpha"
 BfBot.MAX_PRESETS = 8
+BfBot.MAX_SPELL_REPEATS = 5
 
 -- ============================================================
 -- Logging
@@ -91,6 +92,51 @@ function BfBot._Log(msg)
     end
 end
 
+-- EEex v0.11 lets listener errors escape into the engine. Keep every
+-- BuffBot-owned event boundary contained while preserving successful return
+-- arity (including nil slots) for callbacks whose values EEex consumes.
+local _bfbotUnpack = table.unpack or unpack
+local function _bfbotPack(...)
+    return { n = select("#", ...), ... }
+end
+
+local function _bfbotSafeToString(value, fallback)
+    local ok, converted = pcall(tostring, value)
+    if ok then return converted end
+    return fallback
+end
+
+BfBot._callbackErrors = BfBot._callbackErrors or {}
+
+function BfBot._SafeCallback(label, callback)
+    return function(...)
+        local result = _bfbotPack(pcall(callback, ...))
+        if not result[1] then
+            -- Protect the complete diagnostic path as well as the callback:
+            -- user-supplied tostring metamethods, shared diagnostic state, and
+            -- the reporter itself must never rethrow into EEex.
+            pcall(function()
+                local safeLabel = _bfbotSafeToString(
+                    label, "<unprintable callback label>")
+                local safeError = _bfbotSafeToString(
+                    result[2], "<unprintable callback error>")
+                local message = safeLabel .. ": " .. safeError
+                local callbackErrors = BfBot._callbackErrors
+                if type(callbackErrors) ~= "table" then
+                    callbackErrors = {}
+                    BfBot._callbackErrors = callbackErrors
+                end
+                if not callbackErrors[message] then
+                    callbackErrors[message] = 1
+                    pcall(BfBot._Error, "EEex callback failed -- " .. message)
+                end
+            end)
+            return nil
+        end
+        return _bfbotUnpack(result, 2, result.n)
+    end
+end
+
 -- ============================================================
 -- Shared Utilities
 -- ============================================================
@@ -155,6 +201,11 @@ BfBot._cache = {
     -- Scan cache: spriteID -> { spells = {...}, timestamp = number }
     -- Invalidated per-sprite on spell list change events
     scan = {},
+
+    -- Allied-summon sweep cache: { at = clockTicks, list = {entries} } | nil
+    -- nil until the first BfBot.Scan.GetAlliedSummons() call; TTL-checked
+    -- there (~2s). Cleared by BfBot.Scan.InvalidateSummons().
+    summons = nil,
 }
 
 -- User override table: resref -> boolean|nil

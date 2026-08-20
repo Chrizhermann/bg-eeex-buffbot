@@ -4,7 +4,7 @@
 
 **Goal:** Add support for activated equipped-item abilities and inventory potions as buff sources alongside spells. Configure by resref (durable) — engine picks the slot at use time. Listed-but-disabled by default. Closes (a)+(b) of GitHub issue #21; defers (c) scrolls and (d) wands to follow-ups.
 
-**Architecture:** Extend `BfBotScn.lua` to walk inventory + 3 quickitems and merge `kind="itm"` entries into the existing spell catalog. Schema bump v7→v8 adds the `kind` field. Exec engine branches on `kind` to emit `UseItem("RESREF", target)` BCS for items, `SpellRES` for spells. Pre-flight already-active check uses an extended `leafResrefs` list (collected by recursing op=146 sub-spell chains in `BfBot.Class.GetDuration`) so wrapper potions are detected by the leaf SPL on the target's effect list. UI mixes both kinds in one priority-sortable list with a tinted `itemColor` palette key for item rows.
+**Architecture:** Extend `BfBotScn.lua` to walk inventory + 3 quickitems and merge `kind="itm"` entries into the existing spell catalog. Schema bump v9→v10 adds `kind` to party preset entries; summon presets remain spell-only. Exec branches on `kind` to emit `UseItem("RESREF", target)` BCS for items and `SpellRES` for spells. Pre-flight already-active checks use `leafResrefs` collected through op=146 sub-spell chains so wrapper potions are detected by the leaf SPL on the target's effect list. UI mixes both kinds in one priority-sortable list with a tinted `itemColor` palette key for item rows.
 
 **Tech Stack:** Lua 5.1 (EEex), `.menu` DSL, WeiDU installer (no build step — deploy via `bash tools/deploy.sh`). Tests run in-game via `BfBot.Test.<Name>()` in the EEex console. Field-path probes use the EEex remote console at `C:\src\private\eeex-remote-console`.
 
@@ -25,6 +25,20 @@ This plan was authored pre-merge. The `feat/items-and-potions` branch has since 
 - **Task 15 resolved to option (b):** items auto-merge into the main preset list *disabled by default* (the already-approved "listed but disabled" UX — items are NOT excluded from the `BfBotPer.lua` auto-merge). The picker's `[Items]` sub-section scopes to items the user has explicitly REMOVED/excluded (`ovr == -1`), mirroring the excluded-buff-spell re-add affordance (v1.3.10 picker).
 - **Probe / deploy target is the `…modded - Copy - Copy` test install** — never the active playthrough (probes mutate game state).
 - **Innate, scanner, and exec layers confirmed stable post-merge** — anchors in those tasks were audited and hold; GetDuration core, `bump-version.sh` form, and the PROBE CLI path also hold.
+
+---
+
+## Post-merge amendment note (2026-08-20)
+
+The branch was merged again with `main` at **v1.6.4-alpha, schema v9**. This amendment supersedes the 2026-06-15 schema/release pins and any older copy-paste commands below:
+
+- **Schema target is v10** and **release target is v1.7.0-alpha**. This is the approved minor bump for the first source expansion beyond spells. The item migration is now v9→v10 and adds `kind="spl"` only to party entries that lack a kind. Summon presets remain spell-only and kindless. The migrator also preserves item-v8 development saves while supplying the summons shape added by main's colliding v8 lineage.
+- **Items are party-only.** `GetCastableSpells` is shared with summon discovery, so `_BuildItemCatalog` returns empty for non-party sprites and clone seeding filters item entries. This is the selected items × summon-presets policy.
+- **Main's R1–R5 repeat setting applies to items.** Each attempt independently rechecks availability and active effects; an item attempt consumes a stack or charge and never receives Quick Cast.
+- **Scrolls and wands remain deferred** and are explicitly rejected by ITM category even in quickitem slots. Containers/Bags of Holding and inventory search remain deferred. #53 remains open: `UseItem` fires ability 0, so higher-index weapon buffs stay excluded.
+- **SPL and ITM classifier caches are source-separated.** A same-resref SPL must never lend its buff verdict to an ITM ability.
+- **Task 15 is complete** (commit `7fa5231`): the picker has separate spell/item sections, and excluded items can be re-added only through the current character's persisted override.
+- **Do not use `Infinity_DoFile` for reload QA.** It serves cached Lua. Deploy while the game and loader are closed, then restart through InfinityLoader for this multi-module integration.
 
 ---
 
@@ -274,27 +288,27 @@ git commit -m "research(items): verify UseItem BCS + Item:getAbility(i) behavior
 
 ---
 
-## Task 4: Schema v8 — bump version, migrate, validate
+## Task 4: Schema v10 — bump version, migrate, validate
 
 **Files:**
-- Modify: `buffbot/BfBotPer.lua` (line 10 `_SCHEMA_VERSION` — currently `7`; `GetDefaultConfig` stamps `v` at :35; validator per-entry loop at :199; migration block :286-311)
+- Modify: `buffbot/BfBotPer.lua` (`_SCHEMA_VERSION`; default config stamp; party-entry validator; migration chain)
 
 **Step 1: Bump schema version**
 
-`buffbot/BfBotPer.lua:10` is currently `= 7` (and `GetDefaultConfig` stamps the version at :35). Bump to 8 — the `kind` field is schema **v8**:
+Main is schema v9. Bump to 10 — the party-entry `kind` field is schema **v10**:
 
 ```lua
-BfBot.Persist._SCHEMA_VERSION = 8
+BfBot.Persist._SCHEMA_VERSION = 10
 ```
 
-**Step 2: Add v7→v8 migration branch**
+**Step 2: Add v9→v10 migration branch**
 
-In `_MigrateConfig`, the last existing branch is `if fromVersion < 7 then ... end` (BfBotPer.lua:286-309, the #40 color-escape strip; version stamp at :310, return at :311). Leave that `<7` block intact. Insert the new branch **after line 309, before the stamp at :310**:
+In `_MigrateConfig`, leave the existing migration chain intact. Insert the item branch after the v9 repeat migration and before the current-version stamp:
 
 ```lua
-if fromVersion < 8 then
-    -- Add kind = "spl" to all existing spell entries.
-    -- Pre-v8 entries are all spells; items appear in v8+ only.
+if fromVersion < 10 then
+    -- Add kind="spl" to legacy party entries that lack kind.
+    -- Preserve kind from the colliding item-v8 development lineage.
     if config.presets then
         for _, preset in pairs(config.presets) do
             if type(preset) == "table" and type(preset.spells) == "table" then
@@ -324,9 +338,9 @@ end
 In `buffbot/BfBotTst.lua`, find `BfBot.Test.Persist()` (BfBotTst.lua:2730 — the consolidated persistence phase). Add a sub-case:
 
 ```lua
--- v7→v8: kind field added to all entries
-local v7 = {
-    v = 7, ap = 1,
+-- v9→v10: kind field added to party entries only
+local v9 = {
+    v = 9, ap = 1,
     presets = {
         [1] = { name = "P1", cat = "long", qc = 0, spells = {
             ["SPWI304"] = { on = 1, tgt = "s", pri = 1, lock = 0 },
@@ -334,11 +348,11 @@ local v7 = {
     },
     opts = { skip = 1 }, ovr = {},
 }
-local migrated = BfBot.Persist._MigrateConfig(v7, 7)
-if migrated.v == 8 and migrated.presets[1].spells["SPWI304"].kind == "spl" then
-    _ok("v7→v8 migration sets kind=\"spl\"")
+local migrated = BfBot.Persist._MigrateConfig(v9, 9)
+if migrated.v == 10 and migrated.presets[1].spells["SPWI304"].kind == "spl" then
+    _ok("v9→v10 migration sets party kind=\"spl\"")
 else
-    _nok("v7→v8 migration failed: " .. tostring(migrated.presets[1].spells["SPWI304"].kind))
+    _nok("v9→v10 migration failed: " .. tostring(migrated.presets[1].spells["SPWI304"].kind))
 end
 ```
 
@@ -350,15 +364,15 @@ In EEex console:
 BfBot.Test.Persist()
 ```
 
-Expected: all checks pass including the new v8 case.
+Expected: all checks pass including the new v10 case.
 
 **Step 6: Commit**
 
 ```bash
 git add buffbot/BfBotPer.lua buffbot/BfBotTst.lua
-git commit -m "feat(persist): schema v8 adds kind field
+git commit -m "feat(persist): schema v10 adds party kind field
 
-Migration sets kind=\"spl\" on all pre-v8 entries.
+Migration sets missing party kind to \"spl\" on pre-v10 entries.
 Validator defaults missing/invalid kind to \"spl\"."
 ```
 
@@ -463,7 +477,7 @@ Add to `BfBot.Test.ExportImport()` (BfBotTst.lua:1040):
 ```lua
 -- Items kept even if not in inventory; spells stripped if not castable
 local imported = {
-    v = 8, ap = 1,
+    v = 10, ap = 1,
     presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
         ["POTN99"]  = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
         ["SPWI999"] = { kind = "spl", on = 1, tgt = "s", pri = 2, lock = 0 },
@@ -574,10 +588,11 @@ will be detected by the leaf SPL on the target's effect list."
 
 > Scanner anchors verified stable post-merge (audit 2026-06-15).
 
-> **Probe-verified 2026-07-03** (see `tools/items_probe_findings.md`): there is NO separate
+> **Probe-verified 2026-07-03/05** (folded into the `bg-modding` references): there is NO separate
 > quickitem field — one array `sprite.m_equipment.m_items`, slot ranges decide the category.
 > Count/charges and ability-target have no named fields (raw offsets below). EEex's
-> `Item_Header_st:getAbility(i)` has a confirmed stride bug for i ≥ 1 — use manual arithmetic.
+> `Item_Header_st:getAbility(i)` has a confirmed stride bug for i ≥ 1. `UseItem` always fires
+> ability 0, so admission must classify ability 0 only; #53 tracks higher-index selection.
 
 **Step 1: Add the constants + ability helper at the top of the module**
 
@@ -585,14 +600,17 @@ Below the `BfBot.Scan = {}` line (line 9):
 
 ```lua
 -- Inventory access — all verified 2026-07-03 via remote console on BG2EE.
--- See tools/items_probe_findings.md (folded into bg-modding refs in Task 18).
 BfBot.Scan._SLOT_EQUIP_MAX = 17   -- 0-17 equipped body slots (10 = FIST pseudo-item)
 BfBot.Scan._SLOT_QUICK_MIN = 18   -- 18-20 quickitem slots 1-3
 BfBot.Scan._SLOT_QUICK_MAX = 20
-BfBot.Scan._SLOT_PACK_MAX  = 36   -- 21-36 backpack
+BfBot.Scan._SLOT_PACK_MAX  = 34   -- 21-34 backpack
+BfBot.Scan._SLOT_WEAPON_MIN = 35  -- 35-38 equipped weapon slots
+BfBot.Scan._SLOT_WEAPON_MAX = 38
 BfBot.Scan._ITEM_COUNT_OFF = 0x1C -- CItem: count/charges u16 (no named field)
 BfBot.Scan._ABIL_TARGET_OFF = 0xC -- Item_ability_st: target byte (no named field)
 BfBot.Scan._CAT_POTION = 9        -- Item_Header_st.itemType
+BfBot.Scan._CAT_SCROLL = 11       -- deferred by issue #21
+BfBot.Scan._CAT_WAND = 35         -- deferred by issue #21
 
 --- Get item ability i via manual pointer arithmetic.
 -- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header sizeof=114
@@ -609,21 +627,20 @@ end
 Insert after `_buildCountMap`:
 
 ```lua
---- Walk a sprite's inventory (one array: equipped 0-17, quickitems 18-20,
--- backpack 21-36), classify item abilities, return {[resref] = entry}.
--- Slot rules: equipped/quickitem slots admit any usable category; backpack
--- admits ONLY potions (cat 9). The engine would happily UseItem an unequipped
--- ring from the backpack (verified!), so this filter is the game-balance
--- enforcement, not just cosmetics.
+--- Walk a party sprite's inventory (equipped 0-17, quickitems 18-20,
+-- backpack 21-34, equipped weapons 35-38) and return item catalog entries.
+-- Scrolls/wands remain deferred even in quickslots; backpack admits potions only.
 local function _BuildItemCatalog(sprite)
     local items = {}
-    local seen = {}
+
+    local partyOk, portrait = pcall(EEex_Sprite_GetPortraitIndex, sprite)
+    if not partyOk or type(portrait) ~= "number" or portrait == -1 then
+        return items
+    end
 
     local function _consider(resref, count, allowAnyCat)
         if not resref or resref == "" then return end
-        if seen[resref] then return end
         if count <= 0 then return end
-        seen[resref] = true
 
         -- Skip BuffBot's own generated resrefs (defensive)
         if resref:sub(1, 4) == "BFBT" then return end
@@ -631,20 +648,26 @@ local function _BuildItemCatalog(sprite)
         local hdrOk, header = pcall(EEex_Resource_Demand, resref, "ITM")
         if not hdrOk or not header then return end
         if (header.abilityCount or 0) == 0 then return end  -- passive-only
-        if not allowAnyCat and (header.itemType or 0) ~= BfBot.Scan._CAT_POTION then
+        local itemType = header.itemType or 0
+        if itemType == BfBot.Scan._CAT_SCROLL
+            or itemType == BfBot.Scan._CAT_WAND then return end
+        if not allowAnyCat and itemType ~= BfBot.Scan._CAT_POTION then
             return  -- backpack: potions only
         end
 
-        for i = 0, header.abilityCount - 1 do
-            local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, i)
-            if aOk and ability then
-                -- target byte has no named field on Item_ability_st
-                local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
-                if target == 1 or target == 5 or target == 7 then
-                    local cOk, classResult = pcall(BfBot.Class.Classify, resref, header, ability)
-                    if cOk and classResult and classResult.isBuff then
-                        -- First buff ability per item wins (RING39-style multi-
-                        -- ability items: document limitation, revisit if it bites).
+        if items[resref] then
+            items[resref].count = items[resref].count + count
+            return
+        end
+
+        local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, 0)
+        if aOk and ability then
+            local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
+            if target == 1 or target == 5 or target == 7 then
+                local cOk, classResult = pcall(
+                    BfBot.Class.Classify, resref, header, ability, "itm")
+                if cOk and classResult
+                    and (classResult.isBuff or classResult.overridden) then
                         local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
                         -- ITM naming: identifiedName FIRST (genericName is the
                         -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
@@ -656,7 +679,7 @@ local function _BuildItemCatalog(sprite)
                         items[resref] = {
                             resref = resref,
                             kind = "itm",
-                            abilityIdx = i,
+                            abilityIdx = 0,
                             name = name,
                             icon = icon,
                             count = count,
@@ -671,8 +694,6 @@ local function _BuildItemCatalog(sprite)
                             class = classResult,
                             leafResrefs = (leafs and #leafs > 0) and leafs or { resref },
                         }
-                        break  -- first buff ability wins
-                    end
                 end
             end
         end
@@ -681,16 +702,15 @@ local function _BuildItemCatalog(sprite)
     -- Single walk over the one real inventory array. items:get(i) → CItem|nil.
     local ok = pcall(function()
         local arr = sprite.m_equipment.m_items
-        for slot = 0, BfBot.Scan._SLOT_PACK_MAX do
+        for slot = 0, BfBot.Scan._SLOT_WEAPON_MAX do
             local it = arr:get(slot)
             if it then
                 local resref = nil
                 pcall(function() resref = it.pRes.resref:get() end)
                 if resref and resref ~= "FIST" then
                     local count = EEex_ReadU16(EEex_UDToPtr(it) + BfBot.Scan._ITEM_COUNT_OFF)
-                    -- equipped (0-17) + quickitems (18-20): any category;
-                    -- backpack (21-36): potions only
                     local allowAnyCat = slot <= BfBot.Scan._SLOT_QUICK_MAX
+                        or slot >= BfBot.Scan._SLOT_WEAPON_MIN
                     _consider(resref, count, allowAnyCat)
                 end
             end
@@ -708,7 +728,7 @@ end
 
 **Step 3: Probe-test the helper before integrating**
 
-Deploy (`BGEE_DIR="C:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy" bash tools/deploy.sh`), reload with `Infinity_DoFile("BfBotScn")`, then via remote console:
+Deploy (`BGEE_DIR="C:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy" bash tools/deploy.sh`) while the game and loader are closed, restart through InfinityLoader, load the disposable test save to the world screen, then use the remote console:
 
 ```lua
 local sp = EEex_Sprite_GetInPortrait(0)
@@ -731,12 +751,14 @@ Expected on the prepared test save (leader has quickslot potions + backpack ring
 git add buffbot/BfBotScn.lua
 git commit -m "feat(scan): add _BuildItemCatalog — single m_equipment.m_items walk
 
-Slot rules: equipped 0-17 + quickitems 18-20 any category,
-backpack 21-36 potions only (engine allows UseItem on unequipped
-backpack rings — verified — so the scanner filter IS the enforcement).
-Raw offsets for count (+0x1C) and ability target (+0xC); manual
-getAbility arithmetic (EEex stride bug, see items_probe_findings.md).
-Entries carry kind=itm, abilityIdx, leafResrefs."
+Slot rules: equipped/body + quickitems 0-20, backpack 21-34
+potions only, and weapon slots 35-38. Scrolls and wands are excluded
+by category in every slot. Only ability 0 is admitted because UseItem
+always fires ability 0; its target must be 1, 5, or 7 and classify as
+a buff (or be this character's persisted exclusion for picker recovery).
+Duplicate eligible stacks aggregate counts. Raw count/ability offsets
+and the EEex getAbility stride workaround live in the bg-modding refs.
+Entries carry kind=itm, abilityIdx=0, and leafResrefs."
 ```
 
 ---
@@ -994,7 +1016,7 @@ end
 
 **Step 2: Live test — drink Oil of Speed via BuffBot**
 
-1. Reload BuffBot Lua: `Infinity_DoFile("BfBotExe")` in console
+1. Deploy while the game and loader are closed, then restart through InfinityLoader (do not use cached `Infinity_DoFile`)
 2. Open BuffBot panel
 3. Confirm Oil of Speed appears (kind=item; though no UI tinting yet — Task 14)
 4. Enable it in a preset, set caster + target = Self
@@ -1084,9 +1106,7 @@ The spell list (BuffBot.menu:374-478) has 7 columns, **none** for variants — s
 
 **Step 4: Manual QA — reload + open panel**
 
-```
-Infinity_DoFile("BfBotUI")
-```
+Deploy while the game and loader are closed, restart through InfinityLoader, and load the disposable test save. Do not use `Infinity_DoFile`; it does not reread changed modules from disk.
 
 Open the BuffBot panel, switch to a character with items. Items should render in the bronze tint; selecting an item row shows no variant swap buttons.
 
@@ -1213,9 +1233,9 @@ function BfBot.Test.Items()
         else _nok("not classified as buff") end
     end
 
-    -- 3. Schema v8 round-trip with item entries
+    -- 3. Schema v10 round-trip with item entries
     local cfg = {
-        v = 8, ap = 1,
+        v = 10, ap = 1,
         presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
             ["POTN15"] = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
         }}},
@@ -1250,7 +1270,9 @@ end
 
 **Step 3: Run the suite**
 
-In EEex console (test character with POTN15 + RING06 in inventory):
+In the EEex console, use a test character carrying a confirmed admitted buff
+potion and an equipped ability-0 buff item, identified by displayed name on the
+test install. Keep Ring of the Ram as an explicit negative/offensive fixture:
 
 ```
 BfBot.Test.RunAll()
@@ -1288,7 +1310,7 @@ Live cast test stays manual (Task 17 QA)."
 
 For each item:
 1. Place in test character inventory or equip
-2. Reload BuffBot: `Infinity_DoFile("BfBotScn")`
+2. Invalidate the selected sprite's scan cache (`BfBot.Scan.Invalidate(sprite)`); after code changes, deploy closed and restart through InfinityLoader instead of using `Infinity_DoFile`
 3. Open BuffBot panel for the character
 4. Check: does the item appear? Should it?
 5. If a buff: enable in preset, Cast Character, observe result, check stack/charges
@@ -1296,7 +1318,9 @@ For each item:
 
 **Step 2: Document results**
 
-Append findings to `tools/items_probe_findings.md`:
+Capture the QA evidence in the PR test plan and test-install logs. If the live
+pass uncovers a new, reusable engine fact, invoke `bg-modding-learn` and record
+that fact directly in the appropriate shared reference:
 
 ```
 | ResRef | Item              | Expected | Actual | Notes |
@@ -1327,34 +1351,29 @@ If no fixes, no commit.
 
 ## Task 18: bg-modding-learn — capture verified knowledge
 
-**Goal:** persist the in-game discoveries from Tasks 2, 3, 17 into the bg-modding skill references so future sessions don't re-probe.
+**Goal:** persist verified, reusable engine discoveries so future sessions do
+not re-probe them. The known Task 2/3 findings were folded into
+`eeex-resources.md` and `eeex-actions.md` on 2026-08-20, and the temporary probe
+file was removed. After Task 17, record only genuinely new live-QA findings.
 
 **Step 1: Invoke bg-modding-learn skill**
 
-Use the skill to record:
+If Task 17 produces new reusable knowledge, use the skill to record it in the
+relevant reference. In particular, check whether QA adds anything beyond the
+already-recorded facts:
 
-1. **In `references/eeex-sprites.md`:** the verified inventory + quickitem field paths and iteration patterns. New section "Inventory Iteration" with the field name, iteration call, slot record fields (resref/count).
+1. **In `references/eeex-resources.md`:** inventory and quickitem field paths,
+slot/count offsets, ability access, and same-resref SPL/ITM cache separation.
 
-2. **In `references/eeex-actions.md`:** confirmation that `UseItem("RESREF", target)` BCS verb queues via `EEex_Action_QueueResponseStringOnAIBase`, works for any inventory slot (not just quickbar), engine handles destruction/charge decrement automatically. Note any quirks found in QA (e.g. wand-from-inventory behavior).
+2. **In `references/eeex-actions.md`:** `UseItem("RESREF", target)` queueing,
+any-slot lookup, automatic consumption/charge handling, and its ability-0-only
+limitation.
 
-3. **In `references/eeex-resources.md` or `ie-spell-structure.md`:** confirm that `Item_Header_st:getAbility(i)` works (or document the typo if Task 3 found a real bug + the workaround).
+3. **In another reference only if Task 17 proves an additional engine quirk.**
 
-**Step 2: Delete the temporary findings file**
-
-```bash
-git rm tools/items_probe_findings.md
-```
-
-The knowledge now lives in the skill references where it belongs.
-
-**Step 3: Commit project file deletion**
-
-```bash
-git add tools/items_probe_findings.md
-git commit -m "chore: remove temp probe notes — knowledge in bg-modding refs"
-```
-
-(The skill references live outside the project repo, in `~/.claude/skills/bg-modding/references/` — those are committed via a separate dotfiles flow, not this branch.)
+If Task 17 yields no new reusable engine fact, mark this task complete with no
+additional file change. The shared skill references live outside this project
+repo and use their separate dotfiles flow.
 
 ---
 
@@ -1367,10 +1386,10 @@ git commit -m "chore: remove temp probe notes — knowledge in bg-modding refs"
 
 **Step 1: Run the bump tool**
 
-Current state: `BfBotCor.lua:9` is `"1.4.1-alpha"`, `setup-buffbot.tp2:3` is `v1.4.1-alpha`, and the CHANGELOG top is v1.4.1 (2026-05-24). The `bump-version.sh` arg form is unchanged, and CI `version-check` is still enforced (tp2 `VERSION` must equal `v` + `BfBot.VERSION`).
+Current state after the 2026-08-20 merge is v1.6.4-alpha. The approved #21 release plan uses a minor bump for the first source expansion beyond spells, so the target is v1.7.0-alpha. CI `version-check` remains enforced (tp2 `VERSION` must equal `v` + `BfBot.VERSION`).
 
 ```bash
-bash tools/bump-version.sh 1.4.2-alpha
+bash tools/bump-version.sh 1.7.0-alpha
 ```
 
 Verify it updated both:
@@ -1381,14 +1400,14 @@ grep -E "VERSION|BfBot.VERSION" buffbot/BfBotCor.lua buffbot/setup-buffbot.tp2
 
 **Step 2: CHANGELOG entry**
 
-Prepend to `CHANGELOG.md` under a new `## v1.4.2-alpha (2026-06-15)` heading:
+Prepend to `CHANGELOG.md` under a new `## v1.7.0-alpha (2026-08-20)` heading:
 
 ```markdown
-## v1.4.2-alpha (2026-06-15)
+## v1.7.0-alpha (2026-08-20)
 
 ### Added
-- **Items + potions as buff sources** (#21 partial — covers (a) activated equipped-item abilities + (b) inventory potions; (c) scrolls and (d) wands deferred to follow-up issues). Buff potions like Oil of Speed and Potion of Heroism, plus activated abilities on equipped rings/amulets/cloaks/etc., now appear alongside spells in each character's preset list (kind="itm", listed but disabled by default). Engine `UseItem("RESREF", target)` BCS verb does the slot lookup at use time — configure by resref, stack multiple of the same potion in inventory freely. Pre-flight already-active detection follows op=146 wrapper SPL chains so a potion's leaf SPL is checked on the target's effect list.
-- **Schema v8** — `kind` field on every preset entry. Auto-migrates v7 saves on load (sets `kind = "spl"`). Items in imported preset configs are kept regardless of current inventory (catalog-driven UI naturally hides absent items).
+- **Items + potions as buff sources** (#21 — activated equipped-item abilities + inventory potions; scrolls, wands, containers, and search remain deferred). Buff potions like Oil of Speed and Potion of Heroism, plus activated abilities on equipped rings/amulets/cloaks/etc., now appear alongside spells in each character's preset list (kind="itm", listed but disabled by default). Engine `UseItem("RESREF", target)` BCS verb does the slot lookup at use time — configure by resref, stack multiple of the same potion in inventory freely. Pre-flight already-active detection follows op=146 wrapper SPL chains so a potion's leaf SPL is checked on the target's effect list.
+- **Schema v10** — `kind` field on party preset entries. Auto-migrates v9 saves on load (sets missing party `kind = "spl"`); summon presets remain spell-only. Items in imported preset configs are kept regardless of current inventory and reappear when reacquired.
 - **Theme — `itemColor` palette key** — bronze/copper/sienna tints for item rows in the mixed buff list. Variant swap buttons auto-hide for item rows (`hasVariants = 0`).
 - **Picker sub-sections** — the Add Spell picker groups *removed* spells and *removed* items under "Spells" and "Items" headers, for re-adding.
 
@@ -1401,11 +1420,11 @@ Prepend to `CHANGELOG.md` under a new `## v1.4.2-alpha (2026-06-15)` heading:
 
 ```bash
 git add buffbot/BfBotCor.lua buffbot/setup-buffbot.tp2 CHANGELOG.md
-git commit -m "release: v1.4.2-alpha — items + potions as buff sources
+git commit -m "release: v1.7.0-alpha — items + potions as buff sources
 
-Closes #21 partial: (a) activated equipped items + (b) inventory potions.
+Implements #21: (a) activated equipped items + (b) inventory potions.
 Scrolls + wands deferred to follow-up issues.
-Schema v8 (auto-migrates v7 saves)."
+Schema v10 (auto-migrates v9 saves; summons stay spell-only)."
 ```
 
 ---
@@ -1429,16 +1448,20 @@ Expected: `version-check` passes (tp2 VERSION = `v` + `BfBot.VERSION`); `release
 
 **Step 3: Open PR**
 
+Use `Closes #21` only after Task 17 passes in full. If any acceptance check is
+still outstanding, use `Refs #21` and keep the PR draft until the live evidence
+is complete. Never claim or close #53.
+
 ```bash
 gh auth switch --user Chrizhermann
-gh pr create --repo Chrizhermann/bg-eeex-buffbot --title "feat(items): activated equipped items + inventory potions (#21 partial)" --body "$(cat <<'EOF'
-Closes (a)+(b) of #21. Scrolls + wands deferred to follow-up issues.
+gh pr create --repo Chrizhermann/bg-eeex-buffbot --title "feat(items): activated equipped items + inventory potions" --body "$(cat <<'EOF'
+Closes #21 by implementing its approved (a)+(b) scope. Scrolls, wands, containers, and search remain deferred; #53 remains open.
 
 ## Summary
 - New buff sources: activated equipped-item abilities (rings/amulets/etc.) and buff potions from anywhere in inventory.
 - Configure by resref, not slot — engine `UseItem(resref, target)` BCS verb does the lookup at use time. Stack multiples freely.
 - Listed but disabled by default in new presets.
-- Schema bump v7→v8 auto-migrates existing saves.
+- Schema bump v9→v10 auto-migrates existing saves; items remain party-only and summon presets stay spell-only.
 
 ## Design
 Full design: [#21 comment](https://github.com/Chrizhermann/bg-eeex-buffbot/issues/21#issuecomment-4351690202)
@@ -1465,13 +1488,13 @@ gh issue comment 21 --repo Chrizhermann/bg-eeex-buffbot --body "PR opened: <PR-u
 
 ## Acceptance criteria (recap from design)
 
-- ✅ A character with Oil of Speed in inventory + Ring of the Ram equipped sees both in their preset list, kind="itm", default disabled
-- ✅ Enabling Oil of Speed in a preset and pressing Cast Character drinks one potion, applies the Haste buff, decrements stack count by 1
-- ✅ Pressing Cast Character again with Haste already active skips the entry (already-active detection)
-- ✅ F12 hotkey trigger fires the same path
-- ✅ Save/reload preserves item entries; export/import works
-- ✅ Combat detection still aborts mid-queue
-- ✅ Existing spell behavior fully unchanged — `BfBot.Test.RunAll()` passes
+- [ ] A character with a buff potion plus an equipped ability-0 buff item (Sandthief's Ring by displayed name on the test install) sees both as kind="itm", default disabled; offensive Ring of the Ram remains absent
+- [ ] Enabling Oil of Speed in a preset and pressing Cast Character drinks one potion, applies the Haste buff, decrements stack count by 1
+- [ ] Pressing Cast Character again with Haste already active skips the entry (already-active detection)
+- [ ] F12 hotkey trigger fires the same path
+- [ ] Save/reload preserves item entries; export/import works
+- [ ] Combat detection still aborts mid-queue
+- [ ] Existing spell behavior fully unchanged — `BfBot.Test.RunAll()` passes
 
 ---
 
