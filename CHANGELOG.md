@@ -12,6 +12,19 @@
 ### Testing
 - Added synthetic v0.11/v1 coverage for inactive main-only rollback, externally-owned active state, combined helper/main ordering, safe wrong-order recovery, the required two-component legacy update, recoverable main-only update rejection, and legacy helper/main uninstall ownership.
 
+## v1.7.1-alpha (2026-08-20)
+
+### Fixed
+- **Preset targets now survive character display-name changes.** BuffBot still resolves exact current display names first, then falls back to the character's stable, case-insensitive death variable when the stored name is stale. This applies consistently to Cast Character, Cast All, and allied-summon queue construction. (#51)
+- **An unresolved single-character target can no longer become a party-wide cast.** Stale or unknown single names now produce no queue entry, matching the existing safe behavior for unresolved names inside multi-target lists. Valid members of a partially stale target list remain in their original order.
+
+### Diagnostics and compatibility
+- When every configured target for an otherwise castable spell is unavailable, the queue builder now records a diagnostic naming the caster and spell. Existing presets and exports require no migration or schema change; protagonist targets continue to use their display name because CHARNAME normally has no usable death variable.
+
+### Testing
+- The automated suite passes **256 tests**, including exact-name precedence, case-insensitive death-variable fallback, empty and `None` handling, unknown single targets, partial multi-target lists, party and summon caster shapes, repeats, and build-skip plumbing across all three queue builders.
+- Live BG2:EE 2.6.6.0 + EEex 1.2.0 validation passed on the disposable test install: Imoen was temporarily renamed to Mione while a preset retained `Imoen`; BuffBot resolved Player2, built one Armor attempt, and completed the real cast on Mione. An unknown stored target built zero attempts, and the temporary name/config changes were restored. BG1EE and the broader compatibility matrix were not re-exercised in this pass.
+
 ## v1.7.0-alpha (2026-08-20)
 
 ### Added

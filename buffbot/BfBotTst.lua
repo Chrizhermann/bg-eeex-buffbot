@@ -1384,6 +1384,49 @@ function BfBot.Test.TargetPicker()
     _check(BfBot.Persist._ResolveNameToSlot(nil) == nil, "nil → nil")
     _check(BfBot.Persist._ResolveNameToSlot("") == nil, "empty → nil")
 
+    -- Test 1d: stable death-variable fallback. Use a case variant that is
+    -- not any member's exact display name, which forces the fallback path
+    -- even when the current display name still equals the DV semantically.
+    local displayNames = {}
+    for slot = 0, 5 do
+        local sp = EEex_Sprite_GetInPortrait(slot)
+        if sp then displayNames[BfBot._GetName(sp)] = 1 end
+    end
+    local dvPick = nil
+    for slot = 0, 5 do
+        local sp = EEex_Sprite_GetInPortrait(slot)
+        if sp then
+            local deathVar = BfBot._GetDeathVar(sp)
+            if type(deathVar) == "string" and deathVar ~= ""
+                and deathVar:lower() ~= "none" then
+                local lower = deathVar:lower()
+                local upper = deathVar:upper()
+                local probe = not displayNames[lower] and lower
+                    or (not displayNames[upper] and upper or nil)
+                if probe then
+                    dvPick = { slot = slot, sprite = sp, dv = deathVar,
+                        probe = probe }
+                    break
+                end
+            end
+        end
+    end
+    if dvPick then
+        _check(BfBot._GetDeathVar(dvPick.sprite) == dvPick.dv,
+            "_GetDeathVar reads live DV '" .. dvPick.dv .. "'")
+        _check(BfBot.Persist._ResolveNameToSlot(dvPick.probe) == dvPick.slot,
+            "Case-insensitive DV fallback '" .. dvPick.probe .. "' → slot "
+                .. tostring(dvPick.slot))
+    else
+        _warning("No party member with a usable DV fallback probe — skipping live DV case")
+    end
+    if displayNames["none"] then
+        _warning("A party member is literally named 'none' — skipping reserved-DV check")
+    else
+        _check(BfBot.Persist._ResolveNameToSlot("none") == nil,
+            "Reserved protagonist DV 'None' is ignored")
+    end
+
     -- Test 2: _ResolveConfigTarget dual-format
     P("")
     P("  [2] _ResolveConfigTarget dual-format")
@@ -1437,7 +1480,13 @@ function BfBot.Test.TargetPicker()
     _check(#r == 1,
         "Unresolved name skipped: " .. #r .. " entries (expected 1)")
 
-    -- 2g: legacy slot table {"1"} still works
+    -- 2g: unresolved single name must also be skipped. Historically this
+    -- became target='all', turning a stale NPC target into a party-wide cast.
+    r = BfBot.Persist._ResolveConfigTarget("ZZZZZ_NOBODY", 0, "TEST", 1)
+    _check(#r == 0,
+        "Unresolved single name → 0 entries (never party-wide fallback)")
+
+    -- 2h: legacy slot table {"1"} still works
     r = BfBot.Persist._ResolveConfigTarget({"1"}, 0, "TEST", 1)
     _check(#r == 1 and r[1].target == 1,
         "Legacy table {'1'} → target=1")
