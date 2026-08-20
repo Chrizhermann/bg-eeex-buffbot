@@ -241,6 +241,58 @@ def test_item_catalog_and_clone_seeding_are_party_only() -> None:
     assert re.search(r"scanData\.kind\s*~=\s*[\"']itm[\"']", clone_seed)
 
 
+def test_summon_queue_defensively_rejects_item_catalog_rows() -> None:
+    facts = _persist_runtime().execute(
+        """
+        local sprite = {}
+        BfBot.Exec = {
+            _ResolveCaster = function(_) return sprite end,
+        }
+        BfBot.Scan.Invalidate = function(_) end
+        BfBot.Scan.GetCastableSpells = function(_)
+            return {
+                SPELL = {
+                    kind = "spl", count = 1, name = "Spell", durCat = "long",
+                },
+                ITEM = {
+                    kind = "itm", count = 1, name = "Item", durCat = "long",
+                },
+            }
+        end
+        BfBot.Persist.PeekSummonPreset = function(_, _)
+            return {
+                qc = 2,
+                spells = {
+                    SPELL = { on = 1, tgt = "s", pri = 1, rep = 1 },
+                    ITEM = { on = 1, tgt = "s", pri = 2, rep = 1 },
+                },
+            }
+        end
+        BfBot.Persist._ResolveConfigTarget = function(_, casterRef, resref, pri)
+            return { {
+                casterRef = casterRef, spell = resref,
+                target = "self", pri = pri,
+            } }
+        end
+
+        local queue, err = BfBot.Persist.BuildQueueForSummon({
+            identity = "test:clone", oid = 42, name = "Clone",
+        }, 1)
+        return {
+            error = err,
+            count = queue and #queue or 0,
+            first = queue and queue[1] and queue[1].spell,
+            cheat = queue and queue[1] and queue[1].cheat,
+        }
+        """
+    )
+
+    assert facts["error"] is None
+    assert facts["count"] == 1
+    assert facts["first"] == "SPELL"
+    assert facts["cheat"] == 1
+
+
 def test_disallowed_backpack_copy_does_not_hide_equipped_copy() -> None:
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(

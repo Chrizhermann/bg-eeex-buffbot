@@ -1762,7 +1762,11 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
-            if scanData and scanData.count > 0 then
+            -- Summon presets are deliberately spell-only. The normal summon
+            -- scanner cannot produce item rows, but keep this guard here as a
+            -- last line of defense for synthetic seams and future callers that
+            -- resolve a party sprite through a summon-shaped reference.
+            if scanData and scanData.kind ~= "itm" and scanData.count > 0 then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do

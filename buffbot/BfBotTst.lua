@@ -3751,7 +3751,8 @@ function BfBot.Test.SummonCasters()
         if ownPre1 and type(ownPre1.spells) == "table" and okScan and castable then
             for resref in pairs(ownPre1.spells) do
                 local sd = castable[resref]
-                if type(sd) == "table" and (sd.count or 0) > 0 then
+                if type(sd) == "table" and sd.kind ~= "itm"
+                    and (sd.count or 0) > 0 then
                     expect = expect + 1
                 end
             end
@@ -3845,7 +3846,8 @@ function BfBot.Test.SummonCasters()
         local castable = BfBot.Scan.GetCastableSpells(leader)
         local picks = {}
         for resref, data in pairs(castable or {}) do
-            if type(data) == "table" and (data.count or 0) > 0 then
+            if type(data) == "table" and data.kind ~= "itm"
+                and (data.count or 0) > 0 then
                 picks[#picks + 1] = resref
             end
         end
@@ -3980,7 +3982,8 @@ function BfBot.Test.SummonCasters()
             local castable = BfBot.Scan.GetCastableSpells(leader)
             local picks = {}
             for resref, data in pairs(castable or {}) do
-                if type(data) == "table" and (data.count or 0) > 0 then
+                if type(data) == "table" and data.kind ~= "itm"
+                    and (data.count or 0) > 0 then
                     picks[#picks + 1] = resref
                 end
             end
