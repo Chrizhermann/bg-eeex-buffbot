@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.7.2-alpha (2026-08-21)
 
 ### Fixed
 - Active preset selections 6–8 now survive config validation and save import; invalid or missing selections reset safely to preset 1. (#52, #58)
@@ -10,7 +10,8 @@
 - **The existing LuaJIT helper is declared before the main component while retaining its historical component ID 1 (main remains 0).** Selecting both in one WeiDU run activates or repairs LuaJIT before main validation; an exact runtime activated externally by EEex is accepted without a BuffBot component-ownership requirement.
 
 ### Testing
-- Added synthetic v0.11/v1 coverage for inactive main-only rollback, externally-owned active state, combined helper/main ordering, safe wrong-order recovery, the required two-component legacy update, recoverable main-only update rejection, and legacy helper/main uninstall ownership.
+- The full automated suite passes **284 tests**, including synthetic EEex v0.11/v1 coverage for inactive main-only rollback, externally-owned active state, combined helper/main ordering, safe wrong-order recovery, the required two-component legacy update, recoverable main-only update rejection, legacy helper/main uninstall ownership, and active-preset validation/import.
+- On a disposable fresh BG2:EE copy with EEex 1.2.0, released v1.6.1 main-only without LuaJIT reproduced the loader/game process exit. The current main-only install rejected the unsafe state without changing product files, helper-plus-main launched successfully, uninstall restored the loader and DLL state exactly, and the historical two-component upgrade succeeded. The reporter's complete megamod stack was not reproduced.
 
 ## v1.7.1-alpha (2026-08-20)
 
