@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Active preset selections 6–8 now survive config validation and save import; invalid or missing selections reset safely to preset 1. (#52, #58)
+
+### Installer
+- **BuffBot's main component now fails before changing the TLK or override when the exact EEex LuaJIT loader state is not active.** The error directs normal and Project Infinity users to enable EEex LuaJIT or install BuffBot's helper first, preventing a successful-looking main-only install with an unusable loader state. (#36, #62)
+- **The existing LuaJIT helper is declared before the main component while retaining its historical component ID 1 (main remains 0).** Selecting both in one WeiDU run activates or repairs LuaJIT before main validation; an exact runtime activated externally by EEex is accepted without a BuffBot component-ownership requirement.
+
+### Testing
+- Added synthetic v0.11/v1 coverage for inactive main-only rollback, externally-owned active state, combined helper/main ordering, safe wrong-order recovery, the required two-component legacy update, recoverable main-only update rejection, and legacy helper/main uninstall ownership.
+
 ## v1.7.0-alpha (2026-08-20)
 
 ### Added

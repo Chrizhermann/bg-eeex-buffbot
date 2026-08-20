@@ -2,183 +2,13 @@ BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
 VERSION ~v1.7.0-alpha~
 
-BEGIN ~BuffBot: In-Game Buff Automation~
-DESIGNATED 0
-LABEL ~BuffBot-Main~
-
-// ---- Prerequisites ----
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
-  ~BuffBot requires BG:EE, BG2:EE, or EET.~
-
-// EEex component numbers changed in v1.0.0. Detect the runtime capability
-// BuffBot needs instead: v0.11 keeps EEex scripts in override, while v1 puts
-// them under EEex_scripts. Reject dual layouts because their loader family is
-// ambiguous (upgrade residue or an unsafe manual downgrade).
-REQUIRE_PREDICATE (
-  FILE_EXISTS ~override/M___EEex.lua~
-  AND (
-    (
-      FILE_EXISTS ~override/EEex_Sprite.lua~
-      AND FILE_EXISTS ~override/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~override/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-    OR
-    (
-      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
-      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~EEex_scripts/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-  )
-  AND NOT (
-    (
-      FILE_EXISTS ~override/EEex_Sprite.lua~
-      AND FILE_EXISTS ~override/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~override/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-    AND
-    (
-      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
-      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~EEex_scripts/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-  )
-)
-  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
-
-// ---- TLK strings for innate ability tooltips ----
-// One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
-// contiguous strrefs across upgrades — existing strings keep their old
-// strrefs while new strings get appended at the end. So Lua reads all 8
-// as an array indexed by preset rather than computing from a base.
-OUTER_SET bfbot_strref_1 = RESOLVE_STR_REF(~BuffBot 1~)
-OUTER_SET bfbot_strref_2 = RESOLVE_STR_REF(~BuffBot 2~)
-OUTER_SET bfbot_strref_3 = RESOLVE_STR_REF(~BuffBot 3~)
-OUTER_SET bfbot_strref_4 = RESOLVE_STR_REF(~BuffBot 4~)
-OUTER_SET bfbot_strref_5 = RESOLVE_STR_REF(~BuffBot 5~)
-OUTER_SET bfbot_strref_6 = RESOLVE_STR_REF(~BuffBot 6~)
-OUTER_SET bfbot_strref_7 = RESOLVE_STR_REF(~BuffBot 7~)
-OUTER_SET bfbot_strref_8 = RESOLVE_STR_REF(~BuffBot 8~)
-
-// ---- Copy mod files to override ----
-COPY ~buffbot/M_BfBot.lua~   ~override~
-COPY ~buffbot/BfBotCor.lua~  ~override~
-COPY ~buffbot/BfBotCls.lua~  ~override~
-COPY ~buffbot/BfBotScn.lua~  ~override~
-COPY ~buffbot/BfBotExe.lua~  ~override~
-COPY ~buffbot/BfBotMp.lua~   ~override~
-COPY ~buffbot/BfBotPer.lua~  ~override~
-COPY ~buffbot/BfBotInn.lua~  ~override~
-COPY ~buffbot/BfBotUI.lua~   ~override~
-COPY ~buffbot/BfBotThm.lua~  ~override~
-COPY ~buffbot/BfBotTst.lua~  ~override~
-COPY ~buffbot/BuffBot.menu~  ~override~
-
-// ---- Copy visual assets (parchment background, border texture, icons) ----
-COPY ~buffbot/BFBOTIB.BAM~  ~override~
-COPY ~buffbot/BFBOTBG.MOS~  ~override~
-COPY ~buffbot/MOS9900.PVRZ~ ~override~
-COPY ~buffbot/MOS9901.PVRZ~ ~override~
-COPY ~buffbot/MOS9902.PVRZ~ ~override~
-COPY ~buffbot/MOS9903.PVRZ~ ~override~
-COPY ~buffbot/BFBOTFR.PVRZ~ ~override~
-COPY ~buffbot/BFBOTAB.BAM~  ~override~
-
-// ---- Theme assets (issue #32) ----
-// SOD theme background + border
-COPY ~buffbot/MOS9910.PVRZ~ ~override~
-COPY ~buffbot/MOS9911.PVRZ~ ~override~
-COPY ~buffbot/MOS9912.PVRZ~ ~override~
-COPY ~buffbot/MOS9913.PVRZ~ ~override~
-COPY ~buffbot/BFBOTFR2.PVRZ~ ~override~
-// BG1 theme background + border
-COPY ~buffbot/MOS9920.PVRZ~ ~override~
-COPY ~buffbot/MOS9921.PVRZ~ ~override~
-COPY ~buffbot/MOS9922.PVRZ~ ~override~
-COPY ~buffbot/MOS9923.PVRZ~ ~override~
-COPY ~buffbot/BFBOTFR3.PVRZ~ ~override~
-
-// ---- Create presets directory for config export/import ----
-MKDIR ~override/bfbot_presets~
-
-// ---- Write per-preset strrefs (one per line) for Lua tooltip lookup ----
-<<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt
-%bfbot_strref_1%
-%bfbot_strref_2%
-%bfbot_strref_3%
-%bfbot_strref_4%
-%bfbot_strref_5%
-%bfbot_strref_6%
-%bfbot_strref_7%
-%bfbot_strref_8%
->>>>>>>>
-COPY ~.../buffbot-inlined/bfbot_strrefs.txt~ ~override/bfbot_strrefs.txt~
-  EVALUATE_BUFFER
-
-// ============================================================
-// Component 1: EEex LuaJIT (required for full functionality)
-// ============================================================
-BEGIN ~BuffBot: EEex LuaJIT Support (auto-detected)~
-DESIGNATED 1
-LABEL ~BuffBot-LuaJIT~
-
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
-  ~BuffBot requires BG:EE, BG2:EE, or EET.~
-
-REQUIRE_PREDICATE (
-  FILE_EXISTS ~override/M___EEex.lua~
-  AND (
-    (
-      FILE_EXISTS ~override/EEex_Sprite.lua~
-      AND FILE_EXISTS ~override/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~override/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-    OR
-    (
-      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
-      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~EEex_scripts/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-  )
-  AND NOT (
-    (
-      FILE_EXISTS ~override/EEex_Sprite.lua~
-      AND FILE_EXISTS ~override/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~override/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-    AND
-    (
-      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
-      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
-      AND FILE_CONTAINS_EVALUATED(
-        ~EEex_scripts/EEex_Sprite.lua~
-        ~EEex_Sprite_GetCharacterIndex~
-      )
-    )
-  )
-)
-  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
-
+ALWAYS
+// Shared by both components so main validates exactly the state the helper
+// recognizes and produces. Return values are recomputed on every call, so a
+// helper selected earlier in the same WeiDU run can activate main immediately.
+DEFINE_ACTION_FUNCTION BFBOT_DETECT_LUAJIT_STATE
+  RET lua_version lua_version_pattern luajit_active
+BEGIN
 // The one capable script layout determines the loader's Lua version. Do not
 // infer this from EEex.tp2: that file can be absent or left behind by an
 // upgrade, and its component numbers/version strings are not runtime state.
@@ -271,6 +101,75 @@ ACTION_IF (
   BUT_ONLY
 END
 
+END
+// ALWAYS can run more than once in a component cascade. Never reset proof
+// that the helper completed earlier in this same WeiDU invocation.
+ACTION_IF NOT VARIABLE_IS_SET bfbot_luajit_helper_succeeded_this_run BEGIN
+  OUTER_SET bfbot_luajit_helper_succeeded_this_run = 0
+END
+END
+
+// ============================================================
+// Component 1: EEex LuaJIT (required prerequisite for main)
+// Keep DESIGNATED 1 for compatibility with existing WeiDU logs/backups.
+// Declared first so selecting both components in one run activates LuaJIT
+// before the main component validates the observable loader state.
+// ============================================================
+BEGIN ~BuffBot: EEex LuaJIT Support (auto-detected)~
+DESIGNATED 1
+LABEL ~BuffBot-LuaJIT~
+
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+  ~BuffBot requires BG:EE, BG2:EE, or EET.~
+
+REQUIRE_PREDICATE (
+  FILE_EXISTS ~override/M___EEex.lua~
+  AND (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    OR
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+  AND NOT (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    AND
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+)
+  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
+
+// Recompute even when another selected component ran earlier in this process.
+LAF BFBOT_DETECT_LUAJIT_STATE
+  RET lua_version lua_version_pattern luajit_active
+END
+
 ACTION_IF (luajit_active = 1) THEN BEGIN
   PRINT ~LuaJIT is already active. Skipping installation.~
 END ELSE BEGIN
@@ -326,3 +225,158 @@ END ELSE BEGIN
 
   PRINT ~LuaJIT installed successfully. BuffBot will have full functionality.~
 END
+
+// Seed the lifecycle exception only after the helper's exact postcondition is
+// observable. This process-local value cannot survive into a later WeiDU run.
+LAF BFBOT_DETECT_LUAJIT_STATE
+  RET lua_version lua_version_pattern luajit_active
+END
+ACTION_IF (luajit_active = 0) BEGIN
+  FAIL ~BuffBot's LuaJIT helper did not produce the required EEex loader state. Reinstall EEex with LuaJIT / Experimental support, then run BuffBot again.~
+END
+OUTER_SET bfbot_luajit_helper_succeeded_this_run = 1
+
+// ============================================================
+// Component 0: BuffBot main
+// Keep DESIGNATED 0 for compatibility with existing WeiDU logs/backups.
+// ============================================================
+BEGIN ~BuffBot: In-Game Buff Automation~
+DESIGNATED 0
+LABEL ~BuffBot-Main~
+
+// ---- Prerequisites ----
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+  ~BuffBot requires BG:EE, BG2:EE, or EET.~
+
+// EEex component numbers changed in v1.0.0. Detect the runtime capability
+// BuffBot needs instead: v0.11 keeps EEex scripts in override, while v1 puts
+// them under EEex_scripts. Reject dual layouts because their loader family is
+// ambiguous (upgrade residue or an unsafe manual downgrade).
+REQUIRE_PREDICATE (
+  FILE_EXISTS ~override/M___EEex.lua~
+  AND (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    OR
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+  AND NOT (
+    (
+      FILE_EXISTS ~override/EEex_Sprite.lua~
+      AND FILE_EXISTS ~override/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~override/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+    AND
+    (
+      FILE_EXISTS ~EEex_scripts/EEex_Sprite.lua~
+      AND FILE_EXISTS ~EEex_scripts/EEex_Options.lua~
+      AND FILE_CONTAINS_EVALUATED(
+        ~EEex_scripts/EEex_Sprite.lua~
+        ~EEex_Sprite_GetCharacterIndex~
+      )
+    )
+  )
+)
+  ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
+
+// Accept exact LuaJIT state regardless of whether EEex or BuffBot owns it.
+// A WeiDU component/log entry alone is not runtime evidence.
+LAF BFBOT_DETECT_LUAJIT_STATE
+  RET lua_version lua_version_pattern luajit_active
+END
+
+// Updating a legacy main(0)-then-helper(1) stack temporarily removes the
+// helper after it has already succeeded earlier in this same WeiDU process.
+// Accept only that invocation-local proof; fresh main-only runs still require
+// the exact loader state above and helper uninstalls never seed the proof.
+ACTION_IF (
+  luajit_active = 0
+  AND bfbot_luajit_helper_succeeded_this_run = 0
+) BEGIN
+  FAIL ~BuffBot requires EEex LuaJIT to be active before installing the main component. Install "BuffBot: EEex LuaJIT Support" first, or enable EEex's LuaJIT / Experimental component, then install BuffBot again. Project Infinity users must place the LuaJIT component before "BuffBot: In-Game Buff Automation".~
+END
+
+// ---- TLK strings for innate ability tooltips ----
+// One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
+// contiguous strrefs across upgrades — existing strings keep their old
+// strrefs while new strings get appended at the end. So Lua reads all 8
+// as an array indexed by preset rather than computing from a base.
+OUTER_SET bfbot_strref_1 = RESOLVE_STR_REF(~BuffBot 1~)
+OUTER_SET bfbot_strref_2 = RESOLVE_STR_REF(~BuffBot 2~)
+OUTER_SET bfbot_strref_3 = RESOLVE_STR_REF(~BuffBot 3~)
+OUTER_SET bfbot_strref_4 = RESOLVE_STR_REF(~BuffBot 4~)
+OUTER_SET bfbot_strref_5 = RESOLVE_STR_REF(~BuffBot 5~)
+OUTER_SET bfbot_strref_6 = RESOLVE_STR_REF(~BuffBot 6~)
+OUTER_SET bfbot_strref_7 = RESOLVE_STR_REF(~BuffBot 7~)
+OUTER_SET bfbot_strref_8 = RESOLVE_STR_REF(~BuffBot 8~)
+
+// ---- Copy mod files to override ----
+COPY ~buffbot/M_BfBot.lua~   ~override~
+COPY ~buffbot/BfBotCor.lua~  ~override~
+COPY ~buffbot/BfBotCls.lua~  ~override~
+COPY ~buffbot/BfBotScn.lua~  ~override~
+COPY ~buffbot/BfBotExe.lua~  ~override~
+COPY ~buffbot/BfBotMp.lua~   ~override~
+COPY ~buffbot/BfBotPer.lua~  ~override~
+COPY ~buffbot/BfBotInn.lua~  ~override~
+COPY ~buffbot/BfBotUI.lua~   ~override~
+COPY ~buffbot/BfBotThm.lua~  ~override~
+COPY ~buffbot/BfBotTst.lua~  ~override~
+COPY ~buffbot/BuffBot.menu~  ~override~
+
+// ---- Copy visual assets (parchment background, border texture, icons) ----
+COPY ~buffbot/BFBOTIB.BAM~  ~override~
+COPY ~buffbot/BFBOTBG.MOS~  ~override~
+COPY ~buffbot/MOS9900.PVRZ~ ~override~
+COPY ~buffbot/MOS9901.PVRZ~ ~override~
+COPY ~buffbot/MOS9902.PVRZ~ ~override~
+COPY ~buffbot/MOS9903.PVRZ~ ~override~
+COPY ~buffbot/BFBOTFR.PVRZ~ ~override~
+COPY ~buffbot/BFBOTAB.BAM~  ~override~
+
+// ---- Theme assets (issue #32) ----
+// SOD theme background + border
+COPY ~buffbot/MOS9910.PVRZ~ ~override~
+COPY ~buffbot/MOS9911.PVRZ~ ~override~
+COPY ~buffbot/MOS9912.PVRZ~ ~override~
+COPY ~buffbot/MOS9913.PVRZ~ ~override~
+COPY ~buffbot/BFBOTFR2.PVRZ~ ~override~
+// BG1 theme background + border
+COPY ~buffbot/MOS9920.PVRZ~ ~override~
+COPY ~buffbot/MOS9921.PVRZ~ ~override~
+COPY ~buffbot/MOS9922.PVRZ~ ~override~
+COPY ~buffbot/MOS9923.PVRZ~ ~override~
+COPY ~buffbot/BFBOTFR3.PVRZ~ ~override~
+
+// ---- Create presets directory for config export/import ----
+MKDIR ~override/bfbot_presets~
+
+// ---- Write per-preset strrefs (one per line) for Lua tooltip lookup ----
+<<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt
+%bfbot_strref_1%
+%bfbot_strref_2%
+%bfbot_strref_3%
+%bfbot_strref_4%
+%bfbot_strref_5%
+%bfbot_strref_6%
+%bfbot_strref_7%
+%bfbot_strref_8%
+>>>>>>>>
+COPY ~.../buffbot-inlined/bfbot_strrefs.txt~ ~override/bfbot_strrefs.txt~
+  EVALUATE_BUFFER

@@ -303,6 +303,93 @@ def test_current_schema_validation_repairs_malformed_repeats_without_migration(
     assert facts["summonBad"] == 1
 
 
+@pytest.mark.parametrize(
+    "active_preset", (6, 7, None), ids=("six", "seven", "max")
+)
+def test_validate_config_preserves_high_active_preset(
+    lua: LuaRuntime, active_preset: int | None
+) -> None:
+    expected = active_preset or int(lua.eval("BfBot.MAX_PRESETS"))
+    lua.globals().test_active_preset = expected
+    repaired = lua.execute(
+        """
+        local config = BfBot.Persist.GetDefaultConfig()
+        config.presets[test_active_preset] = {
+            name = "High preset",
+            cat = "custom",
+            qc = 0,
+            spells = {},
+        }
+        config.ap = test_active_preset
+        return BfBot.Persist._ValidateConfig(config).ap
+        """
+    )
+
+    assert repaired == expected
+
+
+@pytest.mark.parametrize(
+    "case",
+    ("zero", "above-max", "non-number", "missing-preset"),
+)
+def test_validate_config_resets_invalid_or_missing_active_preset(
+    lua: LuaRuntime,
+    case: str,
+) -> None:
+    lua.globals().test_active_preset_case = case
+    repaired = lua.execute(
+        """
+        local config = BfBot.Persist.GetDefaultConfig()
+        if test_active_preset_case == "zero" then
+            config.ap = 0
+        elseif test_active_preset_case == "above-max" then
+            config.ap = BfBot.MAX_PRESETS + 1
+        elseif test_active_preset_case == "non-number" then
+            config.ap = "6"
+        elseif test_active_preset_case == "missing-preset" then
+            config.ap = 5
+        end
+        return BfBot.Persist._ValidateConfig(config).ap
+        """
+    )
+
+    assert repaired == 1
+
+
+@pytest.mark.parametrize(
+    "active_preset", (6, 7, None), ids=("six", "seven", "max")
+)
+def test_import_validation_preserves_high_active_preset(
+    lua: LuaRuntime, active_preset: int | None
+) -> None:
+    expected = active_preset or int(lua.eval("BfBot.MAX_PRESETS"))
+    lua.globals().test_active_preset = expected
+    imported = lua.execute(
+        """
+        local sprite = {}
+        local aux = {}
+        EEex_GetUDAux = function(seen)
+            assert(seen == sprite)
+            return aux
+        end
+
+        local config = BfBot.Persist.GetDefaultConfig()
+        config.presets[test_active_preset] = {
+            name = "Imported high preset",
+            cat = "custom",
+            qc = 0,
+            spells = {},
+        }
+        config.ap = test_active_preset
+
+        BfBot.Persist._Import(sprite, { cfg = config })
+        return aux.BB and aux.BB.ap or nil
+        """
+    )
+
+    assert imported == expected
+
+
 def test_summon_validation_whitelists_and_normalizes_repeat(lua: LuaRuntime) -> None:
     facts = lua.execute(
         """

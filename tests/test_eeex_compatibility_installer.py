@@ -15,10 +15,14 @@ from tests.ie_formats import write_minimal_bg2ee_key_biff, write_minimal_tlk
 
 ROOT = Path(__file__).resolve().parents[1]
 FALLBACK_WEIDU = Path(r"C:\src\private\chriz-bg-rebalance\weidu.exe")
+RELEASED_V170_TP2 = ROOT / "tests/fixtures/setup-buffbot-v1.7.0-alpha.tp2"
 KEEP_BYTES = b"unrelated override sentinel\n"
 SOURCE_LUA51 = b"synthetic EEex lua51.dll\0"
 SOURCE_PROVIDER = b"synthetic EEex LuaProvider.dll\0"
 REQUIREMENT_TEXT = "BuffBot requires EEex v0.11.0-alpha or later"
+MAIN_LUAJIT_REQUIREMENT_TEXT = (
+    "BuffBot requires EEex LuaJIT to be active before installing the main component"
+)
 TOOLTIP_STRINGS = tuple(f"BuffBot {index}" for index in range(1, 9))
 
 MAIN_OUTPUT_FILES = {
@@ -355,15 +359,14 @@ class BuffBotGame:
             root_provider=_file_bytes(self.root / "LuaProvider.dll"),
         )
 
-    def run(self, operation: str, component: int) -> subprocess.CompletedProcess[str]:
+    def run_args(self, *arguments: str | int) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 str(_weidu()),
                 r".\buffbot\setup-buffbot.tp2",
                 "--game",
                 str(self.root),
-                operation,
-                str(component),
+                *(str(argument) for argument in arguments),
                 "--language",
                 "0",
                 "--use-lang",
@@ -381,11 +384,32 @@ class BuffBotGame:
             check=False,
         )
 
+    def run(
+        self, operation: str, *components: int
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_args(operation, *components)
+
     def install(self, component: int) -> subprocess.CompletedProcess[str]:
         return self.run("--force-install-list", component)
 
+    def install_many(self, *components: int) -> subprocess.CompletedProcess[str]:
+        return self.run("--force-install-list", *components)
+
     def uninstall(self, component: int) -> subprocess.CompletedProcess[str]:
         return self.run("--force-uninstall-list", component)
+
+    def uninstall_then_install(
+        self, uninstall_component: int, install_component: int
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_args(
+            "--force-uninstall-list",
+            uninstall_component,
+            "--force-install-list",
+            install_component,
+        )
+
+    def replace_buffbot_tp2(self, source: Path) -> None:
+        shutil.copy2(source, self.root / "buffbot/setup-buffbot.tp2")
 
     @staticmethod
     def transcript(process: subprocess.CompletedProcess[str]) -> str:
@@ -511,6 +535,323 @@ def test_installer_source_does_not_gate_on_eeex_component_numbers() -> None:
         source,
         re.IGNORECASE | re.DOTALL,
     )
+
+
+def test_luajit_helper_is_declared_before_main_with_stable_component_ids() -> None:
+    source = (ROOT / "buffbot/setup-buffbot.tp2").read_text(encoding="utf-8")
+    helper_begin = source.index("BEGIN ~BuffBot: EEex LuaJIT Support")
+    main_begin = source.index("BEGIN ~BuffBot: In-Game Buff Automation~")
+
+    assert helper_begin < main_begin
+    assert "DESIGNATED 1" in source[helper_begin:main_begin]
+    assert "DESIGNATED 0" in source[main_begin:]
+
+
+def test_helper_and_main_share_one_exact_luajit_state_detector() -> None:
+    source = (ROOT / "buffbot/setup-buffbot.tp2").read_text(encoding="utf-8")
+
+    assert source.count("DEFINE_ACTION_FUNCTION BFBOT_DETECT_LUAJIT_STATE") == 1
+    assert source.count("LAF BFBOT_DETECT_LUAJIT_STATE") == 3
+    assert source.count("COUNT_REGEXP_INSTANCES ~^LuaPatchMode=~") == 1
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_main_only_rejects_inactive_luajit_without_product_mutation(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    before = game.snapshot()
+
+    process = game.install(0)
+    transcript = game.transcript(process)
+
+    assert process.returncode != 0, transcript
+    assert "SUCCESSFULLY INSTALLED" not in transcript, transcript
+    assert "NOT INSTALLED" in transcript, transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT in transcript, transcript
+    assert game.snapshot() == before
+    game.assert_no_main_payload()
+    assert _read_tlk_strings(game.lang_tlk) == [""]
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_main_accepts_exact_external_luajit_without_buffbot_helper_ownership(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout, with_log=False)
+    before = game.snapshot()
+
+    process = game.install(0)
+
+    _assert_installed(game, process)
+    game.assert_main_installed(before)
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_selecting_helper_and_main_together_activates_before_main(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+
+    process = game.install_many(0, 1)
+    transcript = _assert_installed(game, process)
+
+    assert "BuffBot: EEex LuaJIT Support" in transcript, transcript
+    assert "BuffBot: In-Game Buff Automation" in transcript, transcript
+    game.assert_luajit_state(game.expected_version)
+    assert not MAIN_OUTPUT_FILES.isdisjoint(_file_tree(game.override))
+    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_wrong_main_first_attempt_is_safe_then_helper_allows_retry(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    before = game.snapshot()
+
+    rejected = game.install(0)
+    rejected_transcript = game.transcript(rejected)
+    assert "SUCCESSFULLY INSTALLED" not in rejected_transcript, rejected_transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT in rejected_transcript, rejected_transcript
+    assert game.snapshot() == before
+
+    helper = game.install(1)
+    _assert_installed(game, helper)
+    game.assert_luajit_state(game.expected_version)
+    game.assert_no_main_payload()
+    helper_state = game.snapshot()
+
+    main = game.install(0)
+    _assert_installed(game, main)
+    game.assert_main_installed(helper_state)
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_released_main_then_helper_install_updates_under_helper_first_tp2(
+    game_factory, layout: str
+) -> None:
+    released_source = RELEASED_V170_TP2.read_text(encoding="utf-8")
+    assert released_source.index("BEGIN ~BuffBot: In-Game Buff Automation~") < (
+        released_source.index("BEGIN ~BuffBot: EEex LuaJIT Support")
+    )
+
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    inactive = game.snapshot()
+    game.replace_buffbot_tp2(RELEASED_V170_TP2)
+
+    released_main = game.install(0)
+    _assert_installed(game, released_main)
+    after_released_main = game.snapshot()
+    assert after_released_main.loader_ini == inactive.loader_ini
+    assert after_released_main.root_lua51 == inactive.root_lua51
+    assert after_released_main.root_provider == inactive.root_provider
+
+    released_helper = game.install(1)
+    _assert_installed(game, released_helper)
+    game.assert_luajit_state(game.expected_version)
+
+    game.replace_buffbot_tp2(ROOT / "buffbot/setup-buffbot.tp2")
+    update = game.install_many(0, 1)
+    transcript = _assert_installed(game, update)
+
+    assert "NOT INSTALLED" not in transcript, transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT not in transcript, transcript
+    game.assert_luajit_state(game.expected_version)
+    after = game.snapshot()
+    assert after.key == inactive.key
+    assert after.bif == inactive.bif
+    assert after.root_tlk == inactive.root_tlk
+    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    assert MAIN_OUTPUT_FILES.issubset(after.override)
+    assert after.override["keep.me"] == KEEP_BYTES
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_released_main_only_update_fails_safely_then_retry_recovers(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    game.replace_buffbot_tp2(RELEASED_V170_TP2)
+    _assert_installed(game, game.install(0))
+    _assert_installed(game, game.install(1))
+    game.assert_luajit_state(game.expected_version)
+    released = game.snapshot()
+
+    game.replace_buffbot_tp2(ROOT / "buffbot/setup-buffbot.tp2")
+    update = game.install(0)
+    transcript = game.transcript(update)
+
+    assert update.returncode != 0, transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT in transcript, transcript
+    assert "NOT INSTALLED" in transcript, transcript
+    game.assert_luajit_state(game.expected_version)
+    game.assert_no_main_payload()
+
+    failed = game.snapshot()
+    assert failed.key == released.key
+    assert failed.bif == released.bif
+    assert failed.root_tlk == released.root_tlk
+    assert failed.lang_tlk == released.lang_tlk
+    assert failed.eeex == released.eeex
+    assert failed.eeex_scripts == released.eeex_scripts
+    assert failed.loader_ini == released.loader_ini
+    assert failed.root_lua51 == released.root_lua51
+    assert failed.root_provider == released.root_provider
+    assert failed.override == {
+        name: payload
+        for name, payload in released.override.items()
+        if name not in MAIN_OUTPUT_FILES
+    }
+
+    active_log = [
+        line.replace("\\", "/").casefold()
+        for line in (game.root / "WeiDU.log").read_text(encoding="utf-8").splitlines()
+        if line.startswith("~")
+    ]
+    assert any("buffbot/setup-buffbot.tp2~ #0 #1" in line for line in active_log)
+    assert not any("buffbot/setup-buffbot.tp2~ #0 #0" in line for line in active_log)
+
+    retry = game.install(0)
+    _assert_installed(game, retry)
+    game.assert_luajit_state(game.expected_version)
+    after_retry = game.snapshot()
+    assert after_retry.loader_ini == failed.loader_ini
+    assert after_retry.root_lua51 == failed.root_lua51
+    assert after_retry.root_provider == failed.root_provider
+    assert MAIN_OUTPUT_FILES.issubset(after_retry.override)
+    assert after_retry.override["bfbotper.lua"] == (
+        ROOT / "buffbot/BfBotPer.lua"
+    ).read_bytes()
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_explicit_helper_removal_does_not_seed_main_lifecycle_exception(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    inactive = game.snapshot()
+
+    helper = game.install(1)
+    _assert_installed(game, helper)
+    game.assert_luajit_state(game.expected_version)
+
+    removal_and_main = game.uninstall_then_install(1, 0)
+    transcript = game.transcript(removal_and_main)
+    assert removal_and_main.returncode != 0, transcript
+    assert "SUCCESSFULLY REMOVED" in transcript, transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT in transcript, transcript
+    assert "NOT INSTALLED" in transcript, transcript
+    assert game.snapshot() == inactive
+    game.assert_no_main_payload()
+
+    fresh_main = game.install(0)
+    fresh_transcript = game.transcript(fresh_main)
+    assert fresh_main.returncode != 0, fresh_transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT in fresh_transcript, fresh_transcript
+    assert game.snapshot() == inactive
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_legacy_helper_ownership_survives_main_uninstall_then_restores(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        ),
+        root_lua51=b"legacy root lua51.dll\0",
+        root_provider=b"legacy root LuaProvider.dll\0",
+    )
+    before = game.snapshot()
+
+    helper = game.install(1)
+    _assert_installed(game, helper)
+    helper_state = game.snapshot()
+    main = game.install(0)
+    _assert_installed(game, main)
+
+    main_uninstall = game.uninstall(0)
+    main_uninstall_transcript = game.transcript(main_uninstall)
+    assert main_uninstall.returncode == 0, main_uninstall_transcript
+    assert "NOT UNINSTALLED" not in main_uninstall_transcript, main_uninstall_transcript
+    game.assert_no_main_payload()
+    after_main_uninstall = game.snapshot()
+    assert after_main_uninstall.loader_ini == helper_state.loader_ini
+    assert after_main_uninstall.root_lua51 == helper_state.root_lua51
+    assert after_main_uninstall.root_provider == helper_state.root_provider
+
+    helper_uninstall = game.uninstall(1)
+    helper_uninstall_transcript = game.transcript(helper_uninstall)
+    assert helper_uninstall.returncode == 0, helper_uninstall_transcript
+    assert "NOT UNINSTALLED" not in helper_uninstall_transcript, helper_uninstall_transcript
+    after = game.snapshot()
+    assert after.loader_ini == before.loader_ini
+    assert after.root_lua51 == before.root_lua51
+    assert after.root_provider == before.root_provider
+    assert after.override == before.override
+    assert after.eeex == before.eeex
+    assert after.eeex_scripts == before.eeex_scripts
+    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
 
 
 @pytest.mark.parametrize("newline", ("\n", "\r\n"), ids=("lf", "crlf"))

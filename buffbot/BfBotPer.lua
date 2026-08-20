@@ -209,17 +209,20 @@ function BfBot.Persist._ValidateConfig(config)
         config.v = BfBot.Persist._SCHEMA_VERSION
     end
 
-    -- Active preset
-    if type(config.ap) ~= "number" or config.ap < 1 or config.ap > 5 then
-        config.ap = 1
-    end
-
     -- Presets
     if type(config.presets) ~= "table" then
         config.presets = {
             [1] = { name = "Long Buffs",  cat = "long",  spells = {} },
             [2] = { name = "Short Buffs", cat = "short", spells = {} },
         }
+    end
+
+    -- Active preset
+    local activePresetValid = type(config.ap) == "number"
+        and config.ap >= 1 and config.ap <= BfBot.MAX_PRESETS
+        and config.presets[config.ap] ~= nil
+    if not activePresetValid then
+        config.ap = 1
     end
 
     -- Validate each preset

@@ -29,9 +29,9 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ## Requirements
 
 - **BG:EE**, **BG2:EE**, or **EET**
-- **[EEex](https://github.com/Bubb13/EEex)** v0.11.0-alpha or later (v1 recommended)
+- **[EEex](https://github.com/Bubb13/EEex)** v0.11.0-alpha or later, with LuaJIT active (v1 recommended)
 
-EEex v0.11 and v1 have full BuffBot feature parity. BuffBot's LuaJIT installer recognizes both the older `5.1` layout and the newer `5.1-LuaJIT` layout, and activates the matching runtime when needed. On EEex v1, any install tier works — Minimal, Full, or Experimental.
+EEex v0.11 and v1 have full BuffBot feature parity. LuaJIT must be active before BuffBot's main component installs. You can enable it through EEex's LuaJIT / Experimental option, or install BuffBot's **EEex LuaJIT Support** helper first. The main component validates the actual loader configuration and DLLs, so LuaJIT activated externally by EEex is accepted without requiring ownership by BuffBot.
 
 EEex v0.11 keeps its internal Lua files in `override/`. When using v0.11, install EEex and BuffBot late in the mod order — after generalized biffing and any later file-replacement step — so those files cannot be consumed or replaced.
 
@@ -40,7 +40,7 @@ Do not assume an arbitrary save can be downgraded to v0.11 after EEex v1 and oth
 <details>
 <summary><strong>For the curious: how EEex tiers and LuaJIT layouts interact</strong></summary>
 
-EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enables it. BuffBot checks the loader state and required DLLs instead of relying on EEex component numbers, then enables or repairs LuaJIT as needed. It uses `LuaVersionExternal=5.1` for v0.11's older layout and `LuaVersionExternal=5.1-LuaJIT` for v1's newer layout. The "EEex LuaJIT Support" component is auto-skipped when the matching runtime is already active.
+EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enables it. BuffBot checks the loader state and required DLLs instead of relying on EEex component numbers. Its helper enables or repairs LuaJIT when needed, using `LuaVersionExternal=5.1` for v0.11's older layout and `LuaVersionExternal=5.1-LuaJIT` for v1's newer layout. The helper makes no file changes when the matching runtime is already active.
 
 </details>
 
@@ -50,14 +50,20 @@ EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enabl
 
 1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases) and extract it into your game directory
 2. Run `setup-buffbot.exe` (or use your preferred WeiDU launcher)
-3. Select "BuffBot: In-Game Buff Automation" when prompted
-4. Accept the "EEex LuaJIT Support" component if prompted (auto-skipped if EEex already has LuaJIT active)
+3. Select **BuffBot: EEex LuaJIT Support** first if EEex did not already activate LuaJIT
+4. Select **BuffBot: In-Game Buff Automation** after LuaJIT is active
 
-**Uninstall:** re-run the setup and choose uninstall. WeiDU removes all mod files and restores the TLK automatically.
+For **Project Infinity**, explicitly select both BuffBot components and place **EEex LuaJIT Support** (component 1) before **In-Game Buff Automation** (component 0). Project Infinity does not infer that prerequisite from the component name. If EEex already activated the exact matching LuaJIT runtime, selecting only the main component is also valid.
+
+**Updating an existing BuffBot install:** select or reinstall both BuffBot components together. Older releases recorded the main component before the helper, so updating only main makes WeiDU temporarily remove LuaJIT support and the safety check rejects that pass. The helper is restored safely, but the main component is left uninstalled; if this already happened, run setup again to install main.
+
+For **EET**, BuffBot can be installed after `EET_end`; EEex and LuaJIT must be ready first. With EEex v0.11, keep EEex and BuffBot after generalized biffing or later file-replacement steps as noted above.
+
+**Uninstall:** remove **In-Game Buff Automation** first, then remove **EEex LuaJIT Support** if BuffBot installed it. The helper restores the exact loader files that preceded its installation. LuaJIT owned by EEex is left unchanged when BuffBot's helper made no changes.
 
 ### Manual
 
-Copy all files from `buffbot/` to your game's `override/` directory. Note: innate ability tooltip names require TLK patching — see [Developer Setup](#developer-setup) below.
+Only use a manual copy when EEex LuaJIT is already active; manual installation bypasses the prerequisite check. Copy all files from `buffbot/` to your game's `override/` directory. Note: innate ability tooltip names require TLK patching — see [Developer Setup](#developer-setup) below.
 
 ## Usage
 
