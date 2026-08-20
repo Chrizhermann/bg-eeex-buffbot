@@ -20,7 +20,7 @@
     {"id": 17, "subject": "Manual QA on representative items", "status": "completed", "blockedBy": [14, 15, 16]},
     {"id": 18, "subject": "bg-modding-learn — capture any new live-QA knowledge", "status": "completed", "blockedBy": [17]},
     {"id": 19, "subject": "Version bump v1.7.0-alpha + CHANGELOG", "status": "completed", "blockedBy": [17, 18]},
-    {"id": 20, "subject": "Push branch + open PR for #21", "status": "pending", "blockedBy": [19]}
+    {"id": 20, "subject": "Push branch + open PR for #21", "status": "completed", "blockedBy": [19]}
   ],
-  "lastUpdated": "2026-08-20T11:51:26Z"
+  "lastUpdated": "2026-08-20T11:56:15Z"
 }
