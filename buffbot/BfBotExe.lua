@@ -426,6 +426,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         local isAoE = classResult and classResult.isAoE or false
         local splstates = classResult and classResult.splstates or {}
         local spellName = spellData.name or resref
+        local kind = spellData.kind or "spl"
 
         -- Resolve targets (self-targets record the caster's party slot when
         -- there is one; summon casters have no slot — Lua 0-truthy makes the
@@ -465,6 +466,9 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             local durCat = entry.durCat or "short"
             isCheat = (durCat == "permanent" or durCat == "long")
         end
+        if kind == "itm" then
+            isCheat = false  -- Quick Cast / IA wrapper doesn't apply to UseItem
+        end
 
         for _, tgt in ipairs(targets) do
             for _ = 1, repeatCount do
@@ -477,6 +481,8 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                     casterRef = casterRef,
                     casterName = casterName,
                     resref = resref,
+                    kind = kind,
+                    leafResrefs = spellData.leafResrefs,
                     spellName = spellName,
                     targetObj = tgt.targetObj,
                     targetSlot = tgt.targetSlot,
@@ -568,17 +574,29 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
     end
 
     -- Effect list check (authoritative — runs when SPLSTATEs ambiguous or spell has none)
-    -- For variant spells, the variant resref produces the actual buff effects
-    local checkResref = entry.var or entry.resref
-    if BfBot.Exec._HasActiveEffect(targetSprite, checkResref) then
-        BfBot.Exec._LogEntry("SKIP", label .. " (already active)")
+    -- Catalog entries always carry non-empty leafResrefs (see BfBotScn.lua);
+    -- the fallback covers hand-built queues from direct Exec.Start callers.
+    local checkResrefs = entry.leafResrefs or { entry.var or entry.resref }
+    -- Variants always override: the variant resref produces the actual buff effects
+    if entry.var then checkResrefs = { entry.var } end
+
+    local foundActive = nil
+    for _, r in ipairs(checkResrefs) do
+        if BfBot.Exec._HasActiveEffect(targetSprite, r) then
+            foundActive = r
+            break
+        end
+    end
+
+    if foundActive then
+        BfBot.Exec._LogEntry("SKIP", label .. " (already active: " .. foundActive .. ")")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
         return false
     end
 
     -- SPLSTATE said active but effect list disagrees — old logic would have falsely skipped
     if splstatePositive then
-        BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught, checked " .. checkResref .. ")")
+        BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught, checked " .. table.concat(checkResrefs, ",") .. ")")
     end
 
     return true
@@ -675,7 +693,8 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
         end
     end
 
-    -- Cast the spell. The advance callback embeds the caster key as a Lua
+    -- Cast the spell or use the item. The advance callback embeds the caster
+    -- key as a Lua
     -- LONG-BRACKET string literal:
     --   EEex_LuaAction("BfBot.Exec._Advance([[p0]])")
     -- NOT single quotes: the BCS tokenizer strips single quotes inside a
@@ -686,7 +705,17 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     local advanceAction = string.format(
         "EEex_LuaAction(\"BfBot.Exec._Advance([[%s]])\")", key)
 
-    if entry.var then
+    if entry.kind == "itm" then
+        -- Items: queue UseItem(resref, target). Engine handles slot lookup,
+        -- destruction (potions), and charge decrement (wand-like items).
+        local useAction = string.format('UseItem("%s",%s)', entry.resref, entry.targetObj)
+        EEex_Action_QueueResponseStringOnAIBase(useAction, sprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
+        BfBot.Exec._LogEntry("CAST",
+            entry.casterName .. " -> " .. entry.spellName .. " (item) -> " .. entry.targetName)
+        BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+
+    elseif entry.var then
         -- Variant spell path: consume parent spell slot, then cast the variant
         -- directly via ReallyForceSpellRES (variant SPL is not in the spellbook)
         if not BfBot.Exec._ConsumeSpellSlot(sprite, entry.resref) then

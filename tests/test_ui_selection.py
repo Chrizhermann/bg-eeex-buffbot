@@ -510,6 +510,9 @@ def test_preset_lifecycle_changes_clear_selection(
             BfBot.UI.CreateNewPreset()
         else
             BfBot.UI.DeleteCurrentPreset()
+            -- Delete is intentionally deferred behind BUFFBOT_CONFIRM.
+            assert(BfBot.UI._spellSel ~= nil and buffbot_selectedRow == 1)
+            BfBot.UI.RunConfirm()
         end
 
         return BfBot.UI._spellSel == nil

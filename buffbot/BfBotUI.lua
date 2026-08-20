@@ -36,6 +36,12 @@ BfBot.UI._summonPage = 1         -- 1-based page into _summonList
 BfBot.UI._summonSel = nil        -- selection descriptor {identity, oid, name, cloneType} — NEVER a row index
 BfBot.UI._summonQc = nil         -- cached summons-view Quick Cast value (see _UpdateSummonQc)
 
+-- Confirm dialog state (BUFFBOT_CONFIRM). _confirmMsg is read every frame
+-- by the dialog's message label; _confirmFn holds the pending action and
+-- runs only via RunConfirm. Runtime-only — never reaches the marshal layer.
+BfBot.UI._confirmMsg = ""
+BfBot.UI._confirmFn = nil
+
 -- Panel geometry (nil = use default 80%-centered)
 BfBot.UI._panelX = nil
 BfBot.UI._panelY = nil
@@ -814,6 +820,7 @@ function BfBot.UI._OnMenusLoaded()
         EEex_Menu_AddBeforeUIItemRenderListener("bbBgFrame",  borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbTgtFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbRenFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbConfFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbPickFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbImpFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbVarFrame", borderHook)
@@ -1258,7 +1265,7 @@ function BfBot.UI._Refresh()
         if not preset.spells[resref] and scan.class and scan.class.isBuff
            and scan.count > 0 and ovr ~= -1 then
             maxPri = maxPri + 1
-            local entry = BfBot.Persist._MakeDefaultSpellEntry(scan.class, 0)
+            local entry = BfBot.Persist._MakeDefaultEntry(scan.class, 0, scan.kind)
             entry.pri = maxPri
             preset.spells[resref] = entry
         end
@@ -1325,6 +1332,10 @@ end
 function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
     local rows = {}
     for resref, spellCfg in pairs(preset.spells) do
+        -- Imported item settings are retained in persistence while the item
+        -- is absent, but they have no row until the scanner sees the item
+        -- again. Absent spells still load SPL metadata and remain visible.
+        if spellCfg.kind ~= "itm" or castable[resref] then
         local rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
         local scan = castable[resref]
         local name = resref
@@ -1393,6 +1404,7 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
 
         table.insert(rows, {
             resref   = resref,
+            kind     = (scan and scan.kind) or spellCfg.kind or "spl",
             name     = name,
             icon     = icon,
             dur      = dur,
@@ -1417,6 +1429,7 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             var      = varResref,
             variantName = variantName,
         })
+        end
     end
 
     -- Sort by priority (ascending: lower = cast first)
@@ -1647,7 +1660,7 @@ function BfBot.UI.StepSelectedRepeat(delta)
         summonEntry.rep = rep
     else
         BfBot.Persist.SetSpellRepeat(
-            sprite, BfBot.UI._presetIdx, entry.resref, rep)
+            sprite, BfBot.UI._presetIdx, entry.resref, rep, entry.kind)
         rep = BfBot.Persist._NormalizeSpellRepeat(
             BfBot.Persist.GetSpellRepeat(
                 sprite, BfBot.UI._presetIdx, entry.resref))
@@ -1682,7 +1695,8 @@ function BfBot.UI.ToggleSpell(row)
         if not se then return end
         se.on = newState
     else
-        BfBot.Persist.SetSpellEnabled(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+        BfBot.Persist.SetSpellEnabled(
+            sprite, BfBot.UI._presetIdx, entry.resref, newState, entry.kind)
     end
     entry.on = newState  -- immediate visual update
 end
@@ -1949,6 +1963,39 @@ function BfBot.UI.PickerUnlock()
 end
 
 -- ============================================================
+-- Generic Confirm Dialog (BUFFBOT_CONFIRM)
+-- ============================================================
+
+--- Open the confirmation dialog showing `msg`. `fn` runs only if the
+-- user clicks the confirm button (see RunConfirm).
+function BfBot.UI.OpenConfirm(msg, fn)
+    BfBot.UI._confirmMsg = tostring(msg or "")
+    BfBot.UI._confirmFn = fn
+    Infinity_PushMenu("BUFFBOT_CONFIRM")
+end
+
+--- Confirm-button handler: run the pending action, then clear the holders.
+-- The .menu confirm action pops BUFFBOT_CONFIRM right after this call.
+function BfBot.UI.RunConfirm()
+    local fn = BfBot.UI._confirmFn
+    BfBot.UI._confirmMsg = ""
+    BfBot.UI._confirmFn = nil
+    if fn then
+        local ok, err = pcall(fn)
+        if not ok then
+            BfBot._Error("Confirm action failed: " .. tostring(err))
+        end
+    end
+end
+
+--- Cancel/dismiss handler: clear the holders without running the action.
+-- Wired to the Cancel button, the click-outside overlay, and Escape.
+function BfBot.UI.CancelConfirm()
+    BfBot.UI._confirmMsg = ""
+    BfBot.UI._confirmFn = nil
+end
+
+-- ============================================================
 -- Preset Management (Rename, Create, Delete)
 -- ============================================================
 
@@ -1985,20 +2032,28 @@ function BfBot.UI.CreateNewPreset()
 end
 
 --- Delete the current preset for all party members and switch to nearest.
+-- Destructive — routed through the confirm dialog (accidental clicks on
+-- the Delete Preset button kept nuking presets). The index is captured at
+-- open time so the delete targets the preset named in the message; the
+-- original delete + clamp + refresh sequence runs only on confirm.
 function BfBot.UI.DeleteCurrentPreset()
     if BfBot.UI._view == "summons" then return end
-    local result = BfBot.Persist.DeletePresetAll(BfBot.UI._presetIdx)
-    if result then
-        BfBot.UI._ClearSpellSelection()
-        -- Clamp to first valid preset for the current character
-        local sprite = BfBot.UI._GetSelectedSprite()
-        if sprite then
-            local config = BfBot.Persist.GetConfig(sprite)
-            BfBot.UI._ClampPresetIdx(config)
+    local idx = BfBot.UI._presetIdx
+    local name = buffbot_presetNames[idx] or ("Preset " .. idx)
+    BfBot.UI.OpenConfirm('Delete preset "' .. name .. '" for ALL party members?', function()
+        local result = BfBot.Persist.DeletePresetAll(idx)
+        if result then
+            BfBot.UI._ClearSpellSelection()
+            -- Clamp to first valid preset for the current character
+            local sprite = BfBot.UI._GetSelectedSprite()
+            if sprite then
+                local config = BfBot.Persist.GetConfig(sprite)
+                BfBot.UI._ClampPresetIdx(config)
+            end
+            BfBot.Innate.RefreshAll()
+            BfBot.UI._Refresh()
         end
-        BfBot.Innate.RefreshAll()
-        BfBot.UI._Refresh()
-    end
+    end)
 end
 
 -- ============================================================
@@ -2391,9 +2446,13 @@ function BfBot.UI._SpellPickerLess(a, b)
     return (a.resref or "") < (b.resref or "")
 end
 
---- Build the picker list: castable spells the user can add to the preset.
+--- Build the picker list: castable spells/items the user can add to the preset.
 --- Includes non-buff spells (manual inclusion) and previously-excluded buffs
---- (recovery from accidental Remove). Excluded spells sort to the top.
+--- (recovery from accidental Remove). Items ride the same excluded-buff path:
+--- they auto-merge into presets as buffs, so they only surface here after the
+--- user removed them (ovr == -1). The list is sectioned by kind — a [Spells]
+--- header row, spell rows, an [Items] header row, item rows; a section with
+--- no rows is omitted. Excluded entries sort to the top of their section.
 function BfBot.UI._BuildPickerList()
     buffbot_pickerSpells = {}
     buffbot_pickerSelected = 0
@@ -2404,19 +2463,27 @@ function BfBot.UI._BuildPickerList()
     local preset = config.presets[BfBot.UI._presetIdx]
     if not preset then return end
 
+    local spells, items = {}, {}
     local castable = BfBot.Scan.GetCastableSpells(sprite)
     for resref, scan in pairs(castable) do
-        -- Skip spells already in the preset
+        -- Skip entries already in the preset
         if preset.spells[resref] then goto nextSpell end
-        -- Skip spells with no classification
+        -- Skip entries with no classification
         if not scan.class then goto nextSpell end
         local ovr = config.ovr and config.ovr[resref]
-        -- Skip spells classified as buffs, unless they were excluded by the user
-        -- (excluded buffs must remain addable so accidental Remove can be undone).
-        if scan.class.isBuff and ovr ~= -1 then goto nextSpell end
+        -- Items use the picker only as a per-character recovery path. A
+        -- classifier override is process-global, so another character's
+        -- exclusion must not surface this item here without a matching local
+        -- persisted override. Spells retain the general non-buff add path.
+        if scan.kind == "itm" then
+            if ovr ~= -1 then goto nextSpell end
+        elseif scan.class.isBuff and ovr ~= -1 then
+            goto nextSpell
+        end
 
-        table.insert(buffbot_pickerSpells, {
+        table.insert(scan.kind == "itm" and items or spells, {
             resref   = resref,
+            kind     = scan.kind,
             name     = scan.name or resref,
             icon     = scan.icon or "",
             durCat   = scan.durCat or "?",
@@ -2425,9 +2492,22 @@ function BfBot.UI._BuildPickerList()
         })
         ::nextSpell::
     end
-    -- Sort excluded spells first (recently-removed → prominent for undo),
-    -- then available count descending, localized name, and resref.
-    table.sort(buffbot_pickerSpells, BfBot.UI._SpellPickerLess)
+    -- Sort each section by recovery precedence, current count, localized
+    -- name, and resref. Section grouping remains the primary ordering.
+    table.sort(spells, BfBot.UI._SpellPickerLess)
+    table.sort(items, BfBot.UI._SpellPickerLess)
+    -- Assemble sections. Header rows are non-clickable sentinels (isHeader=1);
+    -- AddPickedSpell ignores them and _PickerHasSelection treats them as no
+    -- selection. Empty sections (and their headers) are omitted, so an empty
+    -- picker keeps the existing "nothing to add" behavior.
+    if #spells > 0 then
+        table.insert(buffbot_pickerSpells, { resref = "__HEADER_SPL__", name = "[Spells]", isHeader = 1 })
+        for _, entry in ipairs(spells) do table.insert(buffbot_pickerSpells, entry) end
+    end
+    if #items > 0 then
+        table.insert(buffbot_pickerSpells, { resref = "__HEADER_ITM__", name = "[Items]", isHeader = 1 })
+        for _, entry in ipairs(items) do table.insert(buffbot_pickerSpells, entry) end
+    end
 end
 
 --- Open the spell picker sub-menu.
@@ -2445,7 +2525,7 @@ end
 function BfBot.UI.AddPickedSpell()
     if BfBot.UI._view == "summons" then return end
     local entry = buffbot_pickerSpells[buffbot_pickerSelected]
-    if not entry then return end
+    if not entry or entry.isHeader then return end  -- ignore section-header rows
     local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
@@ -2492,8 +2572,10 @@ function BfBot.UI.ExcludeSelected()
 end
 
 --- Picker display helpers
+--- Section-header rows count as no selection (keeps the Add button hidden).
 function BfBot.UI._PickerHasSelection()
-    return buffbot_pickerSelected > 0 and buffbot_pickerSelected <= #buffbot_pickerSpells
+    local entry = buffbot_pickerSelected > 0 and buffbot_pickerSpells[buffbot_pickerSelected] or nil
+    return entry ~= nil and not entry.isHeader
 end
 
 -- ============================================================
@@ -2638,7 +2720,8 @@ function BfBot.UI.SelectVariant(row)
         local se = BfBot.UI._SummonSpellEntry(entry.resref, 1)
         if se then se.var = vEntry.resref end
     else
-        BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref)
+        BfBot.Persist.SetSpellVariant(
+            sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref, entry.kind)
     end
     entry.var = vEntry.resref
     entry.variantName = currentVariant.name or vEntry.name
@@ -2698,12 +2781,18 @@ function BfBot.UI._RepeatButtonText()
     return "Repeat: " .. BfBot.UI._SelectedSpellRepeat()
 end
 
---- Repeat footer-button tooltip for the selected spell.
+--- Repeat footer-button tooltip for the selected spell or item.
 function BfBot.UI._RepeatTooltip()
-    return "Cast this spell " .. BfBot.UI._SelectedSpellRepeat()
-        .. " times per resolved target. Each attempt uses a spell slot and "
-        .. "normal casting rules. Left-click increases; right-click decreases. "
-        .. "Range 1–" .. BfBot.MAX_SPELL_REPEATS .. "."
+    local entry = buffbot_spellTable[buffbot_selectedRow]
+    local isItem = entry and entry.kind == "itm"
+    local lead = isItem and "Use this item " or "Cast this spell "
+    local rules = isItem
+        and "consumes a stack or charge and follows normal item-use rules. "
+        or "uses a spell slot and normal casting rules. "
+    return lead .. BfBot.UI._SelectedSpellRepeat()
+        .. " times per resolved target. Each attempt " .. rules
+        .. "Left-click increases; right-click decreases. Range 1–"
+        .. BfBot.MAX_SPELL_REPEATS .. "."
 end
 
 --- Format a duration in seconds to a human-readable string.
@@ -2727,13 +2816,26 @@ function BfBot.UI._FormatDuration(seconds)
 end
 
 --- Spell name color: grey for unavailable, dark blue for manual include,
---- gold-tinted for locked, dark brown for normal.
+--- bronze tint for item rows, gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
     if not entry then return _parseColor(BfBot.UI._T("text")) end
     if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
     if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if entry.kind == "itm" and entry.lock ~= 1 then
+        return _parseColor(BfBot.UI._T("itemColor"))
+    end
     if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
+    return _parseColor(BfBot.UI._T("text"))
+end
+
+--- Picker name color: section-header tint for header rows, bronze tint for
+--- item rows, normal text tint for spell rows.
+function BfBot.UI._PickerNameColor(row)
+    local entry = buffbot_pickerSpells[row]
+    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if entry.isHeader then return _parseColor(BfBot.UI._T("headerSub")) end
+    if entry.kind == "itm" then return _parseColor(BfBot.UI._T("itemColor")) end
     return _parseColor(BfBot.UI._T("text"))
 end
 
@@ -2780,7 +2882,7 @@ function BfBot.UI.ToggleLock(row)
     if not sprite then return end
     local newState = (entry.lock == 1) and 0 or 1
     entry.lock = newState  -- immediate visual update
-    BfBot.Persist.SetSpellLock(sprite, BfBot.UI._presetIdx, entry.resref, newState)
+    BfBot.Persist.SetSpellLock(sprite, BfBot.UI._presetIdx, entry.resref, newState, entry.kind)
 end
 
 --- Convert target config value to display text.

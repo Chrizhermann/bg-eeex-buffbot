@@ -514,14 +514,19 @@ local function _subSpellRef(fb)
 end
 
 --- Compute effective duration from feature blocks.
---- Returns duration in seconds (-1 for permanent) and type string.
+--- Returns duration in seconds (-1 for permanent), type string, and the
+--- list of op=146 sub-spell resrefs encountered during recursion (leaf
+--- resrefs). The list is EMPTY for direct-effect spells — GetDuration has
+--- no top-level resref of its own; callers wanting a self-fallback apply
+--- `or {resref}` themselves.
 --- Recurses through op=146 (Cast Spell) into the sub-spell so that
 --- hierarchical spells (e.g. Prayer, Chaos of Battle, SR Barkskin)
 --- report the timed durations that live in their children.
 --- Depth-limited (max 2) and cycle-guarded to stay bounded.
-function BfBot.Class.GetDuration(header, ability, _depth, _visited)
+function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
     _depth = _depth or 0
     _visited = _visited or {}
+    _leafs = _leafs or {}  -- collected op=146 sub-spell leaf resrefs
 
     local maxDuration = 0
     local hasPermanent = false
@@ -536,12 +541,17 @@ function BfBot.Class.GetDuration(header, ability, _depth, _visited)
             local subRes = _subSpellRef(fb)
             if subRes and not _visited[subRes] then
                 _visited[subRes] = true
+                -- Collect the leaf resref. Dedupe comes from the _visited
+                -- guard above: a resref reaches this line at most once per
+                -- top-level GetDuration call (repeated op=146 to the same
+                -- sub-spell is skipped entirely).
+                table.insert(_leafs, subRes)
                 local rOk, subHdr = pcall(EEex_Resource_Demand, subRes, "SPL")
                 if rOk and subHdr then
                     local subAbility = subHdr:getAbility(0)
                     if subAbility then
                         local subDur, subType = BfBot.Class.GetDuration(
-                            subHdr, subAbility, _depth + 1, _visited)
+                            subHdr, subAbility, _depth + 1, _visited, _leafs)
                         if subDur and subDur > 0 then
                             if subDur > maxDuration then maxDuration = subDur end
                         elseif subType == "permanent" then
@@ -579,12 +589,12 @@ function BfBot.Class.GetDuration(header, ability, _depth, _visited)
     -- Fixes spells like Vocalize where a minor permanent side effect (Cure
     -- Intoxication) coexists with the real timed effect (Immunity to Silence).
     if maxDuration > 0 then
-        return maxDuration, "timed"
+        return maxDuration, "timed", _leafs
     end
     if hasPermanent then
-        return -1, "permanent"
+        return -1, "permanent", _leafs
     end
-    return 0, "timed"
+    return 0, "timed", _leafs
 end
 
 --- Categorize a duration into "long", "short", "instant", or "permanent".
@@ -643,23 +653,38 @@ end
 --- Set a user override classification for a spell.
 function BfBot.Class.SetOverride(resref, value)
     BfBot._overrides[resref] = value
-    -- Invalidate classification cache for this resref
+    -- SPL and ITM resources may legally share a resref while exposing
+    -- unrelated abilities. Overrides apply to the mixed catalog identity,
+    -- so invalidate both source-specific classifier cache entries.
     BfBot._cache.class[resref] = nil
+    BfBot._cache.class["itm:" .. resref] = nil
 end
 
 -- ============================================================
 -- Main Classification Function
 -- ============================================================
 
---- Full classification of a spell. Returns a ClassResult table.
---- Results are cached by resref (SPL data does not change in-session).
-function BfBot.Class.Classify(resref, header, ability)
+--- Full classification of a spell or item ability. Returns a ClassResult table.
+--- SPL results retain the legacy bare-resref cache key; ITM callers pass
+--- sourceKind="itm" so a same-resref SPL can never supply the item verdict.
+function BfBot.Class.Classify(resref, header, ability, sourceKind)
+    local cacheKey = sourceKind == "itm" and ("itm:" .. resref) or resref
     -- Check cache
-    local cached = BfBot._cache.class[resref]
+    local cached = BfBot._cache.class[cacheKey]
     if cached then return cached end
 
     local result = {}
     result.msectype = header.secondaryType or 0
+
+    -- Leaf sub-spell resrefs from the op=146 chain (empty table for
+    -- direct-effect spells). Pre-flight already-active checks need this:
+    -- wrapper spells/items deliver their real effects via the leaf SPL,
+    -- so the leaf resref — not the parent — is what appears on the
+    -- target's effect list. Computed ONCE and set here, where `result`
+    -- is built, so BOTH return sites below (the override early-return
+    -- and the normal return) hand out a table that carries the field.
+    local _, _, leafResrefs = BfBot.Class.GetDuration(header, ability)
+    result.leafResrefs = leafResrefs
 
     -- Check user override
     local override = BfBot.Class.GetOverride(resref)
@@ -693,7 +718,7 @@ function BfBot.Class.Classify(resref, header, ability)
             result.variants = nil
         end
 
-        BfBot._cache.class[resref] = result
+        BfBot._cache.class[cacheKey] = result
         return result
     end
 
@@ -773,6 +798,6 @@ function BfBot.Class.Classify(resref, header, ability)
     end
 
     -- Cache and return
-    BfBot._cache.class[resref] = result
+    BfBot._cache.class[cacheKey] = result
     return result
 end

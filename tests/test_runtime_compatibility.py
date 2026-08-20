@@ -178,8 +178,8 @@ def test_core_defines_the_spell_repeat_cap(core_lua: LuaRuntime) -> None:
 def test_default_spell_entries_start_with_one_repeat(lua: LuaRuntime) -> None:
     facts = lua.execute(
         """
-        local enabled = BfBot.Persist._MakeDefaultSpellEntry(nil)
-        local disabled = BfBot.Persist._MakeDefaultSpellEntry(
+        local enabled = BfBot.Persist._MakeDefaultEntry(nil)
+        local disabled = BfBot.Persist._MakeDefaultEntry(
             { defaultTarget = "s" }, 0)
         return {
             enabledRepeat = enabled.rep,
@@ -194,7 +194,7 @@ def test_default_spell_entries_start_with_one_repeat(lua: LuaRuntime) -> None:
     assert facts["disabledTarget"] == "s"
 
 
-def test_v8_to_v9_migration_initializes_party_and_summon_repeats(
+def test_v8_to_current_migration_initializes_repeats_and_party_kind(
     lua: LuaRuntime,
 ) -> None:
     facts = lua.execute(
@@ -233,17 +233,22 @@ def test_v8_to_v9_migration_initializes_party_and_summon_repeats(
                 .spells.SPIN102.rep,
             summonInvalid = migrated.summons.skeleton.presets[1]
                 .spells.SPIN103.rep,
+            partyKind = migrated.presets[1].spells.SPWI101.kind,
+            summonKind = migrated.summons.skeleton.presets[1]
+                .spells.SPIN101.kind,
         }
         """
     )
 
-    assert facts["version"] == 9
+    assert facts["version"] == 10
     assert facts["partyMissing"] == 1
     assert facts["partyValid"] == 4
     assert facts["partyInvalid"] == 1
     assert facts["summonMissing"] == 1
     assert facts["summonValid"] == 5
     assert facts["summonInvalid"] == 1
+    assert facts["partyKind"] == "spl"
+    assert facts["summonKind"] is None
 
 
 def test_current_schema_validation_repairs_malformed_repeats_without_migration(
@@ -252,7 +257,7 @@ def test_current_schema_validation_repairs_malformed_repeats_without_migration(
     facts = lua.execute(
         """
         local config = {
-            v = 9,
+            v = 10,
             ap = 1,
             presets = {
                 [1] = { name = "Current", cat = "custom", qc = 0, spells = {
@@ -289,7 +294,7 @@ def test_current_schema_validation_repairs_malformed_repeats_without_migration(
         """
     )
 
-    assert facts["version"] == 9
+    assert facts["version"] == 10
     assert facts["partyMissing"] == 1
     assert facts["partyValid"] == 3
     assert facts["partyBad"] == 1
@@ -403,7 +408,7 @@ def test_marshal_and_serializer_round_trips_preserve_valid_repeats(
     facts = lua.execute(
         """
         local config = {
-            v = 9,
+            v = 10,
             presets = { [1] = { spells = {
                 PARTY = { on = 1, tgt = "s", pri = 1, rep = 4 },
             } } },
@@ -442,7 +447,7 @@ def test_external_export_import_round_trip_preserves_valid_repeats(
     facts = lua.execute(
         """
         local live = {
-            v = 9,
+            v = 10,
             ap = 1,
             presets = { [1] = {
                 name = "Repeat", cat = "custom", qc = 0,
@@ -1009,6 +1014,128 @@ def test_repeat_expansion_preserves_quick_cast_modes_and_summon_override(
     assert facts["forcedOff"] == "00"
     assert facts["forcedOnCount"] == 2
     assert facts["forcedOn"] == "11"
+
+
+def test_item_repeat_expansion_retains_item_metadata_and_party_ref(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local leafs = { "ITEMLEAF" }
+        BfBot_TestQueueWorld({
+            ITEM = {
+                kind = "itm", count = 2, name = "Buff Item",
+                leafResrefs = leafs,
+                class = { splstates = {} },
+            },
+        }, 1)
+        local byCaster, total = BfBot.Exec._BuildQueue({ {
+            caster = 0, spell = "ITEM", target = "self",
+            durCat = "long", rep = 2,
+        } }, 2)
+        local queue = assert(byCaster.p0)
+        return {
+            total = total,
+            queueCount = #queue,
+            distinct = queue[1] ~= queue[2],
+            kind1 = queue[1].kind,
+            kind2 = queue[2].kind,
+            leaf1 = queue[1].leafResrefs[1],
+            leaf2 = queue[2].leafResrefs[1],
+            cheat1 = queue[1].cheat,
+            cheat2 = queue[2].cheat,
+            casterKind = queue[1].casterRef.kind,
+            casterSlot = queue[1].casterRef.slot,
+            cachedSprite = queue[1].casterSprite,
+        }
+        """
+    )
+
+    assert facts["total"] == 2
+    assert facts["queueCount"] == 2
+    assert facts["distinct"]
+    assert facts["kind1"] == "itm"
+    assert facts["kind2"] == "itm"
+    assert facts["leaf1"] == "ITEMLEAF"
+    assert facts["leaf2"] == "ITEMLEAF"
+    assert not facts["cheat1"]
+    assert not facts["cheat2"]
+    assert facts["casterKind"] == "party"
+    assert facts["casterSlot"] == 0
+    assert facts["cachedSprite"] is None
+
+
+def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local spells = {
+            ITEM = {
+                kind = "itm", count = 2, name = "Buff Item",
+                leafResrefs = { "ITEMLEAF" },
+                class = { splstates = {} },
+            },
+        }
+        local buildSprites = BfBot_TestQueueWorld(spells, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({ {
+            caster = 0, spell = "ITEM", target = "self", rep = 2,
+        } }, 2))
+        local freshSprite = {
+            name = "Fresh A", m_id = 100,
+            m_baseStats = { m_generalState = 0 },
+        }
+        local actions, queuedOnFresh, active, checkedLeaf = {}, true, false, false
+        EEex_Action_QueueResponseStringOnAIBase = function(action, sprite)
+            if sprite ~= freshSprite then queuedOnFresh = false end
+            actions[#actions + 1] = action
+        end
+        BfBot.Exec._ResolveCasterForStep = function() return freshSprite end
+        BfBot.Exec._DetectCombat = function() return false end
+        BfBot.Exec._HasActiveEffect = function(_, resref)
+            if resref == "ITEMLEAF" then checkedLeaf = true end
+            return active and resref == "ITEMLEAF"
+        end
+        BfBot.Exec._NoteProgress = function() end
+        BfBot.Exec._Complete = function() BfBot.Exec._state = "done" end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._castCount = 0
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._activeCasters = 1
+        BfBot.Exec._casters = { p0 = {
+            ref = { kind = "party", slot = 0 },
+            queue = byCaster.p0, index = 0, done = false,
+            name = "A", cheatBoundary = 0, cheatApplied = false,
+        } }
+
+        BfBot.Exec._ProcessCasterEntry("p0", 1)
+        active = true
+        BfBot.Exec._Advance("p0")
+        return {
+            buildAndFreshDiffer = buildSprites[1] ~= freshSprite,
+            queuedOnFresh = queuedOnFresh,
+            actionCount = #actions,
+            firstAction = actions[1],
+            secondAction = actions[2],
+            checkedLeaf = checkedLeaf,
+            castCount = BfBot.Exec._castCount,
+            skipCount = BfBot.Exec._skipCount,
+            state = BfBot.Exec._state,
+        }
+        """
+    )
+
+    assert facts["buildAndFreshDiffer"]
+    assert facts["queuedOnFresh"]
+    assert facts["actionCount"] == 2
+    assert facts["firstAction"] == 'UseItem("ITEM",Myself)'
+    assert facts["secondAction"] == (
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+    )
+    assert facts["checkedLeaf"]
+    assert facts["castCount"] == 1
+    assert facts["skipCount"] == 1
+    assert facts["state"] == "done"
 
 
 def test_repeat_attempts_recheck_slots_and_continue_to_later_priority(

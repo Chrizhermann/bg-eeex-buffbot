@@ -137,6 +137,7 @@ def test_selected_repeat_routes_party_and_summon_writes_without_refresh(
         buffbot_spellTable = {
             {
                 resref = "SPELL",
+                kind = "itm",
                 rep = 1,
                 repeatText = "R1",
                 castable = 0,
@@ -148,9 +149,9 @@ def test_selected_repeat_routes_party_and_summon_writes_without_refresh(
         local partyCalls = 0
         local partyArgs = nil
         local persistedRep = 1
-        BfBot.Persist.SetSpellRepeat = function(sprite, presetIdx, resref, value)
+        BfBot.Persist.SetSpellRepeat = function(sprite, presetIdx, resref, value, kind)
             partyCalls = partyCalls + 1
-            partyArgs = { sprite, presetIdx, resref, value }
+            partyArgs = { sprite, presetIdx, resref, value, kind }
             persistedRep = value
         end
         BfBot.Persist.GetSpellRepeat = function(sprite, presetIdx, resref)
@@ -182,6 +183,7 @@ def test_selected_repeat_routes_party_and_summon_writes_without_refresh(
             partyPreset = partyArgs[2],
             partyResref = partyArgs[3],
             partyValue = partyArgs[4],
+            partyKind = partyArgs[5],
             partyRep = partyRep,
             partyText = partyText,
             partySelection = partySelection,
@@ -199,6 +201,7 @@ def test_selected_repeat_routes_party_and_summon_writes_without_refresh(
     assert facts["partyPreset"] == 3
     assert facts["partyResref"] == "SPELL"
     assert facts["partyValue"] == 2
+    assert facts["partyKind"] == "itm"
     assert facts["partyRep"] == 2
     assert facts["partyText"] == "R2"
     assert facts["partySelection"] == 1
@@ -278,6 +281,20 @@ def test_repeat_footer_text_and_tooltip_follow_the_selected_row(
     )
     assert dynamic_text == "Repeat: 3"
     assert dynamic_tooltip.endswith("Range 1–3.")
+
+    item_tooltip = repeat_ui_lua.execute(
+        """
+        BfBot.MAX_SPELL_REPEATS = 5
+        buffbot_selectedRow = 1
+        buffbot_spellTable = { { kind = "itm", rep = 2 } }
+        return BfBot.UI._RepeatTooltip()
+        """
+    )
+    assert item_tooltip == (
+        "Use this item 2 times per resolved target. Each attempt consumes a "
+        "stack or charge and follows normal item-use rules. Left-click "
+        "increases; right-click decreases. Range 1–5."
+    )
 
 
 _MENU_ELEMENT_OPEN = re.compile(

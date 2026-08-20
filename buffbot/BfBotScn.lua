@@ -8,6 +8,30 @@
 
 BfBot.Scan = {}
 
+-- Inventory access — all verified 2026-07-03 via remote console on BG2EE.
+-- See tools/items_probe_findings.md (folded into bg-modding refs in Task 18).
+BfBot.Scan._SLOT_EQUIP_MAX = 17   -- 0-17 equipped body slots (10 = FIST pseudo-item;
+                                  --   UI quickitems observed at 15-17)
+BfBot.Scan._SLOT_QUICK_MIN = 18   -- 18-20 console/CreateItem fill slots; UseItem-verified
+BfBot.Scan._SLOT_QUICK_MAX = 20
+BfBot.Scan._SLOT_PACK_MAX  = 34   -- 21-34 backpack
+BfBot.Scan._SLOT_WEAPON_MIN = 35  -- 35-38 equipped weapon slots (m_selectedWeapon
+BfBot.Scan._SLOT_WEAPON_MAX = 38  --   indexes m_items directly; verified: STAF11@35)
+BfBot.Scan._ITEM_COUNT_OFF = 0x1C -- CItem: count/charges u16 (no named field)
+BfBot.Scan._ABIL_TARGET_OFF = 0xC -- Item_ability_st: target byte (== ability.actionType)
+BfBot.Scan._CAT_POTION = 9        -- Item_Header_st.itemType
+BfBot.Scan._CAT_SCROLL = 11       -- deferred by issue #21
+BfBot.Scan._CAT_WAND = 35         -- deferred by issue #21
+
+--- Get item ability i via manual pointer arithmetic.
+-- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header sizeof=114
+-- instead of ability sizeof=56) — garbage for i >= 1. Verified 2026-07-03 on STAF11.
+function BfBot.Scan._GetItemAbility(header, i)
+    return EEex_PtrToUD(
+        EEex_UDToPtr(header) + header.abilityOffset + Item_ability_st.sizeof * i,
+        "Item_ability_st")
+end
+
 --- Safe strref lookup — skips invalid/dummy strrefs (0, -1, 0xFFFFFFFF, SR's 9999999).
 local function _tryStrref(strref)
     if not strref or strref == 0xFFFFFFFF or strref == -1
@@ -70,6 +94,7 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
 
     return {
         resref = resref,
+        kind = "spl",
         name = name,
         icon = icon,
         count = 0,          -- filled in by count overlay
@@ -82,6 +107,13 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
         hasVariants = hasVariants,
         variants = variants,
         class = classResult,
+        -- Invariant: catalog entries ALWAYS carry a non-empty leafResrefs.
+        -- GetDuration returns an EMPTY list for direct-effect spells (the
+        -- self-fallback is the caller's job) — an empty list here would make
+        -- the exec pre-flight loop check nothing and never skip active buffs.
+        leafResrefs = (classResult and classResult.leafResrefs
+                       and #classResult.leafResrefs > 0)
+                      and classResult.leafResrefs or { resref },
     }
 end
 
@@ -123,6 +155,128 @@ local function _buildCountMap(sprite)
     processButtons(4)  -- innate
 
     return counts
+end
+
+--- Walk a sprite's inventory (one array: equipped 0-17, quickitems 18-20,
+-- backpack 21-34, equipped weapons 35-38), classify item abilities, return
+-- {[resref] = entry}. Slot rules: equipped/quickitem/weapon slots admit usable
+-- activatables except deferred scrolls/wands; backpack admits ONLY potions
+-- (cat 9). The engine would
+-- happily UseItem an unequipped ring from the backpack (verified!), so this
+-- filter is the game-balance enforcement, not just cosmetics.
+function BfBot.Scan._BuildItemCatalog(sprite)
+    local items = {}
+
+    -- Items are a party-only source in schema v10. Summon discovery and the
+    -- summons view reuse GetCastableSpells(), so fail closed here before
+    -- touching inventory; otherwise a copied/equipped item could make a
+    -- spell-less summon look like a caster or leak into summon presets.
+    local partyOk, portrait = pcall(EEex_Sprite_GetPortraitIndex, sprite)
+    if not partyOk or type(portrait) ~= "number" or portrait == -1 then
+        return items
+    end
+
+    local function _consider(resref, count, allowAnyCat)
+        if not resref or resref == "" then return end
+        if count <= 0 then return end
+
+        -- Skip BuffBot's own generated resrefs (defensive)
+        if resref:sub(1, 4) == "BFBT" then return end
+
+        local hdrOk, header = pcall(EEex_Resource_Demand, resref, "ITM")
+        if not hdrOk or not header then return end
+        if (header.abilityCount or 0) == 0 then return end  -- passive-only
+        local itemType = header.itemType or 0
+        -- Scrolls and wands remain explicitly deferred even when placed in a
+        -- quickitem slot; issue #21 covers potions and equipped activatables.
+        if itemType == BfBot.Scan._CAT_SCROLL
+            or itemType == BfBot.Scan._CAT_WAND then
+            return
+        end
+        if not allowAnyCat and itemType ~= BfBot.Scan._CAT_POTION then
+            return  -- backpack: potions only
+        end
+
+        -- A resref can occupy more than one eligible slot/stack. Once its
+        -- admission has been proven, aggregate the usable count instead of
+        -- hiding later stacks. Ineligible backpack copies never reach here,
+        -- so they cannot mask or inflate an equipped copy of the same item.
+        if items[resref] then
+            items[resref].count = items[resref].count + count
+            return
+        end
+
+        -- UseItem(resref, target) ALWAYS fires ability 0 — BCS has no ability
+        -- selector (verified 2026-07-05: RING39 a0=op20 invis, a1=op16 haste;
+        -- after UseItem only op20 landed). An item is therefore listable ONLY
+        -- if ability 0 classifies as the buff. Items with the buff buried at
+        -- index >= 1 (e.g. STAF11: a0 melee, buff wrapper at a2) are excluded
+        -- for safety — firing them would trigger the wrong ability. Issue #53
+        -- tracks ability-index selection.
+        local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, 0)
+        if not (aOk and ability) then return end
+        -- target byte (== ability.actionType; raw read verified in-game)
+        local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
+        if target ~= 1 and target ~= 5 and target ~= 7 then return end
+        local cOk, classResult = pcall(
+            BfBot.Class.Classify, resref, header, ability, "itm")
+        if not (cOk and classResult) then return end
+        -- Keep a user-excluded buff in the transient catalog so the Add
+        -- picker can recover it. Ordinary non-buffs remain out of scope.
+        if not classResult.isBuff and not classResult.overridden then return end
+
+        local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
+        -- ITM naming: identifiedName FIRST (genericName is the
+        -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
+        local name = _tryStrref(header.identifiedName)
+                     or _tryStrref(header.genericName)
+                     or resref
+        local icon = ""
+        pcall(function() icon = ability.quickSlotIcon:get() end)
+        items[resref] = {
+            resref = resref,
+            kind = "itm",
+            abilityIdx = 0,
+            name = name,
+            icon = icon,
+            count = count,
+            level = 0,
+            spellType = 0,
+            duration = duration or 0,
+            durCat = BfBot.Class.GetDurationCategory(duration or 0),
+            isAoE = (classResult.isAoE) and 1 or 0,
+            isSelfOnly = (classResult.isSelfOnly) and 1 or 0,
+            hasVariants = 0,
+            variants = nil,
+            class = classResult,
+            leafResrefs = (leafs and #leafs > 0) and leafs or { resref },
+        }
+    end
+
+    -- Single walk over the one real inventory array. items:get(i) → CItem|nil.
+    local ok = pcall(function()
+        local arr = sprite.m_equipment.m_items
+        for slot = 0, BfBot.Scan._SLOT_WEAPON_MAX do
+            local it = arr:get(slot)
+            if it then
+                local resref = nil
+                pcall(function() resref = it.pRes.resref:get() end)
+                if resref and resref ~= "FIST" then
+                    local count = EEex_ReadU16(EEex_UDToPtr(it) + BfBot.Scan._ITEM_COUNT_OFF)
+                    -- equipped (0-17) + quickitems (18-20) + weapons (35-38):
+                    -- any category; backpack (21-34): potions only
+                    local allowAnyCat = slot <= BfBot.Scan._SLOT_QUICK_MAX
+                                        or slot >= BfBot.Scan._SLOT_WEAPON_MIN
+                    _consider(resref, count, allowAnyCat)
+                end
+            end
+        end
+    end)
+    if not ok then
+        BfBot._Warn("Item catalog walk failed")
+    end
+
+    return items
 end
 
 --- Scan all known spells for a party member.
@@ -212,6 +366,21 @@ function BfBot.Scan.GetCastableSpells(sprite)
         end
         -- Spells in countMap but NOT in known iterators are engine-internal
         -- or temporary — silently ignored (not part of the character's spellbook).
+    end
+
+    -- Phase 3: Merge item catalog. Spells take precedence on resref collision
+    -- (real case: staf11.SPL vs STAF11.ITM). pcall-guarded so an item-scan
+    -- failure never breaks the spell scan.
+    local itemsOk, itemCatalog = pcall(BfBot.Scan._BuildItemCatalog, sprite)
+    if itemsOk and itemCatalog then
+        for r, entry in pairs(itemCatalog) do
+            if not spells[r] then
+                spells[r] = entry
+                count = count + 1
+            end
+        end
+    else
+        BfBot._Warn("Item catalog merge failed: " .. tostring(itemCatalog))
     end
 
     -- Cache results

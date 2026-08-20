@@ -7,7 +7,7 @@
 BfBot.Persist = {}
 
 -- Constants
-BfBot.Persist._SCHEMA_VERSION = 9
+BfBot.Persist._SCHEMA_VERSION = 10
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
@@ -65,15 +65,20 @@ function BfBot.Persist._NormalizeSpellRepeat(value)
     return value
 end
 
---- Create a default spell entry from classification data.
+--- Create a default entry for a preset spell or item slot.
 -- @param classResult  classification table (may be nil)
 -- @param enabled      optional 0 or 1 (default 1)
-function BfBot.Persist._MakeDefaultSpellEntry(classResult, enabled)
+-- @param kind         "spl" (default) or "itm"
+function BfBot.Persist._MakeDefaultEntry(classResult, enabled, kind)
+    kind = kind or "spl"
     local tgt = "p"
     if classResult and classResult.defaultTarget == "s" then
         tgt = "s"
+    elseif kind == "itm" then
+        tgt = "s"  -- items default to self (most are self-drink potions)
     end
     return {
+        kind = kind,
         on = (enabled == 0) and 0 or 1,
         tgt = tgt,
         pri = 999,
@@ -99,12 +104,13 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         return config
     end
 
-    -- Collect buff spells with classification data
+    -- Collect buff spells and items with classification data
     local buffs = {}
     for resref, data in pairs(spells) do
         if data.class and data.class.isBuff and data.count > 0 then
             table.insert(buffs, {
                 resref    = resref,
+                kind      = data.kind or "spl",
                 classData = data.class,
                 duration  = data.duration or 0,
                 durCat    = data.durCat or "short",
@@ -124,9 +130,14 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
 
     -- Distribute ALL spells to BOTH presets (different enabled states).
     -- Enabled spells get low priorities (cast first), disabled get high.
+    -- Items are listed but NEVER default-enabled, regardless of durCat
+    -- (design: consumables/charges are player-curated — opt-in per item),
+    -- so they don't count toward the enabled block either.
     local p1enCount, p2enCount = 0, 0
     for _, buff in ipairs(buffs) do
-        if buff.durCat == "long" or buff.durCat == "permanent" then
+        if buff.kind == "itm" then
+            -- listed-but-disabled: contributes to the disabled block only
+        elseif buff.durCat == "long" or buff.durCat == "permanent" then
             p1enCount = p1enCount + 1
         elseif buff.durCat == "short" then
             p2enCount = p2enCount + 1
@@ -136,11 +147,12 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
     local p1en, p1dis = 1, 1
     local p2en, p2dis = 1, 1
     for _, buff in ipairs(buffs) do
-        local isLong = (buff.durCat == "long" or buff.durCat == "permanent")
-        local isShort = (buff.durCat == "short")
+        local isItem = (buff.kind == "itm")
+        local isLong = not isItem and (buff.durCat == "long" or buff.durCat == "permanent")
+        local isShort = not isItem and (buff.durCat == "short")
 
-        -- Preset 1: long/permanent enabled, everything else disabled
-        local e1 = BfBot.Persist._MakeDefaultSpellEntry(buff.classData, isLong and 1 or 0)
+        -- Preset 1: long/permanent spells enabled, everything else disabled
+        local e1 = BfBot.Persist._MakeDefaultEntry(buff.classData, isLong and 1 or 0, buff.kind)
         if isLong then
             e1.pri = p1en;  p1en = p1en + 1
         else
@@ -148,8 +160,8 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         end
         config.presets[1].spells[buff.resref] = e1
 
-        -- Preset 2: short enabled, everything else disabled
-        local e2 = BfBot.Persist._MakeDefaultSpellEntry(buff.classData, isShort and 1 or 0)
+        -- Preset 2: short spells enabled, everything else disabled
+        local e2 = BfBot.Persist._MakeDefaultEntry(buff.classData, isShort and 1 or 0, buff.kind)
         if isShort then
             e2.pri = p2en;  p2en = p2en + 1
         else
@@ -251,6 +263,9 @@ function BfBot.Persist._ValidateConfig(config)
                         entry.rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
                         if type(entry.lock) ~= "number" or (entry.lock ~= 0 and entry.lock ~= 1) then
                             entry.lock = 0
+                        end
+                        if type(entry.kind) ~= "string" or (entry.kind ~= "spl" and entry.kind ~= "itm") then
+                            entry.kind = "spl"
                         end
                     end
                 end
@@ -433,6 +448,13 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
         -- GetSummonPreset.
         config.summons = config.summons or {}
     end
+    -- Schema number 8 existed on both development lineages: released main
+    -- used it for summons, while the older items branch used it for `kind`.
+    -- Guarantee the current summons shape even when migrating an item-v8 save
+    -- that legitimately has no summons subtree.
+    if type(config.summons) ~= "table" then
+        config.summons = {}
+    end
     if fromVersion < 9 then
         -- v9: bounded per-spell repeat attempts (#66). Normalize explicitly
         -- across both party and summon presets so v8 saves have a complete
@@ -460,6 +482,23 @@ function BfBot.Persist._MigrateConfig(config, fromVersion)
                                         entry.rep)
                                 end
                             end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if fromVersion < 10 then
+        -- v10: item/potion sources (#21). PARTY entries lacking kind are
+        -- legacy spells; an existing kind from the colliding item-v8
+        -- development lineage is retained. Summon presets deliberately
+        -- remain spell-only and keep their v9 whitelist without a kind field.
+        if type(config.presets) == "table" then
+            for _, preset in pairs(config.presets) do
+                if type(preset) == "table" and type(preset.spells) == "table" then
+                    for _, entry in pairs(preset.spells) do
+                        if type(entry) == "table" and entry.kind == nil then
+                            entry.kind = "spl"
                         end
                     end
                 end
@@ -694,12 +733,15 @@ end
 
 -- ---- Spell config accessors ----
 
---- Set whether a spell is enabled in a preset.
-function BfBot.Persist.SetSpellEnabled(sprite, presetIndex, resref, enabled)
+--- Set whether a spell/item is enabled in a preset.
+-- @param kind  optional "spl"/"itm" — only used when the entry must be
+--              lazily created (default "spl"); pass it when scan/row data
+--              is available so item entries aren't mis-kinded.
+function BfBot.Persist.SetSpellEnabled(sprite, presetIndex, resref, enabled, kind)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil, nil, kind)
     end
     preset.spells[resref].on = (enabled == 1) and 1 or 0
 end
@@ -716,11 +758,12 @@ end
 
 --- Set the bounded repeat count for a spell. Creates a default entry when
 --- needed; invalid values reset to 1 rather than being coerced or clamped.
-function BfBot.Persist.SetSpellRepeat(sprite, presetIndex, resref, value)
+-- @param kind  optional "spl"/"itm" — only used on lazy entry creation
+function BfBot.Persist.SetSpellRepeat(sprite, presetIndex, resref, value, kind)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil, nil, kind)
     end
     preset.spells[resref].rep = BfBot.Persist._NormalizeSpellRepeat(value)
 end
@@ -757,11 +800,13 @@ function BfBot.Persist.GetSpellVariant(sprite, presetIndex, resref)
 end
 
 --- Set the selected variant resref for a spell in a preset.
-function BfBot.Persist.SetSpellVariant(sprite, presetIndex, resref, variantResref)
+-- @param kind  optional "spl"/"itm" — only used on lazy entry creation
+--              (default "spl"); see SetSpellEnabled.
+function BfBot.Persist.SetSpellVariant(sprite, presetIndex, resref, variantResref, kind)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil, nil, kind)
     end
     preset.spells[resref].var = variantResref  -- string or nil to clear
 end
@@ -781,11 +826,13 @@ function BfBot.Persist.GetSpellLock(sprite, presetIndex, resref)
 end
 
 --- Set the lock state for a spell in a preset. Creates the entry if missing.
-function BfBot.Persist.SetSpellLock(sprite, presetIndex, resref, locked)
+-- @param kind  optional "spl"/"itm" — only used on lazy entry creation
+--              (default "spl"); see SetSpellEnabled.
+function BfBot.Persist.SetSpellLock(sprite, presetIndex, resref, locked, kind)
     local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
     if not preset then return end
     if not preset.spells[resref] then
-        preset.spells[resref] = BfBot.Persist._MakeDefaultSpellEntry(nil)
+        preset.spells[resref] = BfBot.Persist._MakeDefaultEntry(nil, nil, kind)
     end
     preset.spells[resref].lock = (locked == 1) and 1 or 0
 end
@@ -852,7 +899,8 @@ function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
     end
     for resref, entry in pairs(ownerPreset.spells) do
         local scanData = cloneCastable[resref]
-        if type(entry) == "table" and type(scanData) == "table"
+        if type(entry) == "table" and entry.kind ~= "itm"
+            and type(scanData) == "table" and scanData.kind ~= "itm"
             and (tonumber(scanData.count) or 0) > 0 then
             local copy = {
                 on  = (type(entry.on) == "number") and entry.on or 0,
@@ -1327,8 +1375,13 @@ function BfBot.Persist.ImportConfig(sprite, filename)
             presetCount = presetCount + 1
             if castable then
                 local toRemove = {}
-                for resref, _ in pairs(preset.spells) do
-                    if not castable[resref] then
+                for resref, entry in pairs(preset.spells) do
+                    if entry.kind == "itm" then
+                        -- Keep item entries regardless of current inventory.
+                        -- Inventory is fluid: player may pick up the item later.
+                        -- The catalog-driven UI naturally hides item rows when the
+                        -- resref isn't in inventory now.
+                    elseif not castable[resref] then
                         table.insert(toRemove, resref)
                     end
                 end
@@ -1709,7 +1762,11 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
-            if scanData and scanData.count > 0 then
+            -- Summon presets are deliberately spell-only. The normal summon
+            -- scanner cannot produce item rows, but keep this guard here as a
+            -- last line of defense for synthetic seams and future callers that
+            -- resolve a party sprite through a summon-shaped reference.
+            if scanData and scanData.kind ~= "itm" and scanData.count > 0 then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
                 for _, e in ipairs(resolved) do
@@ -1851,6 +1908,8 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                 target = e.target,
                 durCat = scanData and scanData.durCat or "short",
                 var    = spellCfg and spellCfg.var or nil,
+                kind   = scanData and scanData.kind or "spl",
+                leafResrefs = scanData and scanData.leafResrefs,
                 rep    = BfBot.Persist._NormalizeSpellRepeat(e.rep),
             })
         end
@@ -1983,25 +2042,30 @@ function BfBot.Persist.CreatePreset(sprite, name)
     end
     if not idx then return nil end  -- all 5 taken
 
-    -- Collect union of all spells across existing presets
+    -- Collect union of all spells/items across existing presets
     local allSpells = {}
     for _, preset in pairs(config.presets) do
         if preset.spells then
             for resref, cfg in pairs(preset.spells) do
                 if not allSpells[resref] then
-                    -- Re-classify target from SPL data (don't copy potentially stale tgt)
+                    local kind = cfg.kind or "spl"
+                    -- Re-classify target from SPL data (don't copy potentially stale
+                    -- tgt). Spells only — an item resref names an ITM, not a SPL, so
+                    -- a same-named SPL would be an unrelated resource; keep stored tgt.
                     local tgt = cfg.tgt or "p"
-                    local ok, header = pcall(EEex_Resource_Demand, resref, "SPL")
-                    if ok and header then
-                        local aOk, ability = pcall(function() return header:getAbility(0) end)
-                        if aOk and ability then
-                            local cOk, classResult = pcall(BfBot.Class.Classify, resref, header, ability)
-                            if cOk and classResult then
-                                tgt = classResult.defaultTarget or "s"
+                    if kind == "spl" then
+                        local ok, header = pcall(EEex_Resource_Demand, resref, "SPL")
+                        if ok and header then
+                            local aOk, ability = pcall(function() return header:getAbility(0) end)
+                            if aOk and ability then
+                                local cOk, classResult = pcall(BfBot.Class.Classify, resref, header, ability)
+                                if cOk and classResult then
+                                    tgt = classResult.defaultTarget or "s"
+                                end
                             end
                         end
                     end
-                    allSpells[resref] = { tgt = tgt, pri = cfg.pri or 999 }
+                    allSpells[resref] = { kind = kind, tgt = tgt, pri = cfg.pri or 999 }
                 end
             end
         end
@@ -2010,7 +2074,9 @@ function BfBot.Persist.CreatePreset(sprite, name)
     -- Build spell table for new preset — all disabled
     local spells = {}
     for resref, info in pairs(allSpells) do
-        spells[resref] = { on = 0, tgt = info.tgt, pri = info.pri, rep = 1 }
+        spells[resref] = {
+            kind = info.kind, on = 0, tgt = info.tgt, pri = info.pri, rep = 1,
+        }
     end
 
     config.presets[idx] = {
@@ -2083,13 +2149,17 @@ function BfBot.Persist.CreatePresetAll(name)
         if sprite then
             local config = BfBot.Persist.GetConfig(sprite)
             if config then
-                -- Collect union of all spells across existing presets
+                -- Collect union of all spells/items across existing presets
                 local allSpells = {}
                 for _, preset in pairs(config.presets) do
                     if preset.spells then
                         for resref, cfg in pairs(preset.spells) do
                             if not allSpells[resref] then
-                                allSpells[resref] = { tgt = cfg.tgt or "p", pri = cfg.pri or 999 }
+                                allSpells[resref] = {
+                                    kind = cfg.kind or "spl",
+                                    tgt = cfg.tgt or "p",
+                                    pri = cfg.pri or 999,
+                                }
                             end
                         end
                     end
@@ -2097,7 +2167,8 @@ function BfBot.Persist.CreatePresetAll(name)
                 local spells = {}
                 for resref, info in pairs(allSpells) do
                     spells[resref] = {
-                        on = 0, tgt = info.tgt, pri = info.pri, rep = 1,
+                        kind = info.kind, on = 0, tgt = info.tgt,
+                        pri = info.pri, rep = 1,
                     }
                 end
                 config.presets[idx] = {
@@ -2220,6 +2291,8 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             target = e.target,
             durCat = scanData and scanData.durCat or "short",
             var    = spellCfg and spellCfg.var or nil,
+            kind   = scanData and scanData.kind or "spl",
+            leafResrefs = scanData and scanData.leafResrefs,
             rep    = BfBot.Persist._NormalizeSpellRepeat(e.rep),
         })
     end

@@ -1202,6 +1202,59 @@ function BfBot.Test.ExportImport()
         _nok("ImportConfig should have failed for missing file")
     end
 
+    -- Test 6: Items kept even if not in inventory; spells stripped if not castable
+    local fakeName = "BFBT_TEST_KIND"
+    local fakePath = BfBot.Persist._PRESETS_DIR .. "/" .. fakeName .. ".lua"
+    local fakeConfig = {
+        v = 10, ap = 1,
+        presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
+            ["POTN99"]  = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
+            ["SPWI999"] = { kind = "spl", on = 1, tgt = "s", pri = 2, lock = 0 },
+        }}},
+        opts = { skip = 1 }, ovr = {},
+    }
+    local ff = io.open(fakePath, "w")
+    if ff then
+        ff:write("BfBot._import = " .. BfBot.Persist._Serialize(fakeConfig) .. "\n")
+        ff:close()
+
+        -- Preserve the character's real config; the fake import replaces it
+        local savedCfg = nil
+        pcall(function() savedCfg = EEex_GetUDAux(sprite0)[BfBot.Persist._KEY] end)
+
+        local kindOk, kindPresets, kindSkipped = BfBot.Persist.ImportConfig(
+            sprite0, fakeName .. ".lua")
+        if kindOk then
+            local cfg = BfBot.Persist.GetConfig(sprite0)
+            local spells = cfg and cfg.presets and cfg.presets[1] and cfg.presets[1].spells
+            if spells and spells["POTN99"] and spells["POTN99"].kind == "itm" then
+                _ok("Item entry POTN99 kept despite not being in inventory")
+            else
+                _nok("Item entry POTN99 was stripped (items must survive the castable filter)")
+            end
+            if spells and spells["SPWI999"] == nil then
+                _ok("Uncastable spell entry SPWI999 stripped")
+            else
+                _nok("Uncastable spell entry SPWI999 survived the filter")
+            end
+            if kindSkipped == 1 then
+                _ok("Skip count is 1 (spell only, item not counted)")
+            else
+                _nok("Skip count expected 1, got " .. tostring(kindSkipped))
+            end
+        else
+            _nok("Kind-filter import failed: " .. tostring(kindPresets))
+        end
+
+        -- Restore the character's original config
+        pcall(function() EEex_GetUDAux(sprite0)[BfBot.Persist._KEY] = savedCfg end)
+    else
+        _nok("Could not write kind-filter test file: " .. tostring(fakePath))
+    end
+
+    -- Cleanup: remove kind-filter test file
+    pcall(function() os.remove(fakePath) end)
+
     -- Cleanup: remove test export file
     pcall(function()
         os.remove(BfBot.Persist._PRESETS_DIR .. "/" .. exportName .. ".lua")
@@ -2074,6 +2127,80 @@ function BfBot.Test.DurationRecursion()
     -- silently zeroing out non-hierarchical durations.
     testSpell("SPPR201", 12, "Aid (non-hierarchical regression)")
 
+    -- Leaf collection (items-and-potions Task 7): GetDuration's third
+    -- return value lists the op=146 sub-spell resrefs met during recursion.
+    local function loadSpell(resref, label)
+        local ok, hdr = pcall(EEex_Resource_Demand, resref, "SPL")
+        if not ok or not hdr then
+            _warning(label .. " (" .. resref .. "): SPL not loadable - skipping")
+            return nil
+        end
+        local ability = hdr:getAbility(0)
+        if not ability then
+            _warning(label .. " (" .. resref .. "): no ability 0 - skipping")
+            return nil
+        end
+        return hdr, ability
+    end
+
+    -- Wrapper spell: Prayer delivers via op=146 -> #PRAYERG/#PRAYERB.
+    -- Leafs must be a non-empty table and must not contain the parent.
+    do
+        local hdr, ability = loadSpell("SPPR327", "Prayer leafs")
+        if hdr then
+            local _, _, leafs = BfBot.Class.GetDuration(hdr, ability)
+            if type(leafs) ~= "table" then
+                _nok("Prayer (SPPR327): third return is " .. type(leafs)
+                    .. " (want table)")
+            else
+                _check(#leafs >= 1, string.format(
+                    "Prayer (SPPR327): %d leaf resref(s) collected [%s] (want >=1)",
+                    #leafs, table.concat(leafs, ",")))
+                local hasParent = false
+                for _, r in ipairs(leafs) do
+                    if r == "SPPR327" then
+                        hasParent = true
+                        break
+                    end
+                end
+                _check(not hasParent,
+                    "Prayer (SPPR327): leafs exclude the parent resref")
+            end
+        end
+    end
+
+    -- Direct-effect spell: Aid has no op=146 chain, so leafs must be EMPTY.
+    -- (The `or {resref}` self-fallback is the CALLER's job, not GetDuration's.)
+    do
+        local hdr, ability = loadSpell("SPPR201", "Aid leafs")
+        if hdr then
+            local _, _, leafs = BfBot.Class.GetDuration(hdr, ability)
+            _check(type(leafs) == "table" and #leafs == 0, string.format(
+                "Aid (SPPR201): empty leafs for direct-effect spell (got %s len=%s)",
+                type(leafs),
+                type(leafs) == "table" and tostring(#leafs) or "n/a"))
+        end
+    end
+
+    -- Classify smoke: result carries leafResrefs as a table (may be empty
+    -- for direct spells; non-empty for Prayer). Clear the cache entry first
+    -- so a stale pre-upgrade cached result (hot-reload of BfBotCls only —
+    -- the cache lives in BfBotCor) cannot mask the new field.
+    do
+        local hdr, ability = loadSpell("SPPR327", "Classify leafResrefs")
+        if hdr then
+            BfBot._cache.class["SPPR327"] = nil
+            local cls = BfBot.Class.Classify("SPPR327", hdr, ability)
+            if type(cls.leafResrefs) == "table" then
+                _ok("Classify(SPPR327).leafResrefs is a table (len="
+                    .. #cls.leafResrefs .. ")")
+            else
+                _nok("Classify(SPPR327).leafResrefs is "
+                    .. type(cls.leafResrefs) .. " (want table)")
+            end
+        end
+    end
+
     return _summary("DurationRecursion")
 end
 
@@ -2213,7 +2340,7 @@ function BfBot.Test.PlanReconciliation()
     -- 1-2), missing the synthetic one → mismatch (the orphan bug, #47).
     p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, _cfgWith(1, 2))
     _check(p.hasMismatch == true and p.actual[syntheticResref] == 1,
-        "config {1,2} + sprite has preset " .. syntheticPreset .. " → mismatch (orphan)")
+        "config minus preset " .. syntheticPreset .. " + sprite has it → mismatch (orphan)")
 
     -- Case 5: config requires a preset the sprite doesn't have (preset 8,
     -- guarded above) → no mismatch (orphans are sprite-side, not
@@ -2663,6 +2790,214 @@ function BfBot.Test.StaleState()
 
     P("")
     return _summary("Stale State")
+end
+
+-- ============================================================
+-- BfBot.Test.Items — Items + potions support (Task 16)
+-- ============================================================
+function BfBot.Test.Items()
+    _reset()
+    P("=== Items + potions support ===")
+
+    -- ---- [1] Inventory slot layout constants ----
+    -- Locks the verified layout (equip 0-17, quickitem 18-20, backpack
+    -- 21-34, weapons 35-38) against accidental edits in BfBotScn.
+    P("  [1] Inventory slot layout constants")
+    local slotChecks = {
+        { "_SLOT_EQUIP_MAX",  17 },
+        { "_SLOT_QUICK_MIN",  18 },
+        { "_SLOT_QUICK_MAX",  20 },
+        { "_SLOT_PACK_MAX",   34 },
+        { "_SLOT_WEAPON_MIN", 35 },
+        { "_SLOT_WEAPON_MAX", 38 },
+    }
+    for _, sc in ipairs(slotChecks) do
+        _check(BfBot.Scan[sc[1]] == sc[2],
+            "Scan." .. sc[1] .. " == " .. sc[2]
+            .. " (got " .. tostring(BfBot.Scan[sc[1]]) .. ")")
+    end
+
+    -- ---- [2] _GetItemAbility manual stride ----
+    -- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header
+    -- sizeof, garbage for i >= 1); _GetItemAbility walks pointers manually.
+    -- STAF11 (Staff of Curing, BG2EE) is multi-ability: a0 melee, buff at a2.
+    P("")
+    P("  [2] _GetItemAbility on a multi-ability ITM (STAF11)")
+    local hdrOk, itmHdr = pcall(EEex_Resource_Demand, "STAF11", "ITM")
+    if not hdrOk or not itmHdr then
+        _warning("STAF11.ITM not demandable on this install - skipping")
+    else
+        local nAbil = itmHdr.abilityCount or 0
+        if nAbil < 2 then
+            _warning("STAF11 has " .. nAbil
+                .. " abilities on this install (want >= 2) - skipping")
+        else
+            local aOk, a0 = pcall(BfBot.Scan._GetItemAbility, itmHdr, 0)
+            local bOk, aN = pcall(BfBot.Scan._GetItemAbility, itmHdr, nAbil - 1)
+            _check(aOk and a0 ~= nil and bOk and aN ~= nil, string.format(
+                "_GetItemAbility returns abilities 0 and %d (of %d)",
+                nAbil - 1, nAbil))
+            if aOk and a0 and bOk and aN then
+                local stride = EEex_UDToPtr(aN) - EEex_UDToPtr(a0)
+                _check(stride == Item_ability_st.sizeof * (nAbil - 1),
+                    "ability stride uses Item_ability_st.sizeof"
+                    .. " (EEex getAbility bug workaround)")
+            end
+        end
+    end
+
+    -- ---- [3] Persistence: item kind ----
+    P("")
+    P("  [3] Persistence handles kind=\"itm\"")
+    -- Validator round-trip: a valid v10 item entry passes through unchanged.
+    -- (Repair of invalid kinds is covered in Persist [11].)
+    local cfg = {
+        v = 10, ap = 1,
+        presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
+            ["POTN15"] = { kind = "itm", on = 1, tgt = "s", pri = 1, lock = 0 },
+        } } },
+        opts = { skip = 1 }, ovr = {},
+    }
+    local validated = BfBot.Persist._ValidateConfig(cfg)
+    local vEntry = validated and validated.presets and validated.presets[1]
+                   and validated.presets[1].spells
+                   and validated.presets[1].spells["POTN15"]
+    _check(vEntry ~= nil and vEntry.kind == "itm",
+        "_ValidateConfig preserves kind=\"itm\" (v10 round-trip)")
+
+    -- One focused defaults assertion for phase self-containment;
+    -- full _MakeDefaultEntry coverage lives in Persist [12].
+    local defEntry = BfBot.Persist._MakeDefaultEntry(nil, nil, "itm")
+    _check(defEntry.kind == "itm" and defEntry.tgt == "s",
+        "_MakeDefaultEntry(nil, nil, \"itm\") -> kind=\"itm\", tgt=\"s\"")
+
+    -- Everything below needs a live party sprite.
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    if not sprite then
+        _warning("no party member in slot 0 - skipping catalog/queue checks")
+        return _summary("Items")
+    end
+
+    -- ---- [4] _BuildItemCatalog entry invariants ----
+    -- Runs against whatever the leader carries: every admitted entry must
+    -- honor the catalog contract. An empty inventory passes vacuously.
+    P("")
+    P("  [4] _BuildItemCatalog entry invariants (leader)")
+    local catOk, itemCat = pcall(BfBot.Scan._BuildItemCatalog, sprite)
+    if not (catOk and type(itemCat) == "table") then
+        _nok("_BuildItemCatalog failed: " .. tostring(itemCat))
+    else
+        _ok("_BuildItemCatalog returned a table")
+        local nItems, bad = 0, {}
+        for r, e in pairs(itemCat) do
+            nItems = nItems + 1
+            if e.kind ~= "itm" then
+                table.insert(bad, r .. " kind=" .. tostring(e.kind))
+            end
+            if e.abilityIdx ~= 0 then
+                table.insert(bad, r .. " abilityIdx=" .. tostring(e.abilityIdx))
+            end
+            if type(e.leafResrefs) ~= "table" or #e.leafResrefs == 0 then
+                table.insert(bad, r .. " leafResrefs empty")
+            end
+            if type(e.count) ~= "number" or e.count <= 0 then
+                table.insert(bad, r .. " count=" .. tostring(e.count))
+            end
+            if e.hasVariants ~= 0 then
+                table.insert(bad, r .. " hasVariants=" .. tostring(e.hasVariants))
+            end
+            if not (e.class and (e.class.isBuff or e.class.overridden)) then
+                table.insert(bad, r .. " neither buff nor excluded override")
+            end
+        end
+        if nItems == 0 then
+            _warning("no items in inventory - catalog invariants vacuously true")
+        elseif #bad == 0 then
+            _ok(nItems .. " item entr"
+                .. (nItems == 1 and "y satisfies" or "ies satisfy")
+                .. " all invariants"
+                .. " (kind/abilityIdx/leafResrefs/count/variants/class)")
+        else
+            _nok("catalog invariant violations: " .. table.concat(bad, "; "))
+        end
+    end
+
+    -- ---- [5] Catalog merge rule ----
+    -- GetCastableSpells merges the item catalog under the spell catalog
+    -- (spells win on resref collision, e.g. staf11.SPL vs STAF11.ITM).
+    -- Every merged entry carries a valid kind; itm entries never carry
+    -- variants (hasVariants stays 0 by construction).
+    P("")
+    P("  [5] Catalog merge (spells win on resref collision)")
+    BfBot.Scan.Invalidate(sprite)
+    local merged = BfBot.Scan.GetCastableSpells(sprite)
+    local nSpl, nItm, mergeBad = 0, 0, {}
+    local sampleItem = nil
+    for r, e in pairs(merged) do
+        if e.kind == "spl" then
+            nSpl = nSpl + 1
+        elseif e.kind == "itm" then
+            nItm = nItm + 1
+            -- Deterministic pick for [6]: lowest resref
+            if sampleItem == nil or r < sampleItem then sampleItem = r end
+            if e.variants ~= nil then
+                table.insert(mergeBad, r .. " itm entry carries variants")
+            end
+        else
+            table.insert(mergeBad, r .. " kind=" .. tostring(e.kind))
+        end
+    end
+    local mergeMsg = string.format(
+        "merged catalog: %d spl + %d itm, every kind valid, no itm variants",
+        nSpl, nItm)
+    if #mergeBad > 0 then
+        mergeMsg = mergeMsg .. " [" .. table.concat(mergeBad, "; ") .. "]"
+    end
+    _check(#mergeBad == 0, mergeMsg)
+
+    -- ---- [6] _BuildQueue item plumbing (fixture-guarded) ----
+    P("")
+    P("  [6] _BuildQueue item entry (fixture-guarded)")
+    if not sampleItem then
+        _warning("no item entries in merged catalog - skipping queue check"
+            .. " (put a buff potion in the leader's pack to exercise it)")
+        return _summary("Items")
+    end
+    -- _BuildQueue only appends to Exec._log on error paths; swap in a
+    -- scratch log so test noise never lands in the real exec log
+    -- (cf. StaleState's save/restore discipline).
+    local savedLog = BfBot.Exec._log
+    BfBot.Exec._log = {}
+    local qOk, byCaster, totalOrErr = pcall(BfBot.Exec._BuildQueue,
+        { { caster = 0, spell = sampleItem, target = "self", rep = 2 } }, 2)
+    BfBot.Exec._log = savedLog
+    if not qOk then
+        _nok("_BuildQueue errored: " .. tostring(byCaster))
+    elseif not byCaster then
+        _nok("_BuildQueue rejected the item entry: " .. tostring(totalOrErr))
+    else
+        local entries = byCaster.p0
+        local entry = entries and entries[1]
+        if not entry then
+            _nok("_BuildQueue returned no entry for caster key p0")
+        else
+            _check(#entries == 2 and entries[1] ~= entries[2],
+                sampleItem .. ": rep=2 creates two distinct attempts")
+            _check(entry.kind == "itm",
+                sampleItem .. ": queue entry kind == \"itm\"")
+            _check(entry.cheat == false, sampleItem
+                .. ": cheat == false under qcMode=2 (Quick Cast bypasses items)")
+            _check(type(entry.leafResrefs) == "table" and #entry.leafResrefs > 0,
+                sampleItem .. ": non-empty leafResrefs on queue entry")
+            _check(entry.casterRef and entry.casterRef.kind == "party"
+                and entry.casterRef.slot == 0 and entry.casterSprite == nil,
+                sampleItem .. ": party casterRef retained without cached sprite")
+            _check(entry.targetObj == "Myself",
+                sampleItem .. ": target \"self\" -> targetObj \"Myself\"")
+        end
+    end
+
+    return _summary("Items")
 end
 
 -- ============================================================
@@ -3416,7 +3751,8 @@ function BfBot.Test.SummonCasters()
         if ownPre1 and type(ownPre1.spells) == "table" and okScan and castable then
             for resref in pairs(ownPre1.spells) do
                 local sd = castable[resref]
-                if type(sd) == "table" and (sd.count or 0) > 0 then
+                if type(sd) == "table" and sd.kind ~= "itm"
+                    and (sd.count or 0) > 0 then
                     expect = expect + 1
                 end
             end
@@ -3510,7 +3846,8 @@ function BfBot.Test.SummonCasters()
         local castable = BfBot.Scan.GetCastableSpells(leader)
         local picks = {}
         for resref, data in pairs(castable or {}) do
-            if type(data) == "table" and (data.count or 0) > 0 then
+            if type(data) == "table" and data.kind ~= "itm"
+                and (data.count or 0) > 0 then
                 picks[#picks + 1] = resref
             end
         end
@@ -3645,7 +3982,8 @@ function BfBot.Test.SummonCasters()
             local castable = BfBot.Scan.GetCastableSpells(leader)
             local picks = {}
             for resref, data in pairs(castable or {}) do
-                if type(data) == "table" and (data.count or 0) > 0 then
+                if type(data) == "table" and data.kind ~= "itm"
+                    and (data.count or 0) > 0 then
                     picks[#picks + 1] = resref
                 end
             end
@@ -5625,11 +5963,15 @@ function BfBot.Test.RunAll()
     local staleOk = BfBot.Test.StaleState()
     P("")
 
-    -- Phase 16: Watchdog / stuck-caster recovery (multiplayer hang)
+    -- Phase 16: Items + potions
+    local itemsOk = BfBot.Test.Items()
+    P("")
+
+    -- Phase 17: Watchdog / stuck-caster recovery (multiplayer hang)
     local watchdogOk = BfBot.Test.Watchdog()
     P("")
 
-    -- Phase 17: Multiplayer caster filter
+    -- Phase 18: Multiplayer caster filter
     local mpOk = BfBot.Test.Mp()
     P("")
 
@@ -5658,13 +6000,14 @@ function BfBot.Test.RunAll()
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
+    P("  Items: " .. (itemsOk and "PASS" or "FAIL"))
     P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk and eeexCompatOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk
 end
 
 -- ============================================================
@@ -6210,6 +6553,121 @@ function BfBot.Test.Persist()
 
     -- Clean up test key
     if iniOk then pcall(BfBot.Persist.SetPref, "BB_TestKey", 0) end
+
+    -- ---- Test 11: Schema v10 migration (kind field) ----
+    P("")
+    P("  [11] Schema v10 migration (kind field)")
+
+    -- v9→v10: kind field added to party entries only. Summon presets remain
+    -- spell-only under their v9 whitelist and do not gain a kind field.
+    local v9 = {
+        v = 9, ap = 1,
+        presets = {
+            [1] = { name = "P1", cat = "long", qc = 0, spells = {
+                ["SPWI304"] = { on = 1, tgt = "s", pri = 1, rep = 1, lock = 0 },
+            }},
+        },
+        opts = { skip = 1 }, ovr = {},
+        summons = { ["test:summon"] = { presets = {
+            [1] = { qc = 0, spells = {
+                ["SPIN101"] = { on = 1, tgt = "s", pri = 1, rep = 1 },
+            } },
+        } } },
+    }
+    local migrated = BfBot.Persist._MigrateConfig(v9, 9)
+    local summonKind = migrated.summons["test:summon"]
+        .presets[1].spells["SPIN101"].kind
+    if migrated.v == 10
+        and migrated.presets[1].spells["SPWI304"].kind == "spl"
+        and summonKind == nil then
+        _ok("v9→v10 sets party kind=\"spl\" and keeps summons kindless")
+    else
+        _nok("v9→v10 migration failed: party="
+            .. tostring(migrated.presets[1].spells["SPWI304"].kind)
+            .. " summon=" .. tostring(summonKind))
+    end
+
+    -- Validator repairs missing/invalid kind to "spl"
+    local kindCfg = BfBot.Persist.GetDefaultConfig()
+    kindCfg.presets[1].spells["TSTKND"] = { on = 1, tgt = "s", pri = 1, lock = 0, kind = "bogus" }
+    local repairedKind = BfBot.Persist._ValidateConfig(kindCfg)
+    if repairedKind.presets[1].spells["TSTKND"].kind == "spl" then
+        _ok("Validator repairs invalid kind to \"spl\"")
+    else
+        _nok("Validator kind repair failed: " ..
+             tostring(repairedKind.presets[1].spells["TSTKND"].kind))
+    end
+
+    -- ---- Test 12: Item kind through entry-creation paths ----
+    P("")
+    P("  [12] Item kind through entry-creation paths")
+
+    -- _MakeDefaultEntry(kind="itm"): kind + tgt + on semantics
+    local itmDef = BfBot.Persist._MakeDefaultEntry(nil, nil, "itm")
+    if itmDef.kind == "itm" then _ok("_MakeDefaultEntry(nil, nil, \"itm\") -> kind=\"itm\"")
+    else _nok("Item entry kind wrong: " .. tostring(itmDef.kind)) end
+
+    if itmDef.tgt == "s" then _ok("Item entry defaults tgt=\"s\"")
+    else _nok("Item entry tgt wrong: " .. tostring(itmDef.tgt)) end
+
+    if itmDef.on == 1 then _ok("Item entry on=1 when enabled arg omitted")
+    else _nok("Item entry default-on wrong: " .. tostring(itmDef.on)) end
+
+    local itmOff = BfBot.Persist._MakeDefaultEntry(nil, 0, "itm")
+    if itmOff.on == 0 then _ok("_MakeDefaultEntry(nil, 0, \"itm\") -> on=0")
+    else _nok("Item entry enabled=0 not honored: " .. tostring(itmOff.on)) end
+
+    -- Omitted kind still yields the spell defaults (regression guard)
+    local splDef = BfBot.Persist._MakeDefaultEntry(nil)
+    if splDef.kind == "spl" and splDef.tgt == "p" then
+        _ok("_MakeDefaultEntry(nil) -> kind=\"spl\", tgt=\"p\" (unchanged)")
+    else
+        _nok("Spell default entry changed: kind=" .. tostring(splDef.kind) ..
+             " tgt=" .. tostring(splDef.tgt))
+    end
+
+    -- CreatePreset union copy preserves item kind. CreatePreset reads config
+    -- from the sprite's UDAux (no pure-table entry point), so this follows the
+    -- ZZTST01 pattern: inject a synthetic entry, act, assert, clean up fully.
+    do
+        local p1 = BfBot.Persist.GetPreset(sprite, 1)
+        if not p1 or not p1.spells then
+            _warning("No preset 1 — skipping CreatePreset kind test")
+        else
+            p1.spells["ZZITM01"] = BfBot.Persist._MakeDefaultEntry(nil, 0, "itm")
+            local newIdx = BfBot.Persist.CreatePreset(sprite, "ZZKindTest")
+            if not newIdx then
+                _warning("CreatePreset returned nil (all preset slots taken?) — skipping")
+            else
+                local newPreset = BfBot.Persist.GetPreset(sprite, newIdx)
+                local copied = newPreset and newPreset.spells
+                               and newPreset.spells["ZZITM01"] or nil
+                if copied and copied.kind == "itm" then
+                    _ok("CreatePreset union copy preserves kind=\"itm\"")
+                else
+                    _nok("CreatePreset dropped item kind: " ..
+                         tostring(copied and copied.kind))
+                end
+                if copied and copied.on == 0 then
+                    _ok("CreatePreset item copy is disabled (on=0)")
+                else
+                    _nok("CreatePreset item copy on wrong: " ..
+                         tostring(copied and copied.on))
+                end
+                if copied and copied.tgt == "s" then
+                    _ok("CreatePreset item copy keeps tgt=\"s\" (no SPL re-classify)")
+                else
+                    _nok("CreatePreset item copy tgt wrong: " ..
+                         tostring(copied and copied.tgt))
+                end
+                BfBot.Persist.DeletePreset(sprite, newIdx)
+            end
+            p1.spells["ZZITM01"] = nil
+        end
+    end
+    -- NOTE: _CreateDefaultConfig's listed-but-disabled item handling is not
+    -- exercised here — it requires a live sprite scan (inventory-dependent)
+    -- and triggers Innate.Refresh side effects. Covered by in-game QA.
 
     -- ---- Summary ----
     P("")
