@@ -1296,15 +1296,16 @@ Live cast test stays manual (Task 17 QA)."
 
 **Goal:** verify end-to-end behavior on real items. Document each test result.
 
-**Test fixtures to set up (via `CreateItem` BCS or starting items):**
-- `POTN15` Oil of Speed (Haste wrapper, op=146)
-- `POTN14` Potion of Heroism (THAC0 + HP buff, multi-effect)
-- `POTN21` Potion of Fire Resistance (resistance buff)
-- `RING06` Ring of the Ram (equipped activated, projectile attack — should be classified as offensive and NOT appear in catalog)
-- `AMUL19` Amulet of Power (equipped passive — should NOT appear, abilityCount=0 likely)
-- `RING23` Ring of Wizardry (passive double-mage-spells — should NOT appear)
-- `WAND09` Wand of Heavens (offensive — should NOT appear in catalog)
-- A pure-buff equipped activated item if available — verify it appears
+**Test fixtures to set up (via `CreateItem` BCS or starting items):** identify
+them by displayed name because this modded install shifts vanilla resrefs.
+
+- `POTN14` Oil of Speed, `POTN15` Red Potion, `POTN21` Potion of Clarity
+- `POTN02` Potion of Fire Resistance (placed in a true backpack slot)
+- `RING05` Sandthief's Ring, `RING39` Ring of Gaxx, `BRAC16` Bracers of Blinding Strike
+- `RING06`, `AMUL19`, `RING23` passive-item negatives on this install
+- `WAND11` and `SCRL07` deferred-category negatives
+- `STAF11` Staff of the Magi, whose ability 0 is a melee attack while its buffs
+  sit at higher indices (#53 negative)
 
 **Step 1: Test each fixture**
 
@@ -1322,14 +1323,23 @@ Capture the QA evidence in the PR test plan and test-install logs. If the live
 pass uncovers a new, reusable engine fact, invoke `bg-modding-learn` and record
 that fact directly in the appropriate shared reference:
 
-```
-| ResRef | Item              | Expected | Actual | Notes |
-|--------|-------------------|----------|--------|-------|
-| POTN15 | Oil of Speed      | listed   | listed | leafs=[SPIN999], Haste applies, stack -1 |
-| POTN14 | Potion of Heroism | listed   | listed | leafs=[SPINxxx], THAC0 applies |
-| RING06 | Ring of the Ram   | NOT listed | NOT listed | offensive — classifier rejected |
-...
-```
+**Completed 2026-08-20 on BG2EE 2.6.6.0 + EEex 1.2.0, disposable
+`...modded - Copy - Copy` install:**
+
+| Fixture | Live result |
+|---|---|
+| Integrated suite | `BfBot.Test.RunAll()` true; SummonCasters 250 pass, Items 19 pass, no failures/warnings in either phase |
+| New preset | Six existing item rows were `kind="itm"`, `on=0`, `rep=1` |
+| Oil of Speed (`POTN14`) | Cast Character consumed 3→2 and applied the active effect; immediate second cast skipped as already active and stayed at 2 |
+| Potion of Clarity (`POTN21`) R2 | 3→2; attempt 1 cast and attempt 2 rechecked/skipped the newly active effect; QC=All never applied to the item |
+| Bracers of Blinding Strike (`BRAC16`) | Equipped-slot charge 1→0 and effect active |
+| Generated innate `BFBT03` | Normal engine `SpellRES` reached `BFBOTGO`, Red Potion 5→4, and the innate remained present/available |
+| Backpack Potion of Fire Resistance (`POTN02`) | Cataloged and consumed from slot 22; effect active |
+| Persistence | Loaded an existing schema-v10 item config; exact marshal callback restored `itm→itm`; external export/import restored 3 presets with 0 skips; exhausted `BRAC16` stayed persisted while hidden from rows |
+| Combat abort | With a controlled positive detection seam, `RING05` fired 1→0, the chain stopped, and pending `RING39` stayed 1/unfired |
+| Negative scope | Passive `RING06`/`AMUL19`/`RING23`, backpack `WAND11`, `SCRL07`, and STAF11 ability 0 stayed excluded |
+| Party-only policy | A live non-party Duergar (`portrait=-1`) produced 0 item rows |
+| Reacquisition | Newly acquired backpack `POTN03` auto-merged as `kind="itm"`, `on=0`, `rep=1` and became visible |
 
 **Step 3: Fix any classifier or scanner issues found**
 
@@ -1374,6 +1384,11 @@ limitation.
 If Task 17 yields no new reusable engine fact, mark this task complete with no
 additional file change. The shared skill references live outside this project
 repo and use their separate dotfiles flow.
+
+**Result 2026-08-20:** no new engine-level fact was discovered beyond the
+already-folded Task 2/3 probes. The only QA defect was a BuffBot-specific
+synthetic summon test seam; it was fixed and regression-covered in commit
+`1f96934`.
 
 ---
 
@@ -1488,13 +1503,13 @@ gh issue comment 21 --repo Chrizhermann/bg-eeex-buffbot --body "PR opened: <PR-u
 
 ## Acceptance criteria (recap from design)
 
-- [ ] A character with a buff potion plus an equipped ability-0 buff item (Sandthief's Ring by displayed name on the test install) sees both as kind="itm", default disabled; offensive Ring of the Ram remains absent
-- [ ] Enabling Oil of Speed in a preset and pressing Cast Character drinks one potion, applies the Haste buff, decrements stack count by 1
-- [ ] Pressing Cast Character again with Haste already active skips the entry (already-active detection)
-- [ ] F12 hotkey trigger fires the same path
-- [ ] Save/reload preserves item entries; export/import works
-- [ ] Combat detection still aborts mid-queue
-- [ ] Existing spell behavior fully unchanged — `BfBot.Test.RunAll()` passes
+- [x] A character with buff potions plus equipped ability-0 buff items sees them as `kind="itm"`, default disabled; passive, wand, scroll, and higher-index-only STAF11 fixtures remain absent
+- [x] Enabling Oil of Speed in a preset and invoking Cast Character drinks one potion, applies Haste, and decrements the stack by 1
+- [x] Invoking Cast Character again with Haste already active skips the entry
+- [x] The generated F12 innate (`BFBT03`) fires the same item queue path and remains available
+- [x] A saved schema-v10 item config loads; exact marshal and external export/import round trips preserve item entries
+- [x] Combat detection aborts mid-queue with the pending item untouched
+- [x] Existing spell behavior remains green — integrated `BfBot.Test.RunAll()` passes
 
 ---
 

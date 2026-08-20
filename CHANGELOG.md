@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.7.0-alpha (2026-08-20)
+
+### Added
+- **Activated equipped items and inventory potions can now be configured as buff sources alongside spells.** BuffBot scans equipped/body and weapon slots, the three curated quickitem/fill slots, and potions anywhere in the backpack. Item rows are keyed by ITM resref, tinted separately in the mixed list, and start disabled in every new preset. The engine resolves the current slot or stack at cast time through `UseItem`, so moving or stacking a configured item does not break the preset. (#21)
+- **Item-aware execution and active-effect checks.** Item attempts bypass Quick Cast, independently recheck charges/stacks and active effects at R1–R5, and follow opcode-146 sub-spell references when a wrapper item applies its lasting effect through a child SPL. The same queue path is used by Cast Character, Cast All, and generated F12 preset innates.
+- **Picker item section and theme support.** Removed item rows can be recovered under a separate Items subsection; item rows use the new `itemColor` key across all six themes and never show spell-variant controls.
+
+### Persistence and compatibility
+- **Config schema v10 adds `kind="spl"|"itm"` to party preset entries.** Schema-v9 saves migrate lazily by tagging missing party kinds as spells. The migration also preserves development saves written by the earlier item-v8 branch while retaining main's summon and repeat migrations. Summon presets remain kindless and spell-only.
+- Imported item entries remain stored while the item is absent and reappear when reacquired; the UI hides the absent row without deleting its settings. Items remain party-only: summon discovery, clone seeding, and summon queue construction reject item rows.
+
+### Safety and scope
+- `UseItem` can select only ability 0, so BuffBot admits an item only when ability 0 itself is a classified buff with a supported target. Higher-index weapon buffs remain excluded and tracked in #53. SPL and ITM classifier caches are source-qualified so a same-resref spell can never admit an unsafe item ability.
+- Scrolls, wands, container contents, and inventory search remain deferred. Scroll and wand categories are rejected even in quickitem slots; backpack non-potions are rejected even though the engine could use them by resref.
+
+### Testing
+- The automated suite passes **249 tests**, including both schema-v8 lineages, v9→v10 migration, summon/item isolation, same-resref cache collisions, item repeats, fresh-sprite execution, picker recovery, deferred categories, duplicate stacks, and absent-item persistence.
+- Live BG2:EE 2.6.6.0 + EEex 1.2.0 validation passed on the disposable test install: integrated `BfBot.Test.RunAll()`, default-disabled rows, quickslot and backpack potion consumption, equipped-item charges, active-effect skipping, R2 rechecks, Quick Cast bypass, generated F12 execution, marshal/export/import round trips, party-only scanning, and combat interruption with an item still pending. BG1EE and the broader EEex compatibility matrix were not re-exercised in this pass.
+
 ## v1.6.4-alpha (2026-08-20)
 
 ### Fixed
