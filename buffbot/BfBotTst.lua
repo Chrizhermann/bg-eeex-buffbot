@@ -926,8 +926,14 @@ function BfBot.Test.SpellLockOrder()
     -- Stub buffbot_spellTable directly; these algorithms are pure data ops.
     local saved = buffbot_spellTable
     local savedRow = buffbot_selectedRow
+    local savedHasVariants = buffbot_selectedHasVariants
     local savedIsOpen = buffbot_isOpen
+    local savedSpellSel = BfBot.UI._spellSel
+    local savedPending = BfBot.UI._pendingSpellSelectionSync
+    local savedTargetAnchor = BfBot.UI._targetSpellAnchor
+    local savedVariantAnchor = BfBot.UI._variantSpellAnchor
     buffbot_isOpen = true
+    BfBot.UI._ClearSpellSelection()
 
     -- We stub _RenumberPriorities to a no-op since it needs a real sprite
     local savedRenum = BfBot.UI._RenumberPriorities
@@ -1027,7 +1033,12 @@ function BfBot.Test.SpellLockOrder()
     -- Restore globals
     buffbot_spellTable = saved
     buffbot_selectedRow = savedRow
+    buffbot_selectedHasVariants = savedHasVariants
     buffbot_isOpen = savedIsOpen
+    BfBot.UI._spellSel = savedSpellSel
+    BfBot.UI._pendingSpellSelectionSync = savedPending
+    BfBot.UI._targetSpellAnchor = savedTargetAnchor
+    BfBot.UI._variantSpellAnchor = savedVariantAnchor
     BfBot.UI._RenumberPriorities = savedRenum
 
     return _summary("SpellLockOrder")
@@ -5246,6 +5257,186 @@ function BfBot.Test.SummonCasters()
 end
 
 -- ============================================================
+-- BfBot.Test.SelectionRefresh -- issue #67 identity invariants
+-- ============================================================
+
+function BfBot.Test.SelectionRefresh()
+    P("=== SelectionRefresh: stable spell identity across rebuilds ===")
+    _reset()
+
+    local saved = {
+        spellTable = buffbot_spellTable,
+        selectedRow = buffbot_selectedRow,
+        selectedHasVariants = buffbot_selectedHasVariants,
+        isOpen = buffbot_isOpen,
+        view = BfBot.UI._view,
+        charSlot = BfBot.UI._charSlot,
+        presetIdx = BfBot.UI._presetIdx,
+        spellSel = BfBot.UI._spellSel,
+        pending = BfBot.UI._pendingSpellSelectionSync,
+        targetAnchor = BfBot.UI._targetSpellAnchor,
+        variantAnchor = BfBot.UI._variantSpellAnchor,
+        renumber = BfBot.UI._RenumberPriorities,
+    }
+
+    local fixtureOk, fixtureError = pcall(function()
+        BfBot.UI._view = "party"
+        BfBot.UI._charSlot = 0
+        BfBot.UI._presetIdx = 1
+        buffbot_isOpen = true
+        BfBot.UI._ClearSpellSelection()
+
+        -- Reorder: row projection follows the canonical resref and recomputes
+        -- variant state.
+        buffbot_spellTable = {
+            { resref = "TSTA", hasVariants = 0 },
+            { resref = "TSTB", hasVariants = 1 },
+        }
+        buffbot_selectedRow = 2
+        BfBot.UI._OnSpellRowAction(3)
+        buffbot_spellTable = {
+            { resref = "TSTB", hasVariants = 1 },
+            { resref = "TSTA", hasVariants = 0 },
+        }
+        BfBot.UI._RestoreSpellSelection()
+        _check(buffbot_selectedRow == 1
+            and buffbot_spellTable[buffbot_selectedRow].resref == "TSTB",
+            "rebuild: selection follows resref after reorder")
+        _check(buffbot_selectedHasVariants == 1,
+            "rebuild: variant state follows the restored spell")
+
+        -- Delayed native-widget clear: the bounded render token repairs it.
+        buffbot_selectedRow = 0
+        buffbot_selectedHasVariants = 0
+        BfBot.UI._SelectionSyncTick()
+        _check(buffbot_selectedRow == 1
+            and buffbot_selectedHasVariants == 1,
+            "render sync: one-frame row clear is repaired")
+
+        -- The widget may also write the OLD valid row number, which now
+        -- belongs to another spell. A pending token still restores by resref.
+        buffbot_selectedRow = 2
+        buffbot_selectedHasVariants = 0
+        BfBot.UI._SelectionSyncTick()
+        _check(buffbot_selectedRow == 1
+            and buffbot_spellTable[1].resref == "TSTB"
+            and buffbot_selectedHasVariants == 1,
+            "render sync: stale valid row is repaired by resref")
+
+        -- A different valid user selection cancels the pending restoration.
+        buffbot_selectedRow = 2
+        BfBot.UI._OnSpellRowAction(3)
+        BfBot.UI._SelectionSyncTick()
+        _check(buffbot_selectedRow == 2
+            and buffbot_spellTable[2].resref == "TSTA"
+            and BfBot.UI._pendingSpellSelectionSync == nil,
+            "render sync: a new user selection wins")
+
+        -- Disappearance clears every selection projection rather than
+        -- transferring the old row to a different spell.
+        buffbot_spellTable = {
+            { resref = "TSTB", hasVariants = 1 },
+            { resref = "TSTA", hasVariants = 0 },
+        }
+        buffbot_selectedRow = 1
+        BfBot.UI._OnSpellRowAction(3)
+        buffbot_spellTable = { { resref = "TSTA", hasVariants = 0 } }
+        BfBot.UI._RestoreSpellSelection()
+        _check(buffbot_selectedRow == 0 and BfBot.UI._spellSel == nil
+            and buffbot_selectedHasVariants == 0,
+            "disappearance: selection clears without row transfer")
+
+        -- Sub-menu anchors resolve by context+resref after a reorder.
+        buffbot_spellTable = {
+            { resref = "TSTA" }, { resref = "TSTB" },
+        }
+        local anchor = BfBot.UI._MakeSpellAnchor("TSTB")
+        buffbot_spellTable = {
+            { resref = "TSTB" }, { resref = "TSTA" },
+        }
+        local anchored, anchoredRow = BfBot.UI._ResolveSpellAnchor(anchor)
+        _check(anchored ~= nil and anchored.resref == "TSTB"
+            and anchoredRow == 1,
+            "sub-menu: anchor follows parent resref after reorder")
+
+        -- Context comparison preserves the same live summon but refuses a
+        -- replacement object, another preset, or another clone type.
+        _check(BfBot.UI._SameSpellSelectionContext(
+            { view = "summons", preset = 1,
+              identity = "clone:Imoen", cloneType = 2,
+              oid = 22, name = "Imoen" },
+            { view = "summons", preset = 1,
+              identity = "clone:Imoen", cloneType = 2,
+              oid = 22, name = "Imoen" }),
+            "context: same live summon matches")
+        _check(not BfBot.UI._SameSpellSelectionContext(
+            { view = "summons", preset = 1,
+              identity = "clone:Imoen", cloneType = 2,
+              oid = 22, name = "Imoen" },
+            { view = "summons", preset = 1,
+              identity = "clone:Imoen", cloneType = 2,
+              oid = 23, name = "Imoen" }),
+            "context: replacement summon does not inherit selection")
+        _check(not BfBot.UI._SameSpellSelectionContext(
+            { view = "summons", preset = 1,
+              identity = "clone:Imoen", cloneType = 2,
+              oid = 22, name = "Imoen" },
+            { view = "summons", preset = 1,
+              identity = "clone:Imoen", cloneType = 3,
+              oid = 22, name = "Imoen" }),
+            "context: different clone type does not inherit selection")
+        _check(not BfBot.UI._SameSpellSelectionContext(
+            { view = "party", preset = 1, slot = 0,
+              oid = 100, name = "Aerie" },
+            { view = "party", preset = 2, slot = 0,
+              oid = 100, name = "Aerie" }),
+            "context: preset change does not inherit selection")
+        _check(not BfBot.UI._SameSpellSelectionContext(
+            { view = "party", preset = 1, slot = 0,
+              oid = 100, name = "Aerie" },
+            { view = "party", preset = 1, slot = 0,
+              oid = 101, name = "Aerie" }),
+            "context: same-name replacement does not inherit selection")
+
+        -- Duration sort uses the same identity restoration path.
+        buffbot_spellTable = {
+            { resref = "TSTA", dur = 10, lock = 0, hasVariants = 0 },
+            { resref = "TSTB", dur = 100, lock = 0, hasVariants = 1 },
+        }
+        buffbot_selectedRow = 2
+        BfBot.UI._OnSpellRowAction(3)
+        BfBot.UI._RenumberPriorities = function() end
+        BfBot.UI.SortByDuration()
+        _check(buffbot_selectedRow == 1
+            and buffbot_spellTable[1].resref == "TSTB",
+            "duration sort: selection follows the sorted resref")
+
+        _check(BfBot.UI._IsBuffBotGeneratedResref("bfbt11")
+            and not BfBot.UI._IsBuffBotGeneratedResref("SPWI101"),
+            "event filter: BFBT resrefs are recognized case-insensitively")
+    end)
+
+    -- Restore every touched live-UI value outside pcall.
+    buffbot_spellTable = saved.spellTable
+    buffbot_selectedRow = saved.selectedRow
+    buffbot_selectedHasVariants = saved.selectedHasVariants
+    buffbot_isOpen = saved.isOpen
+    BfBot.UI._view = saved.view
+    BfBot.UI._charSlot = saved.charSlot
+    BfBot.UI._presetIdx = saved.presetIdx
+    BfBot.UI._spellSel = saved.spellSel
+    BfBot.UI._pendingSpellSelectionSync = saved.pending
+    BfBot.UI._targetSpellAnchor = saved.targetAnchor
+    BfBot.UI._variantSpellAnchor = saved.variantAnchor
+    BfBot.UI._RenumberPriorities = saved.renumber
+
+    if not fixtureOk then
+        _nok("SelectionRefresh fixture errored: " .. tostring(fixtureError))
+    end
+    return _summary("Selection Refresh")
+end
+
+-- ============================================================
 -- BfBot.Test.EEexCompatibility -- pure v0.11 boundary checks
 -- ============================================================
 
@@ -5410,6 +5601,10 @@ function BfBot.Test.RunAll()
     local pickerSortOk = BfBot.Test.SpellPickerSort()
     P("")
 
+    -- Phase: Selection preservation across event-driven refreshes (issue #67)
+    local selectionOk = BfBot.Test.SelectionRefresh()
+    P("")
+
     -- Phase 12: Movable Panel
     local movPanelOk = BfBot.Test.MovablePanel()
     P("")
@@ -5457,6 +5652,7 @@ function BfBot.Test.RunAll()
     P("  Name Strip:         " .. (nameStripOk and "PASS" or "FAIL"))
     P("  Spell Lock Order:   " .. (lockOrderOk and "PASS" or "FAIL"))
     P("  Spell Picker Sort:  " .. (pickerSortOk and "PASS" or "FAIL"))
+    P("  Selection Refresh:   " .. (selectionOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
     P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
@@ -5468,7 +5664,7 @@ function BfBot.Test.RunAll()
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk and eeexCompatOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and watchdogOk and mpOk and eeexCompatOk
 end
 
 -- ============================================================

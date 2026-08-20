@@ -384,11 +384,7 @@ def test_spell_list_columns_and_cell_actions_match_the_repeat_design() -> None:
     assert len(actions) == 1
     action = actions[0]
     assert "rowNumber" not in action
-    assert "BfBot.UI.ToggleSpell(buffbot_selectedRow)" in action
-    assert "cellNumber == 6" in action
-    assert "BfBot.UI.StepSelectedRepeat(1)" in action
-    assert "cellNumber == 8" in action
-    assert "BfBot.UI.ToggleLock(buffbot_selectedRow)" in action
+    assert action == "BfBot.UI._OnSpellRowAction(cellNumber)"
 
 
 def test_repeat_footer_binding_is_selection_only_and_supports_both_directions() -> None:

@@ -23,6 +23,10 @@ BfBot.UI._charSlot = 0        -- selected character slot (0-5)
 BfBot.UI._presetIdx = 1       -- selected preset index (shared across views)
 BfBot.UI._view = "party"      -- active view: "party" (portrait tabs) or "summons"
 BfBot.UI._initialized = false
+BfBot.UI._spellSel = nil       -- canonical spell selection {context, resref}; NEVER a row index
+BfBot.UI._pendingSpellSelectionSync = nil
+BfBot.UI._targetSpellAnchor = nil
+BfBot.UI._variantSpellAnchor = nil
 
 -- Summons view state (issue #19, Task 10)
 BfBot.UI._SUMMONS_PER_PAGE = 6   -- tab slots per page (mirrors the 6 portrait tabs)
@@ -200,6 +204,10 @@ end
 --- paging, and re-select identity-stably. Called on panel open (summons
 --- view) and on every view switch.
 function BfBot.UI._RefreshSummonList()
+    local previousContext = nil
+    if BfBot.UI._view == "summons" then
+        previousContext = BfBot.UI._SpellSelectionContext()
+    end
     BfBot.Scan.InvalidateSummons()
     local ok, raw = pcall(BfBot.Scan.GetAlliedSummons)
     if not ok then
@@ -209,6 +217,10 @@ function BfBot.UI._RefreshSummonList()
     BfBot.UI._summonList = BfBot.UI._BuildSummonListModel(raw)
     BfBot.UI._summonPage = 1
     BfBot.UI._ReselectSummon()
+    if previousContext and not BfBot.UI._SameSpellSelectionContext(
+        previousContext, BfBot.UI._SpellSelectionContext()) then
+        BfBot.UI._ClearSpellSelection()
+    end
     -- Keep the visible slice + tab labels in sync with the rebuilt list —
     -- SetSummon acts on the slice, so it must never lag the list.
     BfBot.UI._UpdateSummonTabNames()
@@ -239,6 +251,7 @@ end
 --- Toggle between party and summons view. Preset index is a shared axis and
 --- survives the switch; the summon list is re-swept on every switch.
 function BfBot.UI.ToggleView()
+    BfBot.UI._ClearSpellSelection()
     if BfBot.UI._view == "summons" then
         BfBot.UI._view = "party"
     else
@@ -253,6 +266,7 @@ end
 function BfBot.UI.SetSummon(n)
     local e = BfBot.UI._summonSlice[n]
     if not e then return end
+    BfBot.UI._ClearSpellSelection()
     BfBot.UI._summonSel = { identity = e.identity, oid = e.oid, name = e.name,
         cloneType = e.cloneType }
     BfBot.UI._Refresh()
@@ -360,6 +374,196 @@ buffbot_selectedHasVariants = 0    -- 0/1: does the selected spell have variants
 buffbot_variantTable = {}          -- array for variant picker list
 buffbot_variantHeader = ""         -- header text for variant picker
 buffbot_variantSelected = 0        -- selected row in variant picker
+
+-- ============================================================
+-- Stable Spell Selection
+-- ============================================================
+
+--- Snapshot the current spell-list context without retaining sprite userdata.
+--- Party selections use portrait slot + exact live oid + normalized name.
+--- Summon selections likewise include exact oid+name as well as persistent
+--- identity metadata, so a replacement caster never inherits old UI state.
+function BfBot.UI._SpellSelectionContext()
+    local context = {
+        view = BfBot.UI._view,
+        preset = BfBot.UI._presetIdx,
+    }
+    if BfBot.UI._view == "summons" then
+        local sel = BfBot.UI._summonSel
+        context.identity = sel and sel.identity or nil
+        context.cloneType = sel and sel.cloneType or nil
+        context.oid = sel and sel.oid or nil
+        context.name = sel and sel.name or nil
+        return context
+    end
+
+    context.slot = BfBot.UI._charSlot
+    local sprite = BfBot.UI._GetSelectedSprite()
+    context.oid = sprite and sprite.m_id or nil
+    context.name = sprite and BfBot._GetName(sprite) or nil
+    return context
+end
+
+--- PURE: compare two spell-list contexts.
+function BfBot.UI._SameSpellSelectionContext(a, b)
+    if type(a) ~= "table" or type(b) ~= "table" then return false end
+    if a.view ~= b.view or a.preset ~= b.preset then return false end
+    if a.view == "summons" then
+        return a.identity == b.identity and a.cloneType == b.cloneType
+            and a.oid == b.oid and a.name == b.name
+    end
+    return a.slot == b.slot and a.oid == b.oid and a.name == b.name
+end
+
+--- Return the current row for a resref, or nil. Resrefs are case-insensitive.
+function BfBot.UI._FindSpellRow(resref)
+    if type(resref) ~= "string" or resref == "" then return nil end
+    local wanted = resref:upper()
+    for row, entry in ipairs(buffbot_spellTable) do
+        if entry and type(entry.resref) == "string"
+            and entry.resref:upper() == wanted then
+            return row
+        end
+    end
+    return nil
+end
+
+--- Capture a spell identity for a sub-menu action.
+function BfBot.UI._MakeSpellAnchor(resref)
+    if type(resref) ~= "string" or resref == "" then return nil end
+    return {
+        context = BfBot.UI._SpellSelectionContext(),
+        resref = resref,
+    }
+end
+
+--- Resolve a sub-menu anchor against the current context and row table.
+--- Returns entry, row; context changes and disappearance return nil.
+function BfBot.UI._ResolveSpellAnchor(anchor)
+    if type(anchor) ~= "table"
+        or not BfBot.UI._SameSpellSelectionContext(
+            anchor.context, BfBot.UI._SpellSelectionContext()) then
+        return nil
+    end
+    local row = BfBot.UI._FindSpellRow(anchor.resref)
+    if not row then return nil end
+    return buffbot_spellTable[row], row
+end
+
+--- Clear canonical and projected spell selection state.
+function BfBot.UI._ClearSpellSelection()
+    BfBot.UI._spellSel = nil
+    BfBot.UI._pendingSpellSelectionSync = nil
+    BfBot.UI._targetSpellAnchor = nil
+    BfBot.UI._variantSpellAnchor = nil
+    buffbot_selectedRow = 0
+    buffbot_selectedHasVariants = 0
+end
+
+--- Capture a valid projected row as the canonical selection. Invalid rows are
+--- left alone during refresh capture, but user row actions explicitly clear.
+function BfBot.UI._CaptureSpellSelection(row, clearIfInvalid)
+    local selectedRow = tonumber(row) or 0
+    local entry = buffbot_spellTable[selectedRow]
+    if not entry or type(entry.resref) ~= "string" or entry.resref == "" then
+        if clearIfInvalid then BfBot.UI._ClearSpellSelection() end
+        return nil
+    end
+    BfBot.UI._spellSel = {
+        context = BfBot.UI._SpellSelectionContext(),
+        resref = entry.resref,
+    }
+    BfBot.UI._pendingSpellSelectionSync = nil
+    buffbot_selectedRow = selectedRow
+    BfBot.UI._UpdateVariantState()
+    return BfBot.UI._spellSel
+end
+
+--- Prepare the canonical identity before replacing/reordering the row table.
+--- A pending render repair stays authoritative because the native widget may
+--- briefly project its old (but still numerically valid) row.
+function BfBot.UI._PrepareSpellSelectionForRebuild()
+    local currentContext = BfBot.UI._SpellSelectionContext()
+    if BfBot.UI._spellSel
+        and not BfBot.UI._SameSpellSelectionContext(
+            BfBot.UI._spellSel.context, currentContext) then
+        BfBot.UI._ClearSpellSelection()
+    elseif not BfBot.UI._pendingSpellSelectionSync then
+        BfBot.UI._CaptureSpellSelection(buffbot_selectedRow, false)
+    end
+end
+
+--- Project the canonical selection into the current rebuilt row table.
+--- Context changes and disappearance clear rather than transfer selection.
+function BfBot.UI._RestoreSpellSelection()
+    local sel = BfBot.UI._spellSel
+    if not sel or not BfBot.UI._SameSpellSelectionContext(
+        sel.context, BfBot.UI._SpellSelectionContext()) then
+        BfBot.UI._ClearSpellSelection()
+        return nil
+    end
+    local row = BfBot.UI._FindSpellRow(sel.resref)
+    if not row then
+        BfBot.UI._ClearSpellSelection()
+        return nil
+    end
+    buffbot_selectedRow = row
+    BfBot.UI._UpdateVariantState()
+    if buffbot_isOpen then
+        -- The native list may write its bound var back to zero after a table
+        -- replacement. Reconcile for two render passes, then stop.
+        BfBot.UI._pendingSpellSelectionSync = {
+            context = sel.context,
+            resref = sel.resref,
+            passes = 2,
+        }
+    end
+    return row
+end
+
+--- Lightweight render-frame reconciliation for the native list widget.
+--- It only acts while a refresh-created token exists. A real user click runs
+--- _OnSpellRowAction first, which replaces the canonical selection and
+--- cancels this token; any other row write while pending is widget state.
+function BfBot.UI._SelectionSyncTick()
+    local pending = BfBot.UI._pendingSpellSelectionSync
+    if not pending then return false end
+    if not buffbot_isOpen then
+        BfBot.UI._pendingSpellSelectionSync = nil
+        return false
+    end
+    if not BfBot.UI._SameSpellSelectionContext(
+        pending.context, BfBot.UI._SpellSelectionContext()) then
+        BfBot.UI._ClearSpellSelection()
+        return false
+    end
+
+    local row = BfBot.UI._FindSpellRow(pending.resref)
+    if not row then
+        BfBot.UI._ClearSpellSelection()
+        return false
+    end
+
+    buffbot_selectedRow = row
+    BfBot.UI._UpdateVariantState()
+    pending.passes = (pending.passes or 1) - 1
+    if pending.passes <= 0 then
+        BfBot.UI._pendingSpellSelectionSync = nil
+    end
+    return false
+end
+
+--- Main list action: record row identity before dispatching cell-specific work.
+function BfBot.UI._OnSpellRowAction(cell)
+    if not BfBot.UI._CaptureSpellSelection(buffbot_selectedRow, true) then return end
+    if cell and cell <= 2 then
+        BfBot.UI.ToggleSpell(buffbot_selectedRow)
+    elseif cell == 6 then
+        BfBot.UI.StepSelectedRepeat(1)
+    elseif cell == 8 then
+        BfBot.UI.ToggleLock(buffbot_selectedRow)
+    end
+end
 
 -- ============================================================
 -- Runtime MOS Generation (ultrawide / high-res support)
@@ -501,6 +705,33 @@ end
 -- Initialization (called from M_BfBot.lua listener)
 -- ============================================================
 
+--- Register global quick-list listeners once per game process. The flags live
+--- on the persistent root namespace, while each wrapper resolves BfBot.UI at
+--- dispatch time so a force-reloaded module supplies the current handler.
+function BfBot.UI._RegisterSpellListeners()
+    if not BfBot._uiQuickListsCheckedListenerRegistered then
+        EEex_Sprite_AddQuickListsCheckedListener(BfBot._SafeCallback(
+            "ui.quick_lists_checked", function(...)
+                return BfBot.UI._OnSpellListChanged(...)
+            end))
+        BfBot._uiQuickListsCheckedListenerRegistered = true
+    end
+    if not BfBot._uiQuickListCountsResetListenerRegistered then
+        EEex_Sprite_AddQuickListCountsResetListener(BfBot._SafeCallback(
+            "ui.quick_list_counts_reset", function(...)
+                return BfBot.UI._OnSpellCountsReset(...)
+            end))
+        BfBot._uiQuickListCountsResetListenerRegistered = true
+    end
+    if not BfBot._uiQuickListNotifyRemovedListenerRegistered then
+        EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot._SafeCallback(
+            "ui.quick_list_notify_removed", function(...)
+                return BfBot.UI._OnSpellRemoved(...)
+            end))
+        BfBot._uiQuickListNotifyRemovedListenerRegistered = true
+    end
+end
+
 function BfBot.UI._OnMenusLoaded()
     -- Register bb_* custom text styles (deep-copies of engine styles) BEFORE
     -- the menu renders. The .menu references these via `text style "bb_*"`,
@@ -611,13 +842,8 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Key_AddPressedListener(BfBot._SafeCallback(
         "ui.key_pressed", BfBot.UI._OnKeyPressed))
 
-    -- Sprite listeners for auto-refresh (invalidate cache, then refresh panel)
-    EEex_Sprite_AddQuickListsCheckedListener(BfBot._SafeCallback(
-        "ui.quick_lists_checked", BfBot.UI._OnSpellListChanged))
-    EEex_Sprite_AddQuickListCountsResetListener(BfBot._SafeCallback(
-        "ui.quick_list_counts_reset", BfBot.UI._OnSpellCountsReset))
-    EEex_Sprite_AddQuickListNotifyRemovedListener(BfBot._SafeCallback(
-        "ui.quick_list_notify_removed", BfBot.UI._OnSpellRemoved))
+    -- Sprite listeners for auto-refresh (root-guarded across F5/module reloads)
+    BfBot.UI._RegisterSpellListeners()
 
     -- Resolution change: regenerate MOS for every theme, clamp stored geometry, re-layout
     EEex_Menu_AddWindowSizeChangedListener(BfBot._SafeCallback(
@@ -932,6 +1158,7 @@ function BfBot.UI._OnOpen()
     -- Selection gone (empty slot / vanished summon) → default to party view,
     -- first party member
     if not BfBot.UI._GetSelectedSprite() then
+        BfBot.UI._ClearSpellSelection()
         BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
     end
@@ -953,7 +1180,9 @@ end
 -- Called on: panel open, tab switch, spell change listeners.
 -- Tab switches do NOT invalidate scan cache — reads cached data.
 function BfBot.UI._Refresh()
-    -- Reset row selection on any refresh
+    -- Keep identity canonical across automatic table replacement. The numeric
+    -- row is only the list widget's projection and is rebuilt below.
+    BfBot.UI._PrepareSpellSelectionForRebuild()
     buffbot_selectedRow = 0
     buffbot_selectedHasVariants = 0
 
@@ -971,6 +1200,7 @@ function BfBot.UI._Refresh()
     -- protagonist's config, NEVER on the summon sprite)
     if BfBot.UI._view == "summons" then
         BfBot.UI._RefreshSummonsView()
+        BfBot.UI._RestoreSpellSelection()
         return
     end
 
@@ -984,11 +1214,16 @@ function BfBot.UI._Refresh()
         buffbot_castLabel = "Cast All"
         buffbot_castCharLabel = "Cast Character"
         buffbot_status = ""
+        BfBot.UI._RestoreSpellSelection()
         return
     end
 
     local config = BfBot.Persist.GetConfig(sprite)
-    if not config then return end
+    if not config then
+        buffbot_spellTable = {}
+        BfBot.UI._RestoreSpellSelection()
+        return
+    end
 
     -- 3. Update preset tab names and count from config (DYNAMIC)
     buffbot_presetNames = {}
@@ -1006,6 +1241,7 @@ function BfBot.UI._Refresh()
     local preset = config.presets[BfBot.UI._presetIdx]
     if not preset then
         buffbot_spellTable = {}
+        BfBot.UI._RestoreSpellSelection()
         return
     end
 
@@ -1074,6 +1310,7 @@ function BfBot.UI._Refresh()
     buffbot_castLabel = "Cast All"
     buffbot_castCharLabel = BfBot.UI._CastCharLabel()
     buffbot_status = BfBot.UI._GetStatusText()
+    BfBot.UI._RestoreSpellSelection()
 end
 
 --- Build the spell-list rows for one caster's preset, cross-referenced with
@@ -1350,12 +1587,14 @@ end
 -- ============================================================
 
 function BfBot.UI.SetChar(slot)
+    BfBot.UI._ClearSpellSelection()
     BfBot.UI._view = "party"  -- portrait tabs always land in party view
     BfBot.UI._charSlot = slot
     BfBot.UI._Refresh()
 end
 
 function BfBot.UI.SetPreset(idx)
+    BfBot.UI._ClearSpellSelection()
     BfBot.UI._presetIdx = idx
     BfBot.UI._Refresh()
 end
@@ -1461,9 +1700,10 @@ end
 
 --- Open the target picker for a spell row.
 function BfBot.UI.OpenTargets(row)
-    buffbot_targetRow = row
     local entry = buffbot_spellTable[row]
     if not entry then return end
+    buffbot_targetRow = row  -- compatibility/debug projection; never dereferenced
+    BfBot.UI._targetSpellAnchor = BfBot.UI._MakeSpellAnchor(entry.resref)
 
     buffbot_targetHeader = entry.name or entry.resref
     buffbot_tgtPickerSel = 0
@@ -1579,15 +1819,23 @@ end
 --- Quick-set: Self target. Sets tgt="s" and closes.
 function BfBot.UI.PickerSelf()
     if buffbot_targetLocked == 1 then return end
-    local row = buffbot_targetRow
-    local entry = buffbot_spellTable[row]
-    if not entry then return end
+    local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
+    if not entry then
+        BfBot.UI._targetSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
+    end
     local sprite = BfBot.UI._GetSelectedSprite()
-    if not sprite then return end
+    if not sprite then
+        BfBot.UI._targetSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
+    end
 
     BfBot.UI._SetSpellTargetForView(sprite, entry.resref, "s")
     entry.tgt = "s"
     entry.targetText = BfBot.UI._TargetToText("s")
+    BfBot.UI._targetSpellAnchor = nil
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
@@ -1637,14 +1885,15 @@ end
 
 --- Confirm and close the picker. Saves the working copy to persist.
 function BfBot.UI.PickerDone()
-    local row = buffbot_targetRow
-    local entry = buffbot_spellTable[row]
+    local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
     if not entry then
+        BfBot.UI._targetSpellAnchor = nil
         Infinity_PopMenu("BUFFBOT_TARGETS")
         return
     end
     local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
+        BfBot.UI._targetSpellAnchor = nil
         Infinity_PopMenu("BUFFBOT_TARGETS")
         return
     end
@@ -1671,6 +1920,7 @@ function BfBot.UI.PickerDone()
     BfBot.UI._SetSpellTargetForView(sprite, entry.resref, tgt)
     entry.tgt = tgt
     entry.targetText = BfBot.UI._TargetToText(tgt)
+    BfBot.UI._targetSpellAnchor = nil
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
@@ -1679,11 +1929,18 @@ end
 --- hidden in the summons view).
 function BfBot.UI.PickerUnlock()
     if BfBot.UI._view == "summons" then return end
-    local row = buffbot_targetRow
-    local entry = buffbot_spellTable[row]
-    if not entry then return end
+    local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
+    if not entry then
+        BfBot.UI._targetSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
+    end
     local sprite = BfBot.UI._GetSelectedSprite()
-    if not sprite then return end
+    if not sprite then
+        BfBot.UI._targetSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
+    end
 
     BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, entry.resref, 1)
     entry.tgtUnlock = 1
@@ -1720,6 +1977,7 @@ function BfBot.UI.CreateNewPreset()
     if BfBot.UI._view == "summons" then return end
     local idx = BfBot.Persist.CreatePresetAll()
     if idx then
+        BfBot.UI._ClearSpellSelection()
         BfBot.UI._presetIdx = idx
         BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
@@ -1731,6 +1989,7 @@ function BfBot.UI.DeleteCurrentPreset()
     if BfBot.UI._view == "summons" then return end
     local result = BfBot.Persist.DeletePresetAll(BfBot.UI._presetIdx)
     if result then
+        BfBot.UI._ClearSpellSelection()
         -- Clamp to first valid preset for the current character
         local sprite = BfBot.UI._GetSelectedSprite()
         if sprite then
@@ -1893,19 +2152,37 @@ end
 -- Sprite Listener Callbacks (invalidate cache, then refresh)
 -- ============================================================
 
+--- Does an event belong to the caster currently displayed by the panel?
+--- Compare numeric object IDs; EEex sprite userdata equality is unreliable.
+function BfBot.UI._IsDisplayedSpellEventSprite(sprite)
+    if not buffbot_isOpen or not sprite then return false end
+    local displayed = BfBot.UI._GetSelectedSprite()
+    return displayed ~= nil and displayed.m_id == sprite.m_id
+end
+
+function BfBot.UI._IsBuffBotGeneratedResref(resref)
+    return type(resref) == "string" and resref:upper():sub(1, 4) == "BFBT"
+end
+
 function BfBot.UI._OnSpellListChanged(sprite, resref, changeAmount)
     BfBot.Scan.Invalidate(sprite)
-    if buffbot_isOpen then BfBot.UI._Refresh() end
+    if not BfBot.UI._IsBuffBotGeneratedResref(resref)
+        and BfBot.UI._IsDisplayedSpellEventSprite(sprite) then
+        BfBot.UI._Refresh()
+    end
 end
 
 function BfBot.UI._OnSpellCountsReset(sprite)
     BfBot.Scan.Invalidate(sprite)
-    if buffbot_isOpen then BfBot.UI._Refresh() end
+    if BfBot.UI._IsDisplayedSpellEventSprite(sprite) then BfBot.UI._Refresh() end
 end
 
 function BfBot.UI._OnSpellRemoved(sprite, resref)
     BfBot.Scan.Invalidate(sprite)
-    if buffbot_isOpen then BfBot.UI._Refresh() end
+    if not BfBot.UI._IsBuffBotGeneratedResref(resref)
+        and BfBot.UI._IsDisplayedSpellEventSprite(sprite) then
+        BfBot.UI._Refresh()
+    end
 end
 
 -- ============================================================
@@ -2052,6 +2329,7 @@ end
 function BfBot.UI.SortByDuration()
     local n = #buffbot_spellTable
     if n == 0 then return end
+    BfBot.UI._PrepareSpellSelectionForRebuild()
 
     local function durKey(entry)
         local d = entry.dur
@@ -2087,6 +2365,7 @@ function BfBot.UI.SortByDuration()
     end
     buffbot_spellTable = result
     BfBot.UI._RenumberPriorities()
+    BfBot.UI._RestoreSpellSelection()
 end
 
 -- ============================================================
@@ -2293,6 +2572,7 @@ end
 function BfBot.UI.OpenVariants(row)
     local entry = buffbot_spellTable[row]
     if not entry or not entry.variants then return end
+    BfBot.UI._variantSpellAnchor = BfBot.UI._MakeSpellAnchor(entry.resref)
 
     buffbot_variantHeader = entry.name or entry.resref
     buffbot_variantSelected = 0
@@ -2322,15 +2602,33 @@ function BfBot.UI.SelectVariant(row)
     local vEntry = buffbot_variantTable[row]
     if not vEntry then return end
 
-    local spellRow = buffbot_selectedRow
-    local entry = buffbot_spellTable[spellRow]
+    local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._variantSpellAnchor)
     if not entry then
+        BfBot.UI._variantSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_VARIANTS")
+        return
+    end
+
+    local currentVariant = nil
+    if type(entry.variants) == "table" and type(vEntry.resref) == "string" then
+        local wanted = vEntry.resref:upper()
+        for _, variant in ipairs(entry.variants) do
+            if type(variant.resref) == "string"
+                and variant.resref:upper() == wanted then
+                currentVariant = variant
+                break
+            end
+        end
+    end
+    if not currentVariant then
+        BfBot.UI._variantSpellAnchor = nil
         Infinity_PopMenu("BUFFBOT_VARIANTS")
         return
     end
 
     local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then
+        BfBot.UI._variantSpellAnchor = nil
         Infinity_PopMenu("BUFFBOT_VARIANTS")
         return
     end
@@ -2343,8 +2641,9 @@ function BfBot.UI.SelectVariant(row)
         BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx, entry.resref, vEntry.resref)
     end
     entry.var = vEntry.resref
-    entry.variantName = vEntry.name
+    entry.variantName = currentVariant.name or vEntry.name
 
+    BfBot.UI._variantSpellAnchor = nil
     Infinity_PopMenu("BUFFBOT_VARIANTS")
 end
 

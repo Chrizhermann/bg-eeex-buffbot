@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.4-alpha (2026-08-20)
+
+### Fixed
+- **Spell-row selection no longer disappears during event-driven spellbook refreshes.** BuffBot now tracks the selected spell by resource reference plus the exact caster, preset, and Party/Summons context, then restores its current row and variant state after count or list rebuilds. Selection clears safely when the spell disappears or the user changes context instead of transferring to whichever spell occupies the old numeric row. (#67)
+- **Selection-dependent actions remain anchored to the intended spell across refreshes and reordering.** Target and variant dialogs retain the parent spell identity, Sort by Duration follows the selected spell, and repeat, lock, priority, target, variant, and remove actions cannot drift onto another row during a native list-widget update.
+
+### Performance and compatibility
+- **Quick-list events rebuild only the relevant visible caster while preserving per-sprite cache invalidation.** Internal `BFBT` events and unrelated sprites no longer cause unnecessary visible refreshes. Listener registration is idempotent across F5/menu reloads and dispatches through the current BuffBot namespace after a development hot reload.
+
+### Testing
+- Added an in-game `SelectionRefresh` phase and automated coverage for reordered rebuilds, disappearance and exact-caster replacement, Party/Summons context switches, target and variant anchors, duration sorting, one-frame widget clobbers, event filtering, and listener reloads. The full automated suite passes (232 tests). The #67 patch also passed the in-game suite and manual unpaused selection checks on BG2:EE 2.6.6.0 with EEex v1.2.0 before integration with the v1.6.3 changes.
+
 ## v1.6.3-alpha (2026-08-19)
 
 ### Added

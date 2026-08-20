@@ -627,12 +627,20 @@ menu
 
 		area 350 148 520 250
 		name    "bbList"
-		action      "BfBot.UI._UpdateVariantState(); if cellNumber <= 2 then BfBot.UI.ToggleSpell(buffbot_selectedRow) elseif cellNumber == 6 then BfBot.UI.StepSelectedRepeat(1) elseif cellNumber == 8 then BfBot.UI.ToggleLock(buffbot_selectedRow) end"
+		action      "BfBot.UI._OnSpellRowAction(cellNumber)"
 		enabled     "buffbot_isOpen"
 		table       "buffbot_spellTable"
 		var         "buffbot_selectedRow"
 		rowheight   36
 		scrollbar   "GUISCRC"
+	}
+
+	-- One-shot row reconciliation after a backing-table replacement. The Lua
+	-- function is inert unless a refresh has scheduled a two-frame token.
+	label
+	{
+		enabled "BfBot.UI._SelectionSyncTick()"
+		area 0 0 0 0
 	}
 
 	-- ======================================================
