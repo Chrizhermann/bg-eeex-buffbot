@@ -6,7 +6,7 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.7.0-alpha"
+BfBot.VERSION = "1.7.1-alpha"
 BfBot.MAX_PRESETS = 8
 BfBot.MAX_SPELL_REPEATS = 5
 
@@ -160,6 +160,23 @@ function BfBot._GetName(sprite)
         if name ~= "" then return name end
     end
     return "?"
+end
+
+--- Get a character's death variable / script name safely.
+-- Display names can change during play (for example, Anomen becoming
+-- "Sir Anomen"), while the death variable remains the stable identity used
+-- by scripts. The protagonist commonly reports an empty or "None" value;
+-- callers decide whether that value is usable for their purpose.
+-- @param sprite userdata: a creature sprite
+-- @return string: the death variable, or "" if unavailable
+function BfBot._GetDeathVar(sprite)
+    if not sprite then return "" end
+    local ok, value = pcall(function() return sprite.m_scriptName end)
+    if not ok or value == nil then return "" end
+    if type(value) == "string" then return value end
+    local getOk, deathVar = pcall(function() return value:get() end)
+    if getOk and type(deathVar) == "string" then return deathVar end
+    return ""
 end
 
 -- ============================================================

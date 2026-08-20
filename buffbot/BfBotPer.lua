@@ -1417,16 +1417,35 @@ end
 
 -- ---- Queue building ----
 
---- Resolve a character name to a party slot (0-5).
--- Iterates party, compares _GetName(sprite) to name.
+--- Resolve a stored character identity to a party slot (0-5).
+-- Current display names remain the primary key. If none match, fall back to
+-- the stable death variable so targets survive in-game renames.
 -- @param name string: character name to find
 -- @return number|nil: slot (0-5) or nil if not in party
 function BfBot.Persist._ResolveNameToSlot(name)
-    if not name or name == "" then return nil end
+    if type(name) ~= "string" or name == "" then return nil end
+    -- Preserve the historical exact display-name behavior, including its
+    -- precedence if another party member's display name matches a DV.
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if sprite and BfBot._GetName(sprite) == name then
             return slot
+        end
+    end
+    -- Death variables are case-insensitive in script resolution. Empty and
+    -- "None" are unusable identities (most notably on the protagonist).
+    local loweredName = name:lower()
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local deathVar = BfBot._GetDeathVar(sprite)
+            if type(deathVar) == "string" then
+                deathVar = deathVar:lower()
+                if deathVar ~= "" and deathVar ~= "none"
+                    and deathVar == loweredName then
+                    return slot
+                end
+            end
         end
     end
     return nil
@@ -1475,7 +1494,8 @@ function BfBot.Persist._ResolveConfigTarget(tgt, caster, resref, pri)
                     -- slot 0-5 → Player 1-6
                     table.insert(results, mkEntry(resolved + 1, pri + subPri / 1000))
                 end
-                -- Unresolved names silently skipped
+                -- Unresolved names are skipped. If every configured target is
+                -- unresolved, the queue builder surfaces a build-time skip.
             end
         end
     else
@@ -1494,12 +1514,13 @@ function BfBot.Persist._ResolveConfigTarget(tgt, caster, resref, pri)
                 local resolved = BfBot.Persist._ResolveNameToSlot(tgt)
                 if resolved then
                     target = resolved + 1
-                else
-                    target = "all"  -- fallback for unresolved
                 end
             end
         end
-        table.insert(results, mkEntry(target, pri))
+        -- Never turn a stale single-character target into a party-wide cast.
+        if target ~= nil then
+            table.insert(results, mkEntry(target, pri))
+        end
     end
     return results
 end
@@ -1698,6 +1719,13 @@ function BfBot.Persist.DrainBuildSkips()
     return msgs
 end
 
+local function _NoTargetSkip(casterName, spellName)
+    return {
+        msg = tostring(casterName) .. ": " .. tostring(spellName)
+            .. " skipped -- no configured targets are currently in the party",
+    }
+end
+
 --- Build an execution queue for a single allied summon/clone (issue #19).
 --- READ path by contract: uses PeekSummonPreset — an unconfigured summon
 --- must never create config (queue building would otherwise pollute the
@@ -1759,6 +1787,7 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
 
     -- Collect enabled, castable spells with priority
     local entries = {}
+    local noTargetSkips = {}
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
@@ -1769,6 +1798,10 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
             if scanData and scanData.kind ~= "itm" and scanData.count > 0 then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
+                if #resolved == 0 then
+                    table.insert(noTargetSkips,
+                        _NoTargetSkip(summonEntry.name, scanData.name or resref))
+                end
                 for _, e in ipairs(resolved) do
                     e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
                     -- Display name rides along for the puppet-lock rule-2
@@ -1779,6 +1812,7 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
             end
         end
     end
+    BfBot.Persist._LogBuildSkips(noTargetSkips)
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(entries, function(a, b) return a.pri < b.pri end)
@@ -1865,12 +1899,18 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
 
         -- Collect enabled, castable spells with priority
         local entries = {}
+        local noTargetSkips = {}
         for resref, spellCfg in pairs(preset.spells) do
             if spellCfg.on == 1 then
                 local scanData = castable[resref]
                 if scanData and scanData.count > 0 then
                     local resolved = BfBot.Persist._ResolveConfigTarget(
                         spellCfg.tgt, slot, resref, spellCfg.pri or 999)
+                    if #resolved == 0 then
+                        table.insert(noTargetSkips,
+                            _NoTargetSkip(BfBot._GetName(sprite),
+                                scanData.name or resref))
+                    end
                     for _, e in ipairs(resolved) do
                         e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
                         -- Display name rides along for the puppet-lock rule-2
@@ -1881,6 +1921,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                 end
             end
         end
+        BfBot.Persist._LogBuildSkips(noTargetSkips)
 
         -- Sort by priority (ascending: lower = cast first)
         table.sort(entries, function(a, b) return a.pri < b.pri end)
@@ -2236,12 +2277,18 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
 
     -- Collect enabled, castable spells with priority
     local entries = {}
+    local noTargetSkips = {}
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
             if scanData and scanData.count > 0 then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, slot, resref, spellCfg.pri or 999)
+                if #resolved == 0 then
+                    table.insert(noTargetSkips,
+                        _NoTargetSkip(BfBot._GetName(sprite),
+                            scanData.name or resref))
+                end
                 for _, e in ipairs(resolved) do
                     e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
                     -- Display name rides along for the puppet-lock rule-2
@@ -2252,6 +2299,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             end
         end
     end
+    BfBot.Persist._LogBuildSkips(noTargetSkips)
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(entries, function(a, b) return a.pri < b.pri end)
