@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import faulthandler
 import re
+import sys
 from pathlib import Path
 
 import pytest
+from lupa.luajit21 import LuaRuntime
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LANG_ROOT = ROOT / "buffbot" / "lang"
+LOC_PATH = ROOT / "buffbot" / "BfBotLoc.lua"
+MAIN_PATH = ROOT / "buffbot" / "M_BfBot.lua"
+DEPLOY_PATH = ROOT / "tools" / "deploy.sh"
 
 ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~([^~]*)~\s*$")
 EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
@@ -268,6 +274,66 @@ def shipped_catalogs() -> list[Path]:
     return sorted(LANG_ROOT.glob("*/setup.tra"))
 
 
+def runtime_catalog_contract() -> dict[int, tuple[str, str]]:
+    english, semantics = parse_tra(LANG_ROOT / "english" / "setup.tra")
+    return {
+        tra_id: (semantics[tra_id], english[tra_id])
+        for tra_id in english
+        if not semantics[tra_id].startswith("installer.")
+    }
+
+
+def localization_source() -> str:
+    assert LOC_PATH.is_file(), "BfBotLoc.lua is missing"
+    return LOC_PATH.read_text(encoding="utf-8")
+
+
+def localization_runtime(
+    map_text: str | None = None,
+    fetch_source: str | None = None,
+) -> LuaRuntime:
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.globals().test_map_text = map_text
+    runtime.execute(
+        """
+        BfBot = {}
+        test_warnings = {}
+        BfBot._Warn = function(message)
+            test_warnings[#test_warnings + 1] = message
+        end
+
+        if test_map_text == nil then
+            io = nil
+        else
+            test_open_count = 0
+            io = {
+                open = function(path, mode)
+                    test_open_count = test_open_count + 1
+                    assert(path == "override/bfbot_l10n.txt")
+                    assert(mode == "r")
+                    local closed = false
+                    return {
+                        read = function(self, format)
+                            assert(not closed)
+                            assert(format == "*a")
+                            return test_map_text
+                        end,
+                        close = function(self)
+                            assert(not closed)
+                            closed = true
+                        end,
+                    }
+                end,
+            }
+        end
+        """
+    )
+    if fetch_source is not None:
+        runtime.execute(fetch_source)
+    runtime.execute(localization_source())
+    return runtime
+
+
 def test_parser_rejects_malformed_utf8_duplicate_empty_ids_and_empty_values(
     tmp_path: Path,
 ):
@@ -373,3 +439,208 @@ def test_catalog_named_placeholders_are_well_formed():
                 raise AssertionError(
                     f"malformed named placeholder in {catalog_path} @{tra_id}"
                 ) from error
+
+
+def test_runtime_registry_exactly_matches_non_installer_catalog_contract():
+    runtime = localization_runtime()
+    registry = runtime.globals().BfBot.L10N._Registry
+
+    actual: dict[int, tuple[str, str]] = {}
+    for key, entry in registry.items():
+        tra_id = entry["id"]
+        assert tra_id not in actual, f"duplicate runtime catalog id {tra_id}"
+        actual[tra_id] = (key, entry["fallback"])
+
+    assert actual == runtime_catalog_contract()
+
+
+def test_raw_runtime_without_io_or_map_uses_english_fallback():
+    runtime = localization_runtime()
+
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
+    assert runtime.eval('BfBot.L10N.StrRef("common.reset")') is None
+
+
+def test_valid_map_fetches_selected_tlk_string_only_once_per_key():
+    runtime = localization_runtime(
+        "305=1234\n",
+        """
+        test_fetch_count = 0
+        Infinity_FetchString = function(strref)
+            test_fetch_count = test_fetch_count + 1
+            assert(strref == 1234)
+            return "重置"
+        end
+        """,
+    )
+
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "重置"
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "重置"
+    assert runtime.globals().test_fetch_count == 1
+    assert runtime.globals().test_open_count == 1
+
+
+def test_engine_invalid_strref_sentinel_uses_cached_english_fallback():
+    runtime = localization_runtime(
+        "305=1234\n",
+        """
+        test_fetch_count = 0
+        Infinity_FetchString = function(strref)
+            test_fetch_count = test_fetch_count + 1
+            return "Invalid: " .. tostring(strref)
+        end
+        """,
+    )
+
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
+    assert runtime.globals().test_fetch_count == 1
+
+
+def test_failed_empty_and_invalid_map_resolutions_cache_english_fallbacks():
+    runtime = localization_runtime(
+        "\n".join(
+            [
+                "300=900",
+                "301=901",
+                "302=902",
+                "303=not_a_strref",
+                "304=904",
+                "305=-1",
+                "306=1.5",
+                "307=999999999999999999999999999999999999999",
+            ]
+        ),
+        """
+        test_fetch_counts = {}
+        Infinity_FetchString = function(strref)
+            test_fetch_counts[strref] = (test_fetch_counts[strref] or 0) + 1
+            if strref == 900 then return nil end
+            if strref == 901 then error("synthetic TLK failure") end
+            if strref == 902 then return "" end
+            if strref == 904 then return 17 end
+            error("invalid strref reached fetch: " .. tostring(strref))
+        end
+        """,
+    )
+
+    expected = {
+        "common.buffbot": "BuffBot",
+        "common.party": "Party",
+        "common.summons": "Summons",
+        "common.self": "Self",
+        "common.none": "None",
+        "common.reset": "Reset",
+        "common.rename": "Rename",
+        "common.new": "New",
+    }
+    # A deliberately raised LuaJIT error is contained by BfBotLoc's pcall, but
+    # Windows reports the handled SEH transition through pytest's faulthandler.
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        for key, fallback in expected.items():
+            get = runtime.globals().BfBot.L10N.Get
+            assert get(key) == fallback
+            assert get(key) == fallback
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert runtime.eval("test_fetch_counts[900]") == 1
+    assert runtime.eval("test_fetch_counts[901]") == 1
+    assert runtime.eval("test_fetch_counts[902]") == 1
+    assert runtime.eval("test_fetch_counts[904]") == 1
+    assert runtime.eval("test_fetch_counts[-1]") is None
+
+
+def test_format_reorders_named_placeholders_and_preserves_literal_percent_values():
+    runtime = localization_runtime(
+        "404=1200\n",
+        """
+        Infinity_FetchString = function(strref)
+            assert(strref == 1200)
+            return "{preset}：{summon}"
+        end
+        """,
+    )
+
+    formatted = runtime.globals().BfBot.L10N.Format(
+        "ui.title.summon_preset",
+        runtime.table_from({"summon": "分身 100%", "preset": "%Boss%"}),
+    )
+    assert formatted == "%Boss%：分身 100%"
+
+
+def test_format_keeps_missing_template_values_visible():
+    runtime = localization_runtime()
+
+    formatted = runtime.globals().BfBot.L10N.Format(
+        "ui.title.summon_preset",
+        runtime.table_from({"summon": "Clone"}),
+    )
+    assert formatted == "BuffBot - Clone - {preset}"
+
+
+def test_unknown_key_returns_marker_and_warns_only_once_when_available():
+    runtime = localization_runtime()
+    get = runtime.globals().BfBot.L10N.Get
+
+    marker = get("unknown.player_text")
+    assert "unknown.player_text" in marker
+    assert "missing" in marker.lower()
+    assert get("unknown.player_text") == marker
+    assert runtime.eval("#test_warnings") == 1
+
+    runtime.execute("BfBot._Warn = nil")
+    assert "another.unknown" in get("another.unknown")
+
+
+def test_strref_returns_only_valid_mapped_numeric_references():
+    runtime = localization_runtime("200=42\n201=-2\n202=not_a_number\n")
+    strref = runtime.globals().BfBot.L10N.StrRef
+
+    assert strref("innate.preset_1") == 42
+    assert strref("innate.preset_2") is None
+    assert strref("innate.preset_3") is None
+    assert strref("unknown.player_text") is None
+
+
+def test_map_content_is_parsed_as_data_and_never_executed():
+    runtime = localization_runtime(
+        "305=77\nBfBot.localization_map_was_executed=1\n",
+        "Infinity_FetchString = function(_) return 'Mapped Reset' end",
+    )
+
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Mapped Reset"
+    assert runtime.eval("BfBot.localization_map_was_executed") is None
+
+
+def test_runtime_module_compiles_under_luajit21():
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    compile_chunk = runtime.eval(
+        "function(source) local chunk, err = loadstring(source); return chunk, err end"
+    )
+
+    chunk, error = compile_chunk(localization_source())
+    assert chunk is not None, error
+
+
+def test_bootstrap_loads_core_then_localization_before_all_consumers():
+    source = MAIN_PATH.read_text(encoding="utf-8")
+
+    core_pos = source.index('Infinity_DoFile("BfBotCor")')
+    loc_pos = source.index('Infinity_DoFile("BfBotLoc")')
+    no_luajit_pos = source.index("if BfBot._noIO then")
+    theme_pos = source.index('Infinity_DoFile("BfBotThm")')
+    assert core_pos < loc_pos < no_luajit_pos < theme_pos
+
+
+def test_deploy_verifies_and_copies_runtime_localization_module():
+    source = DEPLOY_PATH.read_text(encoding="utf-8")
+    file_loops = re.findall(r"for f in ([^;]+); do", source)
+
+    assert len(file_loops) >= 2
+    assert "BfBotLoc.lua" in file_loops[0].split()
+    assert "BfBotLoc.lua" in file_loops[1].split()
