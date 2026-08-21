@@ -93,6 +93,10 @@ def _shell_path(path: Path) -> str:
     return path.resolve().as_posix()
 
 
+def _shell_output_path(path: Path) -> str:
+    return (path.parent.resolve() / path.name).as_posix()
+
+
 def _run_builder(
     installer: Path,
     output: Path,
@@ -104,7 +108,7 @@ def _run_builder(
             _bash(),
             _shell_path(repo_root / "tools/build-release.sh"),
             _shell_path(installer),
-            _shell_path(output),
+            _shell_output_path(output),
         ],
         cwd=repo_root,
         capture_output=True,
@@ -258,6 +262,46 @@ def test_release_builder_rejects_casefold_path_collisions(tmp_path: Path) -> Non
     assert result.returncode != 0
     assert "case-insensitive path collision" in result.stdout + result.stderr
     assert not output.exists()
+
+
+def test_release_builder_rejects_existing_output_symlink_without_touching_target(
+    tmp_path: Path,
+) -> None:
+    victim = tmp_path / "victim.zip"
+    victim_bytes = b"do not overwrite through a symlink\n"
+    victim.write_bytes(victim_bytes)
+    output = tmp_path / "buffbot.zip"
+    output.symlink_to(victim)
+    link_target = os.readlink(output)
+
+    result = _run_builder(
+        _fixture_installer(tmp_path / "setup-buffbot.exe"),
+        output,
+    )
+
+    assert result.returncode != 0
+    assert "output ZIP must not be a symlink" in result.stdout + result.stderr
+    assert output.is_symlink()
+    assert os.readlink(output) == link_target
+    assert victim.read_bytes() == victim_bytes
+
+
+def test_release_builder_rejects_dangling_output_symlink(tmp_path: Path) -> None:
+    missing_target = tmp_path / "missing-victim.zip"
+    output = tmp_path / "buffbot.zip"
+    output.symlink_to(missing_target)
+    link_target = os.readlink(output)
+
+    result = _run_builder(
+        _fixture_installer(tmp_path / "setup-buffbot.exe"),
+        output,
+    )
+
+    assert result.returncode != 0
+    assert "output ZIP must not be a symlink" in result.stdout + result.stderr
+    assert output.is_symlink()
+    assert os.readlink(output) == link_target
+    assert not missing_target.exists()
 
 
 def test_release_workflow_delegates_packaging_and_keeps_version_guards() -> None:

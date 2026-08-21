@@ -36,15 +36,20 @@ STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
 
 "$PYTHON_BIN" - "$REPO_DIR" "$INSTALLER" "$OUTPUT" "$STAGING" <<'PY'
+import os
 import re
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 repo = Path(sys.argv[1]).resolve()
 installer = Path(sys.argv[2]).resolve()
-output = Path(sys.argv[3]).resolve()
+output_argument = Path(sys.argv[3])
+if output_argument.is_symlink():
+    raise SystemExit("ERROR: output ZIP must not be a symlink")
+output = output_argument.parent.resolve() / output_argument.name
 staging = Path(sys.argv[4]).resolve()
 
 root_files = (
@@ -177,11 +182,25 @@ for relative in release_sources:
 
 shutil.copy2(installer, staging / "setup-buffbot.exe")
 archive_members = ["setup-buffbot.exe", *release_sources]
-if output.exists():
-    output.unlink()
-with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
-    for relative in sorted(archive_members):
-        archive.write(staging / relative, relative)
+
+# Write beside the destination and atomically replace only the final path. This
+# avoids partial archives and cannot follow a symlink introduced after the
+# initial rejection check.
+temporary_fd, temporary_name = tempfile.mkstemp(
+    prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
+)
+os.close(temporary_fd)
+temporary_output = Path(temporary_name)
+try:
+    with ZipFile(temporary_output, "w", compression=ZIP_DEFLATED) as archive:
+        for relative in sorted(archive_members):
+            archive.write(staging / relative, relative)
+    if output.is_symlink():
+        fail("output ZIP must not be a symlink")
+    os.replace(temporary_output, output)
+finally:
+    if temporary_output.exists():
+        temporary_output.unlink()
 PY
 
 FILE_COUNT="$(find "$STAGING" -type f | wc -l | tr -d ' ')"
