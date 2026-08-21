@@ -1121,7 +1121,7 @@ end
 --     preset (late-join listener, issue #19). Raw/console queues pass
 --     nothing → nil → late-join stays inert for that run (correct: there
 --     is no preset to look a summon's config up under).
--- @return true if started; false + reasonCode + detail if not
+-- @return true + nil + nil if started; false + reasonCode + detail if not
 function BfBot.Exec.Start(queue, qcMode, presetIdx)
     if BfBot.Exec._state == "running" then
         BfBot._Print("[BuffBot] Already running. Call BfBot.Exec.Stop() first.")
@@ -1208,7 +1208,7 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
         BfBot.Exec._ProcessCasterEntry(key, 1)
     end
 
-    return true
+    return true, nil, nil
 end
 
 --- Stop execution mid-queue.

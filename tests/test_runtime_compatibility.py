@@ -1566,6 +1566,92 @@ def test_exec_public_failures_return_stable_codes_and_structured_details(
     assert facts["runningStructured"]
 
 
+def test_exec_start_forwards_build_failure_result(exec_lua: LuaRuntime) -> None:
+    facts = exec_lua.execute(
+        """
+        local detail = { source = "synthetic builder" }
+        BfBot.Exec._state = "idle"
+        BfBot.Exec._BuildQueue = function()
+            return nil, "reason.exec.no_valid_entries", detail
+        end
+
+        local function capture(...)
+            local first, second, third = ...
+            return {
+                count = select("#", ...),
+                first = first,
+                second = second,
+                third = third,
+            }
+        end
+
+        local result = capture(BfBot.Exec.Start({}, 0))
+        return {
+            count = result.count,
+            started = result.first,
+            code = result.second,
+            sameDetail = result.third == detail,
+            detailSource = result.third and result.third.source,
+        }
+        """
+    )
+
+    assert facts["count"] == 3
+    assert not facts["started"]
+    assert facts["code"] == "reason.exec.no_valid_entries"
+    assert facts["sameDetail"]
+    assert facts["detailSource"] == "synthetic builder"
+
+
+def test_exec_start_success_returns_fixed_three_value_tuple(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        BfBot.Exec._state = "idle"
+        local processed = 0
+        BfBot.Exec._BuildQueue = function()
+            return {
+                p0 = {
+                    {
+                        casterName = "Synthetic Caster",
+                        casterRef = { kind = "party", slot = 0 },
+                        spellName = "Synthetic Ward",
+                        targetName = "Self",
+                        cheat = 0,
+                    },
+                },
+            }, 1, nil
+        end
+        BfBot.Exec._ProcessCasterEntry = function(key, index)
+            assert(key == "p0")
+            assert(index == 1)
+            processed = processed + 1
+        end
+
+        local function capture(...)
+            local first, second, third = ...
+            return {
+                count = select("#", ...),
+                first = first,
+                secondIsNil = second == nil,
+                thirdIsNil = third == nil,
+                processed = processed,
+            }
+        end
+
+        local result = capture(BfBot.Exec.Start({}, 0))
+        return result
+        """
+    )
+
+    assert facts["count"] == 3
+    assert facts["first"]
+    assert facts["secondIsNil"]
+    assert facts["thirdIsNil"]
+    assert facts["processed"] == 1
+
+
 def test_non_ascii_export_names_use_distinct_join_order_fallbacks(
     lua: LuaRuntime,
     tmp_path: Path,

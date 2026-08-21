@@ -700,6 +700,43 @@ def test_reason_formatter_localizes_registered_codes_and_preserves_legacy_prose(
     assert "missing" in unknown.lower()
 
 
+def test_reason_registry_recognizer_and_producers_have_exact_parity():
+    runtime = localization_runtime()
+    registry = runtime.globals().BfBot.L10N._Registry
+    registered = {
+        key for key in registry.keys() if key.startswith("reason.")
+    }
+
+    localization_source = LOC_PATH.read_text(encoding="utf-8")
+    reason_map = re.search(
+        r"local _reasonKeys = \{(?P<body>.*?)\n\}",
+        localization_source,
+        re.DOTALL,
+    )
+    assert reason_map is not None
+    recognized_pairs = re.findall(
+        r'\["(reason\.[a-z0-9_.]+)"\]\s*=\s*'
+        r'"(reason\.[a-z0-9_.]+)"',
+        reason_map.group("body"),
+    )
+    recognized = {code for code, _ in recognized_pairs}
+    assert len(recognized_pairs) == len(recognized)
+    assert all(code == key for code, key in recognized_pairs)
+
+    producer_pattern = re.compile(
+        r'\breturn\s+(?:nil|false)\s*,\s*'
+        r'["\'](reason\.[a-z0-9_.]+)["\']'
+    )
+    produced = set()
+    for path in (PERSIST_PATH, EXEC_PATH):
+        produced.update(
+            producer_pattern.findall(path.read_text(encoding="utf-8"))
+        )
+
+    assert len(registered) == 32
+    assert registered == recognized == produced
+
+
 def test_map_content_is_parsed_as_data_and_never_executed():
     runtime = localization_runtime(
         "305=77\nBfBot.localization_map_was_executed=1\n",
@@ -868,6 +905,54 @@ def test_menu_localization_does_not_change_actions_layout_or_list_structure():
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
         "bc9e7d88c60706d1eca3e393be8f8807d4c08a27d1fba709d18fadab93865380"
     )
+
+
+def _menu_block(source: str, name: str) -> str:
+    marker = f'name    "{name}"'
+    marker_pos = source.index(marker)
+    start = source.rfind("\nmenu\n{", 0, marker_pos)
+    end = source.find("\nmenu\n{", marker_pos)
+    assert start >= 0
+    return source[start : end if end >= 0 else len(source)]
+
+
+def test_spell_picker_name_column_keeps_dynamic_color_binding():
+    picker = _menu_block(
+        MENU_PATH.read_text(encoding="utf-8"), "BUFFBOT_SPELLPICKER"
+    )
+    name_expression = (
+        'text lua "buffbot_pickerSpells[rowNumber] and '
+        'buffbot_pickerSpells[rowNumber].name or \'\'"'
+    )
+    name_pos = picker.index(name_expression)
+    label_end = picker.index("\n\t\t\t}", name_pos)
+    name_label = picker[name_pos:label_end]
+
+    assert (
+        'text color lua "BfBot.UI._PickerNameColor(rowNumber)"'
+        in name_label
+    )
+
+
+def test_spell_picker_count_expression_is_nil_safe_for_header_rows():
+    picker = _menu_block(
+        MENU_PATH.read_text(encoding="utf-8"), "BUFFBOT_SPELLPICKER"
+    )
+    count_expressions = re.findall(
+        r'(?m)^\s*text lua "([^"\n]*buffbot_pickerSpells\[rowNumber\]'
+        r'\.count[^"\n]*)"\s*$',
+        picker,
+    )
+    assert len(count_expressions) == 1
+
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute(
+        "buffbot_pickerSpells = { { isHeader = 1 } }; rowNumber = 1"
+    )
+    assert runtime.eval(count_expressions[0]) == ""
+
+    runtime.execute("buffbot_pickerSpells[1] = { count = 3 }")
+    assert runtime.eval(count_expressions[0]) == "x3"
 
 
 def test_menu_lua_text_tooltip_action_and_enabled_chunks_compile_under_luajit():

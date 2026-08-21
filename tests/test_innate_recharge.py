@@ -916,17 +916,22 @@ def test_recharge_is_independent_of_every_bfbotgo_outcome(
     assert facts["actionCount"] == 0
 
     if case == "normal":
+        assert facts["displayCount"] == 0
+        assert facts["displayRefCount"] == 0
         assert facts["buildCalls"] == 1
         assert facts["drainCalls"] == 1
         assert facts["startCalls"] == 1
         assert facts["startMode"] == quick_cast_mode
         assert facts["startPreset"] == 1
     elif case == "busy":
+        assert facts["displayCount"] == 0
         assert facts["buildCalls"] == 0
         assert facts["startCalls"] == 0
         assert facts["displayRefCount"] == 1
         assert facts["displayRef"] == 14007
     elif case in {"empty", "coded", "generic"}:
+        assert facts["displayCount"] == 1
+        assert facts["displayRefCount"] == 0
         assert facts["buildCalls"] == 1
         assert facts["drainCalls"] == 1
         assert facts["startCalls"] == 0
@@ -943,6 +948,8 @@ def test_recharge_is_independent_of_every_bfbotgo_outcome(
             )
     else:
         assert case == "error"
+        assert facts["displayCount"] == 1
+        assert facts["displayRefCount"] == 0
         assert facts["buildCalls"] == 1
         assert facts["drainCalls"] == 0
         assert facts["startCalls"] == 0
