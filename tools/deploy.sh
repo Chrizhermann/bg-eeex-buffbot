@@ -17,6 +17,7 @@ GAME_DIR="${1:-${BGEE_DIR:?Set BGEE_DIR in tools/deploy.conf or pass game dir as
 OVERRIDE_DIR="$GAME_DIR/override"
 
 echo "Deploying BuffBot to: $OVERRIDE_DIR"
+echo "Runtime UI language: English fallback (raw deploy does not generate bfbot_l10n.txt)"
 
 # Verify source files exist
 for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do

@@ -44,6 +44,15 @@ EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enabl
 
 </details>
 
+## Languages
+
+- English
+- Simplified Chinese (简体中文)
+
+The WeiDU installer asks which BuffBot translation to use and writes the localized strings to the selected game-language TLK. Use WeiDU for a localized installation. In a source checkout, the raw development deploy (`tools/deploy.sh`) does not generate the numeric localization map, so it intentionally uses the checked-in English fallback.
+
+The catalogs and Chinese installer path have automated coverage. Live in-game Chinese glyph and layout acceptance is still pending and is not claimed here.
+
 ## Installation
 
 ### WeiDU (recommended)
@@ -61,9 +70,9 @@ For **EET**, BuffBot can be installed after `EET_end`; EEex and LuaJIT must be r
 
 **Uninstall:** remove **In-Game Buff Automation** first, then remove **EEex LuaJIT Support** if BuffBot installed it. The helper restores the exact loader files that preceded its installation. LuaJIT owned by EEex is left unchanged when BuffBot's helper made no changes.
 
-### Manual
+### Manual Development Copy
 
-Only use a manual copy when EEex LuaJIT is already active; manual installation bypasses the prerequisite check. Copy all files from `buffbot/` to your game's `override/` directory. Note: innate ability tooltip names require TLK patching — see [Developer Setup](#developer-setup) below.
+Raw/manual copying is a development-only path from a source checkout, not the normal release installation. Only use it when EEex LuaJIT is already active, because it bypasses the prerequisite check. Copy the runtime Lua, menu, BAM, MOS, and PVRZ files from `buffbot/` to your game's `override/` directory. Use a clean development target or uninstall a localized WeiDU BuffBot first; the deploy helper deliberately does not delete a pre-existing WeiDU-owned localization map. This path uses English fallback text when no map is present, and F12 innate tooltip names may be blank; players should use WeiDU for complete localized strings.
 
 ## Usage
 
@@ -158,6 +167,16 @@ The code is fully open source — judge it on its merits. If you have concerns a
 
 Found a bug? Have a feature idea? [Open an issue](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) on GitHub.
 
+### Adding a Language
+
+Language pull requests are welcome. BuffBot accepts complete catalogs so players never see a half-translated panel:
+
+1. Copy `buffbot/lang/english/setup.tra` to `buffbot/lang/<language>/setup.tra`, using a lowercase language-folder name.
+2. Translate every entry while preserving the exact `@` IDs, the semantic comment above each entry, all named placeholders such as `{name}`, and any WeiDU token such as `%lua_version%`.
+3. Keep the file UTF-8 and use the existing one-line tilde format (`@123 = ~Text~`). Do not add or omit catalog entries.
+4. Run `python -m pytest tests/test_localization.py -q` (and ideally the full test suite) before opening the PR.
+5. Include the translator credit you would like shown in the README and release notes.
+
 ### Developer Setup
 
 For iterative development without running WeiDU each time:
@@ -180,6 +199,7 @@ bg-eeex-buffbot/
 │   ├── setup-buffbot.tp2 # WeiDU installer
 │   ├── M_BfBot.lua       # Bootstrap (auto-loaded by EEex)
 │   ├── BfBotCor.lua      # Core namespace, logging, field resolution, caches
+│   ├── BfBotLoc.lua      # TLK-backed localization with English fallback
 │   ├── BfBotCls.lua      # Buff classifier (opcode scoring)
 │   ├── BfBotScn.lua      # Spellbook scanner (known spells iterators)
 │   ├── BfBotExe.lua      # Execution engine (parallel per-caster)
@@ -187,7 +207,8 @@ bg-eeex-buffbot/
 │   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
 │   ├── BfBotUI.lua       # Config panel logic
 │   ├── BfBotTst.lua      # Test suite (600+ assertions)
-│   └── BuffBot.menu      # UI definitions (.menu DSL)
+│   ├── BuffBot.menu      # UI definitions (.menu DSL)
+│   └── lang/             # Complete WeiDU translation catalogs
 ├── tools/                # Dev utilities
 │   ├── deploy.sh         # Copy files to game override
 │   └── patch_tlk.py      # TLK patcher for innate tooltips
@@ -199,6 +220,7 @@ bg-eeex-buffbot/
 
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
+- **[robovoid](https://github.com/robvoid)** — original Simplified Chinese translation in [PR #50](https://github.com/Chrizhermann/bg-eeex-buffbot/pull/50); the implementation was reworked on BuffBot's current localization architecture
 - **[Claude Code](https://claude.ai/code)** by Anthropic — AI development assistant
 
 ## License

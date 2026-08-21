@@ -63,28 +63,9 @@ jobs:
       - name: Build release archive
         run: |
           TAG="${{ github.event.release.tag_name }}"
-          STAGING="/tmp/buffbot-release"
-          mkdir -p "$STAGING/buffbot"
-
-          # WeiDU installer
-          cp /tmp/setup-buffbot.exe "$STAGING/"
-
-          # Mod files
-          shopt -s nullglob
-          cp buffbot/setup-buffbot.tp2 "$STAGING/buffbot/"
-          cp buffbot/*.lua   "$STAGING/buffbot/"
-          cp buffbot/*.menu  "$STAGING/buffbot/"
-          cp buffbot/*.BAM   "$STAGING/buffbot/"
-          cp buffbot/*.MOS   "$STAGING/buffbot/"
-          cp buffbot/*.PVRZ  "$STAGING/buffbot/"
-
-          # Docs
-          cp README.md    "$STAGING/"
-          cp CHANGELOG.md "$STAGING/"
-
-          # Create zip (flat — player extracts directly into game dir)
-          cd "$STAGING"
-          zip -r "/tmp/buffbot-${TAG}.zip" .
+          bash tools/build-release.sh \
+            /tmp/setup-buffbot.exe \
+            "/tmp/buffbot-${TAG}.zip"
 
           echo "Archive contents:"
           unzip -l "/tmp/buffbot-${TAG}.zip"
