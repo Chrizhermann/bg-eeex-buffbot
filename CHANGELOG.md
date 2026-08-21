@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.7.3-alpha (2026-08-21)
+
+### Fixed
+- Portrait reordering no longer leaves stale slot-bound F12 preset innates. Reconciliation now purges old-slot entries and restores only the character's current-slot buttons; stale clicks are rejected and refreshed before they can run the preset for the old slot's new occupant. (#57)
+
+### Testing
+- The full automated suite passes **291 tests**, including stale-slot rejection, purge-before-regrant reconciliation, deferred refresh during active runs, retry after refresh failure, and unchanged matching-party/non-party paths.
+- Manual BG2:EE + EEex acceptance in the Copy Copy game installation confirmed the portrait-reorder case is fixed.
+
 ## v1.7.2-alpha (2026-08-21)
 
 ### Fixed

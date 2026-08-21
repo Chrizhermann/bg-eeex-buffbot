@@ -1654,6 +1654,66 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
     assert facts["watchdogState"] == "done"
 
 
+def test_safety_tick_retries_pending_innate_refresh_after_execution(
+    exec_lua: LuaRuntime,
+) -> None:
+    script = """
+        local now = 3000
+        local refreshAttempts = 0
+        local warning = nil
+
+        Infinity_GetClockTicks = function() return now end
+        EEex_Sprite_GetInPortrait = function(_) return nil end
+        BfBot.Exec._IsStateStale = function() return false end
+        BfBot.Exec._ProcessLateJoins = function() end
+        BfBot.Exec._GetGameTime = function() return nil end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {}
+        BfBot.Exec._lastSafetyTick = 0
+        BfBot._innateRefreshPending = true
+        BfBot._Warn = function(message) warning = message end
+        BfBot.Innate.RefreshAll = function()
+            refreshAttempts = refreshAttempts + 1
+            if refreshAttempts == 1 then error("synthetic refresh failure") end
+        end
+
+        BfBot.Exec._SafetyTick()
+        local attemptsWhileRunning = refreshAttempts
+        local pendingWhileRunning = BfBot._innateRefreshPending == true
+
+        BfBot.Exec._state = "done"
+        now = 6000
+        BfBot.Exec._SafetyTick()
+        local pendingAfterFailure = BfBot._innateRefreshPending == true
+
+        now = 9000
+        BfBot.Exec._SafetyTick()
+        return {
+            refreshAttempts = refreshAttempts,
+            attemptsWhileRunning = attemptsWhileRunning,
+            pendingWhileRunning = pendingWhileRunning,
+            pendingAfterFailure = pendingAfterFailure,
+            pendingAfterSuccess = BfBot._innateRefreshPending == true,
+            warning = warning or "",
+        }
+        """
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = exec_lua.execute(script)
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["refreshAttempts"] == 2
+    assert facts["attemptsWhileRunning"] == 0
+    assert facts["pendingWhileRunning"]
+    assert facts["pendingAfterFailure"]
+    assert not facts["pendingAfterSuccess"]
+    assert "synthetic refresh failure" in facts["warning"]
+
+
 def test_in_game_spell_picker_sort_phase(ui_test_lua: LuaRuntime) -> None:
     assert ui_test_lua.eval("BfBot.Test.SpellPickerSort()")
 

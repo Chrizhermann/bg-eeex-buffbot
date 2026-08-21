@@ -2404,13 +2404,14 @@ function BfBot.Test.PlanReconciliation()
         "config requires preset " .. missingPreset
         .. " not on sprite → no mismatch, desired has missing entry")
 
-    -- Case 6: foreign slot — querying a different slot must ignore the
-    -- synthetic entry (which belongs to slotIdx's namespace).
+    -- Case 6: foreign slot — querying a different current slot must retain
+    -- the old entry in actual and flag it for revoke-all reconciliation (#57).
     local foreignSlot = (slotIdx + 1) % 6
     p = BfBot.Innate._PlanReconciliation(sprite, foreignSlot,
         { presets = { [1] = {} } })
-    _check(p.actual[syntheticResref] == nil and p.hasMismatch == false,
-        "querying slot " .. foreignSlot .. " ignores slot-" .. slotIdx .. " BFBT entries")
+    _check(p.actual[syntheticResref] == 1 and p.hasMismatch == true,
+        "querying slot " .. foreignSlot .. " flags slot-" .. slotIdx
+        .. " BFBT entries as stale")
 
     -- Case 7: AddSpecialAbility dedup assumption.
     -- The planner's `n > 1` branch only triggers in legacy v1.3.9-affected

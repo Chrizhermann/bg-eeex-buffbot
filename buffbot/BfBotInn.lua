@@ -476,8 +476,8 @@ function BfBot.Innate._BuildRemoverSPL()
 end
 
 --- Pure reconciliation planner. Examine the sprite's known-innate list once
--- and produce a plan describing the diff between the sprite's actual BFBT
--- entries (for this slot) and the desired set derived from config. No side
+-- and produce a plan describing the diff between all of the sprite's actual
+-- BuffBot BFBT entries and the desired set for its current slot. No side
 -- effects — safe to call from tests with a stub config.
 --
 -- Return value:
@@ -487,7 +487,7 @@ end
 --               accumulation is present — every apply of BFBTRM removes ONE
 --               copy of each BFBT entry, so N copies need N passes).
 --   hasMismatch True iff any actual entry is duplicated (count > 1) OR is not
---               in desired (orphan from a previously-deleted preset).
+--               in desired (deleted-preset orphan or stale portrait slot).
 function BfBot.Innate._PlanReconciliation(sprite, slot, config)
     local plan = { actual = {}, desired = {}, maxCount = 0, hasMismatch = false }
     if not sprite or not config or not config.presets then return plan end
@@ -501,8 +501,7 @@ function BfBot.Innate._PlanReconciliation(sprite, slot, config)
     local ok = pcall(function()
         for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
             if type(resref) == "string" then
-                local s = resref:match("^BFBT(%d)%d$")
-                if s and tonumber(s) == slot then
+                if resref:match("^BFBT[0-5][1-8]$") then
                     local n = (plan.actual[resref] or 0) + 1
                     plan.actual[resref] = n
                     if n > plan.maxCount then plan.maxCount = n end
@@ -693,7 +692,8 @@ local function _InnateLog(msg)
 end
 
 --- Opcode 402 Invoke Lua handler — triggers a specific preset for a specific character.
--- param1 is a CGameEffect userdata: m_effectAmount = party slot, m_dWFlags = preset index.
+-- param1 is a CGameEffect userdata: m_effectAmount = party slot,
+-- m_dWFlags = preset index, m_sourceId = actual casting sprite object ID.
 -- Wrapped in pcall so Lua errors produce diagnostics instead of engine "panic".
 function BFBOTGO(param1, param2, special)
     local slot = param1 and param1.m_effectAmount or 0
@@ -708,6 +708,43 @@ function BFBOTGO(param1, param2, special)
         end
         if presetIdx < 1 or presetIdx > BfBot.MAX_PRESETS then
             error("invalid preset " .. presetIdx)
+        end
+
+        -- The slot baked into the SPL can become stale when portraits move.
+        -- Opcode 402's source ID identifies the character who actually clicked
+        -- the innate; refuse a party-member mismatch before the old slot's
+        -- current occupant can be used to build a queue. Non-party copies keep
+        -- their existing unsupported/fallback behavior (issue #60).
+        local sourceId = param1 and param1.m_sourceId
+        if sourceId ~= nil then
+            local sourceObject = EEex_GameObject_Get(sourceId)
+            if sourceObject and EEex_GameObject_IsSprite(sourceObject, false) then
+                local sourceSprite = EEex_GameObject_CastUserType(sourceObject)
+                local sourceSlot = EEex_Sprite_GetPortraitIndex(sourceSprite)
+                if sourceSlot >= 0 and sourceSlot <= 5 and sourceSlot ~= slot then
+                    _InnateLog(string.format(
+                        "STALE: casting sprite moved from slot %d to %d", slot, sourceSlot))
+                    if BfBot.Exec.GetState() == "running" then
+                        BfBot._innateRefreshPending = true
+                        BfBot._Display(
+                            "BuffBot: Party changed — retry after the current run")
+                        return
+                    end
+                    BfBot._Display("BuffBot: Party changed — refreshing innates, try again")
+                    BfBot._innateRefreshPending = true
+                    local refreshOk, refreshErr = pcall(function()
+                        BfBot.Innate.RefreshAll()
+                    end)
+                    if refreshOk then
+                        BfBot._innateRefreshPending = nil
+                    else
+                        _InnateLog("ERROR: stale-slot refresh failed: " .. tostring(refreshErr))
+                        BfBot._Warn("[Innate] Stale-slot refresh failed; will retry: "
+                            .. tostring(refreshErr))
+                    end
+                    return
+                end
+            end
         end
 
         -- Get the sprite at this slot

@@ -1263,6 +1263,26 @@ function BfBot.Exec._SafetyTick()
         BfBot.Exec._HardReset()
     end
 
+    -- A stale slot-bound F12 click during an active run cannot reconcile
+    -- immediately: BFBTRM/AddSpecialAbility actions would interleave with the
+    -- casting chains. Drain the root-level request once execution has settled.
+    -- Keep it pending after a Lua failure so the next safety tick retries.
+    if BfBot.Exec._state ~= "running" and BfBot._innateRefreshPending then
+        BfBot._innateRefreshPending = nil
+        local ok, err = pcall(function()
+            local refresh = BfBot.Innate and BfBot.Innate.RefreshAll
+            if type(refresh) ~= "function" then
+                error("BfBot.Innate.RefreshAll is unavailable")
+            end
+            refresh()
+        end)
+        if not ok then
+            BfBot._innateRefreshPending = true
+            BfBot._Warn("[Innate] Deferred stale-slot refresh failed; will retry: "
+                .. tostring(err))
+        end
+    end
+
     -- Watchdog: force-complete a run that has stopped making progress. Known
     -- causes: multiplayer casters controlled by another player (their queued
     -- SpellRES + EEex_LuaAction live only in this machine's local action list

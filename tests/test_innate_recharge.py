@@ -146,6 +146,95 @@ def test_reconciliation_remover_keeps_all_48_opcode_172_effects(
     assert facts["lastResource"] == "BFBT58"
 
 
+def test_reconciliation_flags_foreign_slot_innates_as_stale(
+    innate_lua: LuaRuntime,
+) -> None:
+    facts = innate_lua.execute(
+        """
+        local resrefs = {
+            "BFBT01", "BFBT21", "BFBT00", "BFBT09", "BFBT61",
+            "BFBTCH", "BFBTRM", "SPIN123",
+        }
+        EEex_Sprite_GetKnownInnateSpellsIterator = function(_)
+            local index = 0
+            return function()
+                index = index + 1
+                local resref = resrefs[index]
+                if not resref then return nil end
+                return 0, index - 1, resref
+            end
+        end
+
+        local plan = BfBot.Innate._PlanReconciliation(
+            {}, 2, { presets = { [1] = {} } })
+        return {
+            hasMismatch = plan.hasMismatch,
+            oldSlotCount = plan.actual["BFBT01"] or 0,
+            currentSlotCount = plan.actual["BFBT21"] or 0,
+            currentDesired = plan.desired["BFBT21"] == true,
+            maxCount = plan.maxCount,
+            malformedSeen = plan.actual["BFBT00"] ~= nil
+                or plan.actual["BFBT09"] ~= nil
+                or plan.actual["BFBT61"] ~= nil,
+        }
+        """
+    )
+
+    assert facts["hasMismatch"]
+    assert facts["oldSlotCount"] == 1
+    assert facts["currentSlotCount"] == 1
+    assert facts["currentDesired"]
+    assert facts["maxCount"] == 1
+    assert not facts["malformedSeen"]
+
+
+def test_refresh_purges_foreign_slot_innates_before_regranting_current_slot(
+    innate_lua: LuaRuntime,
+) -> None:
+    facts = innate_lua.execute(
+        """
+        local actions = {}
+        local sprite = {}
+
+        EEex_Sprite_GetInPortrait = function(slot)
+            assert(slot == 2)
+            return sprite
+        end
+        EEex_Sprite_GetKnownInnateSpellsIterator = function(_)
+            local emitted = false
+            return function()
+                if emitted then return nil end
+                emitted = true
+                return 0, 0, "BFBT01"
+            end
+        end
+        EEex_Action_QueueResponseStringOnAIBase = function(action, target)
+            assert(target == sprite)
+            actions[#actions + 1] = action
+        end
+        BfBot.Persist = {
+            GetConfig = function(target)
+                assert(target == sprite)
+                return { presets = { [1] = {} } }
+            end,
+        }
+
+        BfBot.Innate.Refresh(2)
+        return {
+            count = #actions,
+            first = actions[1],
+            second = actions[2],
+            third = actions[3],
+        }
+        """
+    )
+
+    assert facts["count"] == 3
+    assert facts["first"] == 'ReallyForceSpellRES("BFBTRM",Myself)'
+    assert facts["second"] == 'ReallyForceSpellRES("BFBTRM",Myself)'
+    assert facts["third"] == 'AddSpecialAbility("BFBT21")'
+
+
 def test_in_game_innate_diagnostic_reports_recharge_storage_details() -> None:
     diagnostic = TEST_SOURCE.split(
         "function BfBot.Test.Innate()", maxsplit=1
@@ -556,11 +645,132 @@ def test_force_reload_migrates_the_legacy_loaded_listener_guard() -> None:
     assert facts["quickGuard"]
 
 
-def test_bfbotgo_has_no_per_use_action_queue_or_special_ability_grant() -> None:
+def test_bfbotgo_has_no_direct_per_use_action_queue_or_special_ability_grant() -> None:
     handler_body = INNATE_SOURCE.split("function BFBOTGO", maxsplit=1)[1]
 
     assert "AddSpecialAbility" not in handler_body
     assert "EEex_Action_QueueResponseStringOnAIBase" not in handler_body
+
+
+def _run_bfbotgo_source_case(
+    innate_lua: LuaRuntime,
+    source_portrait_index: int,
+    exec_state: str = "idle",
+):
+    return innate_lua.execute(
+        f"""
+        local sourceLookups = 0
+        local buildCalls = 0
+        local startCalls = 0
+        local refreshCalls = 0
+        local displays = {{}}
+
+        local sourceSprite = {{ portraitIndex = {source_portrait_index} }}
+        local slotSprite = {{
+            displayTextRef = function(_, _) end,
+        }}
+
+        EEex_GameObject_Get = function(objectId)
+            sourceLookups = sourceLookups + 1
+            assert(objectId == 77)
+            return sourceSprite
+        end
+        EEex_GameObject_IsSprite = function(object, allowDead)
+            assert(object == sourceSprite)
+            assert(allowDead == false)
+            return true
+        end
+        EEex_GameObject_CastUserType = function(object) return object end
+        EEex_Sprite_GetPortraitIndex = function(sprite)
+            return sprite.portraitIndex
+        end
+        EEex_Sprite_GetInPortrait = function(slot)
+            assert(slot == 0)
+            return slotSprite
+        end
+
+        BfBot._Display = function(message)
+            displays[#displays + 1] = message
+        end
+        BfBot.Innate.RefreshAll = function()
+            refreshCalls = refreshCalls + 1
+        end
+        BfBot.Exec = {{
+            GetState = function() return "{exec_state}" end,
+            Start = function()
+                startCalls = startCalls + 1
+            end,
+        }}
+        BfBot.Persist = {{
+            BuildQueueForCharacter = function(slot, preset)
+                assert(slot == 0)
+                assert(preset == 1)
+                buildCalls = buildCalls + 1
+                return {{ {{ tag = "entry" }} }}
+            end,
+            DrainBuildSkips = function() end,
+            GetQuickCast = function(sprite, preset)
+                assert(sprite == slotSprite)
+                assert(preset == 1)
+                return 0
+            end,
+        }}
+
+        BFBOTGO({{
+            m_effectAmount = 0,
+            m_dWFlags = 1,
+            m_sourceId = 77,
+        }}, nil, nil)
+
+        return {{
+            sourceLookups = sourceLookups,
+            buildCalls = buildCalls,
+            startCalls = startCalls,
+            refreshCalls = refreshCalls,
+            refreshPending = BfBot._innateRefreshPending == true,
+            display = displays[1] or "",
+        }}
+        """
+    )
+
+
+def test_bfbotgo_rejects_a_stale_party_slot_before_building(
+    innate_lua: LuaRuntime,
+) -> None:
+    facts = _run_bfbotgo_source_case(innate_lua, source_portrait_index=2)
+
+    assert facts["sourceLookups"] == 1
+    assert facts["buildCalls"] == 0
+    assert facts["startCalls"] == 0
+    assert facts["refreshCalls"] == 1
+    assert "Party changed" in facts["display"]
+    assert "try again" in facts["display"]
+
+
+def test_bfbotgo_defers_stale_slot_refresh_while_a_run_is_active(
+    innate_lua: LuaRuntime,
+) -> None:
+    facts = _run_bfbotgo_source_case(
+        innate_lua, source_portrait_index=2, exec_state="running")
+
+    assert facts["buildCalls"] == 0
+    assert facts["startCalls"] == 0
+    assert facts["refreshCalls"] == 0
+    assert facts["refreshPending"]
+    assert "current run" in facts["display"]
+
+
+@pytest.mark.parametrize("source_portrait_index", [0, -1])
+def test_bfbotgo_keeps_matching_party_and_non_party_source_paths(
+    innate_lua: LuaRuntime,
+    source_portrait_index: int,
+) -> None:
+    facts = _run_bfbotgo_source_case(innate_lua, source_portrait_index)
+
+    assert facts["sourceLookups"] == 1
+    assert facts["buildCalls"] == 1
+    assert facts["startCalls"] == 1
+    assert facts["refreshCalls"] == 0
 
 
 @pytest.mark.parametrize(
