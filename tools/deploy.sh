@@ -17,10 +17,10 @@ GAME_DIR="${1:-${BGEE_DIR:?Set BGEE_DIR in tools/deploy.conf or pass game dir as
 OVERRIDE_DIR="$GAME_DIR/override"
 
 echo "Deploying BuffBot to: $OVERRIDE_DIR"
-if [ -f "$OVERRIDE_DIR/bfbot_l10n.txt" ]; then
-    echo "Runtime UI language: preserving existing WeiDU localization map"
+if [ -f "$OVERRIDE_DIR/bfbot_l10n.tra" ]; then
+    echo "Runtime UI language: preserving existing WeiDU-selected runtime catalog"
 else
-    echo "Runtime UI language: English fallback (raw deploy does not generate bfbot_l10n.txt)"
+    echo "Runtime UI language: English fallback (no WeiDU-selected runtime catalog)"
 fi
 
 # Verify source files exist

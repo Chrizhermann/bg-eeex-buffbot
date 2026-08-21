@@ -794,6 +794,10 @@ def test_deploy_verifies_and_copies_runtime_localization_module():
     assert len(file_loops) >= 2
     assert "BfBotLoc.lua" in file_loops[0].split()
     assert "BfBotLoc.lua" in file_loops[1].split()
+    assert "bfbot_l10n.tra" in source
+    assert "preserving existing WeiDU-selected runtime catalog" in source
+    assert "English fallback" in source
+    assert "setup.tra" not in source
 
 
 def test_installer_localization_contract_copies_selected_catalog_and_resolves_only_innates():
@@ -842,9 +846,11 @@ def test_installer_localization_contract_copies_selected_catalog_and_resolves_on
 def test_all_literal_runtime_localization_keys_exist_and_dynamic_calls_are_explicit():
     runtime_keys = {
         semantic_key
-        for _, semantic_key in CATALOG_SCHEMA.items()
-        if not semantic_key.startswith("installer.")
+        for semantic_key, _ in runtime_catalog_contract().values()
     }
+    assert not any(
+        key.startswith(("installer.", "innate.")) for key in runtime_keys
+    )
     sources = {
         path: path.read_text(encoding="utf-8")
         for path in (

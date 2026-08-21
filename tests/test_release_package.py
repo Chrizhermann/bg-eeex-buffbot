@@ -8,7 +8,6 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
-from lupa.luajit21 import LuaRuntime
 
 from tests.ie_formats import write_minimal_tlk
 from tests.test_eeex_compatibility_installer import (
@@ -18,7 +17,7 @@ from tests.test_eeex_compatibility_installer import (
     _read_tlk_strings,
     _weidu,
 )
-from tests.test_localization import parse_tra
+from tests.test_localization import localization_runtime, parse_tra
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +29,7 @@ TP2_PATH = ROOT / "buffbot/setup-buffbot.tp2"
 VERSION = "v1.7.4-alpha"
 
 # This is deliberately explicit: recursive packaging must not silently publish
-# a backup, generated map, local state, or a future development-only file.
+# a backup, installer-generated state, local state, or a future development-only file.
 BUFFBOT_RELEASE_FILES = {
     "buffbot/BFBOTAB.BAM",
     "buffbot/BFBOTBG.MOS",
@@ -375,7 +374,7 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "#50" in source
 
 
-def test_raw_deploy_is_explicitly_english_without_generated_map(
+def test_raw_deploy_leaves_runtime_catalog_absent_and_reports_english_fallback(
     tmp_path: Path,
 ) -> None:
     game = tmp_path / "synthetic-game"
@@ -396,28 +395,35 @@ def test_raw_deploy_is_explicitly_english_without_generated_map(
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "English fallback" in result.stdout
+    assert "preserving existing WeiDU-selected runtime catalog" not in result.stdout
     assert (override / "BfBotLoc.lua").read_bytes() == (
         ROOT / "buffbot/BfBotLoc.lua"
     ).read_bytes()
+    assert not (override / "bfbot_l10n.tra").exists()
     assert not (override / "bfbot_l10n.txt").exists()
 
-    runtime = LuaRuntime(unpack_returned_tuples=True)
-    runtime.execute("BfBot = {}; io = nil")
-    runtime.execute((override / "BfBotLoc.lua").read_text(encoding="utf-8"))
+    runtime = localization_runtime()
     assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
     assert runtime.eval('BfBot.L10N.Get("default.preset.long")') == "Long Buffs"
 
 
-def test_raw_deploy_preserves_and_reports_existing_weidu_map(
+def test_raw_deploy_preserves_selected_chinese_catalog_and_obsolete_map(
     tmp_path: Path,
 ) -> None:
     game = tmp_path / "synthetic-localized-game"
     override = game / "override"
     override.mkdir(parents=True)
     write_minimal_tlk(game / "lang/en_US/dialog.tlk")
-    map_path = override / "bfbot_l10n.txt"
-    original_map = b"300=12345\n"
-    map_path.write_bytes(original_map)
+    source_catalog = ROOT / "buffbot/lang/schinese/setup.tra"
+    catalog_path = override / "bfbot_l10n.tra"
+    selected_catalog = (
+        source_catalog.read_bytes()
+        + b"// installer-owned preservation sentinel\n"
+    )
+    catalog_path.write_bytes(selected_catalog)
+    obsolete_map_path = override / "bfbot_l10n.txt"
+    obsolete_map = b"300=12345\n"
+    obsolete_map_path.write_bytes(obsolete_map)
 
     result = subprocess.run(
         [_bash(), _shell_path(DEPLOY_SCRIPT), _shell_path(game)],
@@ -431,9 +437,46 @@ def test_raw_deploy_preserves_and_reports_existing_weidu_map(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "preserving existing WeiDU localization map" in result.stdout
+    assert "preserving existing WeiDU-selected runtime catalog" in result.stdout
     assert "English fallback" not in result.stdout
-    assert map_path.read_bytes() == original_map
+    assert catalog_path.read_bytes() == selected_catalog
+    assert obsolete_map_path.read_bytes() == obsolete_map
+
+    catalog, _ = parse_tra(source_catalog)
+    runtime = localization_runtime(catalog_path.read_text(encoding="utf-8"))
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == catalog[305]
+
+
+def test_raw_deploy_does_not_treat_obsolete_map_as_selected_localization(
+    tmp_path: Path,
+) -> None:
+    game = tmp_path / "synthetic-obsolete-map-game"
+    override = game / "override"
+    override.mkdir(parents=True)
+    write_minimal_tlk(game / "lang/en_US/dialog.tlk")
+    obsolete_map_path = override / "bfbot_l10n.txt"
+    obsolete_map = b"305=12345\n"
+    obsolete_map_path.write_bytes(obsolete_map)
+
+    result = subprocess.run(
+        [_bash(), _shell_path(DEPLOY_SCRIPT), _shell_path(game)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "English fallback" in result.stdout
+    assert "preserving existing WeiDU-selected runtime catalog" not in result.stdout
+    assert obsolete_map_path.read_bytes() == obsolete_map
+    assert not (override / "bfbot_l10n.tra").exists()
+
+    runtime = localization_runtime()
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
 
 
 def test_built_archive_installs_simplified_chinese_with_weidu_249(
@@ -502,6 +545,8 @@ def test_built_archive_installs_simplified_chinese_with_weidu_249(
         catalog[catalog_id] for catalog_id in range(200, 208)
     ]
     assert strings[0] == ""
-    assert set(strings[1:]) == {
+    expected_innate_strings = {
         catalog[catalog_id] for catalog_id in range(200, 208)
     }
+    assert len(strings) == 1 + len(expected_innate_strings)
+    assert set(strings[1:]) == expected_innate_strings

@@ -165,6 +165,22 @@ def _weidu() -> Path:
     return result
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _require_weidu_249_for_installer_lifecycle() -> None:
+    version = subprocess.run(
+        [str(_weidu()), "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    transcript = f"{version.stdout}\n{version.stderr}".strip()
+    assert version.returncode == 0, transcript
+    assert "WeiDU version 24900" in transcript
+
+
 def _file_bytes(path: Path) -> bytes | None:
     return path.read_bytes() if path.is_file() else None
 
@@ -793,6 +809,7 @@ def test_main_component_restores_preexisting_selected_catalog_on_uninstall(
     assert uninstall.returncode == 0, transcript
     assert "NOT UNINSTALLED" not in transcript, transcript
     assert selected_catalog.read_bytes() == sentinel
+    assert not (game.override / "bfbot_l10n.txt").exists()
     assert game.snapshot().override == before.override
     assert game.lang_tlk.read_bytes() == installed_tlk
     assert game.root_tlk.read_bytes() == before.root_tlk
@@ -844,6 +861,8 @@ def test_map_backed_candidate_migrates_in_one_forced_uninstall_install(
     uninstall_transcript = game.transcript(uninstall)
     assert uninstall.returncode == 0, uninstall_transcript
     assert "NOT UNINSTALLED" not in uninstall_transcript, uninstall_transcript
+    assert not (game.override / "bfbot_l10n.tra").exists()
+    assert not (game.override / "bfbot_l10n.txt").exists()
     after = game.snapshot()
     assert after.override == baseline.override
     assert after.key == baseline.key
@@ -901,8 +920,8 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
         game_language="en_US",
         catalog_directory="english",
     )
-    english_map = (game.override / "bfbot_l10n.tra").read_bytes()
-    english_innate_map = (game.override / "bfbot_strrefs.txt").read_bytes()
+    english_catalog_bytes = (game.override / "bfbot_l10n.tra").read_bytes()
+    english_innate_refs_bytes = (game.override / "bfbot_strrefs.txt").read_bytes()
     english_payload = {
         name: payload
         for name, payload in after_english.override.items()
@@ -988,8 +1007,12 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
         game_language="en_US",
         catalog_directory="english",
     )
-    assert (game.override / "bfbot_l10n.tra").read_bytes() == english_map
-    assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map
+    assert (
+        game.override / "bfbot_l10n.tra"
+    ).read_bytes() == english_catalog_bytes
+    assert (
+        game.override / "bfbot_strrefs.txt"
+    ).read_bytes() == english_innate_refs_bytes
     assert after_return.override == after_english.override
     assert (
         after_return.loader_ini,
@@ -1032,14 +1055,14 @@ def test_language_switch_reuses_one_fixed_game_tlk_without_duplicate_growth(
 
     english_catalog, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
     chinese_catalog, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
-    english_runtime_strings = {
+    english_innate_strings = {
         english_catalog[catalog_id] for catalog_id in INNATE_CATALOG_IDS
     }
-    chinese_runtime_strings = {
+    chinese_innate_strings = {
         chinese_catalog[catalog_id] for catalog_id in INNATE_CATALOG_IDS
     }
-    english_tlk_strings = {sentinel} | english_runtime_strings
-    union_tlk_strings = english_tlk_strings | chinese_runtime_strings
+    english_tlk_strings = {sentinel} | english_innate_strings
+    union_tlk_strings = english_tlk_strings | chinese_innate_strings
 
     fresh_english = game.install_many(
         1,
@@ -1063,8 +1086,8 @@ def test_language_switch_reuses_one_fixed_game_tlk_without_duplicate_growth(
     )
     english_strings = _read_tlk_strings(selected_tlk)
     assert english_strings[1] == sentinel
-    english_map = (game.override / "bfbot_l10n.tra").read_bytes()
-    english_innate_map = (game.override / "bfbot_strrefs.txt").read_bytes()
+    english_catalog_bytes = (game.override / "bfbot_l10n.tra").read_bytes()
+    english_innate_refs_bytes = (game.override / "bfbot_strrefs.txt").read_bytes()
     english_payload = {
         name: payload
         for name, payload in after_english.override.items()
@@ -1105,7 +1128,7 @@ def test_language_switch_reuses_one_fixed_game_tlk_without_duplicate_growth(
     chinese_strings = _read_tlk_strings(selected_tlk)
     assert chinese_strings[1] == sentinel
     assert len(chinese_strings) - len(english_strings) == len(
-        chinese_runtime_strings - english_runtime_strings
+        chinese_innate_strings - english_innate_strings
     )
     assert {
         name: payload
@@ -1148,8 +1171,12 @@ def test_language_switch_reuses_one_fixed_game_tlk_without_duplicate_growth(
         catalog_directory="english",
         expected_tlk_strings=union_tlk_strings,
     )
-    assert (game.override / "bfbot_l10n.tra").read_bytes() == english_map
-    assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map
+    assert (
+        game.override / "bfbot_l10n.tra"
+    ).read_bytes() == english_catalog_bytes
+    assert (
+        game.override / "bfbot_strrefs.txt"
+    ).read_bytes() == english_innate_refs_bytes
     assert after_return.override == after_english.override
     assert (
         after_return.loader_ini,
@@ -1174,7 +1201,19 @@ def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership
             )
         )
     )
+    english_sentinel = "released-stack English TLK sentinel"
+    chinese_sentinel = "released-stack Chinese TLK sentinel"
+    _write_tlk_strings(game.lang_tlk, ("", english_sentinel))
+    _write_tlk_strings(game.schinese_tlk, ("", chinese_sentinel))
     baseline = game.snapshot()
+    english_catalog, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+    chinese_catalog, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
+    english_tlk_strings = {english_sentinel} | {
+        english_catalog[catalog_id] for catalog_id in INNATE_CATALOG_IDS
+    }
+    chinese_tlk_strings = {chinese_sentinel} | {
+        chinese_catalog[catalog_id] for catalog_id in INNATE_CATALOG_IDS
+    }
 
     game.replace_buffbot_tp2(RELEASED_V170_TP2)
     _assert_installed(game, game.install(0))
@@ -1188,9 +1227,11 @@ def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership
         game,
         game_language="en_US",
         catalog_directory="english",
+        expected_tlk_strings=english_tlk_strings,
     )
-    english_map = (game.override / "bfbot_l10n.tra").read_bytes()
-    english_innate_map = (game.override / "bfbot_strrefs.txt").read_bytes()
+    assert _read_tlk_strings(game.lang_tlk)[1] == english_sentinel
+    english_catalog_bytes = (game.override / "bfbot_l10n.tra").read_bytes()
+    english_innate_refs_bytes = (game.override / "bfbot_strrefs.txt").read_bytes()
     english_payload = {
         name: payload
         for name, payload in upgraded_english.override.items()
@@ -1233,7 +1274,9 @@ def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership
         game,
         game_language="zh_CN",
         catalog_directory="schinese",
+        expected_tlk_strings=chinese_tlk_strings,
     )
+    assert _read_tlk_strings(game.schinese_tlk)[1] == chinese_sentinel
     assert {
         name: payload
         for name, payload in after_chinese.override.items()
@@ -1279,9 +1322,15 @@ def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership
         game,
         game_language="en_US",
         catalog_directory="english",
+        expected_tlk_strings=english_tlk_strings,
     )
-    assert (game.override / "bfbot_l10n.tra").read_bytes() == english_map
-    assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map
+    assert _read_tlk_strings(game.lang_tlk)[1] == english_sentinel
+    assert (
+        game.override / "bfbot_l10n.tra"
+    ).read_bytes() == english_catalog_bytes
+    assert (
+        game.override / "bfbot_strrefs.txt"
+    ).read_bytes() == english_innate_refs_bytes
     assert after_return.override == upgraded_english.override
     assert (
         after_return.loader_ini,
@@ -1293,6 +1342,8 @@ def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership
 
     main_uninstall = game.uninstall(0)
     assert main_uninstall.returncode == 0, game.transcript(main_uninstall)
+    assert not (game.override / "bfbot_l10n.tra").exists()
+    assert not (game.override / "bfbot_l10n.txt").exists()
     after_main_uninstall = game.snapshot()
     assert (
         after_main_uninstall.loader_ini,
@@ -1598,6 +1649,8 @@ def test_legacy_helper_ownership_survives_main_uninstall_then_restores(
     assert main_uninstall.returncode == 0, main_uninstall_transcript
     assert "NOT UNINSTALLED" not in main_uninstall_transcript, main_uninstall_transcript
     game.assert_no_main_payload()
+    assert not (game.override / "bfbot_l10n.tra").exists()
+    assert not (game.override / "bfbot_l10n.txt").exists()
     after_main_uninstall = game.snapshot()
     assert after_main_uninstall.loader_ini == helper_state.loader_ini
     assert after_main_uninstall.root_lua51 == helper_state.root_lua51
@@ -1962,6 +2015,8 @@ def test_main_component_uninstall_leaves_stable_tlk_residue_and_reuses_it(
     transcript = game.transcript(uninstall)
     assert uninstall.returncode == 0, transcript
     assert "NOT UNINSTALLED" not in transcript, transcript
+    assert not (game.override / "bfbot_l10n.tra").exists()
+    assert not (game.override / "bfbot_l10n.txt").exists()
     assert _file_tree(game.override) == before.override
     game.assert_no_main_payload()
     assert game.lang_tlk.read_bytes() == first_tlk
