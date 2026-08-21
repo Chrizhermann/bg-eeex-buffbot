@@ -13,6 +13,7 @@ from tests.ie_formats import write_minimal_tlk
 from tests.test_eeex_compatibility_installer import (
     BuffBotGame,
     _assert_installed,
+    _assert_weidu_249,
     _read_innate_strrefs,
     _read_tlk_strings,
     _weidu,
@@ -410,16 +411,24 @@ def test_raw_deploy_leaves_runtime_catalog_absent_and_reports_english_fallback(
 def test_raw_deploy_preserves_selected_chinese_catalog_and_obsolete_map(
     tmp_path: Path,
 ) -> None:
-    game = tmp_path / "synthetic-localized-game"
+    game = tmp_path / "synthetic localized game"
     override = game / "override"
     override.mkdir(parents=True)
     write_minimal_tlk(game / "lang/en_US/dialog.tlk")
     source_catalog = ROOT / "buffbot/lang/schinese/setup.tra"
     catalog_path = override / "bfbot_l10n.tra"
-    selected_catalog = (
-        source_catalog.read_bytes()
-        + b"// installer-owned preservation sentinel\n"
+    selected_reset = "部署保留测试重置"
+    selected_catalog_text, replacement_count = re.subn(
+        r"(?m)^@305 = ~[^~]+~$",
+        f"@305 = ~{selected_reset}~",
+        source_catalog.read_text(encoding="utf-8"),
     )
+    assert replacement_count == 1
+    selected_catalog = (
+        selected_catalog_text.rstrip("\r\n")
+        + "\n// installer-owned preservation sentinel\n"
+    ).encode("utf-8")
+    assert selected_catalog != source_catalog.read_bytes()
     catalog_path.write_bytes(selected_catalog)
     obsolete_map_path = override / "bfbot_l10n.txt"
     obsolete_map = b"300=12345\n"
@@ -442,9 +451,10 @@ def test_raw_deploy_preserves_selected_chinese_catalog_and_obsolete_map(
     assert catalog_path.read_bytes() == selected_catalog
     assert obsolete_map_path.read_bytes() == obsolete_map
 
-    catalog, _ = parse_tra(source_catalog)
+    catalog, _ = parse_tra(catalog_path)
+    assert catalog[305] == selected_reset
     runtime = localization_runtime(catalog_path.read_text(encoding="utf-8"))
-    assert runtime.eval('BfBot.L10N.Get("common.reset")') == catalog[305]
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == selected_reset
 
 
 def test_raw_deploy_does_not_treat_obsolete_map_as_selected_localization(
@@ -492,8 +502,7 @@ def test_built_archive_installs_simplified_chinese_with_weidu_249(
         timeout=30,
         check=False,
     )
-    assert version.returncode == 0
-    assert "WeiDU version 24900" in version.stdout + version.stderr
+    _assert_weidu_249(version)
 
     game = BuffBotGame(tmp_path / "game", "v1")
     before = game.snapshot()

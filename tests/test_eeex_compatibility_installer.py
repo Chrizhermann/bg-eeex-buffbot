@@ -165,20 +165,27 @@ def _weidu() -> Path:
     return result
 
 
+def _assert_weidu_249(process: subprocess.CompletedProcess[str]) -> None:
+    transcript = f"{process.stdout}\n{process.stderr}".strip()
+    assert process.returncode == 0, transcript
+    versions = re.findall(r"WeiDU version (\d+)", transcript)
+    assert len(versions) == 1, transcript
+    assert int(versions[0]) == 24900, transcript
+
+
 @pytest.fixture(scope="module", autouse=True)
 def _require_weidu_249_for_installer_lifecycle() -> None:
-    version = subprocess.run(
-        [str(_weidu()), "--version"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=30,
-        check=False,
+    _assert_weidu_249(
+        subprocess.run(
+            [str(_weidu()), "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
     )
-    transcript = f"{version.stdout}\n{version.stderr}".strip()
-    assert version.returncode == 0, transcript
-    assert "WeiDU version 24900" in transcript
 
 
 def _file_bytes(path: Path) -> bytes | None:
@@ -642,6 +649,18 @@ def _assert_rejected(
     assert game.snapshot() == before
     game.assert_no_main_payload()
     assert (game.override / "KEEP.ME").read_bytes() == KEEP_BYTES
+
+
+def test_weidu_249_gate_rejects_version_prefix_collision() -> None:
+    prefix_collision = subprocess.CompletedProcess(
+        args=["weidu.exe", "--version"],
+        returncode=0,
+        stdout="[weidu.exe] WeiDU version 249000\n",
+        stderr="",
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_weidu_249(prefix_collision)
 
 
 @pytest.mark.parametrize("component", (0, 1))
