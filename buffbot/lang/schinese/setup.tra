@@ -1,0 +1,354 @@
+// installer.component.luajit
+@100 = ~BuffBot：EEex LuaJIT 支持（自动检测）~
+// installer.require.game
+@101 = ~BuffBot 需要 BG:EE、BG2:EE 或 EET。~
+// installer.require.eeex
+@102 = ~BuffBot 需要 EEex v0.11.0-alpha 或更高版本。请先安装 EEex：https://github.com/Bubb13/EEex/releases~
+// installer.luajit.already_active
+@103 = ~LuaJIT 已启用，跳过安装。~
+// installer.luajit.missing_ini
+@104 = ~未找到 InfinityLoader.ini。请重新安装 EEex，然后再启用 BuffBot 的 LuaJIT 支持。~
+// installer.luajit.missing_dlls
+@105 = ~在 EEex/loader/LuaJIT/ 中未找到 EEex LuaJIT 源 DLL。请重新安装包含 LuaJIT / Experimental 文件的 EEex，然后再启用 BuffBot 的 LuaJIT 支持。~
+// installer.luajit.invalid_general
+@106 = ~InfinityLoader.ini 没有唯一且格式正确的首个 [General] 段。请重新安装 EEex，然后再启用 BuffBot 的 LuaJIT 支持。~
+// installer.luajit.installing
+@107 = ~正在安装 EEex LuaJIT 组件（通常由 EEex 安装程序安装）。~
+// installer.luajit.required_version
+@108 = ~所需的 LuaVersionExternal：%lua_version%~
+// installer.luajit.installed
+@109 = ~LuaJIT 安装成功。BuffBot 的全部功能均可使用。~
+// installer.luajit.postcondition_failed
+@110 = ~BuffBot 的 LuaJIT 辅助组件未能生成所需的 EEex 加载器状态。请重新安装并启用 LuaJIT / Experimental 支持的 EEex，然后再次运行 BuffBot。~
+// installer.component.main
+@111 = ~BuffBot：游戏内增益自动化~
+// installer.main.luajit_required
+@112 = ~安装主组件前必须启用 EEex LuaJIT。请先安装“BuffBot：EEex LuaJIT 支持”，或启用 EEex 的 LuaJIT / Experimental 组件，然后再次安装 BuffBot。Project Infinity 用户必须将 LuaJIT 组件排在“BuffBot：游戏内增益自动化”之前。~
+
+// innate.preset_1
+@200 = ~BuffBot 预设 1~
+// innate.preset_2
+@201 = ~BuffBot 预设 2~
+// innate.preset_3
+@202 = ~BuffBot 预设 3~
+// innate.preset_4
+@203 = ~BuffBot 预设 4~
+// innate.preset_5
+@204 = ~BuffBot 预设 5~
+// innate.preset_6
+@205 = ~BuffBot 预设 6~
+// innate.preset_7
+@206 = ~BuffBot 预设 7~
+// innate.preset_8
+@207 = ~BuffBot 预设 8~
+
+// common.buffbot
+@300 = ~BuffBot~
+// common.party
+@301 = ~队伍~
+// common.summons
+@302 = ~召唤物~
+// common.self
+@303 = ~自身~
+// common.none
+@304 = ~无~
+// common.reset
+@305 = ~重置~
+// common.rename
+@306 = ~重命名~
+// common.new
+@307 = ~新建~
+// common.add_spell
+@308 = ~添加法术~
+// common.remove
+@309 = ~移除~
+// common.export
+@310 = ~导出~
+// common.import
+@311 = ~导入~
+// common.up
+@312 = ~上移~
+// common.down
+@313 = ~下移~
+// common.sort
+@314 = ~排序~
+// common.delete_preset
+@315 = ~删除预设~
+// common.delete_preset_compact
+@316 = ~删预设~
+// common.stop
+@317 = ~停止~
+// common.close
+@318 = ~关闭~
+// common.all_party
+@319 = ~全队~
+// common.clear
+@320 = ~清除~
+// common.done
+@321 = ~完成~
+// common.unlock_targeting
+@322 = ~解锁目标选择~
+// common.ok
+@323 = ~确定~
+// common.cancel
+@324 = ~取消~
+// common.delete
+@325 = ~删除~
+// common.select
+@326 = ~选择~
+// common.enable
+@327 = ~启用~
+// common.disable
+@328 = ~禁用~
+// common.target
+@329 = ~目标~
+// common.variant
+@330 = ~子法术~
+// common.spells
+@331 = ~法术~
+// common.items
+@332 = ~物品~
+
+// ui.tooltip.configuration
+@400 = ~BuffBot 配置~
+// ui.no_allied_summons
+@401 = ~未检测到友方召唤物~
+// ui.title.preset
+@402 = ~BuffBot - {preset}~
+// ui.title.summons
+@403 = ~BuffBot - 召唤物~
+// ui.title.summon_preset
+@404 = ~BuffBot - {summon} - {preset}~
+// ui.clone.mislead
+@405 = ~{owner}的误导幻象~
+// ui.clone.project_image
+@406 = ~{owner}的投影~
+// ui.clone.simulacrum
+@407 = ~{owner}的拟像~
+// ui.clone.generic
+@408 = ~{owner}的复制体~
+// ui.cast.all
+@409 = ~全部施法~
+// ui.cast.character
+@410 = ~为角色施法~
+// ui.cast.named
+@411 = ~为{name}施法~
+// ui.cast.summon
+@412 = ~当前召唤物施法~
+// ui.qualifier.self_only
+@413 = ~（仅限施法者自身）~
+// ui.qualifier.party_wide
+@414 = ~（全队范围）~
+// ui.rename_preset_title
+@415 = ~重命名预设：~
+// ui.add_spell_title
+@416 = ~添加法术到增益列表~
+// ui.add_to_buff_list
+@417 = ~添加到增益列表~
+// ui.import_config_title
+@418 = ~导入配置~
+// ui.select_variant_title
+@419 = ~选择子法术：{spell}~
+// ui.delete_preset_confirm
+@420 = ~确定为所有队员删除预设“{name}”吗？~
+// ui.variant.selected
+@421 = ~子法术：{name}~
+// ui.target.selected
+@422 = ~目标：{target}~
+// ui.repeat.label
+@423 = ~重复：{count}~
+// ui.repeat.spell_tooltip
+@424 = ~对每个已解析目标施放此法术 {count} 次。每次尝试都会消耗一个法术位并遵循正常施法规则。左键增加，右键减少。范围为 1–{max}。~
+// ui.repeat.item_tooltip
+@425 = ~对每个已解析目标使用此物品 {count} 次。每次尝试都会消耗一件堆叽物品或一次充能，并遵循正常物品使用规则。左键增加，右键减少。范围为 1–{max}。~
+// ui.target.player
+@426 = ~玩家 {index}~
+// ui.target.multiple
+@427 = ~{name} +{count}~
+// ui.status.casting
+@428 = ~正在施法……~
+// ui.status.casting_quick_long
+@429 = ~正在施法（快速：仅长效）……~
+// ui.status.casting_quick_all
+@430 = ~正在施法（快速：全部）……~
+// ui.status.done
+@431 = ~完成~
+// ui.status.stopped
+@432 = ~已停止~
+// ui.quick_cast.off
+@433 = ~快速施法：关闭~
+// ui.quick_cast.long
+@434 = ~快速施法：仅长效~
+// ui.quick_cast.all
+@435 = ~快速施法：全部~
+// ui.quick_cast.tooltip_unavailable
+@436 = ~普通施法速度~
+// ui.quick_cast.tooltip_off
+@437 = ~普通施法速度——法术遵循光环冷却。点击切换。~
+// ui.quick_cast.tooltip_long
+@438 = ~快速施放长效增益（持续时间 300 秒以上）。短效增益仍以普通速度施放。点击切换。~
+// ui.quick_cast.tooltip_all
+@439 = ~无论持续时间，快速施放所有增益（作弊模式）。点击切换。~
+// ui.duration.permanent
+@440 = ~永久~
+// ui.duration.instant
+@441 = ~即时~
+// ui.duration.hours_minutes
+@442 = ~{hours}小时 {minutes}分钟~
+// ui.duration.hours
+@443 = ~{hours}小时~
+// ui.duration.minutes_seconds
+@444 = ~{minutes}分钟 {seconds}秒~
+// ui.duration.minutes
+@445 = ~{minutes}分钟~
+// ui.duration.seconds
+@446 = ~{seconds}秒~
+// ui.category.permanent
+@447 = ~永久~
+// ui.category.long
+@448 = ~长效~
+// ui.category.short
+@449 = ~短效~
+// ui.category.instant
+@450 = ~即时~
+// ui.category.unknown
+@451 = ~未知~
+
+// feedback.no_luajit
+@500 = ~BuffBot：未检测到 LuaJIT。F12 天生能力、快速施法、导入/导出和日志记录已禁用。请安装 EEex LuaJIT 组件以启用完整功能。~
+// feedback.combat_stopped
+@501 = ~BuffBot：检测到战斗——已停止施法~
+// feedback.cast_timeout
+@502 = ~BuffBot：施法超时——已停止~
+// feedback.party_changed_after_run
+@503 = ~BuffBot：队伍已变化——请在当前施法结束后重试~
+// feedback.party_changed_refreshing
+@504 = ~BuffBot：队伍已变化——正在刷新天生能力，请重试~
+// feedback.no_spells_with_reason
+@505 = ~BuffBot：没有可施放的法术（{reason}）~
+// feedback.innate_error
+@506 = ~BuffBot 天生能力错误：{error}~
+// feedback.no_spells_preset
+@507 = ~BuffBot：此预设中没有可施放的法术~
+// feedback.character_remote_control
+@508 = ~BuffBot：{name}由另一名玩家控制~
+// feedback.character_project_image_locked
+@509 = ~BuffBot：{name}因投影术而被锁定——请在投影消失后再次施法~
+// feedback.no_spells_character
+@510 = ~BuffBot：此角色没有可施放的法术~
+// feedback.no_summon_selected
+@511 = ~BuffBot：未选择召唤物~
+// feedback.no_spells_summon
+@512 = ~BuffBot：此召唤物没有可施放的法术~
+// feedback.no_spells_summon_with_reason
+@513 = ~BuffBot：此召唤物没有可施放的法术（{reason}）~
+// feedback.no_additional_spells
+@514 = ~BuffBot：没有其他可添加的法术~
+// feedback.export_success
+@515 = ~BuffBot：配置已导出为“{file}”~
+// feedback.export_failed
+@516 = ~BuffBot：导出失败——{reason}~
+// feedback.no_exported_configs
+@517 = ~BuffBot：bfbot_presets/ 中未找到配置~
+// feedback.import_success
+@518 = ~BuffBot：已导入“{file}”（{presets} 个预设，跳过 {skipped} 个条目）~
+// feedback.import_failed
+@519 = ~BuffBot：导入失败——{reason}~
+// reason.exec.empty_queue
+@520 = ~施法队列为空~
+// reason.exec.no_valid_entries
+@521 = ~展开后没有有效条目~
+// reason.exec.already_running
+@522 = ~已有施法正在运行~
+// reason.export.luajit_required
+@523 = ~导出需要 LuaJIT~
+// reason.export.no_sprite
+@524 = ~未选择角色~
+// reason.export.no_config
+@525 = ~未找到配置~
+// reason.export.cannot_open_file
+@526 = ~无法打开文件：{error}~
+// reason.import.luajit_required
+@527 = ~导入需要 LuaJIT~
+// reason.import.no_sprite
+@528 = ~未选择角色~
+// reason.import.no_filename
+@529 = ~未选择文件名~
+// reason.import.invalid_filename
+@530 = ~文件名无效~
+// reason.import.cannot_open_file
+@531 = ~无法打开文件：{error}~
+// reason.import.empty_file
+@532 = ~文件为空~
+// reason.import.parse_error
+@533 = ~解析错误：{error}~
+// reason.import.exec_error
+@534 = ~执行错误：{error}~
+// reason.import.invalid_data
+@535 = ~文件中没有有效的 BuffBot 配置~
+// reason.queue.invalid_summon
+@536 = ~召唤物条目无效~
+// reason.queue.no_summon_preset
+@537 = ~未配置召唤物预设 {index}~
+// reason.queue.caster_resolver_unavailable
+@538 = ~施法者解析器不可用~
+// reason.queue.summon_gone
+@539 = ~召唤物已消失（{name}）~
+// reason.queue.summon_scan_failed
+@540 = ~扫描召唤物 {name} 失败~
+// reason.queue.no_castable_summon_spells
+@541 = ~召唤物预设 {index} 中没有可施放的法术~
+// reason.queue.no_preset_index
+@542 = ~缺少预设编号~
+// reason.queue.no_castable_preset_spells
+@543 = ~预设 {index} 中没有可施放的法术~
+// reason.queue.missing_slot_or_preset
+@544 = ~缺少角色栏位或预设~
+// reason.queue.no_sprite_in_slot
+@545 = ~栏位 {slot} 中没有角色~
+// reason.queue.not_locally_controlled
+@546 = ~不受本机控制~
+// reason.queue.no_config_for_slot
+@547 = ~栏位 {slot} 没有配置~
+// reason.queue.no_preset_for_slot
+@548 = ~栏位 {slot} 没有预设 {preset}~
+// reason.queue.scan_failed_for_slot
+@549 = ~扫描栏位 {slot} 失败~
+// reason.queue.project_image_locked
+@550 = ~因投影术而被锁定~
+// reason.queue.no_castable_spells_for_slot
+@551 = ~栏位 {slot} 的预设 {preset} 中没有可施放的法术~
+
+// default.preset.long
+@600 = ~长效增益~
+// default.preset.short
+@601 = ~短效增益~
+// default.preset.indexed
+@602 = ~预设 {index}~
+
+// options.tab
+@700 = ~BuffBot~
+// options.dark_mode
+@701 = ~深色模式~
+// options.dark_mode_description
+@702 = ~在低光环境下调暗面板羊皮纸，同时保留强调色。~
+// options.color_scheme
+@703 = ~配色方案~
+// options.color_scheme_description
+@704 = ~选择面板强调色：经典的《博德之门 2》羊皮纸、钢蓝色的《龙矛围攻》，或暖琥珀色的《博德之门 1》。~
+// options.color_scheme_bg2
+@705 = ~博德之门 2~
+// options.color_scheme_sod
+@706 = ~龙矛围攻~
+// options.color_scheme_bg1
+@707 = ~博德之门 1~
+// options.text_size
+@708 = ~文本大小~
+// options.text_size_description
+@709 = ~缩放面板中的所有文字。更改后请关闭并重新打开 BuffBot 面板，使新字号生效。~
+// options.text_size_small
+@710 = ~小~
+// options.text_size_medium
+@711 = ~中~
+// options.text_size_large
+@712 = ~大~

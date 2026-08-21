@@ -1,0 +1,354 @@
+// installer.component.luajit
+@100 = ~BuffBot: EEex LuaJIT Support (auto-detected)~
+// installer.require.game
+@101 = ~BuffBot requires BG:EE, BG2:EE, or EET.~
+// installer.require.eeex
+@102 = ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
+// installer.luajit.already_active
+@103 = ~LuaJIT is already active. Skipping installation.~
+// installer.luajit.missing_ini
+@104 = ~InfinityLoader.ini was not found. Reinstall EEex before activating BuffBot's LuaJIT support.~
+// installer.luajit.missing_dlls
+@105 = ~EEex LuaJIT source DLLs were not found at EEex/loader/LuaJIT/. Reinstall EEex with its LuaJIT / Experimental files before activating BuffBot's LuaJIT support.~
+// installer.luajit.invalid_general
+@106 = ~InfinityLoader.ini has no single, well-formed first [General] section. Reinstall EEex before activating BuffBot's LuaJIT support.~
+// installer.luajit.installing
+@107 = ~Installing EEex LuaJIT component (normally installed by EEex setup).~
+// installer.luajit.required_version
+@108 = ~Required LuaVersionExternal: %lua_version%~
+// installer.luajit.installed
+@109 = ~LuaJIT installed successfully. BuffBot will have full functionality.~
+// installer.luajit.postcondition_failed
+@110 = ~BuffBot's LuaJIT helper did not produce the required EEex loader state. Reinstall EEex with LuaJIT / Experimental support, then run BuffBot again.~
+// installer.component.main
+@111 = ~BuffBot: In-Game Buff Automation~
+// installer.main.luajit_required
+@112 = ~BuffBot requires EEex LuaJIT to be active before installing the main component. Install "BuffBot: EEex LuaJIT Support" first, or enable EEex's LuaJIT / Experimental component, then install BuffBot again. Project Infinity users must place the LuaJIT component before "BuffBot: In-Game Buff Automation".~
+
+// innate.preset_1
+@200 = ~BuffBot 1~
+// innate.preset_2
+@201 = ~BuffBot 2~
+// innate.preset_3
+@202 = ~BuffBot 3~
+// innate.preset_4
+@203 = ~BuffBot 4~
+// innate.preset_5
+@204 = ~BuffBot 5~
+// innate.preset_6
+@205 = ~BuffBot 6~
+// innate.preset_7
+@206 = ~BuffBot 7~
+// innate.preset_8
+@207 = ~BuffBot 8~
+
+// common.buffbot
+@300 = ~BuffBot~
+// common.party
+@301 = ~Party~
+// common.summons
+@302 = ~Summons~
+// common.self
+@303 = ~Self~
+// common.none
+@304 = ~None~
+// common.reset
+@305 = ~Reset~
+// common.rename
+@306 = ~Rename~
+// common.new
+@307 = ~New~
+// common.add_spell
+@308 = ~Add Spell~
+// common.remove
+@309 = ~Remove~
+// common.export
+@310 = ~Export~
+// common.import
+@311 = ~Import~
+// common.up
+@312 = ~Up~
+// common.down
+@313 = ~Down~
+// common.sort
+@314 = ~Sort~
+// common.delete_preset
+@315 = ~Delete Preset~
+// common.delete_preset_compact
+@316 = ~Del Preset~
+// common.stop
+@317 = ~Stop~
+// common.close
+@318 = ~Close~
+// common.all_party
+@319 = ~All Party~
+// common.clear
+@320 = ~Clear~
+// common.done
+@321 = ~Done~
+// common.unlock_targeting
+@322 = ~Unlock Targeting~
+// common.ok
+@323 = ~OK~
+// common.cancel
+@324 = ~Cancel~
+// common.delete
+@325 = ~Delete~
+// common.select
+@326 = ~Select~
+// common.enable
+@327 = ~Enable~
+// common.disable
+@328 = ~Disable~
+// common.target
+@329 = ~Target~
+// common.variant
+@330 = ~Variant~
+// common.spells
+@331 = ~Spells~
+// common.items
+@332 = ~Items~
+
+// ui.tooltip.configuration
+@400 = ~BuffBot Configuration~
+// ui.no_allied_summons
+@401 = ~No allied summons detected~
+// ui.title.preset
+@402 = ~BuffBot - {preset}~
+// ui.title.summons
+@403 = ~BuffBot - Summons~
+// ui.title.summon_preset
+@404 = ~BuffBot - {summon} - {preset}~
+// ui.clone.mislead
+@405 = ~{owner}'s Mislead~
+// ui.clone.project_image
+@406 = ~{owner}'s Image~
+// ui.clone.simulacrum
+@407 = ~{owner}'s Simulacrum~
+// ui.clone.generic
+@408 = ~{owner}'s Clone~
+// ui.cast.all
+@409 = ~Cast All~
+// ui.cast.character
+@410 = ~Cast Character~
+// ui.cast.named
+@411 = ~Cast {name}~
+// ui.cast.summon
+@412 = ~Cast (this summon)~
+// ui.qualifier.self_only
+@413 = ~(Self-only)~
+// ui.qualifier.party_wide
+@414 = ~(Party-wide)~
+// ui.rename_preset_title
+@415 = ~Rename Preset:~
+// ui.add_spell_title
+@416 = ~Add Spell to Buff List~
+// ui.add_to_buff_list
+@417 = ~Add to Buff List~
+// ui.import_config_title
+@418 = ~Import Config~
+// ui.select_variant_title
+@419 = ~Select Variant: {spell}~
+// ui.delete_preset_confirm
+@420 = ~Delete preset "{name}" for ALL party members?~
+// ui.variant.selected
+@421 = ~Var: {name}~
+// ui.target.selected
+@422 = ~Target: {target}~
+// ui.repeat.label
+@423 = ~Repeat: {count}~
+// ui.repeat.spell_tooltip
+@424 = ~Cast this spell {count} times per resolved target. Each attempt uses a spell slot and normal casting rules. Left-click increases; right-click decreases. Range 1–{max}.~
+// ui.repeat.item_tooltip
+@425 = ~Use this item {count} times per resolved target. Each attempt consumes a stack or charge and follows normal item-use rules. Left-click increases; right-click decreases. Range 1–{max}.~
+// ui.target.player
+@426 = ~Player {index}~
+// ui.target.multiple
+@427 = ~{name} +{count}~
+// ui.status.casting
+@428 = ~Casting...~
+// ui.status.casting_quick_long
+@429 = ~Casting (Quick: Long)...~
+// ui.status.casting_quick_all
+@430 = ~Casting (Quick: All)...~
+// ui.status.done
+@431 = ~Done~
+// ui.status.stopped
+@432 = ~Stopped~
+// ui.quick_cast.off
+@433 = ~Quick Cast: Off~
+// ui.quick_cast.long
+@434 = ~Quick Cast: Long~
+// ui.quick_cast.all
+@435 = ~Quick Cast: All~
+// ui.quick_cast.tooltip_unavailable
+@436 = ~Normal casting speed~
+// ui.quick_cast.tooltip_off
+@437 = ~Normal casting speed — spells respect aura cooldown. Click to cycle.~
+// ui.quick_cast.tooltip_long
+@438 = ~Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle.~
+// ui.quick_cast.tooltip_all
+@439 = ~Fast casting for ALL buffs regardless of duration (cheat). Click to cycle.~
+// ui.duration.permanent
+@440 = ~Perm~
+// ui.duration.instant
+@441 = ~Inst~
+// ui.duration.hours_minutes
+@442 = ~{hours}h {minutes}m~
+// ui.duration.hours
+@443 = ~{hours}h~
+// ui.duration.minutes_seconds
+@444 = ~{minutes}m {seconds}s~
+// ui.duration.minutes
+@445 = ~{minutes}m~
+// ui.duration.seconds
+@446 = ~{seconds}s~
+// ui.category.permanent
+@447 = ~permanent~
+// ui.category.long
+@448 = ~long~
+// ui.category.short
+@449 = ~short~
+// ui.category.instant
+@450 = ~instant~
+// ui.category.unknown
+@451 = ~unknown~
+
+// feedback.no_luajit
+@500 = ~BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.~
+// feedback.combat_stopped
+@501 = ~BuffBot: Combat detected - casting stopped~
+// feedback.cast_timeout
+@502 = ~BuffBot: casting timed out - stopped~
+// feedback.party_changed_after_run
+@503 = ~BuffBot: Party changed — retry after the current run~
+// feedback.party_changed_refreshing
+@504 = ~BuffBot: Party changed — refreshing innates, try again~
+// feedback.no_spells_with_reason
+@505 = ~BuffBot: No spells to cast ({reason})~
+// feedback.innate_error
+@506 = ~BuffBot innate error: {error}~
+// feedback.no_spells_preset
+@507 = ~BuffBot: No spells to cast in this preset~
+// feedback.character_remote_control
+@508 = ~BuffBot: {name} is controlled by another player~
+// feedback.character_project_image_locked
+@509 = ~BuffBot: {name} is puppet-locked by Project Image — cast again after the image expires~
+// feedback.no_spells_character
+@510 = ~BuffBot: No spells to cast for this character~
+// feedback.no_summon_selected
+@511 = ~BuffBot: No summon selected~
+// feedback.no_spells_summon
+@512 = ~BuffBot: No spells to cast for this summon~
+// feedback.no_spells_summon_with_reason
+@513 = ~BuffBot: No spells to cast for this summon ({reason})~
+// feedback.no_additional_spells
+@514 = ~BuffBot: No additional spells to add~
+// feedback.export_success
+@515 = ~BuffBot: Exported config as '{file}'~
+// feedback.export_failed
+@516 = ~BuffBot: Export failed — {reason}~
+// feedback.no_exported_configs
+@517 = ~BuffBot: No configs found in bfbot_presets/~
+// feedback.import_success
+@518 = ~BuffBot: Imported '{file}' ({presets} presets, {skipped} entries skipped)~
+// feedback.import_failed
+@519 = ~BuffBot: Import failed — {reason}~
+// reason.exec.empty_queue
+@520 = ~empty queue~
+// reason.exec.no_valid_entries
+@521 = ~no valid entries after expansion~
+// reason.exec.already_running
+@522 = ~already running~
+// reason.export.luajit_required
+@523 = ~LuaJIT required for export~
+// reason.export.no_sprite
+@524 = ~no character selected~
+// reason.export.no_config
+@525 = ~no configuration found~
+// reason.export.cannot_open_file
+@526 = ~cannot open file: {error}~
+// reason.import.luajit_required
+@527 = ~LuaJIT required for import~
+// reason.import.no_sprite
+@528 = ~no character selected~
+// reason.import.no_filename
+@529 = ~no filename selected~
+// reason.import.invalid_filename
+@530 = ~invalid filename~
+// reason.import.cannot_open_file
+@531 = ~cannot open file: {error}~
+// reason.import.empty_file
+@532 = ~empty file~
+// reason.import.parse_error
+@533 = ~parse error: {error}~
+// reason.import.exec_error
+@534 = ~execution error: {error}~
+// reason.import.invalid_data
+@535 = ~file did not contain a valid BuffBot configuration~
+// reason.queue.invalid_summon
+@536 = ~invalid summon entry~
+// reason.queue.no_summon_preset
+@537 = ~no configured summon preset {index}~
+// reason.queue.caster_resolver_unavailable
+@538 = ~caster resolver unavailable~
+// reason.queue.summon_gone
+@539 = ~summon gone ({name})~
+// reason.queue.summon_scan_failed
+@540 = ~scan failed for summon {name}~
+// reason.queue.no_castable_summon_spells
+@541 = ~no castable spells in summon preset {index}~
+// reason.queue.no_preset_index
+@542 = ~no preset index~
+// reason.queue.no_castable_preset_spells
+@543 = ~no castable spells in preset {index}~
+// reason.queue.missing_slot_or_preset
+@544 = ~missing character slot or preset~
+// reason.queue.no_sprite_in_slot
+@545 = ~no character in slot {slot}~
+// reason.queue.not_locally_controlled
+@546 = ~not locally controlled~
+// reason.queue.no_config_for_slot
+@547 = ~no configuration for slot {slot}~
+// reason.queue.no_preset_for_slot
+@548 = ~no preset {preset} for slot {slot}~
+// reason.queue.scan_failed_for_slot
+@549 = ~scan failed for slot {slot}~
+// reason.queue.project_image_locked
+@550 = ~puppet-locked by Project Image~
+// reason.queue.no_castable_spells_for_slot
+@551 = ~no castable spells in preset {preset} for slot {slot}~
+
+// default.preset.long
+@600 = ~Long Buffs~
+// default.preset.short
+@601 = ~Short Buffs~
+// default.preset.indexed
+@602 = ~Preset {index}~
+
+// options.tab
+@700 = ~BuffBot~
+// options.dark_mode
+@701 = ~Dark Mode~
+// options.dark_mode_description
+@702 = ~Dim the panel parchment for low-light play. The accent palette is preserved.~
+// options.color_scheme
+@703 = ~Color Scheme~
+// options.color_scheme_description
+@704 = ~Choose the panel accent palette: classic BG2 parchment, the steel-blue Siege of Dragonspear, or the warm BG1 amber.~
+// options.color_scheme_bg2
+@705 = ~Baldur's Gate 2~
+// options.color_scheme_sod
+@706 = ~Siege of Dragonspear~
+// options.color_scheme_bg1
+@707 = ~Baldur's Gate 1~
+// options.text_size
+@708 = ~Text Size~
+// options.text_size_description
+@709 = ~Scale all panel text. Close and reopen the BuffBot panel after changing this for the new size to take effect.~
+// options.text_size_small
+@710 = ~Small~
+// options.text_size_medium
+@711 = ~Medium~
+// options.text_size_large
+@712 = ~Large~
