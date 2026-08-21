@@ -90,6 +90,7 @@ Only use a manual copy when EEex LuaJIT is already active; manual installation b
 - Default presets auto-populate from scanned sources: long/permanent spells are enabled in preset 1, short spells in preset 2, and items are present but disabled
 - Create new presets for specific situations (up to 8 per character)
 - Each preset is fully independent — own spell list, targets, repeat counts, priorities, and Quick Cast setting
+- Newly recruited companions inherit the protagonist's current preset slots, names, and categories when BuffBot first configures them; their own spells and items start disabled and Quick Cast starts Off
 
 ### Repeat Casts
 

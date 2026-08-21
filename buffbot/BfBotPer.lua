@@ -87,9 +87,59 @@ function BfBot.Persist._MakeDefaultEntry(classResult, enabled, kind)
     }
 end
 
+--- Copy the protagonist's party-wide preset structure for a config-less
+--- companion. Reads UDAux directly so finding the template can never create a
+--- second config or recurse through GetConfig. Only scalar structure fields
+--- are copied; spell settings and every other per-character subtree stay local.
+-- @param sprite  config-less party sprite
+-- @return table|nil: { presets = fresh table, ap = valid copied index }
+function BfBot.Persist._GetInheritedPresetStructure(sprite)
+    local indexOk, characterIndex = pcall(EEex_Sprite_GetCharacterIndex, sprite)
+    if not indexOk or type(characterIndex) ~= "number"
+        or characterIndex < 1 or characterIndex > 5
+        or type(EEex_Sprite_GetInPortrait) ~= "function" then
+        return nil
+    end
+
+    local protagonistOk, protagonist = pcall(BfBot.Persist._GetProtagonist)
+    if not protagonistOk or not protagonist then return nil end
+
+    local configOk, sourceConfig = pcall(function()
+        return EEex_GetUDAux(protagonist)[BfBot.Persist._KEY]
+    end)
+    if not configOk or type(sourceConfig) ~= "table"
+        or type(sourceConfig.presets) ~= "table" then
+        return nil
+    end
+
+    local presets = {}
+    local firstIndex = nil
+    for i = 1, BfBot.MAX_PRESETS do
+        local source = sourceConfig.presets[i]
+        if type(source) == "table" then
+            presets[i] = {
+                name = type(source.name) == "string"
+                    and source.name or ("Preset " .. i),
+                cat = type(source.cat) == "string" and source.cat or "custom",
+                qc = 0,
+                spells = {},
+            }
+            if not firstIndex then firstIndex = i end
+        end
+    end
+    if not firstIndex then return nil end
+
+    return { presets = presets, ap = firstIndex }
+end
+
 --- Scan a character's spells and create a populated default config.
 function BfBot.Persist._CreateDefaultConfig(sprite)
     local config = BfBot.Persist.GetDefaultConfig()
+    local inherited = BfBot.Persist._GetInheritedPresetStructure(sprite)
+    if inherited then
+        config.presets = inherited.presets
+        config.ap = inherited.ap
+    end
 
     -- Try to populate from scanner (may fail if sprite not fully loaded)
     local ok, spells, count = pcall(BfBot.Scan.GetCastableSpells, sprite)
@@ -128,46 +178,41 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         return a.resref < b.resref
     end)
 
-    -- Distribute ALL spells to BOTH presets (different enabled states).
-    -- Enabled spells get low priorities (cast first), disabled get high.
-    -- Items are listed but NEVER default-enabled, regardless of durCat
-    -- (design: consumables/charges are player-curated — opt-in per item),
-    -- so they don't count toward the enabled block either.
-    local p1enCount, p2enCount = 0, 0
-    for _, buff in ipairs(buffs) do
-        if buff.kind == "itm" then
-            -- listed-but-disabled: contributes to the disabled block only
-        elseif buff.durCat == "long" or buff.durCat == "permanent" then
-            p1enCount = p1enCount + 1
-        elseif buff.durCat == "short" then
-            p2enCount = p2enCount + 1
-        end
-    end
+    -- Populate every preset from this character's own scan. A first party
+    -- config keeps the established Long/Short defaults; a joining companion's
+    -- inherited structure starts fully disabled for safe player review.
+    for presetIndex = 1, BfBot.MAX_PRESETS do
+        local preset = config.presets[presetIndex]
+        if preset then
+            local function isEnabled(buff)
+                if inherited then return false end
+                if buff.kind == "itm" then return false end
+                if preset.cat == "long" then
+                    return buff.durCat == "long" or buff.durCat == "permanent"
+                end
+                return preset.cat == "short" and buff.durCat == "short"
+            end
 
-    local p1en, p1dis = 1, 1
-    local p2en, p2dis = 1, 1
-    for _, buff in ipairs(buffs) do
-        local isItem = (buff.kind == "itm")
-        local isLong = not isItem and (buff.durCat == "long" or buff.durCat == "permanent")
-        local isShort = not isItem and (buff.durCat == "short")
+            local enabledCount = 0
+            for _, buff in ipairs(buffs) do
+                if isEnabled(buff) then enabledCount = enabledCount + 1 end
+            end
 
-        -- Preset 1: long/permanent spells enabled, everything else disabled
-        local e1 = BfBot.Persist._MakeDefaultEntry(buff.classData, isLong and 1 or 0, buff.kind)
-        if isLong then
-            e1.pri = p1en;  p1en = p1en + 1
-        else
-            e1.pri = p1enCount + p1dis;  p1dis = p1dis + 1
+            local enabledPriority, disabledPriority = 1, 1
+            for _, buff in ipairs(buffs) do
+                local enabled = isEnabled(buff)
+                local entry = BfBot.Persist._MakeDefaultEntry(
+                    buff.classData, enabled and 1 or 0, buff.kind)
+                if enabled then
+                    entry.pri = enabledPriority
+                    enabledPriority = enabledPriority + 1
+                else
+                    entry.pri = enabledCount + disabledPriority
+                    disabledPriority = disabledPriority + 1
+                end
+                preset.spells[buff.resref] = entry
+            end
         end
-        config.presets[1].spells[buff.resref] = e1
-
-        -- Preset 2: short spells enabled, everything else disabled
-        local e2 = BfBot.Persist._MakeDefaultEntry(buff.classData, isShort and 1 or 0, buff.kind)
-        if isShort then
-            e2.pri = p2en;  p2en = p2en + 1
-        else
-            e2.pri = p2enCount + p2dis;  p2dis = p2dis + 1
-        end
-        config.presets[2].spells[buff.resref] = e2
     end
 
     -- Store in UDAux. Only call Refresh if the write succeeded — otherwise

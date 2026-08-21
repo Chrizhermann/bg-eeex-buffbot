@@ -128,6 +128,401 @@ def ui_test_lua() -> LuaRuntime:
     return runtime
 
 
+def test_new_companion_inherits_protagonist_preset_structure(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local protagonist = { id = "protagonist" }
+        local conflictingMember = { id = "conflicting" }
+        local recruit = { id = "recruit" }
+
+        local protagonistConfig = BfBot.Persist.GetDefaultConfig()
+        protagonistConfig.presets[1].name = "Preparation"
+        protagonistConfig.presets[1].qc = 2
+        protagonistConfig.presets[2] = nil
+        protagonistConfig.presets[4] = {
+            name = "Boss Fight",
+            cat = "encounter",
+            qc = 1,
+            spells = {
+                OWNERONLY = {
+                    kind = "spl", on = 1, tgt = "s", pri = 1,
+                    rep = 3, lock = 1,
+                },
+            },
+        }
+        protagonistConfig.ap = 4
+
+        local conflictingConfig = BfBot.Persist.GetDefaultConfig()
+        conflictingConfig.presets[3] = {
+            name = "Wrong Template", cat = "custom", qc = 0, spells = {},
+        }
+
+        local auxBySprite = {
+            [protagonist] = { BB = protagonistConfig },
+            [conflictingMember] = { BB = conflictingConfig },
+            [recruit] = {},
+        }
+        EEex_GetUDAux = function(sprite)
+            return assert(auxBySprite[sprite])
+        end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            if sprite == protagonist then return 0 end
+            if sprite == conflictingMember then return 2 end
+            if sprite == recruit then return 5 end
+            error("unknown synthetic sprite")
+        end
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return conflictingMember end
+            if slot == 2 then return protagonist end
+            if slot == 3 then return recruit end
+            return nil
+        end
+        BfBot.Scan.GetCastableSpells = function(sprite)
+            assert(sprite == recruit)
+            return {
+                LONG = {
+                    kind = "spl", count = 1, duration = 600, durCat = "long",
+                    class = { isBuff = true, defaultTarget = "p" },
+                },
+                SHORT = {
+                    kind = "spl", count = 1, duration = 60, durCat = "short",
+                    class = { isBuff = true, defaultTarget = "s" },
+                },
+                ITEM = {
+                    kind = "itm", count = 1, duration = 600, durCat = "long",
+                    class = { isBuff = true, defaultTarget = "s" },
+                },
+            }, 3
+        end
+
+        local created = BfBot.Persist.GetConfig(recruit)
+        local inherited = created.presets[4]
+        return {
+            inherited = inherited ~= nil,
+            inheritedName = inherited and inherited.name or nil,
+            inheritedCat = inherited and inherited.cat or nil,
+            inheritedQc = inherited and inherited.qc or nil,
+            firstPresetQc = created.presets[1].qc,
+            sparseGapPreserved = created.presets[2] == nil
+                and created.presets[3] == nil,
+            activePreset = created.ap,
+            customLongDisabled = inherited and inherited.spells.LONG
+                and inherited.spells.LONG.on == 0,
+            customShortDisabled = inherited and inherited.spells.SHORT
+                and inherited.spells.SHORT.on == 0,
+            customItemDisabled = inherited and inherited.spells.ITEM
+                and inherited.spells.ITEM.on == 0,
+            ownerSpellNotCopied = inherited
+                and inherited.spells.OWNERONLY == nil,
+            firstPresetDisabled = created.presets[1].spells.LONG.on == 0
+                and created.presets[1].spells.SHORT.on == 0
+                and created.presets[1].spells.ITEM.on == 0,
+            protagonistWon = created.presets[3] == nil,
+            deepCopied = inherited
+                and inherited ~= protagonistConfig.presets[4]
+                and inherited.spells ~= protagonistConfig.presets[4].spells,
+            sourceUnchanged = protagonistConfig.presets[4].spells.OWNERONLY.on == 1
+                and protagonistConfig.presets[4].spells.LONG == nil,
+            stored = auxBySprite[recruit].BB == created,
+        }
+        """
+    )
+
+    assert facts["inherited"]
+    assert facts["inheritedName"] == "Boss Fight"
+    assert facts["inheritedCat"] == "encounter"
+    assert facts["inheritedQc"] == 0
+    assert facts["firstPresetQc"] == 0
+    assert facts["sparseGapPreserved"]
+    assert facts["activePreset"] == 1
+    assert facts["customLongDisabled"]
+    assert facts["customShortDisabled"]
+    assert facts["customItemDisabled"]
+    assert facts["ownerSpellNotCopied"]
+    assert facts["firstPresetDisabled"]
+    assert facts["protagonistWon"]
+    assert facts["deepCopied"]
+    assert facts["sourceUnchanged"]
+    assert facts["stored"]
+
+
+def test_new_companion_keeps_inherited_structure_when_scan_is_empty(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local protagonist = {}
+        local recruit = {}
+        local template = BfBot.Persist.GetDefaultConfig()
+        template.presets[1] = nil
+        template.presets[2] = nil
+        template.presets[4] = {
+            name = "Situational", cat = "custom", qc = 2, spells = {},
+        }
+        local auxBySprite = {
+            [protagonist] = { BB = template },
+            [recruit] = {},
+        }
+        EEex_GetUDAux = function(sprite) return auxBySprite[sprite] end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            return sprite == protagonist and 0 or 1
+        end
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return protagonist end
+            if slot == 1 then return recruit end
+            return nil
+        end
+        BfBot.Scan.GetCastableSpells = function(sprite)
+            assert(sprite == recruit)
+            return {}, 0
+        end
+
+        local created = BfBot.Persist.GetConfig(recruit)
+        return {
+            name = created.presets[4] and created.presets[4].name or nil,
+            qc = created.presets[4] and created.presets[4].qc or nil,
+            activePreset = created.ap,
+            exactSparseSlots = created.presets[1] == nil
+                and created.presets[2] == nil and created.presets[3] == nil,
+            empty = created.presets[4]
+                and next(created.presets[4].spells) == nil,
+            stored = auxBySprite[recruit].BB == created,
+        }
+        """
+    )
+
+    assert facts["name"] == "Situational"
+    assert facts["qc"] == 0
+    assert facts["activePreset"] == 4
+    assert facts["exactSparseSlots"]
+    assert facts["empty"]
+    assert facts["stored"]
+
+
+def test_existing_companion_config_is_never_resynchronized(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local protagonist = {}
+        local companion = {}
+        local template = BfBot.Persist.GetDefaultConfig()
+        template.presets[3] = {
+            name = "Party Preset", cat = "custom", qc = 0, spells = {},
+        }
+        local existing = BfBot.Persist.GetDefaultConfig()
+        existing.presets[1].name = "Imported Personal Setup"
+        local auxBySprite = {
+            [protagonist] = { BB = template },
+            [companion] = { BB = existing },
+        }
+        EEex_GetUDAux = function(sprite) return auxBySprite[sprite] end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            return sprite == protagonist and 0 or 1
+        end
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return protagonist end
+            if slot == 1 then return companion end
+            return nil
+        end
+        BfBot.Scan.GetCastableSpells = function()
+            error("existing configs must not be rescanned")
+        end
+
+        local returned = BfBot.Persist.GetConfig(companion)
+        return {
+            sameTable = returned == existing,
+            personalName = returned.presets[1].name,
+            noPartyPreset = returned.presets[3] == nil,
+        }
+        """
+    )
+
+    assert facts["sameTable"]
+    assert facts["personalName"] == "Imported Personal Setup"
+    assert facts["noPartyPreset"]
+
+
+def test_first_config_without_party_template_keeps_default_enablement(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local protagonist = {}
+        local aux = {}
+        EEex_GetUDAux = function(sprite)
+            assert(sprite == protagonist)
+            return aux
+        end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            assert(sprite == protagonist)
+            return 0
+        end
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return protagonist end
+            return nil
+        end
+        BfBot.Scan.GetCastableSpells = function(sprite)
+            assert(sprite == protagonist)
+            return {
+                LONG = {
+                    kind = "spl", count = 1, duration = 600, durCat = "long",
+                    class = { isBuff = true, defaultTarget = "p" },
+                },
+                SHORT = {
+                    kind = "spl", count = 1, duration = 60, durCat = "short",
+                    class = { isBuff = true, defaultTarget = "s" },
+                },
+            }, 2
+        end
+
+        local created = BfBot.Persist.GetConfig(protagonist)
+        return {
+            presetCount = created.presets[1] and created.presets[2]
+                and created.presets[3] == nil and 2 or 0,
+            longEnabled = created.presets[1].spells.LONG.on,
+            shortDisabledInLong = created.presets[1].spells.SHORT.on,
+            longDisabledInShort = created.presets[2].spells.LONG.on,
+            shortEnabled = created.presets[2].spells.SHORT.on,
+        }
+        """
+    )
+
+    assert facts["presetCount"] == 2
+    assert facts["longEnabled"] == 1
+    assert facts["shortDisabledInLong"] == 0
+    assert facts["longDisabledInShort"] == 0
+    assert facts["shortEnabled"] == 1
+
+
+def test_non_party_sprite_does_not_inherit_party_preset_structure(
+    lua: LuaRuntime,
+) -> None:
+    inherited = lua.execute(
+        """
+        local protagonist = {}
+        local outsider = {}
+        local template = BfBot.Persist.GetDefaultConfig()
+        template.presets[3] = {
+            name = "Party Only", cat = "custom", qc = 0, spells = {},
+        }
+        local auxBySprite = {
+            [protagonist] = { BB = template },
+            [outsider] = {},
+        }
+        EEex_GetUDAux = function(sprite) return auxBySprite[sprite] end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            return sprite == protagonist and 0 or -1
+        end
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return protagonist end
+            return nil
+        end
+        BfBot.Scan.GetCastableSpells = function() return {}, 0 end
+
+        local created = BfBot.Persist.GetConfig(outsider)
+        return created.presets[3] ~= nil
+        """
+    )
+
+    assert not inherited
+
+
+def test_loaded_listener_plans_inherited_innate_with_fresh_sprite_wrappers(
+    lua: LuaRuntime,
+) -> None:
+    lua.execute(INNATE_SOURCE)
+    facts = lua.execute(
+        """
+        local callbackRecruit = { identity = "recruit" }
+        local portraitRecruit = { identity = "recruit" }
+        local protagonist = { identity = "protagonist" }
+        local template = BfBot.Persist.GetDefaultConfig()
+        template.presets[1] = nil
+        template.presets[2] = nil
+        template.presets[3] = {
+            name = "Boss Fight", cat = "custom", qc = 2, spells = {},
+        }
+        local auxByIdentity = {
+            protagonist = { BB = template },
+            recruit = {},
+        }
+        EEex_GetUDAux = function(sprite)
+            return assert(auxByIdentity[sprite.identity])
+        end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            return sprite.identity == "protagonist" and 0 or 2
+        end
+        EEex_Sprite_GetPortraitIndex = function(sprite)
+            assert(sprite == callbackRecruit)
+            return 3
+        end
+        local recruitPortraitReads = 0
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 2 then return protagonist end
+            if slot == 3 then
+                recruitPortraitReads = recruitPortraitReads + 1
+                if recruitPortraitReads == 1 then return portraitRecruit end
+                return { identity = "recruit" }
+            end
+            return nil
+        end
+        BfBot.Scan.GetCastableSpells = function(sprite)
+            assert(sprite == portraitRecruit)
+            return {
+                LONG = {
+                    kind = "spl", count = 1, duration = 600, durCat = "long",
+                    class = { isBuff = true, defaultTarget = "p" },
+                },
+            }, 1
+        end
+
+        EEex_Sprite_GetKnownInnateSpellsIterator = function(sprite)
+            assert(sprite.identity == "recruit")
+            return function() return nil end
+        end
+        local planCalls = 0
+        local inheritedDesired = false
+        local activePreset = nil
+        local realPlan = BfBot.Innate._PlanReconciliation
+        BfBot.Innate._PlanReconciliation = function(sprite, slot, config)
+            planCalls = planCalls + 1
+            activePreset = config.ap
+            local plan = realPlan(sprite, slot, config)
+            inheritedDesired = plan.desired.BFBT33 == true
+            return plan
+        end
+        local queued = {}
+        EEex_Action_QueueResponseStringOnAIBase = function(action, sprite)
+            assert(sprite.identity == "recruit")
+            queued[#queued + 1] = action
+        end
+
+        BfBot.Innate._OnSpriteLoaded(callbackRecruit)
+        return {
+            wrappersDiffer = callbackRecruit ~= portraitRecruit,
+            stored = auxByIdentity.recruit.BB ~= nil,
+            planCalls = planCalls,
+            activePreset = activePreset,
+            inheritedDesired = inheritedDesired,
+            queuedCount = #queued,
+            inheritedQueued = table.concat(queued, ""):find(
+                'AddSpecialAbility("BFBT33")', 1, true) ~= nil,
+        }
+        """
+    )
+
+    assert facts["wrappersDiffer"]
+    assert facts["stored"]
+    assert facts["planCalls"] == 1
+    assert facts["activePreset"] == 3
+    assert facts["inheritedDesired"]
+    assert facts["queuedCount"] == 1
+    assert facts["inheritedQueued"]
+
+
 def test_spell_repeat_normalizer_is_strict_and_bounded(lua: LuaRuntime) -> None:
     facts = lua.execute(
         """

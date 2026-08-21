@@ -6360,6 +6360,62 @@ function BfBot.Test.Persist()
     if not hasBool then _ok("No booleans in created config")
     else _nok("Boolean found at " .. tostring(boolPath)) end
 
+    -- ---- Test 3b: New-companion preset structure inheritance ----
+    P("")
+    P("  [3b] New-companion preset structure inheritance")
+
+    do
+        local savedGetCharacterIndex = EEex_Sprite_GetCharacterIndex
+        local savedGetInPortrait = EEex_Sprite_GetInPortrait
+        local savedGetUDAux = EEex_GetUDAux
+        local savedGetProtagonist = BfBot.Persist._GetProtagonist
+        local target, protagonist = {}, {}
+        local source = BfBot.Persist.GetDefaultConfig()
+        source.presets[1].name = "Preparation"
+        source.presets[1].qc = 2
+        source.presets[2] = nil
+        source.presets[4] = {
+            name = "Boss Fight", cat = "encounter", qc = 1,
+            spells = { OWNERONLY = { on = 1 } },
+        }
+        source.ap = 4
+
+        local inheritedOk, inherited = pcall(function()
+            EEex_Sprite_GetCharacterIndex = function(seen)
+                assert(seen == target)
+                return 1
+            end
+            EEex_Sprite_GetInPortrait = function() return nil end
+            EEex_GetUDAux = function(seen)
+                assert(seen == protagonist)
+                return { [BfBot.Persist._KEY] = source }
+            end
+            BfBot.Persist._GetProtagonist = function() return protagonist end
+            return BfBot.Persist._GetInheritedPresetStructure(target)
+        end)
+
+        -- Restore every live function before evaluating the result.
+        EEex_Sprite_GetCharacterIndex = savedGetCharacterIndex
+        EEex_Sprite_GetInPortrait = savedGetInPortrait
+        EEex_GetUDAux = savedGetUDAux
+        BfBot.Persist._GetProtagonist = savedGetProtagonist
+
+        _check(inheritedOk and type(inherited) == "table"
+            and inherited.presets[1].name == "Preparation"
+            and inherited.presets[4].name == "Boss Fight"
+            and inherited.presets[4].cat == "encounter"
+            and inherited.presets[2] == nil and inherited.presets[3] == nil,
+            "Copies exact sparse preset indices and names from protagonist")
+        _check(inheritedOk and inherited.presets[1].qc == 0
+            and inherited.presets[4].qc == 0 and inherited.ap == 1,
+            "Inherited Quick Cast is off and first preset is active")
+        _check(inheritedOk and next(inherited.presets[4].spells) == nil
+            and inherited.presets[4] ~= source.presets[4]
+            and inherited.presets[4].spells ~= source.presets[4].spells
+            and source.presets[4].spells.OWNERONLY.on == 1,
+            "Does not copy or alias protagonist spell settings")
+    end
+
     -- ---- Test 4: Spell config accessors ----
     P("")
     P("  [4] Spell config accessors")

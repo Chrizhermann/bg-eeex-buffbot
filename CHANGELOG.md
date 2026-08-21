@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.7.4-alpha (2026-08-21)
+
+### Fixed
+- New companions now inherit the protagonist's exact preset slots, names, and categories when BuffBot creates their first config. Their own discovered spells and items populate those presets disabled, Quick Cast starts off, sparse/deleted slots stay sparse, and returning companions with an existing personal config are never overwritten. (#41)
+
+### Testing
+- The full automated suite passes **297 tests**, including canonical protagonist selection, sparse preset indices, disabled recruit entries, empty scans, existing-config preservation, non-party exclusion, source isolation, and the loaded-listener path with EEex-style fresh sprite wrappers. Live BG2:EE + EEex acceptance in the Copy Copy installation confirmed normal dialogue recruitment, matching preset/F12 structure, disabled defaults, and save/reload stability.
+
 ## v1.7.3-alpha (2026-08-21)
 
 ### Fixed
