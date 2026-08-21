@@ -200,6 +200,31 @@ def _read_tlk_strings(path: Path) -> list[str]:
     return strings
 
 
+def _write_tlk_strings(path: Path, strings: tuple[str, ...]) -> None:
+    encoded = [value.encode("utf-8") for value in strings]
+    strings_offset = 0x12 + len(encoded) * 26
+    entries: list[bytes] = []
+    payload = bytearray()
+    for value in encoded:
+        entries.append(
+            struct.pack(
+                "<H8siiII",
+                1 if value else 0,
+                b"\0" * 8,
+                0,
+                0,
+                len(payload),
+                len(value),
+            )
+        )
+        payload.extend(value)
+    path.write_bytes(
+        struct.pack("<8sHII", b"TLK V1  ", 0, len(encoded), strings_offset)
+        + b"".join(entries)
+        + payload
+    )
+
+
 def _read_l10n_map(path: Path) -> dict[int, int]:
     text = path.read_bytes().decode("ascii", errors="strict")
     rows = [line for line in text.splitlines() if line]
@@ -217,7 +242,11 @@ def _read_l10n_map(path: Path) -> dict[int, int]:
 
 
 def _assert_runtime_map_dereferences_selected_catalog(
-    game: "BuffBotGame", *, game_language: str, catalog_directory: str
+    game: "BuffBotGame",
+    *,
+    game_language: str,
+    catalog_directory: str,
+    expected_tlk_strings: set[str] | None = None,
 ) -> dict[int, int]:
     catalog, _ = parse_tra(
         ROOT / "buffbot" / "lang" / catalog_directory / "setup.tra"
@@ -229,9 +258,13 @@ def _assert_runtime_map_dereferences_selected_catalog(
     mapping = _read_l10n_map(game.override / "bfbot_l10n.txt")
 
     assert set(mapping) == RUNTIME_CATALOG_IDS
-    assert len(active_strings) == 1 + len(
-        {catalog[catalog_id] for catalog_id in RUNTIME_CATALOG_IDS}
-    )
+    if expected_tlk_strings is None:
+        expected_tlk_strings = {
+            catalog[catalog_id] for catalog_id in RUNTIME_CATALOG_IDS
+        }
+    assert active_strings[0] == ""
+    assert len(active_strings) == 1 + len(expected_tlk_strings)
+    assert set(active_strings[1:]) == expected_tlk_strings
     for catalog_id, strref in mapping.items():
         assert active_strings[strref] == catalog[catalog_id]
 
@@ -892,6 +925,166 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
         game,
         game_language="en_US",
         catalog_directory="english",
+    )
+    assert (game.override / "bfbot_l10n.txt").read_bytes() == english_map
+    assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map
+    assert after_return.override == after_english.override
+    assert (
+        after_return.loader_ini,
+        after_return.root_lua51,
+        after_return.root_provider,
+    ) == helper_state
+    assert _file_tree(game.root / "weidu_external/backup/buffbot/1") == helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 1), (0, 0)]
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+@pytest.mark.parametrize("fixed_game_language", ("en_US", "zh_CN"))
+def test_language_switch_reuses_one_fixed_game_tlk_without_duplicate_growth(
+    game_factory, layout: str, fixed_game_language: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    selected_tlk = (
+        game.lang_tlk
+        if fixed_game_language == "en_US"
+        else game.schinese_tlk
+    )
+    inactive_tlk = (
+        game.schinese_tlk
+        if fixed_game_language == "en_US"
+        else game.lang_tlk
+    )
+    sentinel = "pre-existing fixed TLK sentinel"
+    _write_tlk_strings(selected_tlk, ("", sentinel))
+    baseline = game.snapshot()
+    inactive_baseline = inactive_tlk.read_bytes()
+
+    english_catalog, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+    chinese_catalog, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
+    english_runtime_strings = {
+        english_catalog[catalog_id] for catalog_id in RUNTIME_CATALOG_IDS
+    }
+    chinese_runtime_strings = {
+        chinese_catalog[catalog_id] for catalog_id in RUNTIME_CATALOG_IDS
+    }
+    english_tlk_strings = {sentinel} | english_runtime_strings
+    union_tlk_strings = english_tlk_strings | chinese_runtime_strings
+
+    fresh_english = game.install_many(
+        1,
+        0,
+        mod_language=0,
+        game_language=fixed_game_language,
+    )
+    english_transcript = _assert_installed(game, fresh_english)
+    assert english_transcript.count("SUCCESSFULLY INSTALLED") == 2
+    assert "NOT INSTALLED DUE TO ERRORS" not in english_transcript
+    assert "ERROR Installing" not in english_transcript
+
+    after_english = game.snapshot()
+    assert game.root_tlk.read_bytes() == baseline.root_tlk
+    assert inactive_tlk.read_bytes() == inactive_baseline
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language=fixed_game_language,
+        catalog_directory="english",
+        expected_tlk_strings=english_tlk_strings,
+    )
+    english_strings = _read_tlk_strings(selected_tlk)
+    assert english_strings[1] == sentinel
+    english_map = (game.override / "bfbot_l10n.txt").read_bytes()
+    english_innate_map = (game.override / "bfbot_strrefs.txt").read_bytes()
+    english_payload = {
+        name: payload
+        for name, payload in after_english.override.items()
+        if name not in {"bfbot_l10n.txt", "bfbot_strrefs.txt"}
+    }
+    helper_state = (
+        after_english.loader_ini,
+        after_english.root_lua51,
+        after_english.root_provider,
+    )
+    helper_backup = _file_tree(game.root / "weidu_external/backup/buffbot/1")
+    assert helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 1), (0, 0)]
+
+    switch_to_chinese = game.run_args(
+        "--force-uninstall-list",
+        0,
+        "--force-install-list",
+        0,
+        mod_language=1,
+        game_language=fixed_game_language,
+    )
+    chinese_transcript = _assert_installed(game, switch_to_chinese)
+    assert chinese_transcript.count("SUCCESSFULLY REMOVED") == 1
+    assert chinese_transcript.count("SUCCESSFULLY INSTALLED") == 1
+    assert "NOT INSTALLED DUE TO ERRORS" not in chinese_transcript
+    assert "ERROR Installing" not in chinese_transcript
+
+    after_chinese = game.snapshot()
+    assert game.root_tlk.read_bytes() == baseline.root_tlk
+    assert inactive_tlk.read_bytes() == inactive_baseline
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language=fixed_game_language,
+        catalog_directory="schinese",
+        expected_tlk_strings=union_tlk_strings,
+    )
+    chinese_strings = _read_tlk_strings(selected_tlk)
+    assert chinese_strings[1] == sentinel
+    assert len(chinese_strings) - len(english_strings) == len(
+        chinese_runtime_strings - english_runtime_strings
+    )
+    assert {
+        name: payload
+        for name, payload in after_chinese.override.items()
+        if name not in {"bfbot_l10n.txt", "bfbot_strrefs.txt"}
+    } == english_payload
+    assert (
+        after_chinese.loader_ini,
+        after_chinese.root_lua51,
+        after_chinese.root_provider,
+    ) == helper_state
+    assert _file_tree(game.root / "weidu_external/backup/buffbot/1") == helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 1), (1, 0)]
+
+    switch_back_to_english = game.run_args(
+        "--force-uninstall-list",
+        0,
+        "--force-install-list",
+        0,
+        mod_language=0,
+        game_language=fixed_game_language,
+    )
+    return_transcript = _assert_installed(game, switch_back_to_english)
+    assert return_transcript.count("SUCCESSFULLY REMOVED") == 1
+    assert return_transcript.count("SUCCESSFULLY INSTALLED") == 1
+    assert "NOT INSTALLED DUE TO ERRORS" not in return_transcript
+    assert "ERROR Installing" not in return_transcript
+
+    after_return = game.snapshot()
+    assert selected_tlk.read_bytes() == (
+        after_chinese.lang_tlk
+        if fixed_game_language == "en_US"
+        else after_chinese.schinese_tlk
+    )
+    assert game.root_tlk.read_bytes() == baseline.root_tlk
+    assert inactive_tlk.read_bytes() == inactive_baseline
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language=fixed_game_language,
+        catalog_directory="english",
+        expected_tlk_strings=union_tlk_strings,
     )
     assert (game.override / "bfbot_l10n.txt").read_bytes() == english_map
     assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map

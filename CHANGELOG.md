@@ -13,7 +13,7 @@
 - **Language switching preserves installer ownership and payload state.** Current helper-first installs switch the main component in one forced uninstall/install pass. Upgraded v1.7.0 main-first stacks safely switch by selecting both installed components together, as documented in the README.
 
 ### Testing
-- The full automated suite passes **378 tests**. Real WeiDU 249 synthetic-game coverage exercises English and Simplified Chinese across EEex v0.11 and v1, exact TLK/map dereferencing, inactive/root TLK byte stability, fresh helper/main installation, English-to-Chinese-to-English switching without duplicate TLK growth, the released-v1.7.0 upgrade lifecycle, helper backup ownership/restoration, and installation from the packaged Chinese archive.
+- The full automated suite passes **382 tests**. Real WeiDU 249 synthetic-game coverage exercises English and Simplified Chinese across EEex v0.11 and v1, exact TLK/map dereferencing, inactive/root TLK byte stability, fresh helper/main installation, same-game-TLK English-to-Chinese-to-English switching without duplicate growth, the released-v1.7.0 upgrade lifecycle, helper backup ownership/restoration, and installation from the packaged Chinese archive.
 - Live Simplified Chinese CJK font/glyph/layout and Copy Copy acceptance are still pending and are not claimed here, including real runtime Project Image safety, non-ASCII export filenames, and save/reload. BG1EE, EET, alternate resolutions/fonts, the Project Infinity frontend, and WeiDU versions other than 249 also remain unvalidated.
 
 ## v1.7.4-alpha (2026-08-21)
