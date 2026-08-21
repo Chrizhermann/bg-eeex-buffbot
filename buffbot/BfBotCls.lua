@@ -731,14 +731,30 @@ end
 --- sourceKind="itm" so a same-resref SPL can never supply the item verdict.
 function BfBot.Class.Classify(resref, header, ability, sourceKind)
     local cacheKey = sourceKind == "itm" and ("itm:" .. resref) or resref
+    -- Unlike the resref-level scoring metadata below, Project Image identity
+    -- belongs to the currently selected ability header. Compute it on every
+    -- call so a multi-ability resource cannot inherit another ability's flag.
+    local currentIsProjectImage = BfBot.Class._IsProjectImage(
+        resref, header, ability)
+
     -- Check cache
     local cached = BfBot._cache.class[cacheKey]
-    if cached then return cached end
+    if cached then
+        if cached.isProjectImage == currentIsProjectImage then
+            return cached
+        end
+        -- Preserve the invariant cached classification while returning a
+        -- per-call scalar overlay. Never mutate the shared cache: callers
+        -- holding an earlier ability's result must keep its original flag.
+        local overlay = {}
+        for k, v in pairs(cached) do overlay[k] = v end
+        overlay.isProjectImage = currentIsProjectImage
+        return overlay
+    end
 
     local result = {}
     result.msectype = header.secondaryType or 0
-    result.isProjectImage = BfBot.Class._IsProjectImage(
-        resref, header, ability)
+    result.isProjectImage = currentIsProjectImage
 
     -- Leaf sub-spell resrefs from the op=146 chain (empty table for
     -- direct-effect spells). Pre-flight already-active checks need this:

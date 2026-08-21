@@ -1329,6 +1329,64 @@ def test_project_image_classification_uses_opcode_236_image_type(
     assert facts["overridden"]
 
 
+def test_project_image_classification_recomputes_flag_across_resref_cache(
+    project_image_lua: LuaRuntime,
+) -> None:
+    facts = project_image_lua.execute(
+        """
+        local misleadAbility = BfBot_TestAbility({
+            { effectID = 236, dwFlags = 1 },
+        })
+        local projectImageAbility = BfBot_TestAbility({
+            { effectID = 236, dwFlags = 2 },
+        })
+        local misleadHeader = BfBot_TestHeader(misleadAbility)
+        local projectImageHeader = BfBot_TestHeader(projectImageAbility)
+
+        -- Non-PI first, then PI under the same resref.
+        local nonPiFirst = BfBot.Class.Classify(
+            "SAME", misleadHeader, misleadAbility)
+        local piSecond = BfBot.Class.Classify(
+            "SAME", projectImageHeader, projectImageAbility)
+        local forwardCached = BfBot._cache.class.SAME
+
+        -- PI first, then non-PI under the same resref.
+        BfBot._cache.class = {}
+        local piFirst = BfBot.Class.Classify(
+            "SAME", projectImageHeader, projectImageAbility)
+        local nonPiSecond = BfBot.Class.Classify(
+            "SAME", misleadHeader, misleadAbility)
+        local reverseCached = BfBot._cache.class.SAME
+
+        return {
+            forwardFirst = nonPiFirst.isProjectImage == true,
+            forwardSecond = piSecond.isProjectImage == true,
+            forwardDistinct = nonPiFirst ~= piSecond,
+            forwardCacheUnchanged = forwardCached.isProjectImage == false,
+            forwardOtherFieldsReused = piSecond.leafResrefs
+                == nonPiFirst.leafResrefs,
+            reverseFirst = piFirst.isProjectImage == true,
+            reverseSecond = nonPiSecond.isProjectImage == true,
+            reverseDistinct = piFirst ~= nonPiSecond,
+            reverseCacheUnchanged = reverseCached.isProjectImage == true,
+            reverseOtherFieldsReused = nonPiSecond.leafResrefs
+                == piFirst.leafResrefs,
+        }
+        """
+    )
+
+    assert not facts["forwardFirst"]
+    assert facts["forwardSecond"]
+    assert facts["forwardDistinct"]
+    assert facts["forwardCacheUnchanged"]
+    assert facts["forwardOtherFieldsReused"]
+    assert facts["reverseFirst"]
+    assert not facts["reverseSecond"]
+    assert facts["reverseDistinct"]
+    assert facts["reverseCacheUnchanged"]
+    assert facts["reverseOtherFieldsReused"]
+
+
 def test_project_image_classification_recurses_two_wrappers_and_guards_cycles(
     project_image_lua: LuaRuntime,
 ) -> None:
