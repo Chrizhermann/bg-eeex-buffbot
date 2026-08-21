@@ -14,6 +14,7 @@ LANG_ROOT = ROOT / "buffbot" / "lang"
 LOC_PATH = ROOT / "buffbot" / "BfBotLoc.lua"
 MAIN_PATH = ROOT / "buffbot" / "M_BfBot.lua"
 DEPLOY_PATH = ROOT / "tools" / "deploy.sh"
+TP2_PATH = ROOT / "buffbot" / "setup-buffbot.tp2"
 
 ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~([^~]*)~\s*$")
 EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
@@ -644,3 +645,48 @@ def test_deploy_verifies_and_copies_runtime_localization_module():
     assert len(file_loops) >= 2
     assert "BfBotLoc.lua" in file_loops[0].split()
     assert "BfBotLoc.lua" in file_loops[1].split()
+
+
+def test_installer_localization_contract_uses_catalog_refs_and_explicit_sparse_map():
+    source = TP2_PATH.read_text(encoding="utf-8")
+    language_pos = source.index("LANGUAGE")
+    helper_label_pos = source.index("LABEL ~BuffBot-LuaJIT~")
+
+    assert source.index("ALWAYS") < language_pos < helper_label_pos
+    assert source[:language_pos].rstrip().endswith("END")
+    assert "~buffbot/lang/english/setup.tra~" in source
+    assert "~buffbot/lang/schinese/setup.tra~" in source
+    assert "BEGIN @100" in source
+    assert "BEGIN @111" in source
+    expected_installer_ref_counts = {
+        100: 1,
+        101: 2,
+        102: 2,
+        **{catalog_id: 1 for catalog_id in range(103, 113)},
+    }
+    english, _ = parse_tra(LANG_ROOT / "english" / "setup.tra")
+    for catalog_id in range(100, 113):
+        assert (
+            source.count(f"@{catalog_id}")
+            == expected_installer_ref_counts[catalog_id]
+        )
+        assert english[catalog_id] not in source
+
+    runtime_ids = {
+        catalog_id
+        for catalog_id, semantic_key in CATALOG_SCHEMA.items()
+        if not semantic_key.startswith("installer.")
+    }
+    resolved_ids = {
+        int(catalog_id)
+        for catalog_id in re.findall(r"RESOLVE_STR_REF\(@(\d+)\)", source)
+    }
+    emitted_ids = {
+        int(catalog_id)
+        for catalog_id in re.findall(
+            r"(?m)^(\d+)=%bfbot_l10n_\d+%$", source
+        )
+    }
+    assert runtime_ids <= resolved_ids
+    assert emitted_ids == runtime_ids
+    assert "COPY ~buffbot/BfBotLoc.lua~" in source

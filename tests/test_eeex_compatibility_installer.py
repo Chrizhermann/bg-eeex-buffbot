@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from tests.ie_formats import write_minimal_bg2ee_key_biff, write_minimal_tlk
+from tests.test_localization import CATALOG_SCHEMA, parse_tra
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,11 +24,21 @@ REQUIREMENT_TEXT = "BuffBot requires EEex v0.11.0-alpha or later"
 MAIN_LUAJIT_REQUIREMENT_TEXT = (
     "BuffBot requires EEex LuaJIT to be active before installing the main component"
 )
-TOOLTIP_STRINGS = tuple(f"BuffBot {index}" for index in range(1, 9))
+LANGUAGE_CASES = (
+    (0, "en_US", "english"),
+    (1, "zh_CN", "schinese"),
+)
+ENGLISH_CATALOG, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+RUNTIME_CATALOG_IDS = {
+    catalog_id
+    for catalog_id, semantic_key in CATALOG_SCHEMA.items()
+    if not semantic_key.startswith("installer.")
+}
 
 MAIN_OUTPUT_FILES = {
     "m_bfbot.lua",
     "bfbotcor.lua",
+    "bfbotloc.lua",
     "bfbotcls.lua",
     "bfbotscn.lua",
     "bfbotexe.lua",
@@ -57,6 +68,7 @@ MAIN_OUTPUT_FILES = {
     "mos9923.pvrz",
     "bfbotfr3.pvrz",
     "bfbot_strrefs.txt",
+    "bfbot_l10n.txt",
 }
 
 CAPABILITY_CASES = (
@@ -188,12 +200,39 @@ def _read_tlk_strings(path: Path) -> list[str]:
     return strings
 
 
+def _read_l10n_map(path: Path) -> dict[int, int]:
+    text = path.read_bytes().decode("ascii", errors="strict")
+    rows = [line for line in text.splitlines() if line]
+    assert rows, "localization map is empty"
+    assert all(re.fullmatch(r"\d+=\d+", row) for row in rows)
+    assert len(rows) == len(set(rows)), "localization map contains duplicate rows"
+
+    result: dict[int, int] = {}
+    for row in rows:
+        catalog_id_text, strref_text = row.split("=", maxsplit=1)
+        catalog_id = int(catalog_id_text)
+        assert catalog_id not in result, f"duplicate catalog id: {catalog_id}"
+        result[catalog_id] = int(strref_text)
+    return result
+
+
+def _assert_english_runtime_catalog_in_tlk(path: Path) -> None:
+    strings = _read_tlk_strings(path)
+    expected_values = {
+        ENGLISH_CATALOG[catalog_id] for catalog_id in RUNTIME_CATALOG_IDS
+    }
+    assert strings[0] == ""
+    assert expected_values <= set(strings[1:])
+    assert set(strings[1:]) <= set(ENGLISH_CATALOG.values())
+
+
 @dataclass(frozen=True)
 class ProductState:
     key: bytes
     bif: bytes
     root_tlk: bytes
     lang_tlk: bytes
+    schinese_tlk: bytes
     override: dict[str, bytes]
     eeex: dict[str, bytes]
     eeex_scripts: dict[str, bytes]
@@ -211,8 +250,10 @@ class BuffBotGame:
         self.bif = write_minimal_bg2ee_key_biff(root)
         self.root_tlk = root / "dialog.tlk"
         self.lang_tlk = root / "lang/en_US/dialog.tlk"
+        self.schinese_tlk = root / "lang/zh_CN/dialog.tlk"
         write_minimal_tlk(self.root_tlk)
         write_minimal_tlk(self.lang_tlk)
+        write_minimal_tlk(self.schinese_tlk)
         shutil.copytree(ROOT / "buffbot", root / "buffbot")
         (self.override / "KEEP.ME").write_bytes(KEEP_BYTES)
         self._build_layout(layout, with_log=with_log)
@@ -351,6 +392,7 @@ class BuffBotGame:
             bif=self.bif.read_bytes(),
             root_tlk=self.root_tlk.read_bytes(),
             lang_tlk=self.lang_tlk.read_bytes(),
+            schinese_tlk=self.schinese_tlk.read_bytes(),
             override=_file_tree(self.override),
             eeex=_file_tree(self.root / "EEex"),
             eeex_scripts=_file_tree(self.root / "EEex_scripts"),
@@ -359,7 +401,12 @@ class BuffBotGame:
             root_provider=_file_bytes(self.root / "LuaProvider.dll"),
         )
 
-    def run_args(self, *arguments: str | int) -> subprocess.CompletedProcess[str]:
+    def run_args(
+        self,
+        *arguments: str | int,
+        mod_language: int = 0,
+        game_language: str = "en_US",
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 str(_weidu()),
@@ -368,9 +415,9 @@ class BuffBotGame:
                 str(self.root),
                 *(str(argument) for argument in arguments),
                 "--language",
-                "0",
+                str(mod_language),
                 "--use-lang",
-                "en_US",
+                game_language,
                 "--no-exit-pause",
                 "--quick-log",
                 "--noautoupdate",
@@ -385,15 +432,45 @@ class BuffBotGame:
         )
 
     def run(
-        self, operation: str, *components: int
+        self,
+        operation: str,
+        *components: int,
+        mod_language: int = 0,
+        game_language: str = "en_US",
     ) -> subprocess.CompletedProcess[str]:
-        return self.run_args(operation, *components)
+        return self.run_args(
+            operation,
+            *components,
+            mod_language=mod_language,
+            game_language=game_language,
+        )
 
-    def install(self, component: int) -> subprocess.CompletedProcess[str]:
-        return self.run("--force-install-list", component)
+    def install(
+        self,
+        component: int,
+        *,
+        mod_language: int = 0,
+        game_language: str = "en_US",
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run(
+            "--force-install-list",
+            component,
+            mod_language=mod_language,
+            game_language=game_language,
+        )
 
-    def install_many(self, *components: int) -> subprocess.CompletedProcess[str]:
-        return self.run("--force-install-list", *components)
+    def install_many(
+        self,
+        *components: int,
+        mod_language: int = 0,
+        game_language: str = "en_US",
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run(
+            "--force-install-list",
+            *components,
+            mod_language=mod_language,
+            game_language=game_language,
+        )
 
     def uninstall(self, component: int) -> subprocess.CompletedProcess[str]:
         return self.run("--force-uninstall-list", component)
@@ -430,7 +507,8 @@ class BuffBotGame:
         assert after.root_lua51 == before.root_lua51
         assert after.root_provider == before.root_provider
         assert after.lang_tlk != before.lang_tlk
-        assert _read_tlk_strings(self.lang_tlk) == ["", *TOOLTIP_STRINGS]
+        assert after.schinese_tlk == before.schinese_tlk
+        _assert_english_runtime_catalog_in_tlk(self.lang_tlk)
         assert after.override.keys() == before.override.keys() | MAIN_OUTPUT_FILES
         for name, payload in before.override.items():
             assert after.override[name] == payload
@@ -539,12 +617,99 @@ def test_installer_source_does_not_gate_on_eeex_component_numbers() -> None:
 
 def test_luajit_helper_is_declared_before_main_with_stable_component_ids() -> None:
     source = (ROOT / "buffbot/setup-buffbot.tp2").read_text(encoding="utf-8")
-    helper_begin = source.index("BEGIN ~BuffBot: EEex LuaJIT Support")
-    main_begin = source.index("BEGIN ~BuffBot: In-Game Buff Automation~")
+    helper_begin = source.index("LABEL ~BuffBot-LuaJIT~")
+    main_begin = source.index("LABEL ~BuffBot-Main~")
 
     assert helper_begin < main_begin
-    assert "DESIGNATED 1" in source[helper_begin:main_begin]
-    assert "DESIGNATED 0" in source[main_begin:]
+    assert "DESIGNATED 1" in source[source.rfind("BEGIN", 0, helper_begin):helper_begin]
+    assert "DESIGNATED 0" in source[source.rfind("BEGIN", 0, main_begin):main_begin]
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+@pytest.mark.parametrize(
+    ("mod_language", "game_language", "catalog_directory"),
+    LANGUAGE_CASES,
+)
+def test_installer_localization_selects_one_tlk_and_writes_exact_sparse_runtime_map(
+    game_factory,
+    layout: str,
+    mod_language: int,
+    game_language: str,
+    catalog_directory: str,
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    before = game.snapshot()
+    catalog, _ = parse_tra(
+        ROOT / "buffbot" / "lang" / catalog_directory / "setup.tra"
+    )
+    runtime_ids = RUNTIME_CATALOG_IDS
+    assert runtime_ids != set(range(min(runtime_ids), max(runtime_ids) + 1))
+
+    process = game.install_many(
+        1,
+        0,
+        mod_language=mod_language,
+        game_language=game_language,
+    )
+    transcript = _assert_installed(game, process)
+    assert transcript.index(catalog[100]) < transcript.index(catalog[111])
+    assert catalog[107] in transcript
+    assert catalog[108].replace("%lua_version%", game.expected_version) in transcript
+    assert "%lua_version%" not in transcript
+    assert catalog[109] in transcript
+
+    active_tlk = (
+        game.lang_tlk if game_language == "en_US" else game.schinese_tlk
+    )
+    inactive_tlk = (
+        game.schinese_tlk if game_language == "en_US" else game.lang_tlk
+    )
+    inactive_before = (
+        before.schinese_tlk if game_language == "en_US" else before.lang_tlk
+    )
+    active_strings = _read_tlk_strings(active_tlk)
+
+    assert inactive_tlk.read_bytes() == inactive_before
+    assert game.root_tlk.read_bytes() == before.root_tlk
+    assert active_strings[0] == ""
+    assert set(active_strings[1:]).issubset(set(catalog.values()))
+
+    mapping = _read_l10n_map(game.override / "bfbot_l10n.txt")
+    assert set(mapping) == runtime_ids
+    assert all(strref >= 0 for strref in mapping.values())
+    for catalog_id, strref in mapping.items():
+        assert active_strings[strref] == catalog[catalog_id]
+
+    innate_strrefs = [
+        int(line)
+        for line in (game.override / "bfbot_strrefs.txt")
+        .read_text(encoding="ascii")
+        .splitlines()
+        if line
+    ]
+    assert innate_strrefs == [mapping[catalog_id] for catalog_id in range(200, 208)]
+
+    text_payloads = sorted(
+        relative
+        for relative in MAIN_OUTPUT_FILES
+        if Path(relative).suffix in {".lua", ".menu", ".txt"}
+    )
+    for relative in text_payloads:
+        installed = (game.override / relative).read_text(encoding="utf-8")
+        assert "BFBOTUITRA_" not in installed
+    for relative in ("bfbot_l10n.txt", "bfbot_strrefs.txt"):
+        installed = (game.override / relative).read_text(encoding="ascii")
+        assert re.search(r"@\d+", installed) is None
+        assert re.search(r"%[A-Za-z_][A-Za-z0-9_]*%", installed) is None
 
 
 def test_helper_and_main_share_one_exact_luajit_state_detector() -> None:
@@ -618,7 +783,7 @@ def test_selecting_helper_and_main_together_activates_before_main(
     assert "BuffBot: In-Game Buff Automation" in transcript, transcript
     game.assert_luajit_state(game.expected_version)
     assert not MAIN_OUTPUT_FILES.isdisjoint(_file_tree(game.override))
-    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    _assert_english_runtime_catalog_in_tlk(game.lang_tlk)
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
@@ -698,7 +863,7 @@ def test_released_main_then_helper_install_updates_under_helper_first_tp2(
     assert after.key == inactive.key
     assert after.bif == inactive.bif
     assert after.root_tlk == inactive.root_tlk
-    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    _assert_english_runtime_catalog_in_tlk(game.lang_tlk)
     assert MAIN_OUTPUT_FILES.issubset(after.override)
     assert after.override["keep.me"] == KEEP_BYTES
 
@@ -851,7 +1016,7 @@ def test_legacy_helper_ownership_survives_main_uninstall_then_restores(
     assert after.override == before.override
     assert after.eeex == before.eeex
     assert after.eeex_scripts == before.eeex_scripts
-    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    _assert_english_runtime_catalog_in_tlk(game.lang_tlk)
 
 
 @pytest.mark.parametrize("newline", ("\n", "\r\n"), ids=("lf", "crlf"))
@@ -1202,10 +1367,10 @@ def test_main_component_uninstall_leaves_stable_tlk_residue_and_reuses_it(
     assert _file_tree(game.override) == before.override
     game.assert_no_main_payload()
     assert game.lang_tlk.read_bytes() == first_tlk
-    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    _assert_english_runtime_catalog_in_tlk(game.lang_tlk)
     assert game.root_tlk.read_bytes() == before.root_tlk
 
     second_install = game.install(0)
     _assert_installed(game, second_install)
     assert game.lang_tlk.read_bytes() == first_tlk
-    assert _read_tlk_strings(game.lang_tlk) == ["", *TOOLTIP_STRINGS]
+    _assert_english_runtime_catalog_in_tlk(game.lang_tlk)
