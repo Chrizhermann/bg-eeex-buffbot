@@ -92,6 +92,11 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
     local hasVariants = (classResult and classResult.hasVariants) and 1 or 0
     local variants = (classResult and classResult.variants) or nil
 
+    -- Structural Project Image identity (opcode 236, image type 2). Keep the
+    -- transient scan shape marshal-safe and consistent with its other flags.
+    local isProjectImage = (classResult and classResult.isProjectImage)
+        and 1 or 0
+
     return {
         resref = resref,
         kind = "spl",
@@ -104,6 +109,7 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
         durCat = durCat,
         isAoE = isAoE,
         isSelfOnly = isSelfOnly,
+        isProjectImage = isProjectImage,
         hasVariants = hasVariants,
         variants = variants,
         class = classResult,
@@ -246,6 +252,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             durCat = BfBot.Class.GetDurationCategory(duration or 0),
             isAoE = (classResult.isAoE) and 1 or 0,
             isSelfOnly = (classResult.isSelfOnly) and 1 or 0,
+            isProjectImage = (classResult.isProjectImage) and 1 or 0,
             hasVariants = 0,
             variants = nil,
             class = classResult,

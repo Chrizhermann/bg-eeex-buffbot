@@ -1655,23 +1655,16 @@ end
 ---           fallback only when it doesn't.
 ---   Rule 2: the caster's own chain casts Project Image with entries AFTER
 ---           it → trailing entries dropped; entries before it and the PI
----           cast itself stay. Detection is pragmatic: the scan entry's
----           display NAME matched against "project image" case-insensitively
----           (resref is NOT assumable under Spell Revisions relocation).
----           LIMITATION: the name match is English-only — on TLK-localized
----           installs (e.g. German "Projektion") rule 2 does not match, and
----           modded PI-alikes with different names aren't caught either. In
----           both cases the degradation is benign: the trailing entries fire
----           delayed at image expiry and the exec watchdog still completes
----           the run. Rule 1 is locale-independent (stat 139 + object id),
----           so the owner lock itself holds on every locale.
+---           cast itself stay. Detection uses the scan entry's structural
+---           `isProjectImage=1` flag (opcode 236, image type 2), so it is
+---           independent of the active TLK and spell resref.
 ---   Rule 3: Simulacrum (cloneType 3) locks nothing — only cloneType 2
 ---           participates, no other handling.
 --- No logging here (pure, synthetic-testable) — callers log the returned
 --- skip records (see _LogBuildSkips).
 -- @param caster     { oid = number|nil, name = string|nil } — the party caster
 -- @param entries    ONE caster's priority-sorted entry list; each entry
---                   carries `spellName` (display name, rule-2 match)
+--                   carries integer `isProjectImage` from the scan result
 -- @param liveClones array of { cloneType, ownerOid|nil, ownerName|nil }
 -- @return kept array using the original entry tables, except a retained
 --              Project Image entry is a shallow copy with rep=1;
@@ -1709,8 +1702,7 @@ function BfBot.Persist._ApplyPuppetLockPolicy(caster, entries, liveClones)
     -- Copy the entry before forcing rep=1 so queue building never mutates the
     -- caller's persisted/config-derived table.
     for i, e in ipairs(entries) do
-        local nm = type(e.spellName) == "string" and e.spellName:lower() or ""
-        if nm:find("project image", 1, true) then
+        if e.isProjectImage == 1 then
             local retained = {}
             for k, v in pairs(e) do retained[k] = v end
             retained.rep = 1
@@ -1852,9 +1844,9 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
                 end
                 for _, e in ipairs(resolved) do
                     e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
-                    -- Display name rides along for the puppet-lock rule-2
-                    -- name match; never copied onto the final queue entry.
-                    e.spellName = scanData.name or resref
+                    -- Transient structural flag for puppet-lock rule 2;
+                    -- never copied onto the final execution queue entry.
+                    e.isProjectImage = (scanData.isProjectImage == 1) and 1 or 0
                     table.insert(entries, e)
                 end
             end
@@ -1879,8 +1871,8 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
         entries = kept
     end
 
-    -- Append to queue (strip pri/spellName ride-alongs, retain normalized rep
-    -- for Exec's per-attempt expansion).
+    -- Append to queue (strip priority/structural ride-alongs, retain normalized
+    -- rep for Exec's per-attempt expansion).
     local qc = (type(preset.qc) == "number") and preset.qc or 0
     local queue = {}
     for _, e in ipairs(entries) do
@@ -1961,9 +1953,10 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                     end
                     for _, e in ipairs(resolved) do
                         e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
-                        -- Display name rides along for the puppet-lock rule-2
-                        -- name match; never copied onto the final queue entry.
-                        e.spellName = scanData.name or resref
+                        -- Transient structural flag for puppet-lock rule 2;
+                        -- never copied onto the final execution queue entry.
+                        e.isProjectImage = (scanData.isProjectImage == 1)
+                            and 1 or 0
                         table.insert(entries, e)
                     end
                 end
@@ -1987,7 +1980,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
             entries = kept
         end
 
-        -- Append to queue (strip pri/spellName ride-alongs, retain rep).
+        -- Append to queue (strip priority/structural ride-alongs, retain rep).
         for _, e in ipairs(entries) do
             local scanData = castable[e.spell]
             local spellCfg = preset.spells[e.spell]
@@ -2339,9 +2332,9 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
                 end
                 for _, e in ipairs(resolved) do
                     e.rep = BfBot.Persist._NormalizeSpellRepeat(spellCfg.rep)
-                    -- Display name rides along for the puppet-lock rule-2
-                    -- name match; never copied onto the final queue entry.
-                    e.spellName = scanData.name or resref
+                    -- Transient structural flag for puppet-lock rule 2;
+                    -- never copied onto the final execution queue entry.
+                    e.isProjectImage = (scanData.isProjectImage == 1) and 1 or 0
                     table.insert(entries, e)
                 end
             end
@@ -2376,7 +2369,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
         entries = kept
     end
 
-    -- Strip pri/spellName ride-alongs; retain normalized rep for Exec.
+    -- Strip priority/structural ride-alongs; retain normalized rep for Exec.
     local queue = {}
     for _, e in ipairs(entries) do
         local scanData = castable[e.spell]

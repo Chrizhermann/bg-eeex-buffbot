@@ -11,6 +11,8 @@ from lupa.luajit21 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE = (ROOT / "buffbot/BfBotCor.lua").read_text(encoding="utf-8")
+CLASS_SOURCE = (ROOT / "buffbot/BfBotCls.lua").read_text(encoding="utf-8")
+SCAN_SOURCE = (ROOT / "buffbot/BfBotScn.lua").read_text(encoding="utf-8")
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
 EXEC_SOURCE = (ROOT / "buffbot/BfBotExe.lua").read_text(encoding="utf-8")
 MAIN_SOURCE = (ROOT / "buffbot/M_BfBot.lua").read_text(encoding="utf-8")
@@ -103,6 +105,87 @@ def exec_lua() -> LuaRuntime:
             end
             return sprites
         end
+        """
+    )
+    return runtime
+
+
+@pytest.fixture
+def project_image_lua() -> LuaRuntime:
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute(
+        """
+        BfBot = {
+            Class = {}, Scan = {},
+            _cache = { class = {}, scan = {} },
+            _overrides = {},
+            _Warn = function(_) end,
+            _fields = {
+                fb_count = "effectCount",
+                fb_start = "startingEffect",
+                friendly_flags = "type",
+                fb_opcode = "effectID",
+                fb_timing = "durationType",
+                fb_duration = "duration",
+                fb_param1 = "effectAmount",
+                fb_param2 = "dwFlags",
+                fb_target = "targetType",
+                fb_res = "res",
+                fb_special = "special",
+            },
+        }
+        """
+    )
+    runtime.execute(CLASS_SOURCE)
+    runtime.execute(
+        """
+        -- Native feature blocks are userdata reached through pointer
+        -- arithmetic. This seam keeps the real classifier/recursion logic
+        -- while supplying equivalent synthetic records to the test runtime.
+        BfBot.Class._IterateFeatureBlocks = function(_, ability, fn)
+            for i, effect in ipairs(ability.effects or {}) do
+                if fn(effect, i - 1) then return end
+            end
+        end
+
+        BfBot_TestResources = {}
+        BfBot_TestResourceDemands = {}
+
+        function BfBot_TestAbility(effects)
+            return {
+                actionType = 5,
+                type = 0,
+                effectCount = #effects,
+                startingEffect = 0,
+                effects = effects,
+                quickSlotIcon = { get = function() return "PIICON" end },
+            }
+        end
+
+        function BfBot_TestHeader(ability, nameRef)
+            local header = {
+                secondaryType = 0,
+                itemType = 1,
+                spellLevel = 7,
+                genericName = nameRef or 1,
+                identifiedName = nameRef or 1,
+            }
+            header.getAbility = function(_, index)
+                if index == 0 then return ability end
+                return nil
+            end
+            header.getAbilityForLevel = function() return ability end
+            return header
+        end
+
+        EEex_Resource_Demand = function(resref, kind)
+            assert(kind == "SPL")
+            BfBot_TestResourceDemands[resref] =
+                (BfBot_TestResourceDemands[resref] or 0) + 1
+            return BfBot_TestResources[resref]
+        end
+        EEex_Sprite_GetPortraitIndex = function() return -1 end
+        Infinity_FetchString = function(_) return "投影术" end
         """
     )
     return runtime
@@ -1212,14 +1295,247 @@ def test_repeat_summon_builder_propagates_counts_and_own_quick_cast(
     assert facts["secondCheat"] == 1
 
 
-def test_project_image_repeat_is_copied_and_forced_to_one(
+def test_project_image_classification_uses_opcode_236_image_type(
+    project_image_lua: LuaRuntime,
+) -> None:
+    facts = project_image_lua.execute(
+        """
+        local function classify(resref, imageType)
+            local ability = BfBot_TestAbility({
+                { effectID = 236, dwFlags = imageType },
+            })
+            local header = BfBot_TestHeader(ability)
+            return BfBot.Class.Classify(resref, header, ability)
+        end
+
+        local projectImage = classify("NOTVANIL", 2)
+        local mislead = classify("MISLEAD", 1)
+        local simulacrum = classify("SIMUL", 3)
+
+        BfBot._overrides.OVERRIDE = false
+        local overridden = classify("OVERRIDE", 2)
+        return {
+            projectImage = projectImage.isProjectImage == true,
+            mislead = mislead.isProjectImage == true,
+            simulacrum = simulacrum.isProjectImage == true,
+            overridden = overridden.isProjectImage == true,
+        }
+        """
+    )
+
+    assert facts["projectImage"]
+    assert not facts["mislead"]
+    assert not facts["simulacrum"]
+    assert facts["overridden"]
+
+
+def test_project_image_classification_recurses_two_wrappers_and_guards_cycles(
+    project_image_lua: LuaRuntime,
+) -> None:
+    facts = project_image_lua.execute(
+        """
+        local leafAbility = BfBot_TestAbility({
+            { effectID = 236, dwFlags = 2 },
+        })
+        local midAbility = BfBot_TestAbility({
+            { effectID = 146, res = "LEAF" },
+        })
+        local rootAbility = BfBot_TestAbility({
+            { effectID = 146, res = "MID" },
+        })
+        BfBot_TestResources.LEAF = BfBot_TestHeader(leafAbility)
+        BfBot_TestResources.MID = BfBot_TestHeader(midAbility)
+        local rootHeader = BfBot_TestHeader(rootAbility)
+        local wrapped = BfBot.Class.Classify(
+            "ROOT", rootHeader, rootAbility).isProjectImage == true
+
+        -- A third wrapper is outside the established depth-2 boundary.
+        local tooDeepLeaf = BfBot_TestAbility({
+            { effectID = 236, dwFlags = 2 },
+        })
+        local tooDeepB = BfBot_TestAbility({
+            { effectID = 146, res = "DEEPLEAF" },
+        })
+        local tooDeepA = BfBot_TestAbility({
+            { effectID = 146, res = "DEEPB" },
+        })
+        local tooDeepRoot = BfBot_TestAbility({
+            { effectID = 146, res = "DEEPA" },
+        })
+        BfBot_TestResources.DEEPLEAF = BfBot_TestHeader(tooDeepLeaf)
+        BfBot_TestResources.DEEPB = BfBot_TestHeader(tooDeepB)
+        BfBot_TestResources.DEEPA = BfBot_TestHeader(tooDeepA)
+        local beyondLimit = BfBot.Class.Classify(
+            "DEEPROOT", BfBot_TestHeader(tooDeepRoot), tooDeepRoot)
+            .isProjectImage == true
+
+        -- The helper receives the root resref so a child that points back to
+        -- it is rejected by the case-insensitive visited set instead of being
+        -- demanded again.
+        local cycleAbility = BfBot_TestAbility({
+            { effectID = 146, res = "cycleroot" },
+            { effectID = 236, dwFlags = 2 },
+        })
+        local cycleRootAbility = BfBot_TestAbility({
+            { effectID = 146, res = "CYCLE" },
+        })
+        BfBot_TestResources.CYCLE = BfBot_TestHeader(cycleAbility)
+        BfBot_TestResources.CYCLEROOT = BfBot_TestHeader(cycleRootAbility)
+        BfBot_TestResourceDemands = {}
+        local helper = BfBot.Class._IsProjectImage
+        local cycleSafe = type(helper) == "function"
+            and helper("CYCLEROOT", BfBot_TestResources.CYCLEROOT,
+                cycleRootAbility) == true
+        return {
+            wrapped = wrapped,
+            beyondLimit = beyondLimit,
+            cycleSafe = cycleSafe,
+            cycleRootDemands = BfBot_TestResourceDemands.CYCLEROOT or 0,
+            cycleRootLowerDemands = BfBot_TestResourceDemands.cycleroot or 0,
+            cycleChildDemands = BfBot_TestResourceDemands.CYCLE or 0,
+        }
+        """
+    )
+
+    assert facts["wrapped"]
+    assert not facts["beyondLimit"]
+    assert facts["cycleSafe"]
+    assert facts["cycleRootDemands"] == 0
+    assert facts["cycleRootLowerDemands"] == 0
+    assert facts["cycleChildDemands"] == 1
+
+
+def test_project_image_scan_entry_carries_integer_structural_flag(
+    project_image_lua: LuaRuntime,
+) -> None:
+    facts = project_image_lua.execute(
+        SCAN_SOURCE
+        + """
+        local ability = BfBot_TestAbility({
+            { effectID = 236, dwFlags = 2 },
+        })
+        local header = BfBot_TestHeader(ability)
+        BfBot_TestResources.ZHPI = header
+
+        local sprite = { m_id = 91 }
+        sprite.getCasterLevelForSpell = function() return 14 end
+        sprite.GetQuickButtons = function() return nil end
+
+        EEex_Sprite_GetKnownMageSpellsWithAbilityIterator = function(seen)
+            assert(seen == sprite)
+            local yielded = false
+            return function()
+                if yielded then return nil end
+                yielded = true
+                return 7, 0, "ZHPI", ability
+            end
+        end
+        EEex_Sprite_GetKnownPriestSpellsWithAbilityIterator = function()
+            return function() return nil end
+        end
+        EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator = function()
+            return function() return nil end
+        end
+
+        local spells = BfBot.Scan.GetCastableSpells(sprite)
+        local entry = assert(spells.ZHPI)
+        return {
+            name = entry.name,
+            scanFlag = entry.isProjectImage,
+            classFlag = entry.class and entry.class.isProjectImage == true,
+        }
+        """
+    )
+
+    assert facts["name"] == "投影术"
+    assert facts["scanFlag"] == 1
+    assert facts["classFlag"]
+
+
+def test_project_image_flag_propagates_through_party_and_summon_builders(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local sprite = {
+            name = "Caster", m_id = 41,
+            m_baseStats = { m_generalState = 0 },
+        }
+        local preset = { qc = 0, spells = {
+            PI = { on = 1, tgt = "s", pri = 1, rep = 5 },
+            TAIL = { on = 1, tgt = "s", pri = 2, rep = 4 },
+        } }
+        local config = BfBot.Persist.GetDefaultConfig()
+        config.presets[1] = preset
+        local castable = {
+            PI = {
+                count = 1, name = "投影术",
+                durCat = "long", isProjectImage = 1,
+            },
+            TAIL = { count = 1, name = "Stoneskin", durCat = "long" },
+        }
+
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return sprite end
+            return nil
+        end
+        BfBot.Persist.GetConfig = function(seen)
+            assert(seen == sprite)
+            return config
+        end
+        BfBot.Persist.GetPref = function(key)
+            if key == "SummonsJoinCast" then return 0 end
+            return BfBot.Persist._INI_DEFAULTS[key]
+        end
+        BfBot.Persist._CollectLiveCloneDescriptors = function() return {} end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function(seen)
+            assert(seen == sprite)
+            return castable
+        end
+
+        local party = assert(BfBot.Persist.BuildQueueFromPreset(1))
+        local character = assert(BfBot.Persist.BuildQueueForCharacter(0, 1))
+
+        BfBot.Persist.PeekSummonPreset = function(identity, presetIdx)
+            assert(identity == "summon:test" and presetIdx == 1)
+            return preset
+        end
+        BfBot.Exec._ResolveCaster = function(ref)
+            assert(ref.kind == "summon" and ref.oid == 77)
+            return sprite
+        end
+        local summon = assert(BfBot.Persist.BuildQueueForSummon({
+            identity = "summon:test", oid = 77, name = "Skeleton",
+        }, 1))
+        return {
+            partyCount = #party,
+            partyRepeat = party[1] and party[1].rep,
+            characterCount = #character,
+            characterRepeat = character[1] and character[1].rep,
+            summonCount = #summon,
+            summonRepeat = summon[1] and summon[1].rep,
+        }
+        """
+    )
+
+    assert facts["partyCount"] == 1
+    assert facts["partyRepeat"] == 1
+    assert facts["characterCount"] == 1
+    assert facts["characterRepeat"] == 1
+    assert facts["summonCount"] == 1
+    assert facts["summonRepeat"] == 1
+
+
+def test_project_image_repeat_is_copied_and_forced_to_one_by_structural_flag(
     exec_lua: LuaRuntime,
 ) -> None:
     facts = exec_lua.execute(
         """
         local caster = { oid = 100, name = "Mage" }
         local image = {
-            caster = 0, spell = "PI", spellName = "Project Image",
+            caster = 0, spell = "PI", spellName = "投影术",
+            isProjectImage = 1,
             target = "self", pri = 1, rep = 5,
         }
         local tail = {
@@ -1228,6 +1544,12 @@ def test_project_image_repeat_is_copied_and_forced_to_one(
         }
         local kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(
             caster, { image, tail }, {})
+        local englishOnly = {
+            caster = 0, spell = "PLAIN", spellName = "Project Image",
+            target = "self", pri = 1, rep = 5,
+        }
+        local plainKept, plainSkips = BfBot.Persist._ApplyPuppetLockPolicy(
+            caster, { englishOnly, tail }, {})
         local locked = BfBot.Persist._ApplyPuppetLockPolicy(
             caster, { image }, {
                 { cloneType = 2, ownerOid = 100, ownerName = "Mage" },
@@ -1239,6 +1561,9 @@ def test_project_image_repeat_is_copied_and_forced_to_one(
             sourceRepeat = image.rep,
             tailRepeat = tail.rep,
             skipCount = #skips,
+            plainKeptCount = #plainKept,
+            plainSkipCount = #plainSkips,
+            plainFirstUnchanged = plainKept[1] == englishOnly,
             lockedCount = #locked,
         }
         """
@@ -1250,6 +1575,9 @@ def test_project_image_repeat_is_copied_and_forced_to_one(
     assert facts["sourceRepeat"] == 5
     assert facts["tailRepeat"] == 4
     assert facts["skipCount"] == 1
+    assert facts["plainKeptCount"] == 2
+    assert facts["plainSkipCount"] == 0
+    assert facts["plainFirstUnchanged"]
     assert facts["lockedCount"] == 0
 
 

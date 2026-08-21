@@ -268,6 +268,76 @@ function BfBot.Class._IterateFeatureBlocks(header, ability, fn)
     end
 end
 
+-- Extract the sub-spell resref from an op=146 feature block. The resource
+-- field may be a userdata (ResRef) or a plain string depending on the EEex
+-- binding; handle both. Returns nil for empty / unusable values.
+local function _subSpellRef(fb)
+    local v = fb[BfBot._fields.fb_res]
+    if v == nil then return nil end
+    if type(v) == "userdata" then
+        local ok, s = pcall(function() return v:get() end)
+        if ok and type(s) == "string" and s ~= "" then return s end
+        return nil
+    end
+    if type(v) == "string" and v ~= "" then return v end
+    return nil
+end
+
+--- Structurally identify Project Image without relying on a localized name or
+--- a particular resref. Opcode 236 parameter 2 selects the image type:
+--- 1=Mislead, 2=Project Image, 3=Simulacrum. Wrapper spells may deliver the
+--- opcode through op=146, so follow children to the same depth used by the
+--- duration classifier (two links), with a resref cycle guard.
+function BfBot.Class._IsProjectImage(resref, header, ability)
+    -- Classify() is also used by isolated tooling/tests that replace the
+    -- scoring seams without bootstrapping Core's EEex field map. In that
+    -- reduced environment there is no structural data to inspect.
+    if type(BfBot._fields) ~= "table" or not header or not ability then
+        return false
+    end
+
+    local visited = {}
+    if type(resref) == "string" and resref ~= "" then
+        visited[resref:upper()] = true
+    end
+
+    local function scan(currentHeader, currentAbility, depth)
+        local found = false
+        BfBot.Class._IterateFeatureBlocks(
+            currentHeader, currentAbility, function(fb, _)
+                local opcode = fb[BfBot._fields.fb_opcode]
+                if opcode == 236
+                    and fb[BfBot._fields.fb_param2] == 2 then
+                    found = true
+                    return true
+                end
+
+                if opcode == 146 and depth < 2 then
+                    local childResref = _subSpellRef(fb)
+                    local childKey = childResref and childResref:upper() or nil
+                    if childKey and not visited[childKey] then
+                        visited[childKey] = true
+                        local okHeader, childHeader = pcall(
+                            EEex_Resource_Demand, childResref, "SPL")
+                        if okHeader and childHeader then
+                            local okAbility, childAbility = pcall(function()
+                                return childHeader:getAbility(0)
+                            end)
+                            if okAbility and childAbility
+                                and scan(childHeader, childAbility, depth + 1) then
+                                found = true
+                                return true
+                            end
+                        end
+                    end
+                end
+            end)
+        return found
+    end
+
+    return scan(header, ability, 0)
+end
+
 --- Check if an opcode is gameplay-affecting (not visual/infrastructure).
 --- Used to filter which effects contribute to duration calculation.
 function BfBot.Class._IsGameplayOpcode(opcode)
@@ -498,21 +568,6 @@ end
 -- Duration
 -- ============================================================
 
--- Extract the sub-spell resref from an op=146 feature block. The resource
--- field may be a userdata (ResRef) or a plain string depending on the EEex
--- binding; handle both. Returns nil for empty / unusable values.
-local function _subSpellRef(fb)
-    local v = fb[BfBot._fields.fb_res]
-    if v == nil then return nil end
-    if type(v) == "userdata" then
-        local ok, s = pcall(function() return v:get() end)
-        if ok and type(s) == "string" and s ~= "" then return s end
-        return nil
-    end
-    if type(v) == "string" and v ~= "" then return v end
-    return nil
-end
-
 --- Compute effective duration from feature blocks.
 --- Returns duration in seconds (-1 for permanent), type string, and the
 --- list of op=146 sub-spell resrefs encountered during recursion (leaf
@@ -675,6 +730,8 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind)
 
     local result = {}
     result.msectype = header.secondaryType or 0
+    result.isProjectImage = BfBot.Class._IsProjectImage(
+        resref, header, ability)
 
     -- Leaf sub-spell resrefs from the op=146 chain (empty table for
     -- direct-effect spells). Pre-flight already-active checks need this:
