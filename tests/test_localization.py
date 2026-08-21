@@ -18,6 +18,9 @@ WEIDU_SENTINEL_RE = re.compile(r"%([A-Za-z_][A-Za-z0-9_]*)%")
 
 # Catalog IDs are deliberately grouped so the later Lua registry and WeiDU
 # id-to-strref map can be audited against translator-facing semantic comments.
+# Task 2 must derive or validate its runtime registry from this machine-readable
+# schema (or these same catalog comments), not introduce an uncontrolled fourth
+# hand-maintained copy of the ID/key contract.
 CATALOG_SCHEMA = {
     # Installer strings (100-199)
     100: "installer.component.luajit",
@@ -232,7 +235,7 @@ def parse_tra(path: Path) -> tuple[dict[int, str], dict[int, str]]:
         value = entry_match.group(2)
         if tra_id in entries:
             raise ValueError(f"{path}:{line_number}: duplicate TRA id @{tra_id}")
-        if value == "":
+        if not value.strip():
             raise ValueError(f"{path}:{line_number}: empty value for @{tra_id}")
         if pending_semantic is None:
             raise ValueError(f"{path}:{line_number}: @{tra_id} lacks a semantic comment")
@@ -253,6 +256,12 @@ def parse_tra(path: Path) -> tuple[dict[int, str], dict[int, str]]:
 
 def named_placeholders(value: str) -> set[str]:
     return set(NAMED_PLACEHOLDER_RE.findall(value))
+
+
+def validate_named_placeholders(value: str) -> None:
+    remainder = NAMED_PLACEHOLDER_RE.sub("", value)
+    if "{" in remainder or "}" in remainder:
+        raise ValueError("malformed named placeholder")
 
 
 def shipped_catalogs() -> list[Path]:
@@ -282,6 +291,11 @@ def test_parser_rejects_malformed_utf8_duplicate_empty_ids_and_empty_values(
     with pytest.raises(ValueError, match="empty value"):
         parse_tra(empty_value)
 
+    whitespace_value = tmp_path / "whitespace-value.tra"
+    whitespace_value.write_text("// key\n@1 = ~   ~\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="empty value"):
+        parse_tra(whitespace_value)
+
 
 def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
     english_path = LANG_ROOT / "english" / "setup.tra"
@@ -289,7 +303,11 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
     assert english_semantics == CATALOG_SCHEMA
 
     catalogs = shipped_catalogs()
-    assert {path.parent.name for path in catalogs} == {"english", "schinese"}
+    shipped_languages = {path.parent.name for path in catalogs}
+    required_languages = {"english", "schinese"}
+    assert not required_languages - shipped_languages, (
+        f"missing required catalog(s): {sorted(required_languages - shipped_languages)}"
+    )
     for catalog_path in catalogs:
         catalog, semantics = parse_tra(catalog_path)
         assert catalog.keys() == english.keys()
@@ -313,19 +331,40 @@ def test_catalog_values_contain_no_legacy_or_unresolved_sentinels():
                 if semantics[tra_id] == "installer.luajit.required_version"
                 else set()
             )
-            assert sentinels == allowed, (
-                f"unexpected WeiDU sentinel(s) in {catalog_path} @{tra_id}: "
-                f"{sorted(sentinels - allowed)}"
+            missing = allowed - sentinels
+            unexpected = sentinels - allowed
+            assert not missing, (
+                f"missing required WeiDU sentinel(s) in {catalog_path} @{tra_id}: "
+                f"{sorted(missing)}"
             )
+            assert not unexpected, (
+                f"unexpected WeiDU sentinel(s) in {catalog_path} @{tra_id}: "
+                f"{sorted(unexpected)}"
+            )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Unmatched opening brace {name",
+        "Unmatched closing brace name}",
+        "Doubled braces {{name}}",
+    ],
+)
+def test_named_placeholder_validation_rejects_unmatched_and_doubled_braces(
+    value: str,
+):
+    with pytest.raises(ValueError, match="malformed named placeholder"):
+        validate_named_placeholders(value)
 
 
 def test_catalog_named_placeholders_are_well_formed():
-    brace_token = re.compile(r"\{[^{}]*\}")
     for catalog_path in shipped_catalogs():
         catalog, _ = parse_tra(catalog_path)
         for tra_id, value in catalog.items():
-            all_braced = set(brace_token.findall(value))
-            valid_braced = {f"{{{name}}}" for name in named_placeholders(value)}
-            assert all_braced == valid_braced, (
-                f"malformed named placeholder in {catalog_path} @{tra_id}"
-            )
+            try:
+                validate_named_placeholders(value)
+            except ValueError as error:
+                raise AssertionError(
+                    f"malformed named placeholder in {catalog_path} @{tra_id}"
+                ) from error
