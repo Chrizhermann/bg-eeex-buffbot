@@ -18,7 +18,7 @@ from tests.test_eeex_compatibility_installer import (
     _read_tlk_strings,
     _weidu,
 )
-from tests.test_localization import parse_tra
+from tests.test_localization import CATALOG_SCHEMA, parse_tra
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -311,9 +311,16 @@ def test_built_archive_installs_simplified_chinese_with_weidu_249(
     _assert_installed(game, process)
 
     assert game.lang_tlk.read_bytes() == before.lang_tlk
+    assert game.root_tlk.read_bytes() == before.root_tlk
+    assert game.schinese_tlk.read_bytes() != before.schinese_tlk
     catalog, _ = parse_tra(game.root / "buffbot/lang/schinese/setup.tra")
     strings = _read_tlk_strings(game.schinese_tlk)
     mapping = _read_l10n_map(game.override / "bfbot_l10n.txt")
-    assert strings[mapping[300]] == catalog[300]
-    assert strings[mapping[420]] == catalog[420]
-    assert strings[mapping[712]] == catalog[712]
+    runtime_ids = {
+        catalog_id
+        for catalog_id, semantic_key in CATALOG_SCHEMA.items()
+        if not semantic_key.startswith("installer.")
+    }
+    assert set(mapping) == runtime_ids
+    for catalog_id, strref in mapping.items():
+        assert strings[strref] == catalog[catalog_id]
