@@ -322,11 +322,6 @@ ACTION_IF (
   FAIL @112
 END
 
-// WeiDU 249 restores the previously installed %LANGUAGE% while replaying an
-// uninstall in a same-process language switch. The newly selected TRA table is
-// already active, so carry its validated directory marker into the COPY path.
-OUTER_SPRINT bfbot_selected_language @113
-
 // ---- TLK strings for innate ability tooltips ----
 // One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
 // contiguous strrefs across upgrades — existing strings keep their old
@@ -341,11 +336,176 @@ OUTER_SET bfbot_strref_6 = RESOLVE_STR_REF(@205)
 OUTER_SET bfbot_strref_7 = RESOLVE_STR_REF(@206)
 OUTER_SET bfbot_strref_8 = RESOLVE_STR_REF(@207)
 
+// Resolve every runtime catalog entry independently. Catalog IDs are sparse
+// by contract; never derive one strref or ID from another.
+OUTER_SET bfbot_l10n_200 = RESOLVE_STR_REF(@200)
+OUTER_SET bfbot_l10n_201 = RESOLVE_STR_REF(@201)
+OUTER_SET bfbot_l10n_202 = RESOLVE_STR_REF(@202)
+OUTER_SET bfbot_l10n_203 = RESOLVE_STR_REF(@203)
+OUTER_SET bfbot_l10n_204 = RESOLVE_STR_REF(@204)
+OUTER_SET bfbot_l10n_205 = RESOLVE_STR_REF(@205)
+OUTER_SET bfbot_l10n_206 = RESOLVE_STR_REF(@206)
+OUTER_SET bfbot_l10n_207 = RESOLVE_STR_REF(@207)
+OUTER_SET bfbot_l10n_300 = RESOLVE_STR_REF(@300)
+OUTER_SET bfbot_l10n_301 = RESOLVE_STR_REF(@301)
+OUTER_SET bfbot_l10n_302 = RESOLVE_STR_REF(@302)
+OUTER_SET bfbot_l10n_303 = RESOLVE_STR_REF(@303)
+OUTER_SET bfbot_l10n_304 = RESOLVE_STR_REF(@304)
+OUTER_SET bfbot_l10n_305 = RESOLVE_STR_REF(@305)
+OUTER_SET bfbot_l10n_306 = RESOLVE_STR_REF(@306)
+OUTER_SET bfbot_l10n_307 = RESOLVE_STR_REF(@307)
+OUTER_SET bfbot_l10n_308 = RESOLVE_STR_REF(@308)
+OUTER_SET bfbot_l10n_309 = RESOLVE_STR_REF(@309)
+OUTER_SET bfbot_l10n_310 = RESOLVE_STR_REF(@310)
+OUTER_SET bfbot_l10n_311 = RESOLVE_STR_REF(@311)
+OUTER_SET bfbot_l10n_312 = RESOLVE_STR_REF(@312)
+OUTER_SET bfbot_l10n_313 = RESOLVE_STR_REF(@313)
+OUTER_SET bfbot_l10n_314 = RESOLVE_STR_REF(@314)
+OUTER_SET bfbot_l10n_315 = RESOLVE_STR_REF(@315)
+OUTER_SET bfbot_l10n_316 = RESOLVE_STR_REF(@316)
+OUTER_SET bfbot_l10n_317 = RESOLVE_STR_REF(@317)
+OUTER_SET bfbot_l10n_318 = RESOLVE_STR_REF(@318)
+OUTER_SET bfbot_l10n_319 = RESOLVE_STR_REF(@319)
+OUTER_SET bfbot_l10n_320 = RESOLVE_STR_REF(@320)
+OUTER_SET bfbot_l10n_321 = RESOLVE_STR_REF(@321)
+OUTER_SET bfbot_l10n_322 = RESOLVE_STR_REF(@322)
+OUTER_SET bfbot_l10n_323 = RESOLVE_STR_REF(@323)
+OUTER_SET bfbot_l10n_324 = RESOLVE_STR_REF(@324)
+OUTER_SET bfbot_l10n_325 = RESOLVE_STR_REF(@325)
+OUTER_SET bfbot_l10n_326 = RESOLVE_STR_REF(@326)
+OUTER_SET bfbot_l10n_327 = RESOLVE_STR_REF(@327)
+OUTER_SET bfbot_l10n_328 = RESOLVE_STR_REF(@328)
+OUTER_SET bfbot_l10n_329 = RESOLVE_STR_REF(@329)
+OUTER_SET bfbot_l10n_330 = RESOLVE_STR_REF(@330)
+OUTER_SET bfbot_l10n_331 = RESOLVE_STR_REF(@331)
+OUTER_SET bfbot_l10n_332 = RESOLVE_STR_REF(@332)
+OUTER_SET bfbot_l10n_400 = RESOLVE_STR_REF(@400)
+OUTER_SET bfbot_l10n_401 = RESOLVE_STR_REF(@401)
+OUTER_SET bfbot_l10n_402 = RESOLVE_STR_REF(@402)
+OUTER_SET bfbot_l10n_403 = RESOLVE_STR_REF(@403)
+OUTER_SET bfbot_l10n_404 = RESOLVE_STR_REF(@404)
+OUTER_SET bfbot_l10n_405 = RESOLVE_STR_REF(@405)
+OUTER_SET bfbot_l10n_406 = RESOLVE_STR_REF(@406)
+OUTER_SET bfbot_l10n_407 = RESOLVE_STR_REF(@407)
+OUTER_SET bfbot_l10n_408 = RESOLVE_STR_REF(@408)
+OUTER_SET bfbot_l10n_409 = RESOLVE_STR_REF(@409)
+OUTER_SET bfbot_l10n_410 = RESOLVE_STR_REF(@410)
+OUTER_SET bfbot_l10n_411 = RESOLVE_STR_REF(@411)
+OUTER_SET bfbot_l10n_412 = RESOLVE_STR_REF(@412)
+OUTER_SET bfbot_l10n_413 = RESOLVE_STR_REF(@413)
+OUTER_SET bfbot_l10n_414 = RESOLVE_STR_REF(@414)
+OUTER_SET bfbot_l10n_415 = RESOLVE_STR_REF(@415)
+OUTER_SET bfbot_l10n_416 = RESOLVE_STR_REF(@416)
+OUTER_SET bfbot_l10n_417 = RESOLVE_STR_REF(@417)
+OUTER_SET bfbot_l10n_418 = RESOLVE_STR_REF(@418)
+OUTER_SET bfbot_l10n_419 = RESOLVE_STR_REF(@419)
+OUTER_SET bfbot_l10n_420 = RESOLVE_STR_REF(@420)
+OUTER_SET bfbot_l10n_421 = RESOLVE_STR_REF(@421)
+OUTER_SET bfbot_l10n_422 = RESOLVE_STR_REF(@422)
+OUTER_SET bfbot_l10n_423 = RESOLVE_STR_REF(@423)
+OUTER_SET bfbot_l10n_424 = RESOLVE_STR_REF(@424)
+OUTER_SET bfbot_l10n_425 = RESOLVE_STR_REF(@425)
+OUTER_SET bfbot_l10n_426 = RESOLVE_STR_REF(@426)
+OUTER_SET bfbot_l10n_427 = RESOLVE_STR_REF(@427)
+OUTER_SET bfbot_l10n_428 = RESOLVE_STR_REF(@428)
+OUTER_SET bfbot_l10n_429 = RESOLVE_STR_REF(@429)
+OUTER_SET bfbot_l10n_430 = RESOLVE_STR_REF(@430)
+OUTER_SET bfbot_l10n_431 = RESOLVE_STR_REF(@431)
+OUTER_SET bfbot_l10n_432 = RESOLVE_STR_REF(@432)
+OUTER_SET bfbot_l10n_433 = RESOLVE_STR_REF(@433)
+OUTER_SET bfbot_l10n_434 = RESOLVE_STR_REF(@434)
+OUTER_SET bfbot_l10n_435 = RESOLVE_STR_REF(@435)
+OUTER_SET bfbot_l10n_436 = RESOLVE_STR_REF(@436)
+OUTER_SET bfbot_l10n_437 = RESOLVE_STR_REF(@437)
+OUTER_SET bfbot_l10n_438 = RESOLVE_STR_REF(@438)
+OUTER_SET bfbot_l10n_439 = RESOLVE_STR_REF(@439)
+OUTER_SET bfbot_l10n_440 = RESOLVE_STR_REF(@440)
+OUTER_SET bfbot_l10n_441 = RESOLVE_STR_REF(@441)
+OUTER_SET bfbot_l10n_442 = RESOLVE_STR_REF(@442)
+OUTER_SET bfbot_l10n_443 = RESOLVE_STR_REF(@443)
+OUTER_SET bfbot_l10n_444 = RESOLVE_STR_REF(@444)
+OUTER_SET bfbot_l10n_445 = RESOLVE_STR_REF(@445)
+OUTER_SET bfbot_l10n_446 = RESOLVE_STR_REF(@446)
+OUTER_SET bfbot_l10n_447 = RESOLVE_STR_REF(@447)
+OUTER_SET bfbot_l10n_448 = RESOLVE_STR_REF(@448)
+OUTER_SET bfbot_l10n_449 = RESOLVE_STR_REF(@449)
+OUTER_SET bfbot_l10n_450 = RESOLVE_STR_REF(@450)
+OUTER_SET bfbot_l10n_451 = RESOLVE_STR_REF(@451)
+OUTER_SET bfbot_l10n_452 = RESOLVE_STR_REF(@452)
+OUTER_SET bfbot_l10n_453 = RESOLVE_STR_REF(@453)
+OUTER_SET bfbot_l10n_500 = RESOLVE_STR_REF(@500)
+OUTER_SET bfbot_l10n_501 = RESOLVE_STR_REF(@501)
+OUTER_SET bfbot_l10n_502 = RESOLVE_STR_REF(@502)
+OUTER_SET bfbot_l10n_503 = RESOLVE_STR_REF(@503)
+OUTER_SET bfbot_l10n_504 = RESOLVE_STR_REF(@504)
+OUTER_SET bfbot_l10n_505 = RESOLVE_STR_REF(@505)
+OUTER_SET bfbot_l10n_506 = RESOLVE_STR_REF(@506)
+OUTER_SET bfbot_l10n_507 = RESOLVE_STR_REF(@507)
+OUTER_SET bfbot_l10n_508 = RESOLVE_STR_REF(@508)
+OUTER_SET bfbot_l10n_509 = RESOLVE_STR_REF(@509)
+OUTER_SET bfbot_l10n_510 = RESOLVE_STR_REF(@510)
+OUTER_SET bfbot_l10n_511 = RESOLVE_STR_REF(@511)
+OUTER_SET bfbot_l10n_512 = RESOLVE_STR_REF(@512)
+OUTER_SET bfbot_l10n_513 = RESOLVE_STR_REF(@513)
+OUTER_SET bfbot_l10n_514 = RESOLVE_STR_REF(@514)
+OUTER_SET bfbot_l10n_515 = RESOLVE_STR_REF(@515)
+OUTER_SET bfbot_l10n_516 = RESOLVE_STR_REF(@516)
+OUTER_SET bfbot_l10n_517 = RESOLVE_STR_REF(@517)
+OUTER_SET bfbot_l10n_518 = RESOLVE_STR_REF(@518)
+OUTER_SET bfbot_l10n_519 = RESOLVE_STR_REF(@519)
+OUTER_SET bfbot_l10n_520 = RESOLVE_STR_REF(@520)
+OUTER_SET bfbot_l10n_521 = RESOLVE_STR_REF(@521)
+OUTER_SET bfbot_l10n_522 = RESOLVE_STR_REF(@522)
+OUTER_SET bfbot_l10n_523 = RESOLVE_STR_REF(@523)
+OUTER_SET bfbot_l10n_524 = RESOLVE_STR_REF(@524)
+OUTER_SET bfbot_l10n_525 = RESOLVE_STR_REF(@525)
+OUTER_SET bfbot_l10n_526 = RESOLVE_STR_REF(@526)
+OUTER_SET bfbot_l10n_527 = RESOLVE_STR_REF(@527)
+OUTER_SET bfbot_l10n_528 = RESOLVE_STR_REF(@528)
+OUTER_SET bfbot_l10n_529 = RESOLVE_STR_REF(@529)
+OUTER_SET bfbot_l10n_530 = RESOLVE_STR_REF(@530)
+OUTER_SET bfbot_l10n_531 = RESOLVE_STR_REF(@531)
+OUTER_SET bfbot_l10n_532 = RESOLVE_STR_REF(@532)
+OUTER_SET bfbot_l10n_533 = RESOLVE_STR_REF(@533)
+OUTER_SET bfbot_l10n_534 = RESOLVE_STR_REF(@534)
+OUTER_SET bfbot_l10n_535 = RESOLVE_STR_REF(@535)
+OUTER_SET bfbot_l10n_536 = RESOLVE_STR_REF(@536)
+OUTER_SET bfbot_l10n_537 = RESOLVE_STR_REF(@537)
+OUTER_SET bfbot_l10n_538 = RESOLVE_STR_REF(@538)
+OUTER_SET bfbot_l10n_539 = RESOLVE_STR_REF(@539)
+OUTER_SET bfbot_l10n_540 = RESOLVE_STR_REF(@540)
+OUTER_SET bfbot_l10n_541 = RESOLVE_STR_REF(@541)
+OUTER_SET bfbot_l10n_542 = RESOLVE_STR_REF(@542)
+OUTER_SET bfbot_l10n_543 = RESOLVE_STR_REF(@543)
+OUTER_SET bfbot_l10n_544 = RESOLVE_STR_REF(@544)
+OUTER_SET bfbot_l10n_545 = RESOLVE_STR_REF(@545)
+OUTER_SET bfbot_l10n_546 = RESOLVE_STR_REF(@546)
+OUTER_SET bfbot_l10n_547 = RESOLVE_STR_REF(@547)
+OUTER_SET bfbot_l10n_548 = RESOLVE_STR_REF(@548)
+OUTER_SET bfbot_l10n_549 = RESOLVE_STR_REF(@549)
+OUTER_SET bfbot_l10n_550 = RESOLVE_STR_REF(@550)
+OUTER_SET bfbot_l10n_551 = RESOLVE_STR_REF(@551)
+OUTER_SET bfbot_l10n_600 = RESOLVE_STR_REF(@600)
+OUTER_SET bfbot_l10n_601 = RESOLVE_STR_REF(@601)
+OUTER_SET bfbot_l10n_602 = RESOLVE_STR_REF(@602)
+OUTER_SET bfbot_l10n_700 = RESOLVE_STR_REF(@700)
+OUTER_SET bfbot_l10n_701 = RESOLVE_STR_REF(@701)
+OUTER_SET bfbot_l10n_702 = RESOLVE_STR_REF(@702)
+OUTER_SET bfbot_l10n_703 = RESOLVE_STR_REF(@703)
+OUTER_SET bfbot_l10n_704 = RESOLVE_STR_REF(@704)
+OUTER_SET bfbot_l10n_705 = RESOLVE_STR_REF(@705)
+OUTER_SET bfbot_l10n_706 = RESOLVE_STR_REF(@706)
+OUTER_SET bfbot_l10n_707 = RESOLVE_STR_REF(@707)
+OUTER_SET bfbot_l10n_708 = RESOLVE_STR_REF(@708)
+OUTER_SET bfbot_l10n_709 = RESOLVE_STR_REF(@709)
+OUTER_SET bfbot_l10n_710 = RESOLVE_STR_REF(@710)
+OUTER_SET bfbot_l10n_711 = RESOLVE_STR_REF(@711)
+OUTER_SET bfbot_l10n_712 = RESOLVE_STR_REF(@712)
+
 // ---- Copy mod files to override ----
 COPY ~buffbot/M_BfBot.lua~   ~override~
 COPY ~buffbot/BfBotCor.lua~  ~override~
 COPY ~buffbot/BfBotLoc.lua~  ~override~
-COPY ~buffbot/lang/%bfbot_selected_language%/setup.tra~ ~override/bfbot_l10n.tra~
 COPY ~buffbot/BfBotCls.lua~  ~override~
 COPY ~buffbot/BfBotScn.lua~  ~override~
 COPY ~buffbot/BfBotExe.lua~  ~override~
@@ -383,6 +543,175 @@ COPY ~buffbot/BFBOTFR3.PVRZ~ ~override~
 
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~
+
+// ---- Write runtime localization catalog ID -> selected TLK strref map ----
+<<<<<<<< .../buffbot-inlined/bfbot_l10n.generated
+200=%bfbot_l10n_200%
+201=%bfbot_l10n_201%
+202=%bfbot_l10n_202%
+203=%bfbot_l10n_203%
+204=%bfbot_l10n_204%
+205=%bfbot_l10n_205%
+206=%bfbot_l10n_206%
+207=%bfbot_l10n_207%
+300=%bfbot_l10n_300%
+301=%bfbot_l10n_301%
+302=%bfbot_l10n_302%
+303=%bfbot_l10n_303%
+304=%bfbot_l10n_304%
+305=%bfbot_l10n_305%
+306=%bfbot_l10n_306%
+307=%bfbot_l10n_307%
+308=%bfbot_l10n_308%
+309=%bfbot_l10n_309%
+310=%bfbot_l10n_310%
+311=%bfbot_l10n_311%
+312=%bfbot_l10n_312%
+313=%bfbot_l10n_313%
+314=%bfbot_l10n_314%
+315=%bfbot_l10n_315%
+316=%bfbot_l10n_316%
+317=%bfbot_l10n_317%
+318=%bfbot_l10n_318%
+319=%bfbot_l10n_319%
+320=%bfbot_l10n_320%
+321=%bfbot_l10n_321%
+322=%bfbot_l10n_322%
+323=%bfbot_l10n_323%
+324=%bfbot_l10n_324%
+325=%bfbot_l10n_325%
+326=%bfbot_l10n_326%
+327=%bfbot_l10n_327%
+328=%bfbot_l10n_328%
+329=%bfbot_l10n_329%
+330=%bfbot_l10n_330%
+331=%bfbot_l10n_331%
+332=%bfbot_l10n_332%
+400=%bfbot_l10n_400%
+401=%bfbot_l10n_401%
+402=%bfbot_l10n_402%
+403=%bfbot_l10n_403%
+404=%bfbot_l10n_404%
+405=%bfbot_l10n_405%
+406=%bfbot_l10n_406%
+407=%bfbot_l10n_407%
+408=%bfbot_l10n_408%
+409=%bfbot_l10n_409%
+410=%bfbot_l10n_410%
+411=%bfbot_l10n_411%
+412=%bfbot_l10n_412%
+413=%bfbot_l10n_413%
+414=%bfbot_l10n_414%
+415=%bfbot_l10n_415%
+416=%bfbot_l10n_416%
+417=%bfbot_l10n_417%
+418=%bfbot_l10n_418%
+419=%bfbot_l10n_419%
+420=%bfbot_l10n_420%
+421=%bfbot_l10n_421%
+422=%bfbot_l10n_422%
+423=%bfbot_l10n_423%
+424=%bfbot_l10n_424%
+425=%bfbot_l10n_425%
+426=%bfbot_l10n_426%
+427=%bfbot_l10n_427%
+428=%bfbot_l10n_428%
+429=%bfbot_l10n_429%
+430=%bfbot_l10n_430%
+431=%bfbot_l10n_431%
+432=%bfbot_l10n_432%
+433=%bfbot_l10n_433%
+434=%bfbot_l10n_434%
+435=%bfbot_l10n_435%
+436=%bfbot_l10n_436%
+437=%bfbot_l10n_437%
+438=%bfbot_l10n_438%
+439=%bfbot_l10n_439%
+440=%bfbot_l10n_440%
+441=%bfbot_l10n_441%
+442=%bfbot_l10n_442%
+443=%bfbot_l10n_443%
+444=%bfbot_l10n_444%
+445=%bfbot_l10n_445%
+446=%bfbot_l10n_446%
+447=%bfbot_l10n_447%
+448=%bfbot_l10n_448%
+449=%bfbot_l10n_449%
+450=%bfbot_l10n_450%
+451=%bfbot_l10n_451%
+452=%bfbot_l10n_452%
+453=%bfbot_l10n_453%
+500=%bfbot_l10n_500%
+501=%bfbot_l10n_501%
+502=%bfbot_l10n_502%
+503=%bfbot_l10n_503%
+504=%bfbot_l10n_504%
+505=%bfbot_l10n_505%
+506=%bfbot_l10n_506%
+507=%bfbot_l10n_507%
+508=%bfbot_l10n_508%
+509=%bfbot_l10n_509%
+510=%bfbot_l10n_510%
+511=%bfbot_l10n_511%
+512=%bfbot_l10n_512%
+513=%bfbot_l10n_513%
+514=%bfbot_l10n_514%
+515=%bfbot_l10n_515%
+516=%bfbot_l10n_516%
+517=%bfbot_l10n_517%
+518=%bfbot_l10n_518%
+519=%bfbot_l10n_519%
+520=%bfbot_l10n_520%
+521=%bfbot_l10n_521%
+522=%bfbot_l10n_522%
+523=%bfbot_l10n_523%
+524=%bfbot_l10n_524%
+525=%bfbot_l10n_525%
+526=%bfbot_l10n_526%
+527=%bfbot_l10n_527%
+528=%bfbot_l10n_528%
+529=%bfbot_l10n_529%
+530=%bfbot_l10n_530%
+531=%bfbot_l10n_531%
+532=%bfbot_l10n_532%
+533=%bfbot_l10n_533%
+534=%bfbot_l10n_534%
+535=%bfbot_l10n_535%
+536=%bfbot_l10n_536%
+537=%bfbot_l10n_537%
+538=%bfbot_l10n_538%
+539=%bfbot_l10n_539%
+540=%bfbot_l10n_540%
+541=%bfbot_l10n_541%
+542=%bfbot_l10n_542%
+543=%bfbot_l10n_543%
+544=%bfbot_l10n_544%
+545=%bfbot_l10n_545%
+546=%bfbot_l10n_546%
+547=%bfbot_l10n_547%
+548=%bfbot_l10n_548%
+549=%bfbot_l10n_549%
+550=%bfbot_l10n_550%
+551=%bfbot_l10n_551%
+600=%bfbot_l10n_600%
+601=%bfbot_l10n_601%
+602=%bfbot_l10n_602%
+700=%bfbot_l10n_700%
+701=%bfbot_l10n_701%
+702=%bfbot_l10n_702%
+703=%bfbot_l10n_703%
+704=%bfbot_l10n_704%
+705=%bfbot_l10n_705%
+706=%bfbot_l10n_706%
+707=%bfbot_l10n_707%
+708=%bfbot_l10n_708%
+709=%bfbot_l10n_709%
+710=%bfbot_l10n_710%
+711=%bfbot_l10n_711%
+712=%bfbot_l10n_712%
+>>>>>>>>
+COPY ~.../buffbot-inlined/bfbot_l10n.generated~ ~override/bfbot_l10n.txt~
+  EVALUATE_BUFFER
 
 // ---- Write per-preset strrefs (one per line) for Lua tooltip lookup ----
 <<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt

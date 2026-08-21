@@ -14,11 +14,11 @@ from tests.ie_formats import write_minimal_tlk
 from tests.test_eeex_compatibility_installer import (
     BuffBotGame,
     _assert_installed,
-    _read_l10n_map,
+    _read_innate_strrefs,
     _read_tlk_strings,
     _weidu,
 )
-from tests.test_localization import CATALOG_SCHEMA, parse_tra
+from tests.test_localization import parse_tra
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -488,14 +488,20 @@ def test_built_archive_installs_simplified_chinese_with_weidu_249(
     assert game.lang_tlk.read_bytes() == before.lang_tlk
     assert game.root_tlk.read_bytes() == before.root_tlk
     assert game.schinese_tlk.read_bytes() != before.schinese_tlk
-    catalog, _ = parse_tra(game.root / "buffbot/lang/schinese/setup.tra")
+    packaged_catalog = game.root / "buffbot/lang/schinese/setup.tra"
+    catalog, _ = parse_tra(packaged_catalog)
+    assert (game.override / "bfbot_l10n.tra").read_bytes() == (
+        packaged_catalog.read_bytes()
+    )
+    assert not (game.override / "bfbot_l10n.txt").exists()
+
     strings = _read_tlk_strings(game.schinese_tlk)
-    mapping = _read_l10n_map(game.override / "bfbot_l10n.txt")
-    runtime_ids = {
-        catalog_id
-        for catalog_id, semantic_key in CATALOG_SCHEMA.items()
-        if not semantic_key.startswith("installer.")
+    refs = _read_innate_strrefs(game)
+    assert all(0 <= strref < len(strings) for strref in refs)
+    assert [strings[strref] for strref in refs] == [
+        catalog[catalog_id] for catalog_id in range(200, 208)
+    ]
+    assert strings[0] == ""
+    assert set(strings[1:]) == {
+        catalog[catalog_id] for catalog_id in range(200, 208)
     }
-    assert set(mapping) == runtime_ids
-    for catalog_id, strref in mapping.items():
-        assert strings[strref] == catalog[catalog_id]

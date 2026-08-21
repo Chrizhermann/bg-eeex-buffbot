@@ -1,4 +1,4 @@
--- BfBotLoc.lua — TLK-backed runtime localization with checked-in English fallback
+-- BfBotLoc.lua — file-backed runtime localization with checked-in English fallback
 
 BfBot = BfBot or {}
 
@@ -173,11 +173,11 @@ for _, entry in pairs(_registry) do
     _registryById[entry.id] = entry
 end
 
-local _strrefs = {}
-local function _LoadStrRefMap()
+local _selectedById = {}
+local function _LoadSelectedCatalog()
     if type(io) ~= "table" or type(io.open) ~= "function" then return end
 
-    local openOK, handle = pcall(io.open, "override/bfbot_l10n.txt", "r")
+    local openOK, handle = pcall(io.open, "override/bfbot_l10n.tra", "r")
     if not openOK or not handle then return end
 
     local readOK, content = pcall(function() return handle:read("*a") end)
@@ -185,21 +185,18 @@ local function _LoadStrRefMap()
     if not readOK or type(content) ~= "string" then return end
 
     for line in content:gmatch("[^\r\n]+") do
-        local idText, strrefText = line:match("^(%d+)=(%d+)$")
-        if idText and strrefText then
-            local catalogId = tonumber(idText)
-            local strref = tonumber(strrefText)
-            if _registryById[catalogId]
-                    and strref >= 0
-                    and strref <= 2147483647
-                    and strref == math.floor(strref) then
-                _strrefs[catalogId] = strref
-            end
+        local idText, value = line:match(
+            "^%s*@(%d+)%s*=%s*~([^~]+)~%s*$"
+        )
+        local catalogId = idText and tonumber(idText) or nil
+        if catalogId and _registryById[catalogId]
+                and _selectedById[catalogId] == nil then
+            _selectedById[catalogId] = value
         end
     end
 end
 
-_LoadStrRefMap()
+_LoadSelectedCatalog()
 
 local _resolved = {}
 local _unknownWarnings = {}
@@ -234,17 +231,7 @@ function BfBot.L10N.Get(key)
     local cached = _resolved[key]
     if cached ~= nil then return cached end
 
-    local value
-    local strref = _strrefs[entry.id]
-    if strref ~= nil and type(Infinity_FetchString) == "function" then
-        local ok, fetched = pcall(Infinity_FetchString, strref)
-        if ok and type(fetched) == "string" and fetched ~= ""
-                and not fetched:match("^Invalid:%s*%d+%s*$") then
-            value = fetched
-        end
-    end
-
-    if value == nil then value = entry.fallback end
+    local value = _selectedById[entry.id] or entry.fallback
     _resolved[key] = value
     return value
 end
@@ -314,13 +301,4 @@ function BfBot.L10N.Reason(code, detail)
         end
     end
     return BfBot.L10N.Format(key, detail)
-end
-
-function BfBot.L10N.StrRef(key)
-    local entry = _registry[key]
-    if not entry then
-        _UnknownKey(key)
-        return nil
-    end
-    return _strrefs[entry.id]
 end

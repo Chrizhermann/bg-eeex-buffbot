@@ -24,6 +24,8 @@
 @111 = ~BuffBot：游戏内增益自动化~
 // installer.main.luajit_required
 @112 = ~安装主组件前必须启用 EEex LuaJIT。请先安装“BuffBot：EEex LuaJIT 支持”，或启用 EEex 的 LuaJIT / Experimental 组件，然后再次安装 BuffBot。Project Infinity 用户必须将 LuaJIT 组件排在“BuffBot：游戏内增益自动化”之前。~
+// installer.catalog_directory
+@113 = ~schinese~
 
 // innate.preset_1
 @200 = ~BuffBot 预设 1~

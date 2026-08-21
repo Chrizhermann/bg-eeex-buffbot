@@ -24,6 +24,8 @@
 @111 = ~BuffBot: In-Game Buff Automation~
 // installer.main.luajit_required
 @112 = ~BuffBot requires EEex LuaJIT to be active before installing the main component. Install "BuffBot: EEex LuaJIT Support" first, or enable EEex's LuaJIT / Experimental component, then install BuffBot again. Project Infinity users must place the LuaJIT component before "BuffBot: In-Game Buff Automation".~
+// installer.catalog_directory
+@113 = ~english~
 
 // innate.preset_1
 @200 = ~BuffBot 1~
