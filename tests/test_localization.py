@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 LANG_ROOT = ROOT / "buffbot" / "lang"
 
-ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~(.*)~\s*$")
+ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~([^~]*)~\s*$")
 EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
 SEMANTIC_COMMENT_RE = re.compile(r"^//\s*([a-z][a-z0-9_.]*)\s*$")
 NAMED_PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
@@ -295,6 +295,11 @@ def test_parser_rejects_malformed_utf8_duplicate_empty_ids_and_empty_values(
     whitespace_value.write_text("// key\n@1 = ~   ~\n", encoding="utf-8")
     with pytest.raises(ValueError, match="empty value"):
         parse_tra(whitespace_value)
+
+    interior_tilde = tmp_path / "interior-tilde.tra"
+    interior_tilde.write_text("// key\n@1 = ~first~ second~\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="unsupported TRA syntax"):
+        parse_tra(interior_tilde)
 
 
 def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
