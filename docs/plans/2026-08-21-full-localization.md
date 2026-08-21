@@ -299,12 +299,17 @@ git commit -m "feat: localize new preset defaults and reason codes"
 ### Task 6: Migrate all player-facing Lua, menu, and EEex Options text
 
 **Files:**
+- Modify: `buffbot/BfBotLoc.lua`
 - Modify: `buffbot/M_BfBot.lua`
 - Modify: `buffbot/BfBotExe.lua`
 - Modify: `buffbot/BfBotInn.lua`
 - Modify: `buffbot/BfBotUI.lua`
 - Modify: `buffbot/BfBotThm.lua`
 - Modify: `buffbot/BuffBot.menu`
+- Modify: `buffbot/setup-buffbot.tp2`
+- Modify: `buffbot/lang/english/setup.tra`
+- Modify: `buffbot/lang/schinese/setup.tra`
+- Modify: `tests/test_eeex_compatibility_installer.py`
 - Modify: `tests/test_localization.py`
 - Modify: `tests/test_repeat_ui.py`
 - Modify: `tests/test_ui_selection.py`
@@ -318,6 +323,13 @@ load order and localized `uiStrings`. Add focused behavior tests for clone
 possessive templates, titles, delete confirmation, cast labels/reasons, import
 summary, repeat tooltips, duration/category labels, targets, statuses, Quick
 Cast, and selected variant text.
+
+Extend the complete catalogs and runtime/installer maps with `@452`
+`ui.repeat.compact` (`R{count}` / `{count}次`) and `@453`
+`ui.lock.compact` (`[L]` / `[锁]`). Keep established English `Cast` labels, but
+make picker and no-work feedback factually include both spells and items.
+Apply the reviewed Chinese actor wording, game-native `特殊能力` terminology,
+Project Image wording, and compact no-space `时` / `分` / `秒` duration forms.
 
 **Step 2: Verify RED**
 
@@ -339,6 +351,10 @@ boundaries. Populate EEex `uiStrings` from localization. Map internal duration
 categories before display. Leave engine strref 14007, spell/item names,
 developer logs, and in-game test diagnostics untouched.
 
+Add the two new IDs to the checked-in registry and explicit WeiDU runtime map;
+the installer/catalog parity tests must continue to derive the exact runtime
+ID set and exercise both languages.
+
 **Step 5: Verify GREEN and behavior preservation**
 
 Run: `python -m pytest tests/test_localization.py tests/test_repeat_ui.py tests/test_ui_selection.py tests/test_runtime_compatibility.py tests/test_innate_recharge.py -q`
@@ -348,7 +364,7 @@ Expected: PASS with no unrelated UI-control-flow diff.
 **Step 6: Commit**
 
 ```bash
-git add buffbot/M_BfBot.lua buffbot/BfBotExe.lua buffbot/BfBotInn.lua buffbot/BfBotUI.lua buffbot/BfBotThm.lua buffbot/BuffBot.menu tests
+git add buffbot/M_BfBot.lua buffbot/BfBotLoc.lua buffbot/BfBotExe.lua buffbot/BfBotInn.lua buffbot/BfBotUI.lua buffbot/BfBotThm.lua buffbot/BuffBot.menu buffbot/setup-buffbot.tp2 buffbot/lang tests
 git commit -m "feat: localize BuffBot player-facing UI"
 ```
 
