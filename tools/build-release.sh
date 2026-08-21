@@ -23,43 +23,6 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 OUTPUT="$OUTPUT_DIR/$(basename "$OUTPUT")"
 
-STAGING="$(mktemp -d)"
-trap 'rm -rf "$STAGING"' EXIT
-mkdir -p "$STAGING/buffbot"
-
-cp "$INSTALLER" "$STAGING/setup-buffbot.exe"
-cp "$REPO_DIR/README.md" "$STAGING/README.md"
-cp "$REPO_DIR/CHANGELOG.md" "$STAGING/CHANGELOG.md"
-
-# Only distributable top-level mod formats are admitted. Generated runtime
-# maps, backups, tests, local configuration, and other development state do
-# not match this allowlist.
-while IFS= read -r -d '' SOURCE; do
-    cp "$SOURCE" "$STAGING/buffbot/$(basename "$SOURCE")"
-done < <(
-    find "$REPO_DIR/buffbot" -maxdepth 1 -type f \
-        \( -name '*.tp2' -o -name '*.lua' -o -name '*.menu' \
-           -o -name '*.BAM' -o -name '*.MOS' -o -name '*.PVRZ' \) \
-        -print0
-)
-
-# Translation catalogs are the only recursively packaged source. Preserve
-# their language-directory layout so WeiDU LANGUAGE paths remain valid.
-for REQUIRED in english schinese; do
-    [ -f "$REPO_DIR/buffbot/lang/$REQUIRED/setup.tra" ] || {
-        echo "ERROR: required catalog missing: buffbot/lang/$REQUIRED/setup.tra" >&2
-        exit 1
-    }
-done
-while IFS= read -r -d '' SOURCE; do
-    RELATIVE="${SOURCE#"$REPO_DIR/buffbot/"}"
-    mkdir -p "$STAGING/buffbot/$(dirname "$RELATIVE")"
-    cp "$SOURCE" "$STAGING/buffbot/$RELATIVE"
-done < <(
-    find "$REPO_DIR/buffbot/lang" -mindepth 2 -maxdepth 2 -type f \
-        -name 'setup.tra' -print0
-)
-
 if command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
 elif command -v python >/dev/null 2>&1; then
@@ -69,18 +32,157 @@ else
     exit 1
 fi
 
-rm -f "$OUTPUT"
-(cd "$STAGING" && "$PYTHON_BIN" - "$OUTPUT" <<'PY'
+STAGING="$(mktemp -d)"
+trap 'rm -rf "$STAGING"' EXIT
+
+"$PYTHON_BIN" - "$REPO_DIR" "$INSTALLER" "$OUTPUT" "$STAGING" <<'PY'
+import re
+import shutil
 import sys
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-output = Path(sys.argv[1])
-with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
-    for source in sorted(path for path in Path(".").rglob("*") if path.is_file()):
-        archive.write(source, source.as_posix())
-PY
+repo = Path(sys.argv[1]).resolve()
+installer = Path(sys.argv[2]).resolve()
+output = Path(sys.argv[3]).resolve()
+staging = Path(sys.argv[4]).resolve()
+
+root_files = (
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
 )
+buffbot_files = (
+    "setup-buffbot.tp2",
+    "M_BfBot.lua",
+    "BfBotCor.lua",
+    "BfBotLoc.lua",
+    "BfBotThm.lua",
+    "BfBotCls.lua",
+    "BfBotScn.lua",
+    "BfBotExe.lua",
+    "BfBotMp.lua",
+    "BfBotPer.lua",
+    "BfBotInn.lua",
+    "BfBotUI.lua",
+    "BfBotTst.lua",
+    "BuffBot.menu",
+    "BFBOTAB.BAM",
+    "BFBOTIB.BAM",
+    "BFBOTBG.MOS",
+    "BFBOTFR.PVRZ",
+    "BFBOTFR2.PVRZ",
+    "BFBOTFR3.PVRZ",
+    "MOS9900.PVRZ",
+    "MOS9901.PVRZ",
+    "MOS9902.PVRZ",
+    "MOS9903.PVRZ",
+    "MOS9910.PVRZ",
+    "MOS9911.PVRZ",
+    "MOS9912.PVRZ",
+    "MOS9913.PVRZ",
+    "MOS9920.PVRZ",
+    "MOS9921.PVRZ",
+    "MOS9922.PVRZ",
+    "MOS9923.PVRZ",
+)
+allowed_suffixes = {".tp2", ".lua", ".menu", ".bam", ".mos", ".pvrz"}
+
+
+def fail(message):
+    raise SystemExit("ERROR: " + message)
+
+
+def reject_casefold_collisions(paths):
+    seen = {}
+    for path in sorted(paths):
+        folded = path.casefold()
+        prior = seen.get(folded)
+        if prior is not None and prior != path:
+            fail(f"case-insensitive path collision: {prior} and {path}")
+        seen[folded] = path
+
+
+if not installer.is_file():
+    fail(f"installer not found: {installer}")
+if installer == output:
+    fail("installer and output ZIP must be different files")
+
+buffbot_root = repo / "buffbot"
+expected_top = {f"buffbot/{name}" for name in buffbot_files}
+actual_top = {
+    f"buffbot/{path.name}"
+    for path in buffbot_root.iterdir()
+    if path.is_file() and path.suffix.casefold() in allowed_suffixes
+}
+reject_casefold_collisions(actual_top)
+
+missing_top = sorted(expected_top - actual_top)
+if missing_top:
+    fail("missing required release file(s): " + ", ".join(missing_top))
+unexpected_top = sorted(actual_top - expected_top)
+if unexpected_top:
+    fail("unexpected release file(s): " + ", ".join(unexpected_top))
+
+tp2_path = repo / "buffbot/setup-buffbot.tp2"
+try:
+    tp2 = tp2_path.read_text(encoding="utf-8")
+except (OSError, UnicodeError) as error:
+    fail(f"cannot read buffbot/setup-buffbot.tp2: {error}")
+
+language_count = len(re.findall(r"(?m)^[ \t]*LANGUAGE[ \t]*$", tp2))
+language_rows = re.findall(
+    r"(?m)^[ \t]*LANGUAGE[ \t]*\r?\n"
+    r"[ \t]*~[^~\r\n]*~[ \t]*\r?\n"
+    r"[ \t]*~([a-z0-9_-]+)~[ \t]*\r?\n"
+    r"[ \t]*~(buffbot/lang/([a-z0-9_-]+)/setup\.tra)~[ \t]*$",
+    tp2,
+)
+if not language_rows or len(language_rows) != language_count:
+    fail("every TP2 LANGUAGE declaration must use a lowercase buffbot/lang folder")
+
+catalog_files = []
+for language_name, relative, folder in language_rows:
+    if language_name != folder:
+        fail(f"TP2 LANGUAGE name/folder mismatch: {language_name} != {folder}")
+    catalog_files.append(relative)
+reject_casefold_collisions(catalog_files)
+if len(set(catalog_files)) != len(catalog_files):
+    fail("duplicate TP2 LANGUAGE catalog declaration")
+
+lang_root = repo / "buffbot/lang"
+actual_catalogs = {
+    path.relative_to(repo).as_posix()
+    for path in lang_root.rglob("*")
+    if path.is_file()
+}
+reject_casefold_collisions(actual_catalogs)
+declared_catalogs = set(catalog_files)
+missing_catalogs = sorted(declared_catalogs - actual_catalogs)
+if missing_catalogs:
+    fail("missing required release file(s): " + ", ".join(missing_catalogs))
+unexpected_catalogs = sorted(actual_catalogs - declared_catalogs)
+if unexpected_catalogs:
+    fail("unexpected release file(s): " + ", ".join(unexpected_catalogs))
+
+release_sources = [*root_files, *sorted(expected_top), *sorted(declared_catalogs)]
+reject_casefold_collisions(release_sources)
+for relative in release_sources:
+    source = repo / relative
+    if not source.is_file() or source.is_symlink():
+        fail(f"missing required release file: {relative}")
+    destination = staging / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+shutil.copy2(installer, staging / "setup-buffbot.exe")
+archive_members = ["setup-buffbot.exe", *release_sources]
+if output.exists():
+    output.unlink()
+with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
+    for relative in sorted(archive_members):
+        archive.write(staging / relative, relative)
+PY
 
 FILE_COUNT="$(find "$STAGING" -type f | wc -l | tr -d ' ')"
 echo "Built BuffBot release: $OUTPUT ($FILE_COUNT files)"

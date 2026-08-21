@@ -26,6 +26,7 @@ BUILD_SCRIPT = ROOT / "tools/build-release.sh"
 DEPLOY_SCRIPT = ROOT / "tools/deploy.sh"
 WORKFLOW = ROOT / ".github/workflows/release.yml"
 README = ROOT / "README.md"
+TP2_PATH = ROOT / "buffbot/setup-buffbot.tp2"
 VERSION = "v1.7.4-alpha"
 
 # This is deliberately explicit: recursive packaging must not silently publish
@@ -70,6 +71,7 @@ ARCHIVE_FILES = {
     "setup-buffbot.exe",
     "README.md",
     "CHANGELOG.md",
+    "LICENSE",
     *BUFFBOT_RELEASE_FILES,
 }
 
@@ -91,15 +93,20 @@ def _shell_path(path: Path) -> str:
     return path.resolve().as_posix()
 
 
-def _run_builder(installer: Path, output: Path) -> subprocess.CompletedProcess[str]:
+def _run_builder(
+    installer: Path,
+    output: Path,
+    *,
+    repo_root: Path = ROOT,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             _bash(),
-            "tools/build-release.sh",
+            _shell_path(repo_root / "tools/build-release.sh"),
             _shell_path(installer),
             _shell_path(output),
         ],
-        cwd=ROOT,
+        cwd=repo_root,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -128,11 +135,27 @@ def _archive_file_names(archive: Path) -> list[str]:
         )
 
 
+def _copy_release_source(tmp_path: Path) -> Path:
+    repo = tmp_path / "release source"
+    (repo / "tools").mkdir(parents=True)
+    shutil.copy2(BUILD_SCRIPT, repo / "tools/build-release.sh")
+    shutil.copytree(ROOT / "buffbot", repo / "buffbot")
+    for name in ("README.md", "CHANGELOG.md", "LICENSE"):
+        shutil.copy2(ROOT / name, repo / name)
+    return repo
+
+
+def _fixture_installer(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"synthetic setup-buffbot.exe\0")
+    return path
+
+
 def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 37
+    assert len(names) == 38
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)
@@ -182,20 +205,98 @@ def test_release_builder_resolves_relative_output_before_staging(
     assert set(_archive_file_names(output)) == ARCHIVE_FILES
 
 
+def test_release_builder_rejects_missing_required_source(tmp_path: Path) -> None:
+    repo = _copy_release_source(tmp_path)
+    (repo / "buffbot/BfBotUI.lua").unlink()
+    output = tmp_path / "missing.zip"
+
+    result = _run_builder(
+        _fixture_installer(tmp_path / "setup-buffbot.exe"),
+        output,
+        repo_root=repo,
+    )
+
+    transcript = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "missing required release file" in transcript
+    assert "buffbot/BfBotUI.lua" in transcript
+    assert not output.exists()
+
+
+def test_release_builder_rejects_unexpected_matching_source(tmp_path: Path) -> None:
+    repo = _copy_release_source(tmp_path)
+    (repo / "buffbot/Accidental.lua").write_text(
+        "-- must not ship\n", encoding="ascii"
+    )
+    output = tmp_path / "unexpected.zip"
+
+    result = _run_builder(
+        _fixture_installer(tmp_path / "setup-buffbot.exe"),
+        output,
+        repo_root=repo,
+    )
+
+    transcript = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "unexpected release file" in transcript
+    assert "buffbot/Accidental.lua" in transcript
+    assert not output.exists()
+
+
+def test_release_builder_rejects_casefold_path_collisions(tmp_path: Path) -> None:
+    repo = _copy_release_source(tmp_path)
+    (repo / "buffbot/SS.lua").write_text("-- collision A\n", encoding="ascii")
+    (repo / "buffbot/ß.lua").write_text("-- collision B\n", encoding="ascii")
+    output = tmp_path / "collision.zip"
+
+    result = _run_builder(
+        _fixture_installer(tmp_path / "setup-buffbot.exe"),
+        output,
+        repo_root=repo,
+    )
+
+    assert result.returncode != 0
+    assert "case-insensitive path collision" in result.stdout + result.stderr
+    assert not output.exists()
+
+
 def test_release_workflow_delegates_packaging_and_keeps_version_guards() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
 
     assert 'TP2_VERSION=$(grep -E \'^VERSION ~\'' in source
     assert 'COR_VERSION=$(grep -E \'^BfBot\\.VERSION = "\'' in source
-    assert 'if [ "$TP2_VERSION" != "$TAG" ]' in source
+    assert 'if [ "$TP2_VERSION" != "$RELEASE_TAG" ]' in source
     assert 'if [ "$COR_VERSION" != "$TAG_NOV" ]' in source
+    release_expression = "${{ github.event.release.tag_name }}"
+    assert source.count(release_expression) == 1
+    assert f"RELEASE_TAG: {release_expression}" in source
+    assert 'TAG="${{' not in source
     assert "bash tools/build-release.sh" in source
     assert "/tmp/setup-buffbot.exe" in source
-    assert '"/tmp/buffbot-${TAG}.zip"' in source
+    assert '"/tmp/buffbot-${RELEASE_TAG}.zip"' in source
     assert "--installer" not in source
     assert "--output" not in source
     assert "cp buffbot/*.lua" not in source
     assert "cp buffbot/*.PVRZ" not in source
+
+
+def test_catalog_folders_exactly_match_tp2_language_declarations() -> None:
+    source = TP2_PATH.read_text(encoding="utf-8")
+    declared = {
+        match.group(1)
+        for match in re.finditer(
+            r"(?m)^\s*~(buffbot/lang/[a-z0-9_-]+/setup\.tra)~\s*$",
+            source,
+        )
+    }
+    actual = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "buffbot/lang").rglob("*")
+        if path.is_file()
+    }
+
+    assert len(re.findall(r"(?m)^LANGUAGE\s*$", source)) == len(declared)
+    assert declared == actual
 
 
 def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
@@ -222,6 +323,8 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "UTF-8" in source
     assert "one-line" in normalized and "tilde" in normalized
     assert "python -m pytest tests/test_localization.py" in source
+    assert "`LANGUAGE` stanza" in source
+    assert "package manifest" in normalized
     assert "translator credit" in normalized
     assert "robovoid" in normalized
     assert "[robovoid](https://github.com/robvoid)" in source
@@ -259,6 +362,34 @@ def test_raw_deploy_is_explicitly_english_without_generated_map(
     runtime.execute((override / "BfBotLoc.lua").read_text(encoding="utf-8"))
     assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
     assert runtime.eval('BfBot.L10N.Get("default.preset.long")') == "Long Buffs"
+
+
+def test_raw_deploy_preserves_and_reports_existing_weidu_map(
+    tmp_path: Path,
+) -> None:
+    game = tmp_path / "synthetic-localized-game"
+    override = game / "override"
+    override.mkdir(parents=True)
+    write_minimal_tlk(game / "lang/en_US/dialog.tlk")
+    map_path = override / "bfbot_l10n.txt"
+    original_map = b"300=12345\n"
+    map_path.write_bytes(original_map)
+
+    result = subprocess.run(
+        [_bash(), _shell_path(DEPLOY_SCRIPT), _shell_path(game)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "preserving existing WeiDU localization map" in result.stdout
+    assert "English fallback" not in result.stdout
+    assert map_path.read_bytes() == original_map
 
 
 def test_built_archive_installs_simplified_chinese_with_weidu_249(

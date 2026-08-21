@@ -7,6 +7,7 @@ on:
 env:
   WEIDU_TAG: "v249.00"
   WEIDU_ASSET: "WeiDU-Windows-249-amd64.zip"
+  RELEASE_TAG: ${{ github.event.release.tag_name }}
 
 jobs:
   package:
@@ -18,19 +19,18 @@ jobs:
 
       - name: Verify version consistency
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          TAG_NOV="${TAG#v}"
+          TAG_NOV="${RELEASE_TAG#v}"
 
           TP2_VERSION=$(grep -E '^VERSION ~' buffbot/setup-buffbot.tp2 | sed -E 's/^VERSION ~([^~]+)~.*$/\1/')
           COR_VERSION=$(grep -E '^BfBot\.VERSION = "' buffbot/BfBotCor.lua | sed -E 's/^BfBot\.VERSION = "([^"]+)".*$/\1/')
 
-          echo "Release tag:       $TAG"
+          echo "Release tag:       $RELEASE_TAG"
           echo "tp2 VERSION:       $TP2_VERSION"
           echo "BfBotCor.VERSION:  $COR_VERSION"
 
           fail=0
-          if [ "$TP2_VERSION" != "$TAG" ]; then
-            echo "::error file=buffbot/setup-buffbot.tp2,line=3::tp2 VERSION ($TP2_VERSION) does not match release tag ($TAG)"
+          if [ "$TP2_VERSION" != "$RELEASE_TAG" ]; then
+            echo "::error file=buffbot/setup-buffbot.tp2,line=3::tp2 VERSION ($TP2_VERSION) does not match release tag ($RELEASE_TAG)"
             fail=1
           fi
           if [ "$COR_VERSION" != "$TAG_NOV" ]; then
@@ -62,19 +62,17 @@ jobs:
 
       - name: Build release archive
         run: |
-          TAG="${{ github.event.release.tag_name }}"
           bash tools/build-release.sh \
             /tmp/setup-buffbot.exe \
-            "/tmp/buffbot-${TAG}.zip"
+            "/tmp/buffbot-${RELEASE_TAG}.zip"
 
           echo "Archive contents:"
-          unzip -l "/tmp/buffbot-${TAG}.zip"
+          unzip -l "/tmp/buffbot-${RELEASE_TAG}.zip"
 
       - name: Upload release asset
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          gh release upload "$TAG" \
-            "/tmp/buffbot-${TAG}.zip" \
+          gh release upload "$RELEASE_TAG" \
+            "/tmp/buffbot-${RELEASE_TAG}.zip" \
             --clobber
         env:
           GH_TOKEN: ${{ github.token }}

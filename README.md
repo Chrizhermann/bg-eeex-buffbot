@@ -174,8 +174,9 @@ Language pull requests are welcome. BuffBot accepts complete catalogs so players
 1. Copy `buffbot/lang/english/setup.tra` to `buffbot/lang/<language>/setup.tra`, using a lowercase language-folder name.
 2. Translate every entry while preserving the exact `@` IDs, the semantic comment above each entry, all named placeholders such as `{name}`, and any WeiDU token such as `%lua_version%`.
 3. Keep the file UTF-8 and use the existing one-line tilde format (`@123 = ~Text~`). Do not add or omit catalog entries.
-4. Run `python -m pytest tests/test_localization.py -q` (and ideally the full test suite) before opening the PR.
-5. Include the translator credit you would like shown in the README and release notes.
+4. Add the matching `LANGUAGE` stanza to `buffbot/setup-buffbot.tp2`, then update and validate the release package manifest/tests so the catalog ships in the archive.
+5. Run `python -m pytest tests/test_localization.py -q` (and ideally the full test suite) before opening the PR.
+6. Include the translator credit you would like shown in the README and release notes.
 
 ### Developer Setup
 
