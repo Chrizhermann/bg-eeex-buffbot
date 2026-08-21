@@ -3,14 +3,6 @@
 BfBot = BfBot or {}
 
 local _registry = {
-    ["innate.preset_1"] = { id = 200, fallback = [=[BuffBot 1]=] },
-    ["innate.preset_2"] = { id = 201, fallback = [=[BuffBot 2]=] },
-    ["innate.preset_3"] = { id = 202, fallback = [=[BuffBot 3]=] },
-    ["innate.preset_4"] = { id = 203, fallback = [=[BuffBot 4]=] },
-    ["innate.preset_5"] = { id = 204, fallback = [=[BuffBot 5]=] },
-    ["innate.preset_6"] = { id = 205, fallback = [=[BuffBot 6]=] },
-    ["innate.preset_7"] = { id = 206, fallback = [=[BuffBot 7]=] },
-    ["innate.preset_8"] = { id = 207, fallback = [=[BuffBot 8]=] },
     ["common.buffbot"] = { id = 300, fallback = [=[BuffBot]=] },
     ["common.party"] = { id = 301, fallback = [=[Party]=] },
     ["common.summons"] = { id = 302, fallback = [=[Summons]=] },
@@ -190,6 +182,7 @@ local function _LoadSelectedCatalog()
         )
         local catalogId = idText and tonumber(idText) or nil
         if catalogId and _registryById[catalogId]
+                and value:find("%S")
                 and _selectedById[catalogId] == nil then
             _selectedById[catalogId] = value
         end

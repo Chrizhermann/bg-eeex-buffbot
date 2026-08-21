@@ -9,7 +9,7 @@ if not io then
 end
 
 Infinity_DoFile("BfBotCor")  -- Namespace, logging, shared utilities, caches
-Infinity_DoFile("BfBotLoc")  -- TLK-backed localization with English fallback
+Infinity_DoFile("BfBotLoc")  -- file-backed localization with English fallback
 
 if BfBot._noIO then
     EEex_Menu_AddAfterMainFileLoadedListener(BfBot._SafeCallback(

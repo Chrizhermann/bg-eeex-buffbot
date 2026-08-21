@@ -304,7 +304,7 @@ def runtime_catalog_contract() -> dict[int, tuple[str, str]]:
     return {
         tra_id: (semantics[tra_id], english[tra_id])
         for tra_id in english
-        if not semantics[tra_id].startswith("installer.")
+        if not semantics[tra_id].startswith(("installer.", "innate."))
     }
 
 
@@ -521,7 +521,7 @@ def test_catalog_named_placeholders_are_well_formed():
                 ) from error
 
 
-def test_runtime_registry_exactly_matches_non_installer_catalog_contract():
+def test_runtime_registry_exactly_matches_runtime_only_catalog_contract():
     runtime = localization_runtime()
     registry = runtime.globals().BfBot.L10N._Registry
 
@@ -532,6 +532,21 @@ def test_runtime_registry_exactly_matches_non_installer_catalog_contract():
         actual[tra_id] = (key, entry["fallback"])
 
     assert actual == runtime_catalog_contract()
+
+
+def test_innate_only_catalog_rows_are_not_registered_or_runtime_addressable():
+    runtime = localization_runtime(
+        "@200 = ~poisoned runtime innate name~\n@305 = ~Selected Reset~\n"
+    )
+
+    assert runtime.eval('BfBot.L10N._Registry["innate.preset_1"]') is None
+    unknown = runtime.eval('BfBot.L10N.Get("innate.preset_1")')
+    assert "innate.preset_1" in unknown
+    assert "missing" in unknown.lower()
+    assert "poisoned runtime innate name" not in unknown
+    assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Selected Reset"
+    assert runtime.globals().test_open_count == 1
+    assert runtime.globals().test_fetch_count == 0
 
 
 def test_selected_utf8_catalog_is_loaded_and_cached_without_native_tlk_access():
@@ -574,10 +589,11 @@ def test_catalog_parser_ignores_unknown_empty_malformed_and_interior_tilde_rows(
                 "@305 = ~重置~",
                 "@305 = ~second value must lose~",
                 "@9999 = ~ignored~",
-                "@306 = ~~",
+                "@306 = ~   ~",
                 "@307 = ~contains ~ tilde~",
                 "@308 = ~valid value~ trailing",
                 "@309 = valid value without delimiters",
+                "@310 = ~~",
                 "not a TRA row",
             )
         )
@@ -588,6 +604,7 @@ def test_catalog_parser_ignores_unknown_empty_malformed_and_interior_tilde_rows(
     assert runtime.eval('BfBot.L10N.Get("common.new")') == "New"
     assert runtime.eval('BfBot.L10N.Get("common.add_spell")') == "Add Spell/Item"
     assert runtime.eval('BfBot.L10N.Get("common.remove")') == "Remove"
+    assert runtime.eval('BfBot.L10N.Get("common.export")') == "Export"
     assert runtime.globals().test_open_count == 1
     assert runtime.globals().test_fetch_count == 0
 
@@ -749,6 +766,8 @@ def test_persistence_public_failures_use_catalog_reason_codes():
 def test_bootstrap_loads_core_then_localization_before_all_consumers():
     source = MAIN_PATH.read_text(encoding="utf-8")
 
+    assert "file-backed localization with English fallback" in source
+    assert "TLK-backed localization" not in source
     core_pos = source.index('Infinity_DoFile("BfBotCor")')
     loc_pos = source.index('Infinity_DoFile("BfBotLoc")')
     no_luajit_pos = source.index("if BfBot._noIO then")
