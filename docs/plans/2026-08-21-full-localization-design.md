@@ -56,8 +56,8 @@ menu escaping knowledge. This is rejected for long-term maintenance.
 
 ### TLK-backed runtime localization (selected)
 
-WeiDU resolves plain `.tra` entries into the active game TLK and substitutes
-only numeric string references into a BuffBot-owned localization map. Runtime
+WeiDU resolves plain `.tra` entries into the active game TLK and writes only
+numeric ID-to-strref pairs into a BuffBot-owned localization map file. Runtime
 code fetches and caches those strings through `Infinity_FetchString`. Menu and
 Lua code refer to semantic keys, so translated text is never injected into
 executable source.
@@ -92,8 +92,8 @@ set mismatches, and unreferenced or undefined runtime keys.
 - Missing mappings, failed TLK fetches, or source deployments fall back to a
   complete English table and never expose a raw sentinel to the player.
 
-The installer copies this module unchanged except for numeric mapping values.
-It never inserts translated text. `M_BfBot.lua` loads localization immediately
+The installer copies this module unchanged and generates a separate numeric
+mapping file. It never inserts translated text. `M_BfBot.lua` loads localization immediately
 after Core and before the no-LuaJIT notice, Theme, persistence defaults, and UI.
 
 Static `.menu` labels use `text lua` with localization keys. Lua-built labels
@@ -110,8 +110,9 @@ numbers, labels, helper-first declaration order, LuaJIT state detection,
 upgrade exception, and uninstall ownership remain unchanged.
 
 The main component resolves every runtime entry independently; it does not
-assume contiguous TLK references. Numeric references are written into the
-localization module alongside the existing eight innate mappings. Installer
+assume contiguous TLK references. Numeric references are written as explicit
+catalog-ID-to-strref pairs. The existing eight innate mappings remain
+independent and gain localized `.tra` inputs. Installer
 component names, predicates, failures, and progress messages use `.tra`
 entries normally.
 
@@ -153,6 +154,13 @@ README gains a localization section that:
   values remain visible to tests instead of being silently deleted.
 - Localization failures never alter casting, persistence, component ordering,
   or uninstall state.
+
+Two current English assumptions must be removed before claiming Chinese-safe
+behavior. Project Image queue protection must identify opcode 236 with image
+type 2 (including bounded opcode-146 wrappers), not the English display name.
+Export filenames must not collapse every non-ASCII character name to the same
+`Unknown.lua`; a collision-safe ASCII party-slot fallback is used when the
+sanitized name is empty.
 
 ## Verification
 
