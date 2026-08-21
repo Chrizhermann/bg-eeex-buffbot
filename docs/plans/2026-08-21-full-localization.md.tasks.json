@@ -5,11 +5,11 @@
     {"id": 1, "subject": "Task 2: Build the TLK-backed runtime localization API", "status": "completed", "blockedBy": [0]},
     {"id": 2, "subject": "Task 3: Integrate language selection and mappings into the installer", "status": "completed", "blockedBy": [1]},
     {"id": 3, "subject": "Task 4: Remove locale-dependent Project Image safety detection", "status": "completed", "blockedBy": [1]},
-    {"id": 4, "subject": "Task 5: Localize persistence defaults and stabilize reason contracts", "status": "pending", "blockedBy": [1, 3]},
+    {"id": 4, "subject": "Task 5: Localize persistence defaults and stabilize reason contracts", "status": "completed", "blockedBy": [1, 3]},
     {"id": 5, "subject": "Task 6: Migrate all player-facing Lua, menu, and EEex Options text", "status": "pending", "blockedBy": [2, 4]},
     {"id": 6, "subject": "Task 7: Make development deployment and release packaging complete", "status": "pending", "blockedBy": [2, 5]},
     {"id": 7, "subject": "Task 8: Exercise language switching and the complete compatibility matrix", "status": "pending", "blockedBy": [6]},
     {"id": 8, "subject": "Task 9: Prepare and run live Copy Copy acceptance", "status": "pending", "blockedBy": [7]}
   ],
-  "lastUpdated": "2026-08-21T22:44:00+09:00"
+  "lastUpdated": "2026-08-21T23:03:00+09:00"
 }
