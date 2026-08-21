@@ -298,7 +298,7 @@ function BfBot.Class._IsProjectImage(resref, header, ability)
 
     local visited = {}
     if type(resref) == "string" and resref ~= "" then
-        visited[resref:upper()] = true
+        visited[resref:upper()] = 0
     end
 
     local function scan(currentHeader, currentAbility, depth)
@@ -315,8 +315,15 @@ function BfBot.Class._IsProjectImage(resref, header, ability)
                 if opcode == 146 and depth < 2 then
                     local childResref = _subSpellRef(fb)
                     local childKey = childResref and childResref:upper() or nil
-                    if childKey and not visited[childKey] then
-                        visited[childKey] = true
+                    local childDepth = depth + 1
+                    local seenDepth = childKey and visited[childKey] or nil
+                    -- A resource first reached near the depth limit may still
+                    -- expose a valid path when another branch reaches it more
+                    -- directly. Revisit only when the new path is shallower;
+                    -- equal/deeper paths are cycles or redundant work.
+                    if childKey and (seenDepth == nil
+                        or childDepth < seenDepth) then
+                        visited[childKey] = childDepth
                         local okHeader, childHeader = pcall(
                             EEex_Resource_Demand, childResref, "SPL")
                         if okHeader and childHeader then
@@ -324,7 +331,7 @@ function BfBot.Class._IsProjectImage(resref, header, ability)
                                 return childHeader:getAbility(0)
                             end)
                             if okAbility and childAbility
-                                and scan(childHeader, childAbility, depth + 1) then
+                                and scan(childHeader, childAbility, childDepth) then
                                 found = true
                                 return true
                             end

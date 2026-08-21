@@ -1405,6 +1405,39 @@ def test_project_image_classification_recurses_two_wrappers_and_guards_cycles(
     assert facts["cycleChildDemands"] == 1
 
 
+def test_project_image_wrapper_dag_revisits_child_at_shallower_depth(
+    project_image_lua: LuaRuntime,
+) -> None:
+    detected = project_image_lua.execute(
+        """
+        -- ROOT first reaches X too deeply to follow X -> PI, then reaches the
+        -- same X directly. A global seen-set must not suppress that valid
+        -- shallower path.
+        local projectImage = BfBot_TestAbility({
+            { effectID = 236, dwFlags = 2 },
+        })
+        local x = BfBot_TestAbility({
+            { effectID = 146, res = "PI" },
+        })
+        local a = BfBot_TestAbility({
+            { effectID = 146, res = "X" },
+        })
+        local root = BfBot_TestAbility({
+            { effectID = 146, res = "A" },
+            { effectID = 146, res = "X" },
+        })
+        BfBot_TestResources.PI = BfBot_TestHeader(projectImage)
+        BfBot_TestResources.X = BfBot_TestHeader(x)
+        BfBot_TestResources.A = BfBot_TestHeader(a)
+
+        return BfBot.Class._IsProjectImage(
+            "ROOT", BfBot_TestHeader(root), root)
+        """
+    )
+
+    assert detected
+
+
 def test_project_image_scan_entry_carries_integer_structural_flag(
     project_image_lua: LuaRuntime,
 ) -> None:
