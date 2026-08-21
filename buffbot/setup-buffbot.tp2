@@ -431,6 +431,8 @@ OUTER_SET bfbot_l10n_448 = RESOLVE_STR_REF(@448)
 OUTER_SET bfbot_l10n_449 = RESOLVE_STR_REF(@449)
 OUTER_SET bfbot_l10n_450 = RESOLVE_STR_REF(@450)
 OUTER_SET bfbot_l10n_451 = RESOLVE_STR_REF(@451)
+OUTER_SET bfbot_l10n_452 = RESOLVE_STR_REF(@452)
+OUTER_SET bfbot_l10n_453 = RESOLVE_STR_REF(@453)
 OUTER_SET bfbot_l10n_500 = RESOLVE_STR_REF(@500)
 OUTER_SET bfbot_l10n_501 = RESOLVE_STR_REF(@501)
 OUTER_SET bfbot_l10n_502 = RESOLVE_STR_REF(@502)
@@ -637,6 +639,8 @@ MKDIR ~override/bfbot_presets~
 449=%bfbot_l10n_449%
 450=%bfbot_l10n_450%
 451=%bfbot_l10n_451%
+452=%bfbot_l10n_452%
+453=%bfbot_l10n_453%
 500=%bfbot_l10n_500%
 501=%bfbot_l10n_501%
 502=%bfbot_l10n_502%

@@ -59,7 +59,7 @@
 // common.new
 @307 = ~新建~
 // common.add_spell
-@308 = ~添加法术~
+@308 = ~添加法术/物品~
 // common.remove
 @309 = ~移除~
 // common.export
@@ -128,13 +128,13 @@
 // ui.clone.generic
 @408 = ~{owner}的复制体~
 // ui.cast.all
-@409 = ~全部施法~
+@409 = ~全部执行~
 // ui.cast.character
-@410 = ~为角色施法~
+@410 = ~执行：当前角色~
 // ui.cast.named
-@411 = ~为{name}施法~
+@411 = ~执行：{name}~
 // ui.cast.summon
-@412 = ~当前召唤物施法~
+@412 = ~执行：当前召唤物~
 // ui.qualifier.self_only
 @413 = ~（仅限施法者自身）~
 // ui.qualifier.party_wide
@@ -142,7 +142,7 @@
 // ui.rename_preset_title
 @415 = ~重命名预设：~
 // ui.add_spell_title
-@416 = ~添加法术到增益列表~
+@416 = ~将法术或物品添加到增益列表~
 // ui.add_to_buff_list
 @417 = ~添加到增益列表~
 // ui.import_config_title
@@ -166,11 +166,11 @@
 // ui.target.multiple
 @427 = ~{name} +{count}~
 // ui.status.casting
-@428 = ~正在施法……~
+@428 = ~执行中……~
 // ui.status.casting_quick_long
-@429 = ~正在施法（快速：仅长效）……~
+@429 = ~执行中（快速施法：仅长效）……~
 // ui.status.casting_quick_all
-@430 = ~正在施法（快速：全部）……~
+@430 = ~执行中（快速施法：全部）……~
 // ui.status.done
 @431 = ~完成~
 // ui.status.stopped
@@ -194,13 +194,13 @@
 // ui.duration.instant
 @441 = ~即时~
 // ui.duration.hours_minutes
-@442 = ~{hours}小时 {minutes}分钟~
+@442 = ~{hours}时{minutes}分~
 // ui.duration.hours
-@443 = ~{hours}小时~
+@443 = ~{hours}时~
 // ui.duration.minutes_seconds
-@444 = ~{minutes}分钟 {seconds}秒~
+@444 = ~{minutes}分{seconds}秒~
 // ui.duration.minutes
-@445 = ~{minutes}分钟~
+@445 = ~{minutes}分~
 // ui.duration.seconds
 @446 = ~{seconds}秒~
 // ui.category.permanent
@@ -213,9 +213,13 @@
 @450 = ~即时~
 // ui.category.unknown
 @451 = ~未知~
+// ui.repeat.compact
+@452 = ~{count}次~
+// ui.lock.compact
+@453 = ~[锁]~
 
 // feedback.no_luajit
-@500 = ~BuffBot：未检测到 LuaJIT。F12 天生能力、快速施法、导入/导出和日志记录已禁用。请安装 EEex LuaJIT 组件以启用完整功能。~
+@500 = ~BuffBot：未检测到 LuaJIT。F12 特殊能力、快速施法、导入/导出和日志记录已禁用。请安装 EEex LuaJIT 组件以启用完整功能。~
 // feedback.combat_stopped
 @501 = ~BuffBot：检测到战斗——已停止施法~
 // feedback.cast_timeout
@@ -223,19 +227,19 @@
 // feedback.party_changed_after_run
 @503 = ~BuffBot：队伍已变化——请在当前施法结束后重试~
 // feedback.party_changed_refreshing
-@504 = ~BuffBot：队伍已变化——正在刷新天生能力，请重试~
+@504 = ~BuffBot：队伍已变化——正在刷新特殊能力，请重试~
 // feedback.no_spells_with_reason
-@505 = ~BuffBot：没有可施放的法术（{reason}）~
+@505 = ~BuffBot：没有可施放的法术或可使用的物品（{reason}）~
 // feedback.innate_error
-@506 = ~BuffBot 天生能力错误：{error}~
+@506 = ~BuffBot 特殊能力错误：{error}~
 // feedback.no_spells_preset
-@507 = ~BuffBot：此预设中没有可施放的法术~
+@507 = ~BuffBot：此预设中没有可施放的法术或可使用的物品~
 // feedback.character_remote_control
 @508 = ~BuffBot：{name}由另一名玩家控制~
 // feedback.character_project_image_locked
-@509 = ~BuffBot：{name}因投影术而被锁定——请在投影消失后再次施法~
+@509 = ~BuffBot：{name}的本体受投影术限制——请在投影消失后再次执行~
 // feedback.no_spells_character
-@510 = ~BuffBot：此角色没有可施放的法术~
+@510 = ~BuffBot：此角色没有可施放的法术或可使用的物品~
 // feedback.no_summon_selected
 @511 = ~BuffBot：未选择召唤物~
 // feedback.no_spells_summon
@@ -243,7 +247,7 @@
 // feedback.no_spells_summon_with_reason
 @513 = ~BuffBot：此召唤物没有可施放的法术（{reason}）~
 // feedback.no_additional_spells
-@514 = ~BuffBot：没有其他可添加的法术~
+@514 = ~BuffBot：没有其他可添加的法术或物品~
 // feedback.export_success
 @515 = ~BuffBot：配置已导出为“{file}”~
 // feedback.export_failed
@@ -301,7 +305,7 @@
 // reason.queue.no_preset_index
 @542 = ~缺少预设编号~
 // reason.queue.no_castable_preset_spells
-@543 = ~预设 {index} 中没有可施放的法术~
+@543 = ~预设 {index} 中没有可施放的法术或可使用的物品~
 // reason.queue.missing_slot_or_preset
 @544 = ~缺少角色栏位或预设~
 // reason.queue.no_sprite_in_slot
@@ -315,9 +319,9 @@
 // reason.queue.scan_failed_for_slot
 @549 = ~扫描栏位 {slot} 失败~
 // reason.queue.project_image_locked
-@550 = ~因投影术而被锁定~
+@550 = ~本体受投影术限制~
 // reason.queue.no_castable_spells_for_slot
-@551 = ~栏位 {slot} 的预设 {preset} 中没有可施放的法术~
+@551 = ~栏位 {slot} 的预设 {preset} 中没有可施放的法术或可使用的物品~
 
 // default.preset.long
 @600 = ~长效增益~

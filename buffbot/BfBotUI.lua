@@ -105,10 +105,6 @@ function BfBot.UI._SummonPageSlice(list, page)
     return slice, p, pageCount
 end
 
--- Clone-type display nouns (derived stat 139 PUPPETMASTERTYPE: 1=Mislead,
--- 2=Project Image, 3=Simulacrum — probe-verified for 2/3).
-local _CLONE_NOUNS = { [1] = "Mislead", [2] = "Image", [3] = "Simulacrum" }
-
 --- PURE: tab label for a summon entry. Clones get an owner-possessive label
 --- ("Imoen's Image"); the owner comes from the entry's ownerName, falling
 --- back to the "clone:<Owner>" identity. Everything else shows its name.
@@ -120,7 +116,14 @@ function BfBot.UI._SummonTabLabel(entry)
             owner = entry.identity:match("^clone:(.+)$")
         end
         if owner and owner ~= "" then
-            return owner .. "'s " .. (_CLONE_NOUNS[entry.cloneType] or "Clone")
+            if entry.cloneType == 1 then
+                return BfBot.L10N.Format("ui.clone.mislead", { owner = owner })
+            elseif entry.cloneType == 2 then
+                return BfBot.L10N.Format("ui.clone.project_image", { owner = owner })
+            elseif entry.cloneType == 3 then
+                return BfBot.L10N.Format("ui.clone.simulacrum", { owner = owner })
+            end
+            return BfBot.L10N.Format("ui.clone.generic", { owner = owner })
         end
     end
     return entry.name or ""
@@ -250,8 +253,10 @@ end
 
 --- View toggle button caption: offers the OTHER view.
 function BfBot.UI._ViewBtnLabel()
-    if BfBot.UI._IsPartyView() then return "Summons" end
-    return "Party"
+    if BfBot.UI._IsPartyView() then
+        return BfBot.L10N.Get("common.summons")
+    end
+    return BfBot.L10N.Get("common.party")
 end
 
 --- Toggle between party and summons view. Preset index is a shared axis and
@@ -331,9 +336,9 @@ end
 
 -- Panel state
 buffbot_isOpen = false
-buffbot_title = "BuffBot"
+buffbot_title = BfBot.L10N.Get("common.buffbot")
 buffbot_status = ""
-buffbot_btnTooltip = "BuffBot Configuration"
+buffbot_btnTooltip = BfBot.L10N.Get("ui.tooltip.configuration")
 buffbot_btnFrame = 0             -- 0=normal, 1=active/running
 
 -- Character tabs (1-indexed; nil entries = empty party slot)
@@ -352,8 +357,8 @@ buffbot_spellTable = {}
 buffbot_selectedRow = 0
 
 -- Cast button labels
-buffbot_castLabel = "Cast All"
-buffbot_castCharLabel = "Cast Character"
+buffbot_castLabel = BfBot.L10N.Get("ui.cast.all")
+buffbot_castCharLabel = BfBot.L10N.Get("ui.cast.character")
 
 -- Target picker state
 buffbot_targetRow = 0            -- which spell row opened the picker
@@ -379,6 +384,7 @@ buffbot_importSelected = 0
 buffbot_selectedHasVariants = 0    -- 0/1: does the selected spell have variants?
 buffbot_variantTable = {}          -- array for variant picker list
 buffbot_variantHeader = ""         -- header text for variant picker
+buffbot_variantTitle = ""          -- complete localized variant-picker title
 buffbot_variantSelected = 0        -- selected row in variant picker
 
 -- ============================================================
@@ -1217,9 +1223,9 @@ function BfBot.UI._Refresh()
         buffbot_spellTable = {}
         buffbot_presetNames = {}
         buffbot_presetCount = 0
-        buffbot_title = "BuffBot"
-        buffbot_castLabel = "Cast All"
-        buffbot_castCharLabel = "Cast Character"
+        buffbot_title = BfBot.L10N.Get("common.buffbot")
+        buffbot_castLabel = BfBot.L10N.Get("ui.cast.all")
+        buffbot_castCharLabel = BfBot.L10N.Get("ui.cast.character")
         buffbot_status = ""
         BfBot.UI._RestoreSpellSelection()
         return
@@ -1237,7 +1243,8 @@ function BfBot.UI._Refresh()
     buffbot_presetCount = 0
     if config.presets then
         for idx, preset in pairs(config.presets) do
-            buffbot_presetNames[idx] = preset.name or ("Preset " .. idx)
+            buffbot_presetNames[idx] = preset.name or BfBot.L10N.Format(
+                "default.preset.indexed", { index = idx })
             buffbot_presetCount = buffbot_presetCount + 1
         end
     end
@@ -1313,12 +1320,55 @@ function BfBot.UI._Refresh()
     buffbot_spellTable = BfBot.UI._BuildSpellRows(sprite, preset, castable, config.ovr)
 
     -- 8. Update title, cast labels, status
-    buffbot_title = "BuffBot - " .. (preset.name or "Preset")
-    buffbot_castLabel = "Cast All"
+    buffbot_title = BfBot.L10N.Format("ui.title.preset", {
+        preset = preset.name or BfBot.L10N.Format(
+            "default.preset.indexed", { index = BfBot.UI._presetIdx }),
+    })
+    buffbot_castLabel = BfBot.L10N.Get("ui.cast.all")
     buffbot_castCharLabel = BfBot.UI._CastCharLabel()
     buffbot_status = BfBot.UI._GetStatusText()
     BfBot.UI._RestoreSpellSelection()
 end
+
+-- Complete dynamic templates that feed per-frame menu bindings are prepared
+-- when their underlying state changes. Repeat strings have a tiny bounded
+-- cache (1..MAX_SPELL_REPEATS); a future cap change rebuilds it once.
+local _repeatDisplayCache = {}
+local _repeatDisplayMax = nil
+
+local function _EnsureRepeatDisplayCache()
+    local max = BfBot.MAX_SPELL_REPEATS
+    if _repeatDisplayMax == max then return end
+    _repeatDisplayCache = {}
+    _repeatDisplayMax = max
+    for count = 1, max do
+        local values = { count = count, max = max }
+        _repeatDisplayCache[count] = {
+            compact = BfBot.L10N.Format("ui.repeat.compact", values),
+            label = BfBot.L10N.Format("ui.repeat.label", values),
+            spellTooltip = BfBot.L10N.Format(
+                "ui.repeat.spell_tooltip", values),
+            itemTooltip = BfBot.L10N.Format(
+                "ui.repeat.item_tooltip", values),
+        }
+    end
+end
+
+local function _RepeatDisplay(value)
+    _EnsureRepeatDisplayCache()
+    local count = BfBot.Persist._NormalizeSpellRepeat(value)
+    return _repeatDisplayCache[count]
+end
+
+local function _TargetButtonDisplay(target)
+    return BfBot.L10N.Format("ui.target.selected", { target = target })
+end
+
+local function _VariantButtonDisplay(name)
+    return BfBot.L10N.Format("ui.variant.selected", { name = name })
+end
+
+_EnsureRepeatDisplayCache()
 
 --- Build the spell-list rows for one caster's preset, cross-referenced with
 --- scan data. Shared by the party view (ovr = config.ovr) and the summons
@@ -1402,20 +1452,26 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             end
         end
 
+        local rowKind = (scan and scan.kind) or spellCfg.kind or "spl"
+        local targetText = BfBot.UI._TargetToText(spellCfg.tgt)
+        local repeatDisplay = _RepeatDisplay(rep)
+
         table.insert(rows, {
             resref   = resref,
-            kind     = (scan and scan.kind) or spellCfg.kind or "spl",
+            kind     = rowKind,
             name     = name,
             icon     = icon,
             dur      = dur,
             durText  = BfBot.UI._FormatDuration(dur),
             durCat   = durCat,
+            durCatText = BfBot.UI._CategoryText(durCat),
             count    = count,
             countText = count > 0 and ("x" .. count) or "--",
             rep      = rep,
-            repeatText = "R" .. rep,
+            repeatText = repeatDisplay.compact,
             on       = spellCfg.on or 0,
-            targetText = BfBot.UI._TargetToText(spellCfg.tgt),
+            targetText = targetText,
+            targetButtonText = _TargetButtonDisplay(targetText),
             tgt      = spellCfg.tgt or "p",
             castable = isCastable,
             pri      = spellCfg.pri or 999,
@@ -1428,6 +1484,8 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             variants = variants,
             var      = varResref,
             variantName = variantName,
+            variantButtonText = variantName
+                and _VariantButtonDisplay(variantName) or nil,
         })
         end
     end
@@ -1452,13 +1510,14 @@ function BfBot.UI._RefreshSummonsView()
     buffbot_presetCount = 0
     if config and config.presets then
         for idx, preset in pairs(config.presets) do
-            buffbot_presetNames[idx] = preset.name or ("Preset " .. idx)
+            buffbot_presetNames[idx] = preset.name or BfBot.L10N.Format(
+                "default.preset.indexed", { index = idx })
             buffbot_presetCount = buffbot_presetCount + 1
         end
     end
     BfBot.UI._ClampPresetIdx(config)
 
-    buffbot_castLabel = "Cast All"
+    buffbot_castLabel = BfBot.L10N.Get("ui.cast.all")
     buffbot_castCharLabel = BfBot.UI._CastCharLabel()
     buffbot_status = BfBot.UI._GetStatusText()
 
@@ -1475,14 +1534,18 @@ function BfBot.UI._RefreshSummonsView()
     end
     if not entry or not sprite then
         buffbot_spellTable = {}
-        buffbot_title = "BuffBot - Summons"
+        buffbot_title = BfBot.L10N.Get("ui.title.summons")
         BfBot.UI._UpdateSummonQc()  -- per-frame bbQC cache (review MINOR-4)
         return
     end
 
-    buffbot_title = "BuffBot - " .. BfBot.UI._SummonTabLabel(entry)
-        .. " - " .. (buffbot_presetNames[BfBot.UI._presetIdx]
-                     or ("Preset " .. BfBot.UI._presetIdx))
+    buffbot_title = BfBot.L10N.Format("ui.title.summon_preset", {
+        summon = BfBot.UI._SummonTabLabel(entry),
+        preset = buffbot_presetNames[BfBot.UI._presetIdx]
+            or BfBot.L10N.Format("default.preset.indexed", {
+                index = BfBot.UI._presetIdx,
+            }),
+    })
 
     -- First open of this identity+preset creates it (clones seed from the
     -- owner's same-index preset ∩ the clone's castable set)
@@ -1669,7 +1732,7 @@ function BfBot.UI.StepSelectedRepeat(delta)
     -- Immediate visual update preserves buffbot_selectedRow; _Refresh()
     -- would clear the selection and is intentionally not used here.
     entry.rep = rep
-    entry.repeatText = "R" .. rep
+    entry.repeatText = _RepeatDisplay(rep).compact
 end
 
 -- ============================================================
@@ -1728,10 +1791,10 @@ function BfBot.UI.OpenTargets(row)
     if entry.tgtUnlock ~= 1 then
         if entry.isSelfOnly == 1 then
             isLocked = 1
-            lockText = "(Self-only)"
+            lockText = BfBot.L10N.Get("ui.qualifier.self_only")
         elseif entry.isAoE == 1 then
             isLocked = 1
-            lockText = "(Party-wide)"
+            lockText = BfBot.L10N.Get("ui.qualifier.party_wide")
         end
     end
     buffbot_targetLocked = isLocked
@@ -1849,6 +1912,7 @@ function BfBot.UI.PickerSelf()
     BfBot.UI._SetSpellTargetForView(sprite, entry.resref, "s")
     entry.tgt = "s"
     entry.targetText = BfBot.UI._TargetToText("s")
+    entry.targetButtonText = _TargetButtonDisplay(entry.targetText)
     BfBot.UI._targetSpellAnchor = nil
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
@@ -1934,6 +1998,7 @@ function BfBot.UI.PickerDone()
     BfBot.UI._SetSpellTargetForView(sprite, entry.resref, tgt)
     entry.tgt = tgt
     entry.targetText = BfBot.UI._TargetToText(tgt)
+    entry.targetButtonText = _TargetButtonDisplay(entry.targetText)
     BfBot.UI._targetSpellAnchor = nil
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
@@ -2039,8 +2104,10 @@ end
 function BfBot.UI.DeleteCurrentPreset()
     if BfBot.UI._view == "summons" then return end
     local idx = BfBot.UI._presetIdx
-    local name = buffbot_presetNames[idx] or ("Preset " .. idx)
-    BfBot.UI.OpenConfirm('Delete preset "' .. name .. '" for ALL party members?', function()
+    local name = buffbot_presetNames[idx] or BfBot.L10N.Format(
+        "default.preset.indexed", { index = idx })
+    BfBot.UI.OpenConfirm(BfBot.L10N.Format(
+        "ui.delete_preset_confirm", { name = name }), function()
         local result = BfBot.Persist.DeletePresetAll(idx)
         if result then
             BfBot.UI._ClearSpellSelection()
@@ -2114,7 +2181,7 @@ function BfBot.UI.Cast()
     BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds
     local queue = BfBot.Persist.BuildQueueFromPreset(BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        BfBot._Display("BuffBot: No spells to cast in this preset")
+        BfBot._Display(BfBot.L10N.Get("feedback.no_spells_preset"))
         return
     end
     local qcMode = sprite and BfBot.Persist.GetQuickCast(sprite, BfBot.UI._presetIdx) or 0
@@ -2135,17 +2202,22 @@ function BfBot.UI.CastCharacter()
     BfBot.UI._ClampPresetIdx(config)
 
     BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds
-    local queue, reason = BfBot.Persist.BuildQueueForCharacter(BfBot.UI._charSlot, BfBot.UI._presetIdx)
+    local queue, reason, detail = BfBot.Persist.BuildQueueForCharacter(
+        BfBot.UI._charSlot, BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        if reason == "not locally controlled" then
-            Infinity_DisplayString("BuffBot: " .. BfBot._GetName(sprite)
-                .. " is controlled by another player")
-        elseif reason == "puppet-locked" then
-            Infinity_DisplayString("BuffBot: " .. BfBot._GetName(sprite)
-                .. " is puppet-locked by Project Image — cast again after the"
-                .. " image expires")
+        if reason == "reason.queue.not_locally_controlled" then
+            Infinity_DisplayString(BfBot.L10N.Format(
+                "feedback.character_remote_control", {
+                    name = detail and detail.name or BfBot._GetName(sprite),
+                }))
+        elseif reason == "reason.queue.project_image_locked" then
+            Infinity_DisplayString(BfBot.L10N.Format(
+                "feedback.character_project_image_locked", {
+                    name = detail and detail.name or BfBot._GetName(sprite),
+                }))
         else
-            Infinity_DisplayString("BuffBot: No spells to cast for this character")
+            Infinity_DisplayString(BfBot.L10N.Get(
+                "feedback.no_spells_character"))
         end
         return
     end
@@ -2160,14 +2232,23 @@ end
 function BfBot.UI._CastSelectedSummon()
     local entry = BfBot.UI._SelectedSummon()
     if not entry then
-        Infinity_DisplayString("BuffBot: No summon selected")
+        Infinity_DisplayString(BfBot.L10N.Get("feedback.no_summon_selected"))
         return
     end
     BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds
-    local queue, reason = BfBot.Persist.BuildQueueForSummon(entry, BfBot.UI._presetIdx)
+    local queue, reason, detail = BfBot.Persist.BuildQueueForSummon(
+        entry, BfBot.UI._presetIdx)
     if not queue or #queue == 0 then
-        Infinity_DisplayString("BuffBot: No spells to cast for this summon"
-            .. (reason and (" (" .. reason .. ")") or ""))
+        if reason == nil
+                or reason == "reason.queue.no_castable_summon_spells" then
+            Infinity_DisplayString(BfBot.L10N.Get(
+                "feedback.no_spells_summon"))
+        else
+            Infinity_DisplayString(BfBot.L10N.Format(
+                "feedback.no_spells_summon_with_reason", {
+                    reason = BfBot.L10N.Reason(reason, detail),
+                }))
+        end
         return
     end
     BfBot.UI._StartRun(queue, 0, BfBot.UI._presetIdx)
@@ -2176,11 +2257,13 @@ end
 
 function BfBot.UI._CastCharLabel()
     if BfBot.UI._view == "summons" then
-        return "Cast (this summon)"
+        return BfBot.L10N.Get("ui.cast.summon")
     end
     local name = buffbot_charNames[BfBot.UI._charSlot + 1]
-    if name then return "Cast " .. name end
-    return "Cast Character"
+    if name then
+        return BfBot.L10N.Format("ui.cast.named", { name = name })
+    end
+    return BfBot.L10N.Get("ui.cast.character")
 end
 
 function BfBot.UI.Stop()
@@ -2487,6 +2570,7 @@ function BfBot.UI._BuildPickerList()
             name     = scan.name or resref,
             icon     = scan.icon or "",
             durCat   = scan.durCat or "?",
+            durCatText = BfBot.UI._CategoryText(scan.durCat),
             count    = scan.count or 0,
             excluded = (ovr == -1) and 1 or 0,
         })
@@ -2501,11 +2585,19 @@ function BfBot.UI._BuildPickerList()
     -- selection. Empty sections (and their headers) are omitted, so an empty
     -- picker keeps the existing "nothing to add" behavior.
     if #spells > 0 then
-        table.insert(buffbot_pickerSpells, { resref = "__HEADER_SPL__", name = "[Spells]", isHeader = 1 })
+        table.insert(buffbot_pickerSpells, {
+            resref = "__HEADER_SPL__",
+            name = "[" .. BfBot.L10N.Get("common.spells") .. "]",
+            isHeader = 1,
+        })
         for _, entry in ipairs(spells) do table.insert(buffbot_pickerSpells, entry) end
     end
     if #items > 0 then
-        table.insert(buffbot_pickerSpells, { resref = "__HEADER_ITM__", name = "[Items]", isHeader = 1 })
+        table.insert(buffbot_pickerSpells, {
+            resref = "__HEADER_ITM__",
+            name = "[" .. BfBot.L10N.Get("common.items") .. "]",
+            isHeader = 1,
+        })
         for _, entry in ipairs(items) do table.insert(buffbot_pickerSpells, entry) end
     end
 end
@@ -2515,7 +2607,7 @@ function BfBot.UI.OpenSpellPicker()
     if BfBot.UI._view == "summons" then return end
     BfBot.UI._BuildPickerList()
     if #buffbot_pickerSpells == 0 then
-        BfBot._Display("BuffBot: No additional spells to add")
+        BfBot._Display(BfBot.L10N.Get("feedback.no_additional_spells"))
         return
     end
     Infinity_PushMenu("BUFFBOT_SPELLPICKER")
@@ -2588,11 +2680,14 @@ function BfBot.UI.ExportConfig()
     local sprite = BfBot.UI._GetSelectedSprite()
     if not sprite then return end
 
-    local ok, result = BfBot.Persist.ExportConfig(sprite)
+    local ok, result, detail = BfBot.Persist.ExportConfig(sprite)
     if ok then
-        BfBot._Display("BuffBot: Exported config as '" .. result .. "'")
+        BfBot._Display(BfBot.L10N.Format(
+            "feedback.export_success", { file = result }))
     else
-        BfBot._Display("BuffBot: Export failed — " .. tostring(result))
+        BfBot._Display(BfBot.L10N.Format("feedback.export_failed", {
+            reason = BfBot.L10N.Reason(result, detail),
+        }))
     end
 end
 
@@ -2614,7 +2709,7 @@ function BfBot.UI.OpenImportPicker()
     if BfBot.UI._view == "summons" then return end
     BfBot.UI._BuildImportList()
     if #buffbot_importList == 0 then
-        BfBot._Display("BuffBot: No configs found in bfbot_presets/")
+        BfBot._Display(BfBot.L10N.Get("feedback.no_exported_configs"))
         return
     end
     Infinity_PushMenu("BUFFBOT_IMPORT")
@@ -2632,12 +2727,17 @@ function BfBot.UI.ImportSelected()
     Infinity_PopMenu("BUFFBOT_IMPORT")
 
     if ok then
-        BfBot._Display("BuffBot: Imported '" .. entry.name .. "' ("
-            .. presets .. " presets, " .. skipped .. " spells skipped)")
+        BfBot._Display(BfBot.L10N.Format("feedback.import_success", {
+            file = entry.name,
+            presets = presets,
+            skipped = skipped,
+        }))
         BfBot.Scan.Invalidate(sprite)
         BfBot.UI._Refresh()
     else
-        BfBot._Display("BuffBot: Import failed — " .. tostring(presets))
+        BfBot._Display(BfBot.L10N.Format("feedback.import_failed", {
+            reason = BfBot.L10N.Reason(presets, skipped),
+        }))
     end
 end
 
@@ -2657,6 +2757,8 @@ function BfBot.UI.OpenVariants(row)
     BfBot.UI._variantSpellAnchor = BfBot.UI._MakeSpellAnchor(entry.resref)
 
     buffbot_variantHeader = entry.name or entry.resref
+    buffbot_variantTitle = BfBot.L10N.Format(
+        "ui.select_variant_title", { spell = buffbot_variantHeader })
     buffbot_variantSelected = 0
     buffbot_variantTable = {}
 
@@ -2725,6 +2827,7 @@ function BfBot.UI.SelectVariant(row)
     end
     entry.var = vEntry.resref
     entry.variantName = currentVariant.name or vEntry.name
+    entry.variantButtonText = _VariantButtonDisplay(entry.variantName)
 
     BfBot.UI._variantSpellAnchor = nil
     Infinity_PopMenu("BUFFBOT_VARIANTS")
@@ -2734,11 +2837,11 @@ end
 function BfBot.UI._VariantBtnText()
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         local entry = buffbot_spellTable[buffbot_selectedRow]
-        if entry and entry.variantName then
-            return "Var: " .. entry.variantName
+        if entry and entry.variantButtonText then
+            return entry.variantButtonText
         end
     end
-    return "Variant"
+    return BfBot.L10N.Get("common.variant")
 end
 
 --- Can we create more presets? (fewer than 5 exist)
@@ -2755,18 +2858,20 @@ end
 function BfBot.UI._ToggleBtnText()
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         local entry = buffbot_spellTable[buffbot_selectedRow]
-        if entry and entry.on == 1 then return "Disable" end
+        if entry and entry.on == 1 then
+            return BfBot.L10N.Get("common.disable")
+        end
     end
-    return "Enable"
+    return BfBot.L10N.Get("common.enable")
 end
 
 --- Target button text: shows current target of selected row.
 function BfBot.UI._TargetBtnText()
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         local entry = buffbot_spellTable[buffbot_selectedRow]
-        if entry then return "Target: " .. (entry.targetText or "Party") end
+        if entry and entry.targetButtonText then return entry.targetButtonText end
     end
-    return "Target"
+    return BfBot.L10N.Get("common.target")
 end
 
 --- Normalized repeat count for the selected row (safe while the button is
@@ -2778,41 +2883,67 @@ end
 
 --- Repeat footer-button text for the selected spell.
 function BfBot.UI._RepeatButtonText()
-    return "Repeat: " .. BfBot.UI._SelectedSpellRepeat()
+    return _RepeatDisplay(BfBot.UI._SelectedSpellRepeat()).label
 end
 
 --- Repeat footer-button tooltip for the selected spell or item.
 function BfBot.UI._RepeatTooltip()
     local entry = buffbot_spellTable[buffbot_selectedRow]
-    local isItem = entry and entry.kind == "itm"
-    local lead = isItem and "Use this item " or "Cast this spell "
-    local rules = isItem
-        and "consumes a stack or charge and follows normal item-use rules. "
-        or "uses a spell slot and normal casting rules. "
-    return lead .. BfBot.UI._SelectedSpellRepeat()
-        .. " times per resolved target. Each attempt " .. rules
-        .. "Left-click increases; right-click decreases. Range 1–"
-        .. BfBot.MAX_SPELL_REPEATS .. "."
+    local display = _RepeatDisplay(BfBot.UI._SelectedSpellRepeat())
+    if entry and entry.kind == "itm" then
+        return display.itemTooltip
+    end
+    return display.spellTooltip
+end
+
+--- Compact repeat text for a list row. The menu can evaluate stale rowNumber
+--- values while replacing its list table, so the fallback must be nil-safe.
+function BfBot.UI._RepeatRowText(row)
+    local entry = buffbot_spellTable[row]
+    if entry and entry.repeatText then return entry.repeatText end
+    return _RepeatDisplay(entry and entry.rep).compact
 end
 
 --- Format a duration in seconds to a human-readable string.
 --- Returns mixed format: "1h 30m", "5m", "1m 30s", "45s", "Perm", "Inst", "?"
 function BfBot.UI._FormatDuration(seconds)
     if seconds == nil then return "?" end
-    if seconds == -1 then return "Perm" end
-    if seconds == 0 then return "Inst" end
+    if seconds == -1 then return BfBot.L10N.Get("ui.duration.permanent") end
+    if seconds == 0 then return BfBot.L10N.Get("ui.duration.instant") end
     local h = math.floor(seconds / 3600)
     local m = math.floor((seconds % 3600) / 60)
     local s = seconds % 60
     if h > 0 then
-        if m > 0 then return h .. "h " .. m .. "m" end
-        return h .. "h"
+        if m > 0 then
+            return BfBot.L10N.Format("ui.duration.hours_minutes", {
+                hours = h, minutes = m,
+            })
+        end
+        return BfBot.L10N.Format("ui.duration.hours", { hours = h })
     end
     if m > 0 then
-        if s > 0 then return m .. "m " .. s .. "s" end
-        return m .. "m"
+        if s > 0 then
+            return BfBot.L10N.Format("ui.duration.minutes_seconds", {
+                minutes = m, seconds = s,
+            })
+        end
+        return BfBot.L10N.Format("ui.duration.minutes", { minutes = m })
     end
-    return s .. "s"
+    return BfBot.L10N.Format("ui.duration.seconds", { seconds = s })
+end
+
+--- Map language-neutral classifier categories only at the display boundary.
+function BfBot.UI._CategoryText(category)
+    if category == "permanent" then
+        return BfBot.L10N.Get("ui.category.permanent")
+    elseif category == "long" then
+        return BfBot.L10N.Get("ui.category.long")
+    elseif category == "short" then
+        return BfBot.L10N.Get("ui.category.short")
+    elseif category == "instant" then
+        return BfBot.L10N.Get("ui.category.instant")
+    end
+    return BfBot.L10N.Get("ui.category.unknown")
 end
 
 --- Spell name color: grey for unavailable, dark blue for manual include,
@@ -2862,7 +2993,9 @@ end
 function BfBot.UI._LockText(row)
     if BfBot.UI._view == "summons" then return "" end
     local entry = buffbot_spellTable[row]
-    if entry and entry.lock == 1 then return "[L]" end
+    if entry and entry.lock == 1 then
+        return BfBot.L10N.Get("ui.lock.compact")
+    end
     return "[ ]"
 end
 
@@ -2889,26 +3022,30 @@ end
 -- tgt can be: "s", "p", a name string, or a table of name strings.
 -- Also handles legacy slot strings ("1"-"6") for backwards compatibility.
 function BfBot.UI._TargetToText(tgt)
-    if tgt == "s" then return "Self"
-    elseif tgt == "p" then return "Party"
+    if tgt == "s" then return BfBot.L10N.Get("common.self")
+    elseif tgt == "p" then return BfBot.L10N.Get("common.party")
     elseif type(tgt) == "table" then
-        if #tgt == 0 then return "None" end
+        if #tgt == 0 then return BfBot.L10N.Get("common.none") end
         -- First entry is always the display name (highest priority target)
         local firstName = tgt[1]
         -- Legacy slot string? Resolve to name for display
         local num = tonumber(firstName)
         if num and num >= 1 and num <= 6 then
-            firstName = buffbot_charNames[num] or ("Player " .. num)
+            firstName = buffbot_charNames[num] or BfBot.L10N.Format(
+                "ui.target.player", { index = num })
         end
         if #tgt == 1 then
             return firstName
         end
-        return firstName .. " +" .. (#tgt - 1)
+        return BfBot.L10N.Format("ui.target.multiple", {
+            name = firstName, count = #tgt - 1,
+        })
     else
         -- Single string: name or legacy slot
         local num = tonumber(tgt)
         if num and num >= 1 and num <= 6 then
-            return buffbot_charNames[num] or ("Player " .. num)
+            return buffbot_charNames[num] or BfBot.L10N.Format(
+                "ui.target.player", { index = num })
         end
         -- Name string — return as-is
         return tgt
@@ -2920,11 +3057,15 @@ function BfBot.UI._GetStatusText()
     local state = BfBot.Exec.GetState()
     if state == "running" then
         local qc = BfBot.Exec._qcMode or 0
-        if qc == 2 then return "Casting (Quick: All)..."
-        elseif qc == 1 then return "Casting (Quick: Long)..."
-        else return "Casting..." end
-    elseif state == "done" then return "Done"
-    elseif state == "stopped" then return "Stopped"
+        if qc == 2 then
+            return BfBot.L10N.Get("ui.status.casting_quick_all")
+        elseif qc == 1 then
+            return BfBot.L10N.Get("ui.status.casting_quick_long")
+        else
+            return BfBot.L10N.Get("ui.status.casting")
+        end
+    elseif state == "done" then return BfBot.L10N.Get("ui.status.done")
+    elseif state == "stopped" then return BfBot.L10N.Get("ui.status.stopped")
     else return "" end
 end
 
@@ -2992,9 +3133,9 @@ end
 function BfBot.UI._QuickCastLabel()
     if not buffbot_isOpen then return "" end
     local qc = BfBot.UI._ViewQuickCast()
-    if qc == 1 then return "Quick Cast: Long" end
-    if qc == 2 then return "Quick Cast: All" end
-    return "Quick Cast: Off"
+    if qc == 1 then return BfBot.L10N.Get("ui.quick_cast.long") end
+    if qc == 2 then return BfBot.L10N.Get("ui.quick_cast.all") end
+    return BfBot.L10N.Get("ui.quick_cast.off")
 end
 
 function BfBot.UI._QuickCastColor()
@@ -3006,10 +3147,12 @@ end
 
 function BfBot.UI._QuickCastTooltip()
     local qc = BfBot.UI._ViewQuickCast()
-    if qc == nil then return "Normal casting speed" end
-    if qc == 1 then return "Fast casting for 'long' buffs (300s+ duration). Short buffs cast normally. Click to cycle." end
-    if qc == 2 then return "Fast casting for ALL buffs regardless of duration (cheat). Click to cycle." end
-    return "Normal casting speed — spells respect aura cooldown. Click to cycle."
+    if qc == nil then
+        return BfBot.L10N.Get("ui.quick_cast.tooltip_unavailable")
+    end
+    if qc == 1 then return BfBot.L10N.Get("ui.quick_cast.tooltip_long") end
+    if qc == 2 then return BfBot.L10N.Get("ui.quick_cast.tooltip_all") end
+    return BfBot.L10N.Get("ui.quick_cast.tooltip_off")
 end
 
 -- ============================================================

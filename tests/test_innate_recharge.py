@@ -10,6 +10,7 @@ from lupa.luajit21 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE = (ROOT / "buffbot/BfBotCor.lua").read_text(encoding="utf-8")
+LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
 INNATE_SOURCE = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
 TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
 
@@ -27,6 +28,7 @@ def innate_lua() -> LuaRuntime:
         }
         """
     )
+    runtime.execute(LOC_SOURCE)
     runtime.execute(INNATE_SOURCE)
     return runtime
 
@@ -781,6 +783,8 @@ def test_bfbotgo_keeps_matching_party_and_non_party_source_paths(
         ("normal", 2),
         ("busy", 0),
         ("empty", 0),
+        ("coded", 0),
+        ("generic", 0),
         ("error", 0),
     ],
 )
@@ -857,6 +861,14 @@ def test_recharge_is_independent_of_every_bfbotgo_outcome(
                 buildCalls = buildCalls + 1
                 if case == "error" then error("synthetic build failure") end
                 if case == "empty" then return {{}}, "synthetic empty" end
+                if case == "coded" then
+                    return {{}}, "reason.queue.no_preset_for_slot",
+                        {{ preset = 2, slot = 0 }}
+                end
+                if case == "generic" then
+                    return {{}}, "reason.queue.no_castable_spells_for_slot",
+                        {{ preset = 1, slot = 0 }}
+                end
                 return {{ {{ tag = "entry" }} }}
             end,
             DrainBuildSkips = function()
@@ -914,12 +926,21 @@ def test_recharge_is_independent_of_every_bfbotgo_outcome(
         assert facts["startCalls"] == 0
         assert facts["displayRefCount"] == 1
         assert facts["displayRef"] == 14007
-    elif case == "empty":
+    elif case in {"empty", "coded", "generic"}:
         assert facts["buildCalls"] == 1
         assert facts["drainCalls"] == 1
         assert facts["startCalls"] == 0
-        assert "No spells to cast" in facts["display"]
-        assert "synthetic empty" in facts["display"]
+        if case == "empty":
+            assert "No spells or items to use" in facts["display"]
+            assert "synthetic empty" in facts["display"]
+        elif case == "coded":
+            assert "no preset 2 for slot 0" in facts["display"]
+            assert "reason.queue" not in facts["display"]
+            assert "{preset}" not in facts["display"]
+        else:
+            assert facts["display"] == (
+                "BuffBot: No spells or items to use in this preset"
+            )
     else:
         assert case == "error"
         assert facts["buildCalls"] == 1

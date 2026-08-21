@@ -142,7 +142,7 @@ menu
 		name    "bbReset"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI._ResetLayout()"
-		text    "Reset"
+		text lua "BfBot.L10N.Get('common.reset')"
 		text style "bb_normal"
 		text color lua "BfBot.UI._T('reset')"
 		text align center center
@@ -369,7 +369,7 @@ menu
 	{
 		name    "bbSEmpty"
 		enabled "BfBot.UI._SummonEmptyVisible()"
-		text    "No allied summons detected"
+		text lua "BfBot.L10N.Get('ui.no_allied_summons')"
 		text style "bb_normal_parchment"
 		text align center center
 		area 350 90 520 24
@@ -489,7 +489,7 @@ menu
 		name    "bbRen"
 		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenRename()"
-		text    "Rename"
+		text lua "BfBot.L10N.Get('common.rename')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -502,7 +502,7 @@ menu
 		name    "bbNew"
 		enabled "BfBot.UI._CanCreatePreset() and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.CreateNewPreset()"
-		text    "New"
+		text lua "BfBot.L10N.Get('common.new')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -591,7 +591,7 @@ menu
 			label
 			{
 				area 0 0 -1 36
-				text lua "buffbot_spellTable[rowNumber] and buffbot_spellTable[rowNumber].repeatText or 'R1'"
+				text lua "BfBot.UI._RepeatRowText(rowNumber)"
 				text style "bb_normal_parchment"
 				text align center center
 				text color lua "BfBot.UI._RepeatColor(rowNumber)"
@@ -653,7 +653,7 @@ menu
 		name    "bbAdd"
 		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenSpellPicker()"
-		text    "Add Spell"
+		text lua "BfBot.L10N.Get('common.add_spell')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -666,7 +666,7 @@ menu
 		name    "bbRmv"
 		enabled "BfBot.UI._HasSelection() and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ExcludeSelected()"
-		text    "Remove"
+		text lua "BfBot.L10N.Get('common.remove')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -695,7 +695,7 @@ menu
 		name    "bbExp"
 		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ExportConfig()"
-		text    "Export"
+		text lua "BfBot.L10N.Get('common.export')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -708,7 +708,7 @@ menu
 		name    "bbImp"
 		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenImportPicker()"
-		text    "Import"
+		text lua "BfBot.L10N.Get('common.import')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -752,7 +752,7 @@ menu
 		name    "bbUp"
 		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.MoveSpellUp()"
-		text    "Up"
+		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -765,7 +765,7 @@ menu
 		name    "bbDn"
 		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.MoveSpellDown()"
-		text    "Down"
+		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -778,7 +778,7 @@ menu
 		name    "bbSort"
 		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants ~= 1"
 		action  "BfBot.UI.SortByDuration()"
-		text    "Sort"
+		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -791,7 +791,7 @@ menu
 		name    "bbDel"
 		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
-		text    "Delete Preset"
+		text lua "BfBot.L10N.Get('common.delete_preset')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -848,7 +848,7 @@ menu
 		name    "bbVUp"
 		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.MoveSpellUp()"
-		text    "Up"
+		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -861,7 +861,7 @@ menu
 		name    "bbVDn"
 		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.MoveSpellDown()"
-		text    "Down"
+		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -874,7 +874,7 @@ menu
 		name    "bbVSort"
 		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.SortByDuration()"
-		text    "Sort"
+		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -887,7 +887,7 @@ menu
 		name    "bbVDel"
 		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
-		text    "Del Preset"
+		text lua "BfBot.L10N.Get('common.delete_preset_compact')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -932,7 +932,7 @@ menu
 		name    "bbStop"
 		enabled "BfBot.UI._IsRunning()"
 		action  "BfBot.UI.Stop()"
-		text    "Stop"
+		text lua "BfBot.L10N.Get('common.stop')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -961,7 +961,7 @@ menu
 		name    "bbClose"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.Close()"
-		text    "Close"
+		text lua "BfBot.L10N.Get('common.close')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1063,7 +1063,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerSelf()"
-		text    "Self"
+		text lua "BfBot.L10N.Get('common.self')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1075,7 +1075,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerAllParty()"
-		text    "All Party"
+		text lua "BfBot.L10N.Get('common.all_party')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1231,7 +1231,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 1"
 		action  "BfBot.UI.PickerMoveUp()"
-		text    "Up"
+		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1243,7 +1243,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerOrder"
 		action  "BfBot.UI.PickerMoveDown()"
-		text    "Down"
+		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1255,7 +1255,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerClear()"
-		text    "Clear"
+		text lua "BfBot.L10N.Get('common.clear')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1266,7 +1266,7 @@ menu
 	button
 	{
 		action  "BfBot.UI.PickerDone()"
-		text    "Done"
+		text lua "BfBot.L10N.Get('common.done')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1279,7 +1279,7 @@ menu
 	{
 		enabled "buffbot_targetLocked == 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.PickerUnlock()"
-		text    "Unlock Targeting"
+		text lua "BfBot.L10N.Get('common.unlock_targeting')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1347,7 +1347,7 @@ menu
 	-- Label
 	label
 	{
-		text    "Rename Preset:"
+		text lua "BfBot.L10N.Get('ui.rename_preset_title')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('title')"
 		text align left center
@@ -1369,7 +1369,7 @@ menu
 	button
 	{
 		action  "BfBot.UI.ConfirmRename(); Infinity_PopMenu('BUFFBOT_RENAME')"
-		text    "OK"
+		text lua "BfBot.L10N.Get('common.ok')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1380,7 +1380,7 @@ menu
 	button
 	{
 		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
-		text    "Cancel"
+		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1459,7 +1459,7 @@ menu
 	button
 	{
 		action  "BfBot.UI.RunConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
-		text    "Delete"
+		text lua "BfBot.L10N.Get('common.delete')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1470,7 +1470,7 @@ menu
 	button
 	{
 		action  "BfBot.UI.CancelConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
-		text    "Cancel"
+		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1539,7 +1539,7 @@ menu
 	-- Title
 	label
 	{
-		text    "Add Spell to Buff List"
+		text lua "BfBot.L10N.Get('ui.add_spell_title')"
 		text style "bb_title"
 		text color lua "BfBot.UI._T('title')"
 		text align center center
@@ -1579,7 +1579,7 @@ menu
 			label
 			{
 				area 0 0 -1 34
-				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].durCat or ''"
+				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].durCatText or ''"
 				text style "bb_normal_parchment"
 				text align center center
 			}
@@ -1610,7 +1610,7 @@ menu
 	{
 		enabled "BfBot.UI._PickerHasSelection()"
 		action  "BfBot.UI.AddPickedSpell()"
-		text    "Add to Buff List"
+		text lua "BfBot.L10N.Get('ui.add_to_buff_list')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1621,7 +1621,7 @@ menu
 	button
 	{
 		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
-		text    "Cancel"
+		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1690,7 +1690,7 @@ menu
 	-- Title
 	label
 	{
-		text    "Import Config"
+		text lua "BfBot.L10N.Get('ui.import_config_title')"
 		text style "bb_title"
 		text color lua "BfBot.UI._T('title')"
 		text align center center
@@ -1725,7 +1725,7 @@ menu
 	{
 		enabled "BfBot.UI._ImportHasSelection()"
 		action  "BfBot.UI.ImportSelected()"
-		text    "Import"
+		text lua "BfBot.L10N.Get('common.import')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1736,7 +1736,7 @@ menu
 	button
 	{
 		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
-		text    "Cancel"
+		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1805,7 +1805,7 @@ menu
 	-- Title
 	label
 	{
-		text lua "'Select Variant: ' .. buffbot_variantHeader"
+		text lua "buffbot_variantTitle"
 		text style "bb_title"
 		text color lua "BfBot.UI._T('title')"
 		text align center center
@@ -1851,7 +1851,7 @@ menu
 	{
 		enabled "buffbot_variantSelected > 0 and buffbot_variantSelected <= #buffbot_variantTable"
 		action  "BfBot.UI.SelectVariant(buffbot_variantSelected)"
-		text    "Select"
+		text lua "BfBot.L10N.Get('common.select')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip
@@ -1862,7 +1862,7 @@ menu
 	button
 	{
 		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
-		text    "Cancel"
+		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
 		bam     "GUIOSTUL"
 		scaleToClip

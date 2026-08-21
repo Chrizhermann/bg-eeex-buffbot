@@ -726,11 +726,12 @@ function BFBOTGO(param1, param2, special)
                         "STALE: casting sprite moved from slot %d to %d", slot, sourceSlot))
                     if BfBot.Exec.GetState() == "running" then
                         BfBot._innateRefreshPending = true
-                        BfBot._Display(
-                            "BuffBot: Party changed — retry after the current run")
+                        BfBot._Display(BfBot.L10N.Get(
+                            "feedback.party_changed_after_run"))
                         return
                     end
-                    BfBot._Display("BuffBot: Party changed — refreshing innates, try again")
+                    BfBot._Display(BfBot.L10N.Get(
+                        "feedback.party_changed_refreshing"))
                     BfBot._innateRefreshPending = true
                     local refreshOk, refreshErr = pcall(function()
                         BfBot.Innate.RefreshAll()
@@ -753,7 +754,8 @@ function BFBOTGO(param1, param2, special)
             -- Party was likely rearranged since innates were granted.
             -- Trigger refresh so next attempt works, and tell the player.
             _InnateLog("ERROR: no sprite in slot " .. slot .. " — party may have changed")
-            BfBot._Display("BuffBot: Party changed — refreshing innates, try again")
+            BfBot._Display(BfBot.L10N.Get(
+                "feedback.party_changed_refreshing"))
             pcall(function() BfBot.Innate.RefreshAll() end)
             return
         end
@@ -766,7 +768,8 @@ function BFBOTGO(param1, param2, special)
         end
 
         -- Build the queue
-        local queue, queueErr = BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
+        local queue, queueErr, queueDetail =
+            BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
         -- The builder queues its SKIP lines for the config panel
         -- (Persist._pendingSkips); the innate path has no panel log to
         -- surface into, so drain-and-discard here (review MINOR-3). The
@@ -775,9 +778,16 @@ function BFBOTGO(param1, param2, special)
         -- cast replayed them into that run's log.
         if BfBot.Persist.DrainBuildSkips then BfBot.Persist.DrainBuildSkips() end
         if not queue or #queue == 0 then
-            local reason = queueErr or "empty queue"
-            _InnateLog("INFO: no spells to cast — " .. reason)
-            BfBot._Display("BuffBot: No spells to cast (" .. reason .. ")")
+            local reasonCode = queueErr or "reason.exec.empty_queue"
+            _InnateLog("INFO: no spells to cast — " .. tostring(reasonCode))
+            if reasonCode == "reason.queue.no_castable_spells_for_slot" then
+                BfBot._Display(BfBot.L10N.Get("feedback.no_spells_preset"))
+            else
+                BfBot._Display(BfBot.L10N.Format(
+                    "feedback.no_spells_with_reason", {
+                        reason = BfBot.L10N.Reason(reasonCode, queueDetail),
+                    }))
+            end
             return
         end
 
@@ -792,7 +802,8 @@ function BFBOTGO(param1, param2, special)
         _InnateLog("ERROR: " .. tostring(err))
         -- Try to show the error in-game (BfBot._Display may itself fail if modules aren't loaded)
         pcall(function()
-            BfBot._Display("BuffBot innate error: " .. tostring(err))
+            BfBot._Display(BfBot.L10N.Format(
+                "feedback.innate_error", { error = tostring(err) }))
         end)
     end
 end

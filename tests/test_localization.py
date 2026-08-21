@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import faulthandler
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -16,6 +17,11 @@ MAIN_PATH = ROOT / "buffbot" / "M_BfBot.lua"
 DEPLOY_PATH = ROOT / "tools" / "deploy.sh"
 TP2_PATH = ROOT / "buffbot" / "setup-buffbot.tp2"
 PERSIST_PATH = ROOT / "buffbot" / "BfBotPer.lua"
+EXEC_PATH = ROOT / "buffbot" / "BfBotExe.lua"
+INNATE_PATH = ROOT / "buffbot" / "BfBotInn.lua"
+UI_PATH = ROOT / "buffbot" / "BfBotUI.lua"
+THEME_PATH = ROOT / "buffbot" / "BfBotThm.lua"
+MENU_PATH = ROOT / "buffbot" / "BuffBot.menu"
 
 ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~([^~]*)~\s*$")
 EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
@@ -141,6 +147,8 @@ CATALOG_SCHEMA = {
     449: "ui.category.short",
     450: "ui.category.instant",
     451: "ui.category.unknown",
+    452: "ui.repeat.compact",
+    453: "ui.lock.compact",
     # Player feedback and stable reason text (500-599)
     500: "feedback.no_luajit",
     501: "feedback.combat_stopped",
@@ -410,6 +418,43 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
             ), f"WeiDU placeholder mismatch in {catalog_path} @{tra_id}"
 
 
+def test_reviewed_english_and_chinese_ui_wording_is_exact():
+    english, _ = parse_tra(LANG_ROOT / "english" / "setup.tra")
+    chinese, _ = parse_tra(LANG_ROOT / "schinese" / "setup.tra")
+
+    assert english[308] == "Add Spell/Item"
+    assert english[416] == "Add Spell or Item to Buff List"
+    assert english[452] == "R{count}"
+    assert english[453] == "[L]"
+    for tra_id in (505, 507, 510, 514, 543, 551):
+        assert "spell" in english[tra_id].lower()
+        assert "item" in english[tra_id].lower()
+
+    assert chinese[308] == "添加法术/物品"
+    assert chinese[409] == "全部执行"
+    assert chinese[410] == "执行：当前角色"
+    assert chinese[411] == "执行：{name}"
+    assert chinese[412] == "执行：当前召唤物"
+    assert chinese[428] == "执行中……"
+    assert chinese[429] == "执行中（快速施法：仅长效）……"
+    assert chinese[430] == "执行中（快速施法：全部）……"
+    assert chinese[442] == "{hours}时{minutes}分"
+    assert chinese[443] == "{hours}时"
+    assert chinese[444] == "{minutes}分{seconds}秒"
+    assert chinese[445] == "{minutes}分"
+    assert chinese[446] == "{seconds}秒"
+    assert chinese[452] == "{count}次"
+    assert chinese[453] == "[锁]"
+    for tra_id in (500, 504, 506):
+        assert "特殊能力" in chinese[tra_id]
+        assert "天生能力" not in chinese[tra_id]
+    for tra_id in (509, 550):
+        assert "本体受投影术限制" in chinese[tra_id]
+    for tra_id in (505, 507, 510, 514, 543, 551):
+        assert "法术" in chinese[tra_id]
+        assert "物品" in chinese[tra_id]
+
+
 @pytest.mark.parametrize(
     "bad_value",
     (
@@ -627,6 +672,34 @@ def test_strref_returns_only_valid_mapped_numeric_references():
     assert strref("unknown.player_text") is None
 
 
+def test_reason_formatter_localizes_registered_codes_and_preserves_legacy_prose():
+    runtime = localization_runtime()
+    reason = runtime.globals().BfBot.L10N.Reason
+
+    assert reason(
+        "reason.queue.no_preset_for_slot",
+        runtime.table_from({"preset": 3, "slot": 1}),
+    ) == "no preset 3 for slot 1"
+    assert reason(
+        "reason.import.cannot_open_file",
+        runtime.table_from({"error": "denied 100%"}),
+    ) == "cannot open file: denied 100%"
+    assert reason("legacy hot-reload prose", runtime.table()) == (
+        "legacy hot-reload prose"
+    )
+    assert reason(None, runtime.table()) is None
+
+    missing_detail = reason(
+        "reason.queue.no_preset_for_slot", runtime.table_from({"slot": 1})
+    )
+    assert "{preset}" not in missing_detail
+    assert "reason.queue.no_preset_for_slot" in missing_detail
+
+    unknown = reason("reason.future.unknown", runtime.table())
+    assert "reason.future.unknown" in unknown
+    assert "missing" in unknown.lower()
+
+
 def test_map_content_is_parsed_as_data_and_never_executed():
     runtime = localization_runtime(
         "305=77\nBfBot.localization_map_was_executed=1\n",
@@ -721,3 +794,154 @@ def test_installer_localization_contract_uses_catalog_refs_and_explicit_sparse_m
     assert runtime_ids <= resolved_ids
     assert emitted_ids == runtime_ids
     assert "COPY ~buffbot/BfBotLoc.lua~" in source
+
+
+def test_all_literal_runtime_localization_keys_exist_and_dynamic_calls_are_explicit():
+    runtime_keys = {
+        semantic_key
+        for _, semantic_key in CATALOG_SCHEMA.items()
+        if not semantic_key.startswith("installer.")
+    }
+    sources = {
+        path: path.read_text(encoding="utf-8")
+        for path in (
+            MAIN_PATH,
+            EXEC_PATH,
+            INNATE_PATH,
+            UI_PATH,
+            THEME_PATH,
+            MENU_PATH,
+            PERSIST_PATH,
+        )
+    }
+    literal_call = re.compile(
+        r"BfBot\.L10N\.(?:Get|Format|StrRef)\(\s*(['\"])([a-z][a-z0-9_.]*)\1"
+    )
+    any_call = re.compile(r"BfBot\.L10N\.(?:Get|Format|StrRef)\(\s*([^\s,)]+)")
+
+    used_keys: set[str] = set()
+    for path, source in sources.items():
+        used_keys.update(match.group(2) for match in literal_call.finditer(source))
+        for match in any_call.finditer(source):
+            first_arg = match.group(1)
+            assert first_arg[:1] in {'"', "'"}, (
+                f"dynamic localization key in {path}: {first_arg}; "
+                "use a literal key or an explicit checked mapping"
+            )
+
+    assert used_keys <= runtime_keys
+    assert {
+        "feedback.no_luajit",
+        "feedback.combat_stopped",
+        "feedback.cast_timeout",
+        "ui.title.preset",
+        "ui.title.summons",
+        "ui.title.summon_preset",
+        "ui.delete_preset_confirm",
+        "ui.repeat.compact",
+        "ui.lock.compact",
+        "options.text_size_large",
+    } <= used_keys
+
+
+def test_menu_has_no_static_alphabetic_player_labels_or_legacy_markers():
+    source = MENU_PATH.read_text(encoding="utf-8")
+    static_text = re.compile(r'(?m)^\s*text\s+(["\'])(.*?)\1\s*$')
+    allowed_symbols = {"///", "<", ">"}
+
+    for match in static_text.finditer(source):
+        value = match.group(2)
+        assert value in allowed_symbols or not re.search(r"[A-Za-z]", value), (
+            f"static player-facing menu label is not localized: {value!r}"
+        )
+    assert "BFBOTUITRA_" not in source
+    assert not re.search(r"(?<![A-Za-z0-9_])@\d+", source)
+
+
+def test_menu_localization_does_not_change_actions_layout_or_list_structure():
+    source = MENU_PATH.read_text(encoding="utf-8")
+    normalized = "\n".join(
+        line
+        for line in source.splitlines()
+        if not re.match(r"^\s*(?:text|tooltip)\b", line)
+    ) + "\n"
+    assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
+        "bc9e7d88c60706d1eca3e393be8f8807d4c08a27d1fba709d18fadab93865380"
+    )
+
+
+def test_menu_lua_text_tooltip_action_and_enabled_chunks_compile_under_luajit():
+    source = MENU_PATH.read_text(encoding="utf-8")
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    compile_chunk = runtime.eval(
+        "function(source) local chunk, err = loadstring(source); return chunk, err end"
+    )
+    expression_props = re.findall(
+        r'(?m)^\s*(?:text\s+lua|tooltip\s+lua|enabled|clickable\s+lua)\s+"([^"]*)"',
+        source,
+    )
+    statement_props = re.findall(
+        r'(?m)^\s*(?:action|actionAlt|actionDrag|onopen|onclose)\s+"([^"]*)"',
+        source,
+    )
+    assert expression_props
+    assert statement_props
+    for expression in expression_props:
+        chunk, error = compile_chunk("return " + expression)
+        assert chunk is not None, f"menu expression failed to compile: {expression}: {error}"
+    for statements in statement_props:
+        chunk, error = compile_chunk(statements)
+        assert chunk is not None, f"menu action failed to compile: {statements}: {error}"
+
+
+def test_known_player_display_sinks_use_localization_not_raw_reason_codes():
+    main = MAIN_PATH.read_text(encoding="utf-8")
+    execution = EXEC_PATH.read_text(encoding="utf-8")
+    innate = INNATE_PATH.read_text(encoding="utf-8")
+    ui = UI_PATH.read_text(encoding="utf-8")
+
+    assert 'Infinity_DisplayString("BuffBot:' not in main
+    assert 'EEex_Sprite_DisplayStringHead(leader,\n                    "BuffBot:' not in execution
+    assert 'BfBot._Display("BuffBot:' not in innate
+    # ToggleDebug is an intentionally untranslated developer diagnostic.
+    ui_without_debug = re.sub(
+        r'BfBot\._Display\("BuffBot: Debug mode "[^\n]+', "", ui
+    )
+    assert 'BfBot._Display("BuffBot:' not in ui_without_debug
+    assert 'Infinity_DisplayString("BuffBot:' not in ui
+    assert 'reason == "not locally controlled"' not in ui
+    assert 'reason == "puppet-locked"' not in ui
+    assert '"empty queue"' not in execution
+    assert '"no valid entries after expansion"' not in execution
+    assert 'return false, "already running"' not in execution
+
+
+def test_all_thirteen_eeex_options_strings_come_from_runtime_localization():
+    source = THEME_PATH.read_text(encoding="utf-8")
+    expected = {
+        CATALOG_SCHEMA[catalog_id] for catalog_id in range(700, 713)
+    }
+    assignments = re.findall(
+        r"uiStrings\.[A-Za-z0-9_]+\s*=\s*"
+        r"BfBot\.L10N\.Get\(\s*['\"]([a-z][a-z0-9_.]*)['\"]\s*\)",
+        source,
+    )
+    actual = set(assignments)
+    assert len(assignments) == 13
+    assert actual == expected
+
+
+def test_per_frame_menu_text_helpers_use_precomputed_or_cached_templates():
+    source = UI_PATH.read_text(encoding="utf-8")
+    for helper in (
+        "_VariantBtnText",
+        "_TargetBtnText",
+        "_RepeatButtonText",
+        "_RepeatTooltip",
+    ):
+        start = source.index(f"function BfBot.UI.{helper}(")
+        end = source.find("\nfunction BfBot.UI.", start + 1)
+        body = source[start : end if end >= 0 else len(source)]
+        assert "BfBot.L10N.Format" not in body, (
+            f"{helper} is evaluated every frame; precompute or cache its template"
+        )

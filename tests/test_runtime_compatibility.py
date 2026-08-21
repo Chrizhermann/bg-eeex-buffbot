@@ -11,6 +11,7 @@ from lupa.luajit21 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE = (ROOT / "buffbot/BfBotCor.lua").read_text(encoding="utf-8")
+LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
 CLASS_SOURCE = (ROOT / "buffbot/BfBotCls.lua").read_text(encoding="utf-8")
 SCAN_SOURCE = (ROOT / "buffbot/BfBotScn.lua").read_text(encoding="utf-8")
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
@@ -90,6 +91,8 @@ def exec_lua() -> LuaRuntime:
         EEex_Sprite_DisplayStringHead = function() end
         """
     )
+    runtime.execute("io = nil")
+    runtime.execute(LOC_SOURCE)
     runtime.execute(PERSIST_SOURCE)
     runtime.execute(EXEC_SOURCE)
     runtime.execute(
@@ -218,6 +221,8 @@ def ui_test_lua() -> LuaRuntime:
         }
         """
     )
+    runtime.execute("io = nil")
+    runtime.execute(LOC_SOURCE)
     runtime.execute(UI_SOURCE)
     runtime.execute(TEST_SOURCE)
     return runtime
@@ -1521,6 +1526,44 @@ def test_queue_failures_return_stable_codes_and_placeholder_details(
     assert facts["scanFailed"] == "reason.queue.scan_failed_for_slot"
     assert facts["scanFailedSlot"] == 2
     assert "synthetic scan failure" in facts["scanFailedError"]
+
+
+def test_exec_public_failures_return_stable_codes_and_structured_details(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local emptyQueue, emptyCode, emptyDetail =
+            BfBot.Exec._BuildQueue(nil, 0)
+        local invalidQueue, invalidCode, invalidDetail =
+            BfBot.Exec._BuildQueue({ { caster = 99 } }, 0)
+
+        BfBot.Exec._state = "running"
+        local started, runningCode, runningDetail =
+            BfBot.Exec.Start({}, 0)
+        return {
+            emptyQueue = emptyQueue,
+            emptyCode = emptyCode,
+            emptyStructured = type(emptyDetail) == "table",
+            invalidQueue = invalidQueue,
+            invalidCode = invalidCode,
+            invalidStructured = type(invalidDetail) == "table",
+            started = started,
+            runningCode = runningCode,
+            runningStructured = type(runningDetail) == "table",
+        }
+        """
+    )
+
+    assert facts["emptyQueue"] is None
+    assert facts["emptyCode"] == "reason.exec.empty_queue"
+    assert facts["emptyStructured"]
+    assert facts["invalidQueue"] is None
+    assert facts["invalidCode"] == "reason.exec.no_valid_entries"
+    assert facts["invalidStructured"]
+    assert not facts["started"]
+    assert facts["runningCode"] == "reason.exec.already_running"
+    assert facts["runningStructured"]
 
 
 def test_non_ascii_export_names_use_distinct_join_order_fallbacks(

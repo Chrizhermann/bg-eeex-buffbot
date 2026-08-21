@@ -652,6 +652,7 @@ def test_installer_localization_selects_one_tlk_and_writes_exact_sparse_runtime_
         ROOT / "buffbot" / "lang" / catalog_directory / "setup.tra"
     )
     runtime_ids = RUNTIME_CATALOG_IDS
+    assert len(runtime_ids) == 163
     assert runtime_ids != set(range(min(runtime_ids), max(runtime_ids) + 1))
 
     process = game.install_many(

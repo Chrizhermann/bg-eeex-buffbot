@@ -330,10 +330,11 @@ end
 -- Entries may alternatively carry a pre-built caster ref instead of a slot:
 -- {casterRef={kind="party",slot=N} | {kind="summon",oid=N,name=S}, ...} —
 -- the seam the summon queue builders use (issue #19).
--- Returns: {[casterKey] = {entries}} grouped by _CasterKey, or nil + error
+-- Returns: {[casterKey] = {entries}} grouped by _CasterKey, or
+-- nil + reasonCode + detail.
 function BfBot.Exec._BuildQueue(userQueue, qcMode)
     if not userQueue or #userQueue == 0 then
-        return nil, "empty queue"
+        return nil, "reason.exec.empty_queue", {}
     end
 
     local byCaster = {}
@@ -501,7 +502,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
     end
 
     if totalEntries == 0 then
-        return nil, "no valid entries after expansion"
+        return nil, "reason.exec.no_valid_entries", {}
     end
 
     -- Cast order: user-set priority (pri) is always respected — no reordering.
@@ -769,7 +770,7 @@ function BfBot.Exec._Advance(key)
             local leader = EEex_Sprite_GetInPortrait(0)
             if leader then
                 EEex_Sprite_DisplayStringHead(leader,
-                    "BuffBot: Combat detected - casting stopped")
+                    BfBot.L10N.Get("feedback.combat_stopped"))
             end
         end)
         return
@@ -1120,11 +1121,11 @@ end
 --     preset (late-join listener, issue #19). Raw/console queues pass
 --     nothing → nil → late-join stays inert for that run (correct: there
 --     is no preset to look a summon's config up under).
--- @return true if started, false + reason string if not
+-- @return true if started; false + reasonCode + detail if not
 function BfBot.Exec.Start(queue, qcMode, presetIdx)
     if BfBot.Exec._state == "running" then
         BfBot._Print("[BuffBot] Already running. Call BfBot.Exec.Stop() first.")
-        return false, "already running"
+        return false, "reason.exec.already_running", {}
     end
 
     -- Open execution log file
@@ -1144,11 +1145,12 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
     BfBot.Exec._pendingLateJoin = {}
 
     -- Build per-caster queues
-    local byCaster, totalEntries = BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
+    local byCaster, totalEntries, buildDetail =
+        BfBot.Exec._BuildQueue(queue, BfBot.Exec._qcMode)
     if not byCaster then
         BfBot.Exec._LogEntry("ERROR", "Failed to build queue: " .. tostring(totalEntries))
         BfBot._CloseLog()
-        return false, totalEntries
+        return false, totalEntries, buildDetail
     end
 
     BfBot.Exec._totalEntries = totalEntries
@@ -1336,7 +1338,7 @@ function BfBot.Exec._SafetyTick()
                 local leader = EEex_Sprite_GetInPortrait(0)
                 if leader then
                     EEex_Sprite_DisplayStringHead(leader,
-                        "BuffBot: casting timed out - stopped")
+                        BfBot.L10N.Get("feedback.cast_timeout"))
                 end
             end)
         end

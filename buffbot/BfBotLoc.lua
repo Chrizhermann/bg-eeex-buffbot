@@ -19,7 +19,7 @@ local _registry = {
     ["common.reset"] = { id = 305, fallback = [=[Reset]=] },
     ["common.rename"] = { id = 306, fallback = [=[Rename]=] },
     ["common.new"] = { id = 307, fallback = [=[New]=] },
-    ["common.add_spell"] = { id = 308, fallback = [=[Add Spell]=] },
+    ["common.add_spell"] = { id = 308, fallback = [=[Add Spell/Item]=] },
     ["common.remove"] = { id = 309, fallback = [=[Remove]=] },
     ["common.export"] = { id = 310, fallback = [=[Export]=] },
     ["common.import"] = { id = 311, fallback = [=[Import]=] },
@@ -60,7 +60,7 @@ local _registry = {
     ["ui.qualifier.self_only"] = { id = 413, fallback = [=[(Self-only)]=] },
     ["ui.qualifier.party_wide"] = { id = 414, fallback = [=[(Party-wide)]=] },
     ["ui.rename_preset_title"] = { id = 415, fallback = [=[Rename Preset:]=] },
-    ["ui.add_spell_title"] = { id = 416, fallback = [=[Add Spell to Buff List]=] },
+    ["ui.add_spell_title"] = { id = 416, fallback = [=[Add Spell or Item to Buff List]=] },
     ["ui.add_to_buff_list"] = { id = 417, fallback = [=[Add to Buff List]=] },
     ["ui.import_config_title"] = { id = 418, fallback = [=[Import Config]=] },
     ["ui.select_variant_title"] = { id = 419, fallback = [=[Select Variant: {spell}]=] },
@@ -96,21 +96,23 @@ local _registry = {
     ["ui.category.short"] = { id = 449, fallback = [=[short]=] },
     ["ui.category.instant"] = { id = 450, fallback = [=[instant]=] },
     ["ui.category.unknown"] = { id = 451, fallback = [=[unknown]=] },
+    ["ui.repeat.compact"] = { id = 452, fallback = [=[R{count}]=] },
+    ["ui.lock.compact"] = { id = 453, fallback = [=[[L]]=] },
     ["feedback.no_luajit"] = { id = 500, fallback = [=[BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.]=] },
     ["feedback.combat_stopped"] = { id = 501, fallback = [=[BuffBot: Combat detected - casting stopped]=] },
     ["feedback.cast_timeout"] = { id = 502, fallback = [=[BuffBot: casting timed out - stopped]=] },
     ["feedback.party_changed_after_run"] = { id = 503, fallback = [=[BuffBot: Party changed — retry after the current run]=] },
     ["feedback.party_changed_refreshing"] = { id = 504, fallback = [=[BuffBot: Party changed — refreshing innates, try again]=] },
-    ["feedback.no_spells_with_reason"] = { id = 505, fallback = [=[BuffBot: No spells to cast ({reason})]=] },
+    ["feedback.no_spells_with_reason"] = { id = 505, fallback = [=[BuffBot: No spells or items to use ({reason})]=] },
     ["feedback.innate_error"] = { id = 506, fallback = [=[BuffBot innate error: {error}]=] },
-    ["feedback.no_spells_preset"] = { id = 507, fallback = [=[BuffBot: No spells to cast in this preset]=] },
+    ["feedback.no_spells_preset"] = { id = 507, fallback = [=[BuffBot: No spells or items to use in this preset]=] },
     ["feedback.character_remote_control"] = { id = 508, fallback = [=[BuffBot: {name} is controlled by another player]=] },
     ["feedback.character_project_image_locked"] = { id = 509, fallback = [=[BuffBot: {name} is puppet-locked by Project Image — cast again after the image expires]=] },
-    ["feedback.no_spells_character"] = { id = 510, fallback = [=[BuffBot: No spells to cast for this character]=] },
+    ["feedback.no_spells_character"] = { id = 510, fallback = [=[BuffBot: No spells or items to use for this character]=] },
     ["feedback.no_summon_selected"] = { id = 511, fallback = [=[BuffBot: No summon selected]=] },
     ["feedback.no_spells_summon"] = { id = 512, fallback = [=[BuffBot: No spells to cast for this summon]=] },
     ["feedback.no_spells_summon_with_reason"] = { id = 513, fallback = [=[BuffBot: No spells to cast for this summon ({reason})]=] },
-    ["feedback.no_additional_spells"] = { id = 514, fallback = [=[BuffBot: No additional spells to add]=] },
+    ["feedback.no_additional_spells"] = { id = 514, fallback = [=[BuffBot: No additional spells or items to add]=] },
     ["feedback.export_success"] = { id = 515, fallback = [=[BuffBot: Exported config as '{file}']=] },
     ["feedback.export_failed"] = { id = 516, fallback = [=[BuffBot: Export failed — {reason}]=] },
     ["feedback.no_exported_configs"] = { id = 517, fallback = [=[BuffBot: No configs found in bfbot_presets/]=] },
@@ -139,7 +141,7 @@ local _registry = {
     ["reason.queue.summon_scan_failed"] = { id = 540, fallback = [=[scan failed for summon {name}]=] },
     ["reason.queue.no_castable_summon_spells"] = { id = 541, fallback = [=[no castable spells in summon preset {index}]=] },
     ["reason.queue.no_preset_index"] = { id = 542, fallback = [=[no preset index]=] },
-    ["reason.queue.no_castable_preset_spells"] = { id = 543, fallback = [=[no castable spells in preset {index}]=] },
+    ["reason.queue.no_castable_preset_spells"] = { id = 543, fallback = [=[no castable spells or usable items in preset {index}]=] },
     ["reason.queue.missing_slot_or_preset"] = { id = 544, fallback = [=[missing character slot or preset]=] },
     ["reason.queue.no_sprite_in_slot"] = { id = 545, fallback = [=[no character in slot {slot}]=] },
     ["reason.queue.not_locally_controlled"] = { id = 546, fallback = [=[not locally controlled]=] },
@@ -147,7 +149,7 @@ local _registry = {
     ["reason.queue.no_preset_for_slot"] = { id = 548, fallback = [=[no preset {preset} for slot {slot}]=] },
     ["reason.queue.scan_failed_for_slot"] = { id = 549, fallback = [=[scan failed for slot {slot}]=] },
     ["reason.queue.project_image_locked"] = { id = 550, fallback = [=[puppet-locked by Project Image]=] },
-    ["reason.queue.no_castable_spells_for_slot"] = { id = 551, fallback = [=[no castable spells in preset {preset} for slot {slot}]=] },
+    ["reason.queue.no_castable_spells_for_slot"] = { id = 551, fallback = [=[no castable spells or usable items in preset {preset} for slot {slot}]=] },
     ["default.preset.long"] = { id = 600, fallback = [=[Long Buffs]=] },
     ["default.preset.short"] = { id = 601, fallback = [=[Short Buffs]=] },
     ["default.preset.indexed"] = { id = 602, fallback = [=[Preset {index}]=] },
@@ -254,6 +256,64 @@ function BfBot.L10N.Format(key, values)
         if value == nil then return "{" .. name .. "}" end
         return tostring(value)
     end))
+end
+
+-- Stable public failure codes are deliberately mapped explicitly.  This keeps
+-- caller-facing reason localization separate from arbitrary localization keys,
+-- and preserves prose returned by older hot-reloaded modules.
+local _reasonKeys = {
+    ["reason.exec.empty_queue"] = "reason.exec.empty_queue",
+    ["reason.exec.no_valid_entries"] = "reason.exec.no_valid_entries",
+    ["reason.exec.already_running"] = "reason.exec.already_running",
+    ["reason.export.luajit_required"] = "reason.export.luajit_required",
+    ["reason.export.no_sprite"] = "reason.export.no_sprite",
+    ["reason.export.no_config"] = "reason.export.no_config",
+    ["reason.export.cannot_open_file"] = "reason.export.cannot_open_file",
+    ["reason.import.luajit_required"] = "reason.import.luajit_required",
+    ["reason.import.no_sprite"] = "reason.import.no_sprite",
+    ["reason.import.no_filename"] = "reason.import.no_filename",
+    ["reason.import.invalid_filename"] = "reason.import.invalid_filename",
+    ["reason.import.cannot_open_file"] = "reason.import.cannot_open_file",
+    ["reason.import.empty_file"] = "reason.import.empty_file",
+    ["reason.import.parse_error"] = "reason.import.parse_error",
+    ["reason.import.exec_error"] = "reason.import.exec_error",
+    ["reason.import.invalid_data"] = "reason.import.invalid_data",
+    ["reason.queue.invalid_summon"] = "reason.queue.invalid_summon",
+    ["reason.queue.no_summon_preset"] = "reason.queue.no_summon_preset",
+    ["reason.queue.caster_resolver_unavailable"] = "reason.queue.caster_resolver_unavailable",
+    ["reason.queue.summon_gone"] = "reason.queue.summon_gone",
+    ["reason.queue.summon_scan_failed"] = "reason.queue.summon_scan_failed",
+    ["reason.queue.no_castable_summon_spells"] = "reason.queue.no_castable_summon_spells",
+    ["reason.queue.no_preset_index"] = "reason.queue.no_preset_index",
+    ["reason.queue.no_castable_preset_spells"] = "reason.queue.no_castable_preset_spells",
+    ["reason.queue.missing_slot_or_preset"] = "reason.queue.missing_slot_or_preset",
+    ["reason.queue.no_sprite_in_slot"] = "reason.queue.no_sprite_in_slot",
+    ["reason.queue.not_locally_controlled"] = "reason.queue.not_locally_controlled",
+    ["reason.queue.no_config_for_slot"] = "reason.queue.no_config_for_slot",
+    ["reason.queue.no_preset_for_slot"] = "reason.queue.no_preset_for_slot",
+    ["reason.queue.scan_failed_for_slot"] = "reason.queue.scan_failed_for_slot",
+    ["reason.queue.project_image_locked"] = "reason.queue.project_image_locked",
+    ["reason.queue.no_castable_spells_for_slot"] = "reason.queue.no_castable_spells_for_slot",
+}
+
+function BfBot.L10N.Reason(code, detail)
+    if code == nil then return nil end
+
+    if type(code) ~= "string" then return _UnknownKey(code) end
+
+    local key = _reasonKeys[code]
+    if not key then
+        if code:match("^reason%.") then return _UnknownKey(code) end
+        return code
+    end
+
+    local template = BfBot.L10N.Get(key)
+    for name in template:gmatch("{([a-z][a-z0-9_]*)}") do
+        if type(detail) ~= "table" or detail[name] == nil then
+            return _UnknownKey(code)
+        end
+    end
+    return BfBot.L10N.Format(key, detail)
 end
 
 function BfBot.L10N.StrRef(key)

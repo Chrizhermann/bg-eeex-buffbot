@@ -7,6 +7,7 @@ from lupa.luajit21 import LuaRuntime
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
 CLASS_SOURCE = (ROOT / "buffbot/BfBotCls.lua").read_text(encoding="utf-8")
 SCAN_SOURCE = (ROOT / "buffbot/BfBotScn.lua").read_text(encoding="utf-8")
@@ -26,6 +27,8 @@ def _persist_runtime() -> LuaRuntime:
         }
         """
     )
+    lua.execute("io = nil")
+    lua.execute(LOC_SOURCE)
     lua.execute(PERSIST_SOURCE)
     return lua
 
@@ -519,6 +522,8 @@ def test_absent_imported_items_stay_persisted_but_hidden_from_rows() -> None:
         }
         """
     )
+    lua.execute("io = nil")
+    lua.execute(LOC_SOURCE)
     lua.execute(PERSIST_SOURCE)
     lua.execute(UI_SOURCE)
     facts = lua.execute(

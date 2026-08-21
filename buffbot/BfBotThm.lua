@@ -532,19 +532,19 @@ BfBot.Theme._registered = BfBot.Theme._registered or false
 -- raw key in the UI), so populating it here is the safest path.
 local function _populateUiStrings()
     if not uiStrings then return end
-    uiStrings.BuffBot_Tab               = "BuffBot"
-    uiStrings.BuffBot_DarkMode          = "Dark Mode"
-    uiStrings.BuffBot_DarkMode_Desc     = "Dim the panel parchment for low-light play. The accent palette is preserved."
-    uiStrings.BuffBot_Accent            = "Color Scheme"
-    uiStrings.BuffBot_Accent_Desc       = "Choose the panel accent palette: classic BG2 parchment, the steel-blue Siege of Dragonspear, or the warm BG1 amber."
-    uiStrings.BuffBot_Accent_BG2        = "Baldur's Gate 2"
-    uiStrings.BuffBot_Accent_SOD        = "Siege of Dragonspear"
-    uiStrings.BuffBot_Accent_BG1        = "Baldur's Gate 1"
-    uiStrings.BuffBot_TextSize          = "Text Size"
-    uiStrings.BuffBot_TextSize_Desc     = "Scale all panel text. Close and reopen the BuffBot panel after changing this for the new size to take effect."
-    uiStrings.BuffBot_TextSize_Small    = "Small"
-    uiStrings.BuffBot_TextSize_Medium   = "Medium"
-    uiStrings.BuffBot_TextSize_Large    = "Large"
+    uiStrings.BuffBot_Tab = BfBot.L10N.Get("options.tab")
+    uiStrings.BuffBot_DarkMode = BfBot.L10N.Get("options.dark_mode")
+    uiStrings.BuffBot_DarkMode_Desc = BfBot.L10N.Get("options.dark_mode_description")
+    uiStrings.BuffBot_Accent = BfBot.L10N.Get("options.color_scheme")
+    uiStrings.BuffBot_Accent_Desc = BfBot.L10N.Get("options.color_scheme_description")
+    uiStrings.BuffBot_Accent_BG2 = BfBot.L10N.Get("options.color_scheme_bg2")
+    uiStrings.BuffBot_Accent_SOD = BfBot.L10N.Get("options.color_scheme_sod")
+    uiStrings.BuffBot_Accent_BG1 = BfBot.L10N.Get("options.color_scheme_bg1")
+    uiStrings.BuffBot_TextSize = BfBot.L10N.Get("options.text_size")
+    uiStrings.BuffBot_TextSize_Desc = BfBot.L10N.Get("options.text_size_description")
+    uiStrings.BuffBot_TextSize_Small = BfBot.L10N.Get("options.text_size_small")
+    uiStrings.BuffBot_TextSize_Medium = BfBot.L10N.Get("options.text_size_medium")
+    uiStrings.BuffBot_TextSize_Large = BfBot.L10N.Get("options.text_size_large")
 end
 
 --- Build a custom storage class that bridges between an EEex option's

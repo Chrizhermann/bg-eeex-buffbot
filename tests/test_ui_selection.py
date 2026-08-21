@@ -7,6 +7,7 @@ from lupa.luajit21 import LuaRuntime
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
 TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
@@ -24,6 +25,7 @@ def ui_lua() -> LuaRuntime:
 
         BfBot = {
             MAX_PRESETS = 8,
+            MAX_SPELL_REPEATS = 5,
             UI = {},
             Scan = {
                 Invalidate = function(_) end,
@@ -48,6 +50,8 @@ def ui_lua() -> LuaRuntime:
         Infinity_PopMenu = function(_) end
         """
     )
+    runtime.execute("io = nil")
+    runtime.execute(LOC_SOURCE)
     runtime.execute(UI_SOURCE)
     return runtime
 
@@ -485,6 +489,47 @@ def test_same_live_summon_survives_summon_list_rebuild(
     assert facts["hasVariants"] == 1
 
 
+def test_empty_summons_view_uses_localized_generic_title_without_preset_access(
+    ui_lua: LuaRuntime,
+) -> None:
+    facts = ui_lua.execute(
+        """
+        BfBot.UI._view = "summons"
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._summonList = {}
+        BfBot.UI._summonSel = nil
+
+        local originalGet = BfBot.L10N.Get
+        BfBot.L10N.Get = function(key)
+            if key == "ui.title.summons" then
+                return "BuffBot - 召唤物 100%"
+            end
+            return originalGet(key)
+        end
+
+        BfBot.Persist._GetProtagonist = function() return {} end
+        BfBot.Persist.GetConfig = function(_)
+            return { ap = 1, presets = {} }
+        end
+        BfBot.Persist.PeekSummonPreset = function(_, _) return nil end
+        BfBot.UI._CastCharLabel = function() return "" end
+        BfBot.UI._GetStatusText = function() return "" end
+
+        local ok, err = pcall(BfBot.UI._RefreshSummonsView)
+        return {
+            ok = ok,
+            err = err,
+            title = buffbot_title,
+            spellCount = #buffbot_spellTable,
+        }
+        """
+    )
+
+    assert facts["ok"], facts["err"]
+    assert facts["title"] == "BuffBot - 召唤物 100%"
+    assert facts["spellCount"] == 0
+
+
 @pytest.mark.parametrize("operation", ["create", "delete"])
 def test_preset_lifecycle_changes_clear_selection(
     ui_lua: LuaRuntime,
@@ -746,6 +791,58 @@ def test_variant_picker_writes_to_anchored_resref_after_reorder(
     )
 
     assert written_resref == "SPWI101"
+
+
+def test_variant_picker_precomputes_complete_localized_title_for_arbitrary_name(
+    ui_lua: LuaRuntime,
+) -> None:
+    spell_name = "龙's \"Ward\" 100%"
+    ui_lua.globals().test_spell_name = spell_name
+
+    facts = ui_lua.execute(
+        """
+        BfBot.UI._view = "party"
+        BfBot.UI._charSlot = 0
+        BfBot.UI._presetIdx = 1
+        buffbot_spellTable = {
+            {
+                resref = "SPWI101", name = test_spell_name, hasVariants = 1,
+                variants = {
+                    { resref = "SPWI1A", name = "Variant" },
+                },
+            },
+        }
+        buffbot_selectedRow = 1
+        BfBot.UI._OnSpellRowAction(3)
+
+        local originalFormat = BfBot.L10N.Format
+        BfBot.L10N.Format = function(key, values)
+            if key == "ui.select_variant_title" then
+                _variantFormatKey = key
+                _variantFormatSpell = values and values.spell or nil
+                return "选择变体：「" .. tostring(_variantFormatSpell) .. "」 100%"
+            end
+            return originalFormat(key, values)
+        end
+
+        BfBot.UI.OpenVariants(1)
+        return {
+            title = buffbot_variantTitle,
+            formatKey = _variantFormatKey,
+            formatSpell = _variantFormatSpell,
+            variantAnchor = BfBot.UI._variantSpellAnchor
+                and BfBot.UI._variantSpellAnchor.resref or nil,
+            selectedAnchor = BfBot.UI._spellSel
+                and BfBot.UI._spellSel.resref or nil,
+        }
+        """
+    )
+
+    assert facts["title"] == f"选择变体：「{spell_name}」 100%"
+    assert facts["formatKey"] == "ui.select_variant_title"
+    assert facts["formatSpell"] == spell_name
+    assert facts["variantAnchor"] == "SPWI101"
+    assert facts["selectedAnchor"] == "SPWI101"
 
 
 def test_variant_picker_closes_and_clears_anchor_when_caster_disappears(

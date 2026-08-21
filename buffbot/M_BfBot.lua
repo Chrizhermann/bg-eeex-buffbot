@@ -14,7 +14,7 @@ Infinity_DoFile("BfBotLoc")  -- TLK-backed localization with English fallback
 if BfBot._noIO then
     EEex_Menu_AddAfterMainFileLoadedListener(BfBot._SafeCallback(
         "main.no_luajit_notice", function()
-        Infinity_DisplayString("BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.")
+        Infinity_DisplayString(BfBot.L10N.Get("feedback.no_luajit"))
     end))
 end
 

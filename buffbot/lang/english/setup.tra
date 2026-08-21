@@ -59,7 +59,7 @@
 // common.new
 @307 = ~New~
 // common.add_spell
-@308 = ~Add Spell~
+@308 = ~Add Spell/Item~
 // common.remove
 @309 = ~Remove~
 // common.export
@@ -142,7 +142,7 @@
 // ui.rename_preset_title
 @415 = ~Rename Preset:~
 // ui.add_spell_title
-@416 = ~Add Spell to Buff List~
+@416 = ~Add Spell or Item to Buff List~
 // ui.add_to_buff_list
 @417 = ~Add to Buff List~
 // ui.import_config_title
@@ -213,6 +213,10 @@
 @450 = ~instant~
 // ui.category.unknown
 @451 = ~unknown~
+// ui.repeat.compact
+@452 = ~R{count}~
+// ui.lock.compact
+@453 = ~[L]~
 
 // feedback.no_luajit
 @500 = ~BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.~
@@ -225,17 +229,17 @@
 // feedback.party_changed_refreshing
 @504 = ~BuffBot: Party changed — refreshing innates, try again~
 // feedback.no_spells_with_reason
-@505 = ~BuffBot: No spells to cast ({reason})~
+@505 = ~BuffBot: No spells or items to use ({reason})~
 // feedback.innate_error
 @506 = ~BuffBot innate error: {error}~
 // feedback.no_spells_preset
-@507 = ~BuffBot: No spells to cast in this preset~
+@507 = ~BuffBot: No spells or items to use in this preset~
 // feedback.character_remote_control
 @508 = ~BuffBot: {name} is controlled by another player~
 // feedback.character_project_image_locked
 @509 = ~BuffBot: {name} is puppet-locked by Project Image — cast again after the image expires~
 // feedback.no_spells_character
-@510 = ~BuffBot: No spells to cast for this character~
+@510 = ~BuffBot: No spells or items to use for this character~
 // feedback.no_summon_selected
 @511 = ~BuffBot: No summon selected~
 // feedback.no_spells_summon
@@ -243,7 +247,7 @@
 // feedback.no_spells_summon_with_reason
 @513 = ~BuffBot: No spells to cast for this summon ({reason})~
 // feedback.no_additional_spells
-@514 = ~BuffBot: No additional spells to add~
+@514 = ~BuffBot: No additional spells or items to add~
 // feedback.export_success
 @515 = ~BuffBot: Exported config as '{file}'~
 // feedback.export_failed
@@ -301,7 +305,7 @@
 // reason.queue.no_preset_index
 @542 = ~no preset index~
 // reason.queue.no_castable_preset_spells
-@543 = ~no castable spells in preset {index}~
+@543 = ~no castable spells or usable items in preset {index}~
 // reason.queue.missing_slot_or_preset
 @544 = ~missing character slot or preset~
 // reason.queue.no_sprite_in_slot
@@ -317,7 +321,7 @@
 // reason.queue.project_image_locked
 @550 = ~puppet-locked by Project Image~
 // reason.queue.no_castable_spells_for_slot
-@551 = ~no castable spells in preset {preset} for slot {slot}~
+@551 = ~no castable spells or usable items in preset {preset} for slot {slot}~
 
 // default.preset.long
 @600 = ~Long Buffs~

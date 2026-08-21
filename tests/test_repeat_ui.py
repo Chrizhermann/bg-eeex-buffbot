@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
 
 
 @pytest.fixture
@@ -31,6 +32,8 @@ def repeat_ui_lua() -> LuaRuntime:
         }
         """
     )
+    runtime.execute("io = nil")
+    runtime.execute(LOC_SOURCE)
     runtime.execute(PERSIST_SOURCE)
     runtime.execute(UI_SOURCE)
     return runtime
@@ -297,6 +300,417 @@ def test_repeat_footer_text_and_tooltip_follow_the_selected_row(
     )
 
 
+def test_localized_compact_rows_durations_categories_targets_and_statuses(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        BfBot.UI._view = "party"
+        buffbot_charNames = {}
+        buffbot_spellTable = {
+            {
+                name = "Ward", variantName = "火's 100% Ward", on = 1,
+                targetText = "Aerie", lock = 1, rep = 4,
+                variantButtonText = BfBot.L10N.Format(
+                    "ui.variant.selected", { name = "火's 100% Ward" }),
+                targetButtonText = BfBot.L10N.Format(
+                    "ui.target.selected", { target = "Aerie" }),
+            },
+        }
+        buffbot_selectedRow = 1
+        BfBot.Exec.GetState = function() return "running" end
+        BfBot.Exec._qcMode = 2
+        return {
+            repeatRow = BfBot.UI._RepeatRowText(1),
+            staleRepeatRow = BfBot.UI._RepeatRowText(99),
+            lock = BfBot.UI._LockText(1),
+            permanent = BfBot.UI._FormatDuration(-1),
+            instant = BfBot.UI._FormatDuration(0),
+            hoursMinutes = BfBot.UI._FormatDuration(3660),
+            hours = BfBot.UI._FormatDuration(7200),
+            minutesSeconds = BfBot.UI._FormatDuration(90),
+            minutes = BfBot.UI._FormatDuration(120),
+            seconds = BfBot.UI._FormatDuration(45),
+            unknownDuration = BfBot.UI._FormatDuration(nil),
+            permanentCategory = BfBot.UI._CategoryText("permanent"),
+            longCategory = BfBot.UI._CategoryText("long"),
+            shortCategory = BfBot.UI._CategoryText("short"),
+            instantCategory = BfBot.UI._CategoryText("instant"),
+            unknownCategory = BfBot.UI._CategoryText("future"),
+            selfTarget = BfBot.UI._TargetToText("s"),
+            partyTarget = BfBot.UI._TargetToText("p"),
+            noneTarget = BfBot.UI._TargetToText({}),
+            legacyTarget = BfBot.UI._TargetToText("2"),
+            manyTargets = BfBot.UI._TargetToText({ "Aerie", "Imoen" }),
+            variant = BfBot.UI._VariantBtnText(),
+            toggle = BfBot.UI._ToggleBtnText(),
+            target = BfBot.UI._TargetBtnText(),
+            status = BfBot.UI._GetStatusText(),
+        }
+        """
+    )
+
+    assert facts["repeatRow"] == "R4"
+    assert facts["staleRepeatRow"] == "R1"
+    assert facts["lock"] == "[L]"
+    assert facts["permanent"] == "Perm"
+    assert facts["instant"] == "Inst"
+    assert facts["hoursMinutes"] == "1h 1m"
+    assert facts["hours"] == "2h"
+    assert facts["minutesSeconds"] == "1m 30s"
+    assert facts["minutes"] == "2m"
+    assert facts["seconds"] == "45s"
+    assert facts["unknownDuration"] == "?"
+    assert facts["permanentCategory"] == "permanent"
+    assert facts["longCategory"] == "long"
+    assert facts["shortCategory"] == "short"
+    assert facts["instantCategory"] == "instant"
+    assert facts["unknownCategory"] == "unknown"
+    assert facts["selfTarget"] == "Self"
+    assert facts["partyTarget"] == "Party"
+    assert facts["noneTarget"] == "None"
+    assert facts["legacyTarget"] == "Player 2"
+    assert facts["manyTargets"] == "Aerie +1"
+    assert facts["variant"] == "Var: 火's 100% Ward"
+    assert facts["toggle"] == "Disable"
+    assert facts["target"] == "Target: Aerie"
+    assert facts["status"] == "Casting (Quick: All)..."
+
+
+def test_quick_cast_keeps_closed_and_unavailable_guards(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        local calls = 0
+        BfBot.UI._ViewQuickCast = function()
+            calls = calls + 1
+            return nil
+        end
+        buffbot_isOpen = false
+        local closedLabel = BfBot.UI._QuickCastLabel()
+        local closedCalls = calls
+        buffbot_isOpen = true
+        local unavailableLabel = BfBot.UI._QuickCastLabel()
+        local unavailableTooltip = BfBot.UI._QuickCastTooltip()
+        BfBot.UI._ViewQuickCast = function() return 0 end
+        local offTooltip = BfBot.UI._QuickCastTooltip()
+        return {
+            closedLabel = closedLabel,
+            closedCalls = closedCalls,
+            unavailableLabel = unavailableLabel,
+            unavailableTooltip = unavailableTooltip,
+            offTooltip = offTooltip,
+        }
+        """
+    )
+
+    assert facts["closedLabel"] == ""
+    assert facts["closedCalls"] == 0
+    assert facts["unavailableLabel"] == "Quick Cast: Off"
+    assert facts["unavailableTooltip"] == "Normal casting speed"
+    assert facts["offTooltip"] != facts["unavailableTooltip"]
+
+
+def test_clone_cast_and_title_templates_preserve_arbitrary_runtime_names(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        local owner = [[龙's "Owner" 100%]]
+        local presetName = [[守护's "Set" 100%]]
+        local labels = {
+            mislead = BfBot.UI._SummonTabLabel({
+                kind = "clone", ownerName = owner, cloneType = 1,
+            }),
+            image = BfBot.UI._SummonTabLabel({
+                kind = "clone", ownerName = owner, cloneType = 2,
+            }),
+            simulacrum = BfBot.UI._SummonTabLabel({
+                kind = "clone", ownerName = owner, cloneType = 3,
+            }),
+            generic = BfBot.UI._SummonTabLabel({
+                kind = "clone", ownerName = owner, cloneType = 99,
+            }),
+        }
+
+        BfBot.Exec.GetState = function() return "idle" end
+        BfBot._GetName = function(sprite) return sprite.name end
+        local partySprite = { m_id = 100, name = owner }
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return partySprite end
+            return nil
+        end
+        BfBot.UI._view = "party"
+        BfBot.UI._charSlot = 0
+        BfBot.UI._presetIdx = 1
+        BfBot.Persist.GetConfig = function()
+            return { ap = 1, ovr = {}, presets = { [1] = {
+                name = presetName, spells = {},
+            } } }
+        end
+        BfBot.Scan.GetCastableSpells = function() return {} end
+        BfBot.UI._Refresh()
+        local partyTitle = buffbot_title
+
+        BfBot.UI._view = "summons"
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._summonList = {
+            {
+                identity = "clone:owner", oid = 200,
+                name = "Image", kind = "clone",
+                ownerName = owner, cloneType = 2,
+            },
+        }
+        BfBot.UI._summonSel = {
+            identity = "clone:owner", oid = 200,
+            name = "Image", cloneType = 2,
+        }
+        BfBot.Persist._GetProtagonist = function() return {} end
+        BfBot.Persist.GetConfig = function()
+            return { ap = 1, presets = { [1] = {
+                name = presetName, spells = {},
+            } } }
+        end
+        BfBot.UI._GetSelectedSprite = function() return {} end
+        BfBot.UI._EnsureSummonPreset = function() end
+        local summonPreset = { qc = 0, spells = {} }
+        BfBot.Persist.GetSummonPreset = function() return summonPreset end
+        BfBot.Persist.PeekSummonPreset = function() return summonPreset end
+        BfBot.Scan.GetCastableSpells = function() return {} end
+        BfBot.UI._RefreshSummonsView()
+        local summonTitle = buffbot_title
+        local summonCast = BfBot.UI._CastCharLabel()
+
+        BfBot.UI._view = "party"
+        buffbot_charNames = { owner }
+        BfBot.UI._charSlot = 0
+        local namedCast = BfBot.UI._CastCharLabel()
+        buffbot_charNames = {}
+        local genericCast = BfBot.UI._CastCharLabel()
+        return {
+            mislead = labels.mislead,
+            image = labels.image,
+            simulacrum = labels.simulacrum,
+            generic = labels.generic,
+            partyTitle = partyTitle,
+            summonTitle = summonTitle,
+            summonCast = summonCast,
+            namedCast = namedCast,
+            genericCast = genericCast,
+            owner = owner,
+            presetName = presetName,
+        }
+        """
+    )
+
+    owner = facts["owner"]
+    assert facts["mislead"] == f"{owner}'s Mislead"
+    assert facts["image"] == f"{owner}'s Image"
+    assert facts["simulacrum"] == f"{owner}'s Simulacrum"
+    assert facts["generic"] == f"{owner}'s Clone"
+    assert facts["partyTitle"] == f"BuffBot - {facts['presetName']}"
+    assert facts["summonTitle"] == (
+        f"BuffBot - {owner}'s Image - {facts['presetName']}"
+    )
+    assert facts["summonCast"] == "Cast (this summon)"
+    assert facts["namedCast"] == f"Cast {owner}"
+    assert facts["genericCast"] == "Cast Character"
+
+
+def test_delete_confirmation_uses_one_complete_localized_template(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    message = repeat_ui_lua.execute(
+        """
+        BfBot.UI._view = "party"
+        BfBot.UI._presetIdx = 2
+        buffbot_presetNames = { [2] = [[中文's "Set" 100%]] }
+        local captured = nil
+        BfBot.UI.OpenConfirm = function(message, callback)
+            captured = message
+            assert(type(callback) == "function")
+        end
+        BfBot.UI.DeleteCurrentPreset()
+        return captured
+        """
+    )
+
+    assert message == 'Delete preset "中文\'s "Set" 100%" for ALL party members?'
+
+
+def test_structured_reason_feedback_is_localized_once_at_each_ui_boundary(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        local messages = {}
+        local function display(message) messages[#messages + 1] = message end
+        BfBot._Display = display
+        Infinity_DisplayString = display
+        BfBot._GetName = function(sprite) return sprite.name end
+        BfBot.UI._view = "party"
+        BfBot.UI._charSlot = 0
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._GetSelectedSprite = function()
+            return { name = "Fallback Name" }
+        end
+        BfBot.Persist.GetConfig = function()
+            return { ap = 1, presets = { [1] = { spells = {} } } }
+        end
+        BfBot.Persist.DrainBuildSkips = function() return {} end
+
+        local function oneCharacter(code, detail)
+            messages = {}
+            BfBot.Persist.BuildQueueForCharacter = function()
+                return nil, code, detail
+            end
+            BfBot.UI.CastCharacter()
+            assert(#messages == 1)
+            return messages[1]
+        end
+        local remote = oneCharacter(
+            "reason.queue.not_locally_controlled", { name = "远程 100%" })
+        local image = oneCharacter(
+            "reason.queue.project_image_locked", { name = [[镜像's "Caster"]] })
+        local generic = oneCharacter(
+            "reason.queue.no_castable_spells_for_slot", { preset = 1, slot = 0 })
+
+        BfBot.UI._view = "summons"
+        BfBot.UI._SelectedSummon = function()
+            return { identity = "cre:deva", name = "Deva" }
+        end
+        local function oneSummon(code, detail)
+            messages = {}
+            BfBot.Persist.BuildQueueForSummon = function()
+                return nil, code, detail
+            end
+            BfBot.UI._CastSelectedSummon()
+            assert(#messages == 1)
+            return messages[1]
+        end
+        local summonGeneric = oneSummon(
+            "reason.queue.no_castable_summon_spells", { index = 1 })
+        local summonReason = oneSummon(
+            "reason.queue.summon_gone", { name = "Deva 100%" })
+
+        BfBot.UI._view = "party"
+        messages = {}
+        BfBot.Persist.ExportConfig = function()
+            return false, "reason.export.cannot_open_file", { error = "denied 100%" }
+        end
+        BfBot.UI.ExportConfig()
+        assert(#messages == 1)
+        local exportFailure = messages[1]
+
+        messages = {}
+        BfBot.Persist.ExportConfig = function()
+            return true, [[中文's 100%.lua]]
+        end
+        BfBot.UI.ExportConfig()
+        assert(#messages == 1)
+        local exportSuccess = messages[1]
+
+        messages = {}
+        buffbot_importList = { { name = "中文's 100%", filename = "x.lua" } }
+        buffbot_importSelected = 1
+        Infinity_PopMenu = function() end
+        BfBot.Persist.ImportConfig = function()
+            return false, "reason.import.parse_error", { error = "bad % token" }
+        end
+        BfBot.UI.ImportSelected()
+        assert(#messages == 1)
+        local importFailure = messages[1]
+
+        messages = {}
+        BfBot.Scan.Invalidate = function() end
+        BfBot.UI._Refresh = function() end
+        BfBot.Persist.ImportConfig = function()
+            return true, 3, 2
+        end
+        BfBot.UI.ImportSelected()
+        assert(#messages == 1)
+        local importSuccess = messages[1]
+
+        return {
+            remote = remote,
+            image = image,
+            generic = generic,
+            summonGeneric = summonGeneric,
+            summonReason = summonReason,
+            exportFailure = exportFailure,
+            exportSuccess = exportSuccess,
+            importFailure = importFailure,
+            importSuccess = importSuccess,
+        }
+        """
+    )
+
+    assert facts["remote"] == "BuffBot: 远程 100% is controlled by another player"
+    assert facts["image"].startswith("BuffBot: 镜像's \"Caster\" is puppet-locked")
+    assert facts["generic"] == "BuffBot: No spells or items to use for this character"
+    assert facts["summonGeneric"] == "BuffBot: No spells to cast for this summon"
+    assert facts["summonReason"] == (
+        "BuffBot: No spells to cast for this summon (summon gone (Deva 100%))"
+    )
+    assert facts["exportFailure"] == "BuffBot: Export failed — cannot open file: denied 100%"
+    assert facts["exportSuccess"] == "BuffBot: Exported config as '中文's 100%.lua'"
+    assert facts["importFailure"] == "BuffBot: Import failed — parse error: bad % token"
+    assert facts["importSuccess"] == (
+        "BuffBot: Imported '中文's 100%' (3 presets, 2 entries skipped)"
+    )
+
+
+def test_item_aware_picker_headers_and_empty_feedback_are_localized(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        BfBot.UI._view = "party"
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._GetSelectedSprite = function() return {} end
+        BfBot.Persist.GetConfig = function()
+            return { ovr = { ITEM = -1 }, presets = { [1] = { spells = {} } } }
+        end
+        BfBot.Scan.GetCastableSpells = function()
+            return {
+                SPELL = {
+                    kind = "spl", name = "Spell", icon = "S", count = 1,
+                    durCat = "long", class = { isBuff = false },
+                },
+                ITEM = {
+                    kind = "itm", name = "Potion", icon = "I", count = 2,
+                    durCat = "short", class = { isBuff = true },
+                },
+            }
+        end
+        BfBot.UI._BuildPickerList()
+        local spellHeader = buffbot_pickerSpells[1].name
+        local spellCategory = buffbot_pickerSpells[2].durCatText
+        local itemHeader = buffbot_pickerSpells[3].name
+        local itemCategory = buffbot_pickerSpells[4].durCatText
+
+        local message = nil
+        BfBot._Display = function(value) message = value end
+        BfBot.Scan.GetCastableSpells = function() return {} end
+        BfBot.UI.OpenSpellPicker()
+        return {
+            spellHeader = spellHeader,
+            spellCategory = spellCategory,
+            itemHeader = itemHeader,
+            itemCategory = itemCategory,
+            message = message,
+        }
+        """
+    )
+
+    assert facts["spellHeader"] == "[Spells]"
+    assert facts["spellCategory"] == "long"
+    assert facts["itemHeader"] == "[Items]"
+    assert facts["itemCategory"] == "short"
+    assert facts["message"] == "BuffBot: No additional spells or items to add"
+
+
 _MENU_ELEMENT_OPEN = re.compile(
     r"(?m)^[ \t]*(?:list|button|text|label|handle)\s*\{"
 )
@@ -396,7 +810,7 @@ def test_spell_list_columns_and_cell_actions_match_the_repeat_design() -> None:
 
     assert widths == [8, 8, 26, 10, 10, 8, 24, 6]
     assert sum(widths) == 100
-    assert "repeatText" in block
+    assert "BfBot.UI._RepeatRowText(rowNumber)" in block
     assert "BfBot.UI._RepeatColor(rowNumber)" in block
     assert len(actions) == 1
     action = actions[0]
