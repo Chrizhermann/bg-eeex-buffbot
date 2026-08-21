@@ -216,6 +216,55 @@ def _read_l10n_map(path: Path) -> dict[int, int]:
     return result
 
 
+def _assert_runtime_map_dereferences_selected_catalog(
+    game: "BuffBotGame", *, game_language: str, catalog_directory: str
+) -> dict[int, int]:
+    catalog, _ = parse_tra(
+        ROOT / "buffbot" / "lang" / catalog_directory / "setup.tra"
+    )
+    active_tlk = (
+        game.lang_tlk if game_language == "en_US" else game.schinese_tlk
+    )
+    active_strings = _read_tlk_strings(active_tlk)
+    mapping = _read_l10n_map(game.override / "bfbot_l10n.txt")
+
+    assert set(mapping) == RUNTIME_CATALOG_IDS
+    assert len(active_strings) == 1 + len(
+        {catalog[catalog_id] for catalog_id in RUNTIME_CATALOG_IDS}
+    )
+    for catalog_id, strref in mapping.items():
+        assert active_strings[strref] == catalog[catalog_id]
+
+    innate_strrefs = [
+        int(line)
+        for line in (game.override / "bfbot_strrefs.txt")
+        .read_text(encoding="ascii")
+        .splitlines()
+        if line
+    ]
+    assert innate_strrefs == [mapping[catalog_id] for catalog_id in range(200, 208)]
+    return mapping
+
+
+def _active_buffbot_log_entries(game: "BuffBotGame") -> list[tuple[int, int]]:
+    active: list[tuple[int, int]] = []
+    for line in (game.root / "WeiDU.log").read_text(encoding="utf-8").splitlines():
+        if not line.startswith("~"):
+            continue
+        normalized = line.replace("\\", "/").casefold()
+        if "buffbot/setup-buffbot.tp2~" not in normalized:
+            continue
+        language_and_component = re.search(r"#(\d+)\s+#(\d+)", normalized)
+        assert language_and_component is not None, line
+        active.append(
+            (
+                int(language_and_component.group(1)),
+                int(language_and_component.group(2)),
+            )
+        )
+    return active
+
+
 def _assert_english_runtime_catalog_in_tlk(path: Path) -> None:
     strings = _read_tlk_strings(path)
     expected_values = {
@@ -711,6 +760,299 @@ def test_installer_localization_selects_one_tlk_and_writes_exact_sparse_runtime_
         installed = (game.override / relative).read_text(encoding="ascii")
         assert re.search(r"@\d+", installed) is None
         assert re.search(r"%[A-Za-z_][A-Za-z0-9_]*%", installed) is None
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    baseline = game.snapshot()
+    english_catalog, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+    chinese_catalog, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
+
+    fresh_english = game.install_many(
+        1,
+        0,
+        mod_language=0,
+        game_language="en_US",
+    )
+    english_transcript = _assert_installed(game, fresh_english)
+    assert english_transcript.count("SUCCESSFULLY INSTALLED") == 2
+    assert "NOT INSTALLED DUE TO ERRORS" not in english_transcript
+    assert "ERROR Installing" not in english_transcript
+    assert english_transcript.index(english_catalog[100]) < english_transcript.index(
+        english_catalog[111]
+    )
+    game.assert_luajit_state(game.expected_version)
+
+    after_english = game.snapshot()
+    assert after_english.key == baseline.key
+    assert after_english.bif == baseline.bif
+    assert after_english.root_tlk == baseline.root_tlk
+    assert after_english.lang_tlk != baseline.lang_tlk
+    assert after_english.schinese_tlk == baseline.schinese_tlk
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language="en_US",
+        catalog_directory="english",
+    )
+    english_map = (game.override / "bfbot_l10n.txt").read_bytes()
+    english_innate_map = (game.override / "bfbot_strrefs.txt").read_bytes()
+    english_payload = {
+        name: payload
+        for name, payload in after_english.override.items()
+        if name not in {"bfbot_l10n.txt", "bfbot_strrefs.txt"}
+    }
+    helper_state = (
+        after_english.loader_ini,
+        after_english.root_lua51,
+        after_english.root_provider,
+    )
+    helper_backup = _file_tree(game.root / "weidu_external/backup/buffbot/1")
+    assert helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 1), (0, 0)]
+
+    switch_to_chinese = game.run_args(
+        "--force-uninstall-list",
+        0,
+        "--force-install-list",
+        0,
+        mod_language=1,
+        game_language="zh_CN",
+    )
+    chinese_transcript = _assert_installed(game, switch_to_chinese)
+    assert chinese_transcript.count("SUCCESSFULLY REMOVED") == 1
+    assert chinese_transcript.count("SUCCESSFULLY INSTALLED") == 1
+    assert "NOT INSTALLED DUE TO ERRORS" not in chinese_transcript
+    assert "ERROR Installing" not in chinese_transcript
+    assert chinese_transcript.index("SUCCESSFULLY REMOVED") < chinese_transcript.rindex(
+        "SUCCESSFULLY INSTALLED"
+    )
+    assert chinese_catalog[111] in chinese_transcript
+
+    after_chinese = game.snapshot()
+    assert after_chinese.key == baseline.key
+    assert after_chinese.bif == baseline.bif
+    assert after_chinese.root_tlk == baseline.root_tlk
+    assert after_chinese.lang_tlk == after_english.lang_tlk
+    assert after_chinese.schinese_tlk != baseline.schinese_tlk
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language="zh_CN",
+        catalog_directory="schinese",
+    )
+    assert {
+        name: payload
+        for name, payload in after_chinese.override.items()
+        if name not in {"bfbot_l10n.txt", "bfbot_strrefs.txt"}
+    } == english_payload
+    assert (
+        after_chinese.loader_ini,
+        after_chinese.root_lua51,
+        after_chinese.root_provider,
+    ) == helper_state
+    assert _file_tree(game.root / "weidu_external/backup/buffbot/1") == helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 1), (1, 0)]
+
+    switch_back_to_english = game.run_args(
+        "--force-uninstall-list",
+        0,
+        "--force-install-list",
+        0,
+        mod_language=0,
+        game_language="en_US",
+    )
+    return_transcript = _assert_installed(game, switch_back_to_english)
+    assert return_transcript.count("SUCCESSFULLY REMOVED") == 1
+    assert return_transcript.count("SUCCESSFULLY INSTALLED") == 1
+    assert "NOT INSTALLED DUE TO ERRORS" not in return_transcript
+    assert "ERROR Installing" not in return_transcript
+    assert return_transcript.index("SUCCESSFULLY REMOVED") < return_transcript.rindex(
+        "SUCCESSFULLY INSTALLED"
+    )
+    assert english_catalog[111] in return_transcript
+
+    after_return = game.snapshot()
+    assert after_return.key == baseline.key
+    assert after_return.bif == baseline.bif
+    assert after_return.root_tlk == baseline.root_tlk
+    assert after_return.lang_tlk == after_english.lang_tlk
+    assert after_return.schinese_tlk == after_chinese.schinese_tlk
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language="en_US",
+        catalog_directory="english",
+    )
+    assert (game.override / "bfbot_l10n.txt").read_bytes() == english_map
+    assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map
+    assert after_return.override == after_english.override
+    assert (
+        after_return.loader_ini,
+        after_return.root_lua51,
+        after_return.root_provider,
+    ) == helper_state
+    assert _file_tree(game.root / "weidu_external/backup/buffbot/1") == helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 1), (0, 0)]
+
+
+@pytest.mark.parametrize("layout", ("v011", "v1"))
+def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership(
+    game_factory, layout: str
+) -> None:
+    game = game_factory(layout)
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaPatchMode=INTERNAL",
+                "LuaLibrary=lua52.dll",
+                "LuaVersionExternal=5.2",
+            )
+        )
+    )
+    baseline = game.snapshot()
+
+    game.replace_buffbot_tp2(RELEASED_V170_TP2)
+    _assert_installed(game, game.install(0))
+    _assert_installed(game, game.install(1))
+    game.replace_buffbot_tp2(ROOT / "buffbot/setup-buffbot.tp2")
+    _assert_installed(game, game.install_many(0, 1))
+
+    upgraded_english = game.snapshot()
+    assert _active_buffbot_log_entries(game) == [(0, 0), (0, 1)]
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language="en_US",
+        catalog_directory="english",
+    )
+    english_map = (game.override / "bfbot_l10n.txt").read_bytes()
+    english_innate_map = (game.override / "bfbot_strrefs.txt").read_bytes()
+    english_payload = {
+        name: payload
+        for name, payload in upgraded_english.override.items()
+        if name not in {"bfbot_l10n.txt", "bfbot_strrefs.txt"}
+    }
+    helper_state = (
+        upgraded_english.loader_ini,
+        upgraded_english.root_lua51,
+        upgraded_english.root_provider,
+    )
+    helper_backup = _file_tree(game.root / "weidu_external/backup/buffbot/1")
+    assert helper_backup
+
+    # Main-only forced reinstall is unsafe for the historical main->helper
+    # stack: WeiDU temporarily pops the helper and main's LuaJIT gate rejects
+    # before the helper is re-pushed. Selecting both installed components
+    # genuinely reinstalls them while preserving the historical log order.
+    switch_to_chinese = game.install_many(
+        0,
+        1,
+        mod_language=1,
+        game_language="zh_CN",
+    )
+    chinese_transcript = _assert_installed(game, switch_to_chinese)
+    assert chinese_transcript.count("SUCCESSFULLY REMOVED") == 2
+    assert chinese_transcript.count("SUCCESSFULLY INSTALLED") == 2
+    assert "NOT INSTALLED DUE TO ERRORS" not in chinese_transcript
+    assert "ERROR Installing" not in chinese_transcript
+    assert chinese_transcript.index("SUCCESSFULLY REMOVED") < chinese_transcript.rindex(
+        "SUCCESSFULLY INSTALLED"
+    )
+
+    after_chinese = game.snapshot()
+    assert after_chinese.key == baseline.key
+    assert after_chinese.bif == baseline.bif
+    assert after_chinese.root_tlk == baseline.root_tlk
+    assert after_chinese.lang_tlk == upgraded_english.lang_tlk
+    assert after_chinese.schinese_tlk != baseline.schinese_tlk
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language="zh_CN",
+        catalog_directory="schinese",
+    )
+    assert {
+        name: payload
+        for name, payload in after_chinese.override.items()
+        if name not in {"bfbot_l10n.txt", "bfbot_strrefs.txt"}
+    } == english_payload
+    assert (
+        after_chinese.loader_ini,
+        after_chinese.root_lua51,
+        after_chinese.root_provider,
+    ) == helper_state
+    chinese_helper_backup = _file_tree(
+        game.root / "weidu_external/backup/buffbot/1"
+    )
+    assert chinese_helper_backup.keys() == helper_backup.keys()
+    assert {
+        name: payload
+        for name, payload in chinese_helper_backup.items()
+        if name != "tlkpath.1"
+    } == {
+        name: payload
+        for name, payload in helper_backup.items()
+        if name != "tlkpath.1"
+    }
+    assert b"zh_cn" in chinese_helper_backup["tlkpath.1"].lower()
+    assert _active_buffbot_log_entries(game) == [(1, 0), (1, 1)]
+
+    switch_back_to_english = game.install_many(
+        0,
+        1,
+        mod_language=0,
+        game_language="en_US",
+    )
+    return_transcript = _assert_installed(game, switch_back_to_english)
+    assert return_transcript.count("SUCCESSFULLY REMOVED") == 2
+    assert return_transcript.count("SUCCESSFULLY INSTALLED") == 2
+    assert "NOT INSTALLED DUE TO ERRORS" not in return_transcript
+    assert "ERROR Installing" not in return_transcript
+
+    after_return = game.snapshot()
+    assert after_return.lang_tlk == upgraded_english.lang_tlk
+    assert after_return.schinese_tlk == after_chinese.schinese_tlk
+    _assert_runtime_map_dereferences_selected_catalog(
+        game,
+        game_language="en_US",
+        catalog_directory="english",
+    )
+    assert (game.override / "bfbot_l10n.txt").read_bytes() == english_map
+    assert (game.override / "bfbot_strrefs.txt").read_bytes() == english_innate_map
+    assert after_return.override == upgraded_english.override
+    assert (
+        after_return.loader_ini,
+        after_return.root_lua51,
+        after_return.root_provider,
+    ) == helper_state
+    assert _file_tree(game.root / "weidu_external/backup/buffbot/1") == helper_backup
+    assert _active_buffbot_log_entries(game) == [(0, 0), (0, 1)]
+
+    main_uninstall = game.uninstall(0)
+    assert main_uninstall.returncode == 0, game.transcript(main_uninstall)
+    after_main_uninstall = game.snapshot()
+    assert (
+        after_main_uninstall.loader_ini,
+        after_main_uninstall.root_lua51,
+        after_main_uninstall.root_provider,
+    ) == helper_state
+    assert _active_buffbot_log_entries(game) == [(0, 1)]
+    game.assert_no_main_payload()
+    helper_uninstall = game.uninstall(1)
+    assert helper_uninstall.returncode == 0, game.transcript(helper_uninstall)
+    after_uninstall = game.snapshot()
+    assert after_uninstall.override == baseline.override
+    assert after_uninstall.loader_ini == baseline.loader_ini
+    assert after_uninstall.root_lua51 == baseline.root_lua51
+    assert after_uninstall.root_provider == baseline.root_provider
 
 
 def test_helper_and_main_share_one_exact_luajit_state_detector() -> None:

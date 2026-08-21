@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **BuffBot is fully localizable and ships complete English and Simplified Chinese catalogs.** The selected language now covers the WeiDU installer, generated F12 innate names, every player-facing panel and runtime message, EEex Options, and default names for genuinely new presets. Existing saved, imported, inherited, and user-renamed preset names remain unchanged.
+- **Runtime text is resolved safely through the selected game TLK.** WeiDU writes an ASCII-only numeric catalog-ID-to-strref map, while Lua fetches and caches those strings, expands named placeholders without evaluating translated content, and falls back to checked-in English when a raw development deploy has no generated map.
+- **Localization-aware release packaging and contribution guidance.** Release archives retain complete nested language catalogs, the reusable builder is covered by an extracted-archive Chinese install, and the README welcomes complete language PRs with exact ID/placeholder validation and translator credit. The Simplified Chinese catalog builds on [robovoid's PR #50](https://github.com/Chrizhermann/bg-eeex-buffbot/pull/50).
+
+### Compatibility and safety
+- **Project Image queue safety no longer depends on an English spell name or vanilla resref.** BuffBot identifies Project Image structurally from opcode 236 image type 2, including bounded opcode-146 child spells, while leaving Mislead and Simulacrum distinct.
+- **Persistence/UI failure handling uses stable internal reason codes with localized display text.** Character names containing no ASCII filename characters now receive collision-safe `BuffBot-PlayerN.lua` export names instead of colliding as `Unknown.lua`.
+- **Language switching preserves installer ownership and payload state.** Current helper-first installs switch the main component in one forced uninstall/install pass. Upgraded v1.7.0 main-first stacks safely switch by selecting both installed components together, as documented in the README.
+
+### Testing
+- The full automated suite passes **378 tests**. Real WeiDU 249 synthetic-game coverage exercises English and Simplified Chinese across EEex v0.11 and v1, exact TLK/map dereferencing, inactive/root TLK byte stability, fresh helper/main installation, English-to-Chinese-to-English switching without duplicate TLK growth, the released-v1.7.0 upgrade lifecycle, helper backup ownership/restoration, and installation from the packaged Chinese archive.
+- Live Simplified Chinese CJK font/glyph/layout and Copy Copy acceptance are still pending and are not claimed here, including real runtime Project Image safety, non-ASCII export filenames, and save/reload. BG1EE, EET, alternate resolutions/fonts, the Project Infinity frontend, and WeiDU versions other than 249 also remain unvalidated.
+
 ## v1.7.4-alpha (2026-08-21)
 
 ### Fixed
