@@ -21,6 +21,7 @@ EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
 SEMANTIC_COMMENT_RE = re.compile(r"^//\s*([a-z][a-z0-9_.]*)\s*$")
 NAMED_PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 WEIDU_SENTINEL_RE = re.compile(r"%([A-Za-z_][A-Za-z0-9_]*)%")
+WEIDU_PLACEHOLDER_CONTRACT = {108: {"lua_version"}}
 
 
 # Catalog IDs are deliberately grouped so the later Lua registry and WeiDU
@@ -271,6 +272,21 @@ def validate_named_placeholders(value: str) -> None:
         raise ValueError("malformed named placeholder")
 
 
+def weidu_placeholders(value: str) -> set[str]:
+    return set(WEIDU_SENTINEL_RE.findall(value))
+
+
+def validate_weidu_placeholder_contract(catalog: dict[int, str]) -> None:
+    for tra_id, value in catalog.items():
+        expected = WEIDU_PLACEHOLDER_CONTRACT.get(tra_id, set())
+        actual = weidu_placeholders(value)
+        if actual != expected:
+            raise ValueError(
+                f"WeiDU placeholder mismatch at @{tra_id}: "
+                f"expected {sorted(expected)}, got {sorted(actual)}"
+            )
+
+
 def shipped_catalogs() -> list[Path]:
     return sorted(LANG_ROOT.glob("*/setup.tra"))
 
@@ -388,31 +404,33 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
             assert named_placeholders(catalog[tra_id]) == named_placeholders(
                 english[tra_id]
             ), f"named placeholder mismatch in {catalog_path} @{tra_id}"
+            assert weidu_placeholders(catalog[tra_id]) == weidu_placeholders(
+                english[tra_id]
+            ), f"WeiDU placeholder mismatch in {catalog_path} @{tra_id}"
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    (
+        "Required LuaVersionExternal",
+        "Required LuaVersionExternal: %runtime_version%",
+    ),
+    ids=("omitted", "renamed"),
+)
+def test_weidu_placeholder_contract_rejects_omitted_or_renamed_required_token(
+    bad_value: str,
+):
+    with pytest.raises(ValueError, match=r"WeiDU placeholder mismatch at @108"):
+        validate_weidu_placeholder_contract({108: bad_value})
 
 
 def test_catalog_values_contain_no_legacy_or_unresolved_sentinels():
     for catalog_path in shipped_catalogs():
-        catalog, semantics = parse_tra(catalog_path)
+        catalog, _ = parse_tra(catalog_path)
+        validate_weidu_placeholder_contract(catalog)
         for tra_id, value in catalog.items():
             assert "BFBOTUITRA_" not in value, f"legacy marker in {catalog_path} @{tra_id}"
             assert not re.search(r"@\d+", value), f"raw TRA ref in {catalog_path} @{tra_id}"
-
-            sentinels = set(WEIDU_SENTINEL_RE.findall(value))
-            allowed = (
-                {"lua_version"}
-                if semantics[tra_id] == "installer.luajit.required_version"
-                else set()
-            )
-            missing = allowed - sentinels
-            unexpected = sentinels - allowed
-            assert not missing, (
-                f"missing required WeiDU sentinel(s) in {catalog_path} @{tra_id}: "
-                f"{sorted(missing)}"
-            )
-            assert not unexpected, (
-                f"unexpected WeiDU sentinel(s) in {catalog_path} @{tra_id}: "
-                f"{sorted(unexpected)}"
-            )
 
 
 @pytest.mark.parametrize(
