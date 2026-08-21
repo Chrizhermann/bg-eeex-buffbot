@@ -25,6 +25,18 @@ class _OpaqueUserData:
     pass
 
 
+def _execute_with_handled_lua_errors(runtime: LuaRuntime, source: str):
+    """Hide Windows' faulthandler noise for Lua errors contained by pcall."""
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        return runtime.execute(source)
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+
 @pytest.fixture
 def lua() -> LuaRuntime:
     runtime = LuaRuntime(unpack_returned_tuples=True)
@@ -1062,6 +1074,494 @@ def test_external_export_import_round_trip_preserves_valid_repeats(
     assert facts["skipped"] == 0
     assert facts["partyRepeat"] == 4
     assert facts["summonRepeat"] == 5
+
+
+def test_localized_defaults_only_name_new_or_missing_presets(
+    lua: LuaRuntime,
+    tmp_path: Path,
+) -> None:
+    import_path = tmp_path / "localized-import.lua"
+    import_path.write_text(
+        """
+BfBot._import = {
+    v = 10,
+    ap = 1,
+    presets = {
+        [1] = { name = "Imported Personal Setup", cat = "custom", qc = 0, spells = {} },
+        [2] = { name = "导入的预设", cat = "custom", qc = 0, spells = {} },
+    },
+    opts = { skip = 1 },
+    ovr = {},
+    summons = {},
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    lua.globals().localized_presets_dir = tmp_path.as_posix()
+
+    facts = lua.execute(
+        """
+        local selectedLanguage = "zh"
+        BfBot.L10N = {
+            Get = function(key)
+                if selectedLanguage == "zh" then
+                    if key == "default.preset.long" then return "长期增益" end
+                    if key == "default.preset.short" then return "短期增益" end
+                end
+                if key == "default.preset.long" then return "Long Buffs" end
+                if key == "default.preset.short" then return "Short Buffs" end
+                error("unexpected Get key: " .. tostring(key))
+            end,
+            Format = function(key, values)
+                assert(key == "default.preset.indexed")
+                if selectedLanguage == "zh" then
+                    return "预设 " .. tostring(values.index)
+                end
+                return "Preset " .. tostring(values.index)
+            end,
+        }
+
+        local created = BfBot.Persist.GetDefaultConfig()
+        local existing = BfBot.Persist.GetDefaultConfig()
+        existing.presets[1].name = "Existing Long"
+        existing.presets[2].name = "用户短预设"
+
+        local repaired = {
+            v = 10, ap = 4,
+            presets = { [4] = { cat = "custom", qc = 0, spells = {} } },
+            opts = { skip = 1 }, ovr = {}, summons = {},
+        }
+        BfBot.Persist._ValidateConfig(existing)
+        BfBot.Persist._ValidateConfig(repaired)
+
+        local protagonist = { id = "protagonist" }
+        local companion = { id = "companion" }
+        local protagonistConfig = BfBot.Persist.GetDefaultConfig()
+        protagonistConfig.presets[1].name = "Inherited Exact Name"
+        BfBot.Persist._GetProtagonist = function() return protagonist end
+        EEex_Sprite_GetCharacterIndex = function(sprite)
+            assert(sprite == companion)
+            return 1
+        end
+        EEex_Sprite_GetInPortrait = function() return nil end
+        EEex_GetUDAux = function(sprite)
+            assert(sprite == protagonist)
+            return { BB = protagonistConfig }
+        end
+        local inherited = BfBot.Persist._GetInheritedPresetStructure(companion)
+
+        local importedAux = {}
+        EEex_GetUDAux = function(sprite)
+            assert(sprite == companion)
+            return importedAux
+        end
+        BfBot.Persist._PRESETS_DIR = localized_presets_dir
+        BfBot.Scan.GetCastableSpells = function() return {} end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Class.SetOverride = function() end
+        local importOk = BfBot.Persist.ImportConfig(
+            companion, "localized-import.lua")
+        BfBot.Persist.GetConfig = function() return importedAux.BB end
+        BfBot.Persist.RenamePreset(companion, 1, "User Renamed")
+
+        selectedLanguage = "en"
+        BfBot.Persist._ValidateConfig(created)
+        BfBot.Persist._ValidateConfig(existing)
+        BfBot.Persist._ValidateConfig(repaired)
+        BfBot.Persist._ValidateConfig(importedAux.BB)
+
+        return {
+            createdLong = created.presets[1].name,
+            createdShort = created.presets[2].name,
+            existingLong = existing.presets[1].name,
+            existingShort = existing.presets[2].name,
+            repairedMissing = repaired.presets[4].name,
+            inherited = inherited.presets[1].name,
+            importOk = importOk,
+            renamed = importedAux.BB.presets[1].name,
+            importedChinese = importedAux.BB.presets[2].name,
+        }
+        """
+    )
+
+    assert facts["createdLong"] == "长期增益"
+    assert facts["createdShort"] == "短期增益"
+    assert facts["existingLong"] == "Existing Long"
+    assert facts["existingShort"] == "用户短预设"
+    assert facts["repairedMissing"] == "预设 4"
+    assert facts["inherited"] == "Inherited Exact Name"
+    assert facts["importOk"]
+    assert facts["renamed"] == "User Renamed"
+    assert facts["importedChinese"] == "导入的预设"
+
+
+def test_sparse_preset_creation_localizes_once_without_resync(
+    lua: LuaRuntime,
+) -> None:
+    facts = lua.execute(
+        """
+        local selectedLanguage = "zh"
+        BfBot.L10N = {
+            Get = function(key)
+                if key == "default.preset.long" then return "长期增益" end
+                if key == "default.preset.short" then return "短期增益" end
+                error("unexpected Get key: " .. tostring(key))
+            end,
+            Format = function(key, values)
+                assert(key == "default.preset.indexed")
+                local prefix = selectedLanguage == "zh" and "预设 " or "Preset "
+                return prefix .. tostring(values.index)
+            end,
+        }
+
+        local singleConfig = BfBot.Persist.GetDefaultConfig()
+        EEex_Resource_Demand = function() return nil end
+        BfBot.Persist.GetConfig = function() return singleConfig end
+        local singleIdx = BfBot.Persist.CreatePreset("single", nil)
+
+        local partyConfigs = {
+            A = singleConfig,
+            B = BfBot.Persist.GetDefaultConfig(),
+        }
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 0 then return "A" end
+            if slot == 1 then return "B" end
+            return nil
+        end
+        BfBot.Persist.GetConfig = function(sprite) return partyConfigs[sprite] end
+        local partyIdx = BfBot.Persist.CreatePresetAll(nil)
+
+        selectedLanguage = "en"
+        BfBot.Persist._ValidateConfig(singleConfig)
+        BfBot.Persist._ValidateConfig(partyConfigs.B)
+        return {
+            singleIdx = singleIdx,
+            singleName = singleConfig.presets[singleIdx].name,
+            partyIdx = partyIdx,
+            partyAName = partyConfigs.A.presets[partyIdx].name,
+            partyBName = partyConfigs.B.presets[partyIdx].name,
+        }
+        """
+    )
+
+    assert facts["singleIdx"] == 3
+    assert facts["singleName"] == "预设 3"
+    assert facts["partyIdx"] == 4
+    assert facts["partyAName"] == "预设 4"
+    assert facts["partyBName"] == "预设 4"
+
+
+def test_export_import_failures_return_stable_codes_and_details(
+    lua: LuaRuntime,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "empty.lua").write_text("", encoding="utf-8")
+    (tmp_path / "parse.lua").write_text("this is not Lua", encoding="utf-8")
+    (tmp_path / "exec.lua").write_text("error('synthetic boom')", encoding="utf-8")
+    (tmp_path / "invalid.lua").write_text("BfBot._import = 17", encoding="utf-8")
+    lua.globals().failure_presets_dir = tmp_path.as_posix()
+
+    facts = _execute_with_handled_lua_errors(
+        lua,
+        """
+        BfBot._noIO = true
+        local _, exportNoIo, exportNoIoDetail =
+            BfBot.Persist.ExportConfig("sprite")
+        local _, importNoIo, importNoIoDetail =
+            BfBot.Persist.ImportConfig("sprite", "x.lua")
+
+        BfBot._noIO = false
+        BfBot.Persist._PRESETS_DIR = failure_presets_dir
+        BfBot.Persist._EnsurePresetsDir = function() end
+        local _, exportNoSprite, exportNoSpriteDetail =
+            BfBot.Persist.ExportConfig(nil)
+        BfBot.Persist.GetConfig = function() return nil end
+        local _, exportNoConfig, exportNoConfigDetail =
+            BfBot.Persist.ExportConfig("sprite")
+        BfBot.Persist.GetConfig = function()
+            return BfBot.Persist.GetDefaultConfig()
+        end
+        BfBot._GetName = function() return "Ascii Name" end
+
+        local realOpen = io.open
+        io.open = function(_, mode)
+            assert(mode == "w")
+            return nil, "synthetic denied"
+        end
+        local _, exportOpen, exportOpenDetail =
+            BfBot.Persist.ExportConfig("sprite")
+        io.open = realOpen
+
+        local _, importNoSprite, importNoSpriteDetail =
+            BfBot.Persist.ImportConfig(nil, "x.lua")
+        local _, importNoFilename, importNoFilenameDetail =
+            BfBot.Persist.ImportConfig("sprite", nil)
+        local _, importInvalidFilename, importInvalidFilenameDetail =
+            BfBot.Persist.ImportConfig("sprite", "../x.lua")
+        local _, importOpen, importOpenDetail =
+            BfBot.Persist.ImportConfig("sprite", "missing.lua")
+        local _, importEmpty, importEmptyDetail =
+            BfBot.Persist.ImportConfig("sprite", "empty.lua")
+        local _, importParse, importParseDetail =
+            BfBot.Persist.ImportConfig("sprite", "parse.lua")
+        local _, importExec, importExecDetail =
+            BfBot.Persist.ImportConfig("sprite", "exec.lua")
+        local _, importInvalid, importInvalidDetail =
+            BfBot.Persist.ImportConfig("sprite", "invalid.lua")
+
+        return {
+            exportNoIo = exportNoIo,
+            exportNoIoStructured = type(exportNoIoDetail) == "table",
+            exportNoSprite = exportNoSprite,
+            exportNoSpriteStructured = type(exportNoSpriteDetail) == "table",
+            exportNoConfig = exportNoConfig,
+            exportNoConfigStructured = type(exportNoConfigDetail) == "table",
+            exportOpen = exportOpen,
+            exportOpenError = exportOpenDetail and exportOpenDetail.error,
+            importNoIo = importNoIo,
+            importNoIoStructured = type(importNoIoDetail) == "table",
+            importNoSprite = importNoSprite,
+            importNoSpriteStructured = type(importNoSpriteDetail) == "table",
+            importNoFilename = importNoFilename,
+            importNoFilenameStructured = type(importNoFilenameDetail) == "table",
+            importInvalidFilename = importInvalidFilename,
+            importInvalidFilenameStructured = type(importInvalidFilenameDetail) == "table",
+            importOpen = importOpen,
+            importOpenError = importOpenDetail and importOpenDetail.error,
+            importEmpty = importEmpty,
+            importEmptyStructured = type(importEmptyDetail) == "table",
+            importParse = importParse,
+            importParseError = importParseDetail and importParseDetail.error,
+            importExec = importExec,
+            importExecError = importExecDetail and importExecDetail.error,
+            importInvalid = importInvalid,
+            importInvalidStructured = type(importInvalidDetail) == "table",
+        }
+        """
+    )
+
+    assert facts["exportNoIo"] == "reason.export.luajit_required"
+    assert facts["exportNoIoStructured"]
+    assert facts["exportNoSprite"] == "reason.export.no_sprite"
+    assert facts["exportNoSpriteStructured"]
+    assert facts["exportNoConfig"] == "reason.export.no_config"
+    assert facts["exportNoConfigStructured"]
+    assert facts["exportOpen"] == "reason.export.cannot_open_file"
+    assert "synthetic denied" in facts["exportOpenError"]
+    assert facts["importNoIo"] == "reason.import.luajit_required"
+    assert facts["importNoIoStructured"]
+    assert facts["importNoSprite"] == "reason.import.no_sprite"
+    assert facts["importNoSpriteStructured"]
+    assert facts["importNoFilename"] == "reason.import.no_filename"
+    assert facts["importNoFilenameStructured"]
+    assert facts["importInvalidFilename"] == "reason.import.invalid_filename"
+    assert facts["importInvalidFilenameStructured"]
+    assert facts["importOpen"] == "reason.import.cannot_open_file"
+    assert facts["importOpenError"]
+    assert facts["importEmpty"] == "reason.import.empty_file"
+    assert facts["importEmptyStructured"]
+    assert facts["importParse"] == "reason.import.parse_error"
+    assert facts["importParseError"]
+    assert facts["importExec"] == "reason.import.exec_error"
+    assert "synthetic boom" in facts["importExecError"]
+    assert facts["importInvalid"] == "reason.import.invalid_data"
+    assert facts["importInvalidStructured"]
+
+
+def test_queue_failures_return_stable_codes_and_placeholder_details(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = _execute_with_handled_lua_errors(
+        exec_lua,
+        """
+        local _, invalidSummon, invalidSummonDetail =
+            BfBot.Persist.BuildQueueForSummon(nil, 3)
+
+        BfBot.Persist.PeekSummonPreset = function() return nil end
+        local _, noSummonPreset, noSummonPresetDetail =
+            BfBot.Persist.BuildQueueForSummon({
+                identity = "summon:test", oid = 77, name = "Skeleton",
+            }, 3)
+
+        local summonEntry = {
+            identity = "summon:test", oid = 77, name = "Skeleton",
+        }
+        BfBot.Persist.PeekSummonPreset = function()
+            return { qc = 0, spells = {
+                BUFF = { on = 1, tgt = "s", pri = 1 },
+            } }
+        end
+        local savedExec = BfBot.Exec
+        BfBot.Exec = nil
+        local _, noResolver, noResolverDetail =
+            BfBot.Persist.BuildQueueForSummon(summonEntry, 3)
+        BfBot.Exec = { _ResolveCaster = function() return nil end }
+        local _, summonGone, summonGoneDetail =
+            BfBot.Persist.BuildQueueForSummon(summonEntry, 3)
+        local summonSprite = { name = "Skeleton", m_id = 77 }
+        BfBot.Exec._ResolveCaster = function() return summonSprite end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function()
+            error("synthetic summon scan failure")
+        end
+        local _, summonScan, summonScanDetail =
+            BfBot.Persist.BuildQueueForSummon(summonEntry, 3)
+        BfBot.Scan.GetCastableSpells = function() return {} end
+        local _, noSummonSpells, noSummonSpellsDetail =
+            BfBot.Persist.BuildQueueForSummon(summonEntry, 3)
+        BfBot.Exec = savedExec
+
+        local _, noPresetIndex, noPresetIndexDetail =
+            BfBot.Persist.BuildQueueFromPreset(nil)
+        local _, missingCharacterArgs, missingCharacterArgsDetail =
+            BfBot.Persist.BuildQueueForCharacter(nil, 3)
+
+        EEex_Sprite_GetInPortrait = function() return nil end
+        local _, noSprite, noSpriteDetail =
+            BfBot.Persist.BuildQueueForCharacter(2, 3)
+
+        local sprite = { name = "Remote Mage", m_id = 42 }
+        EEex_Sprite_GetInPortrait = function(slot)
+            if slot == 2 then return sprite end
+            return nil
+        end
+        BfBot.Mp.IsLocallyControlled = function() return false end
+        local _, remote, remoteDetail =
+            BfBot.Persist.BuildQueueForCharacter(2, 3)
+
+        BfBot.Mp.IsLocallyControlled = function() return true end
+        BfBot.Persist.GetConfig = function() return nil end
+        local _, noConfig, noConfigDetail =
+            BfBot.Persist.BuildQueueForCharacter(2, 3)
+
+        BfBot.Persist.GetConfig = function()
+            return { presets = {} }
+        end
+        local _, noCharacterPreset, noCharacterPresetDetail =
+            BfBot.Persist.BuildQueueForCharacter(2, 3)
+
+        BfBot.Persist.GetConfig = function()
+            return { presets = { [3] = { spells = {} } } }
+        end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function()
+            error("synthetic scan failure")
+        end
+        local _, scanFailed, scanFailedDetail =
+            BfBot.Persist.BuildQueueForCharacter(2, 3)
+
+        return {
+            invalidSummon = invalidSummon,
+            invalidSummonStructured = type(invalidSummonDetail) == "table",
+            noSummonPreset = noSummonPreset,
+            noSummonPresetIndex = noSummonPresetDetail and noSummonPresetDetail.index,
+            noSummonPresetIdentity = noSummonPresetDetail and noSummonPresetDetail.identity,
+            noResolver = noResolver,
+            noResolverStructured = type(noResolverDetail) == "table",
+            summonGone = summonGone,
+            summonGoneName = summonGoneDetail and summonGoneDetail.name,
+            summonGoneOid = summonGoneDetail and summonGoneDetail.oid,
+            summonScan = summonScan,
+            summonScanName = summonScanDetail and summonScanDetail.name,
+            summonScanError = summonScanDetail and summonScanDetail.error,
+            noSummonSpells = noSummonSpells,
+            noSummonSpellsIndex = noSummonSpellsDetail and noSummonSpellsDetail.index,
+            noSummonSpellsIdentity = noSummonSpellsDetail and noSummonSpellsDetail.identity,
+            noPresetIndex = noPresetIndex,
+            noPresetIndexStructured = type(noPresetIndexDetail) == "table",
+            missingCharacterArgs = missingCharacterArgs,
+            missingCharacterArgsStructured = type(missingCharacterArgsDetail) == "table",
+            noSprite = noSprite,
+            noSpriteSlot = noSpriteDetail and noSpriteDetail.slot,
+            remote = remote,
+            remoteSlot = remoteDetail and remoteDetail.slot,
+            remoteName = remoteDetail and remoteDetail.name,
+            noConfig = noConfig,
+            noConfigSlot = noConfigDetail and noConfigDetail.slot,
+            noCharacterPreset = noCharacterPreset,
+            noCharacterPresetIndex = noCharacterPresetDetail and noCharacterPresetDetail.preset,
+            noCharacterPresetSlot = noCharacterPresetDetail and noCharacterPresetDetail.slot,
+            scanFailed = scanFailed,
+            scanFailedSlot = scanFailedDetail and scanFailedDetail.slot,
+            scanFailedError = scanFailedDetail and scanFailedDetail.error,
+        }
+        """
+    )
+
+    assert facts["invalidSummon"] == "reason.queue.invalid_summon"
+    assert facts["invalidSummonStructured"]
+    assert facts["noSummonPreset"] == "reason.queue.no_summon_preset"
+    assert facts["noSummonPresetIndex"] == 3
+    assert facts["noSummonPresetIdentity"] == "summon:test"
+    assert facts["noResolver"] == "reason.queue.caster_resolver_unavailable"
+    assert facts["noResolverStructured"]
+    assert facts["summonGone"] == "reason.queue.summon_gone"
+    assert facts["summonGoneName"] == "Skeleton"
+    assert facts["summonGoneOid"] == 77
+    assert facts["summonScan"] == "reason.queue.summon_scan_failed"
+    assert facts["summonScanName"] == "Skeleton"
+    assert "synthetic summon scan failure" in facts["summonScanError"]
+    assert facts["noSummonSpells"] == "reason.queue.no_castable_summon_spells"
+    assert facts["noSummonSpellsIndex"] == 3
+    assert facts["noSummonSpellsIdentity"] == "summon:test"
+    assert facts["noPresetIndex"] == "reason.queue.no_preset_index"
+    assert facts["noPresetIndexStructured"]
+    assert facts["missingCharacterArgs"] == "reason.queue.missing_slot_or_preset"
+    assert facts["missingCharacterArgsStructured"]
+    assert facts["noSprite"] == "reason.queue.no_sprite_in_slot"
+    assert facts["noSpriteSlot"] == 2
+    assert facts["remote"] == "reason.queue.not_locally_controlled"
+    assert facts["remoteSlot"] == 2
+    assert facts["remoteName"] == "Remote Mage"
+    assert facts["noConfig"] == "reason.queue.no_config_for_slot"
+    assert facts["noConfigSlot"] == 2
+    assert facts["noCharacterPreset"] == "reason.queue.no_preset_for_slot"
+    assert facts["noCharacterPresetIndex"] == 3
+    assert facts["noCharacterPresetSlot"] == 2
+    assert facts["scanFailed"] == "reason.queue.scan_failed_for_slot"
+    assert facts["scanFailedSlot"] == 2
+    assert "synthetic scan failure" in facts["scanFailedError"]
+
+
+def test_non_ascii_export_names_use_distinct_join_order_fallbacks(
+    lua: LuaRuntime,
+    tmp_path: Path,
+) -> None:
+    lua.globals().export_presets_dir = tmp_path.as_posix()
+    facts = lua.execute(
+        """
+        local sprites = {
+            { name = "阿莉娜", index = 0 },
+            { name = "梅丽珊", index = 1 },
+            { name = "Ascii Name", index = 2 },
+        }
+        local config = BfBot.Persist.GetDefaultConfig()
+        BfBot.Persist.GetConfig = function() return config end
+        BfBot.Persist._PRESETS_DIR = export_presets_dir
+        BfBot.Persist._EnsurePresetsDir = function() end
+        BfBot._GetName = function(sprite) return sprite.name end
+        EEex_Sprite_GetCharacterIndex = function(sprite) return sprite.index end
+
+        local okA, nameA = BfBot.Persist.ExportConfig(sprites[1])
+        local okB, nameB = BfBot.Persist.ExportConfig(sprites[2])
+        local okAscii, nameAscii = BfBot.Persist.ExportConfig(sprites[3])
+        return {
+            okA = okA, nameA = nameA,
+            okB = okB, nameB = nameB,
+            okAscii = okAscii, nameAscii = nameAscii,
+        }
+        """
+    )
+
+    assert facts["okA"]
+    assert facts["nameA"] == "BuffBot-Player1"
+    assert facts["okB"]
+    assert facts["nameB"] == "BuffBot-Player2"
+    assert facts["okAscii"]
+    assert facts["nameAscii"] == "AsciiName"
+    assert (tmp_path / "BuffBot-Player1.lua").is_file()
+    assert (tmp_path / "BuffBot-Player2.lua").is_file()
+    assert not (tmp_path / "Unknown.lua").exists()
 
 
 def test_create_preset_and_create_preset_all_initialize_repeat(

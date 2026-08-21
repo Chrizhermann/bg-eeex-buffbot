@@ -15,6 +15,7 @@ LOC_PATH = ROOT / "buffbot" / "BfBotLoc.lua"
 MAIN_PATH = ROOT / "buffbot" / "M_BfBot.lua"
 DEPLOY_PATH = ROOT / "tools" / "deploy.sh"
 TP2_PATH = ROOT / "buffbot" / "setup-buffbot.tp2"
+PERSIST_PATH = ROOT / "buffbot" / "BfBotPer.lua"
 
 ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~([^~]*)~\s*$")
 EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
@@ -644,6 +645,18 @@ def test_runtime_module_compiles_under_luajit21():
 
     chunk, error = compile_chunk(localization_source())
     assert chunk is not None, error
+
+
+def test_persistence_public_failures_use_catalog_reason_codes():
+    source = PERSIST_PATH.read_text(encoding="utf-8")
+    returned_failure_codes = set(
+        re.findall(r'return\s+(?:false|nil),\s*"([^"]+)"', source)
+    )
+    expected_failure_codes = {
+        CATALOG_SCHEMA[tra_id] for tra_id in range(523, 552)
+    }
+
+    assert returned_failure_codes == expected_failure_codes
 
 
 def test_bootstrap_loads_core_then_localization_before_all_consumers():

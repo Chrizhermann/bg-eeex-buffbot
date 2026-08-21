@@ -11,6 +11,29 @@ BfBot.Persist._SCHEMA_VERSION = 10
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
+local function _LocalizedDefault(key, fallback)
+    local l10n = BfBot.L10N
+    if l10n and type(l10n.Get) == "function" then
+        local ok, value = pcall(l10n.Get, key)
+        if ok and type(value) == "string" and value ~= "" then
+            return value
+        end
+    end
+    return fallback
+end
+
+local function _LocalizedIndexedPreset(index)
+    local l10n = BfBot.L10N
+    if l10n and type(l10n.Format) == "function" then
+        local ok, value = pcall(l10n.Format, "default.preset.indexed",
+            { index = index })
+        if ok and type(value) == "string" and value ~= "" then
+            return value
+        end
+    end
+    return "Preset " .. tostring(index)
+end
+
 -- INI preference defaults (cross-save, stored in baldur.ini)
 BfBot.Persist._INI_DEFAULTS = {
     LongThreshold = 300,  -- seconds (5 turns) — divides "long" from "short"
@@ -38,8 +61,10 @@ function BfBot.Persist.GetDefaultConfig()
         v  = BfBot.Persist._SCHEMA_VERSION,
         ap = 1,
         presets = {
-            [1] = { name = "Long Buffs",  cat = "long",  qc = 0, spells = {} },
-            [2] = { name = "Short Buffs", cat = "short", qc = 0, spells = {} },
+            [1] = { name = _LocalizedDefault("default.preset.long", "Long Buffs"),
+                cat = "long", qc = 0, spells = {} },
+            [2] = { name = _LocalizedDefault("default.preset.short", "Short Buffs"),
+                cat = "short", qc = 0, spells = {} },
         },
         opts = { skip = 1 },
         ovr  = {},
@@ -119,7 +144,7 @@ function BfBot.Persist._GetInheritedPresetStructure(sprite)
         if type(source) == "table" then
             presets[i] = {
                 name = type(source.name) == "string"
-                    and source.name or ("Preset " .. i),
+                    and source.name or _LocalizedIndexedPreset(i),
                 cat = type(source.cat) == "string" and source.cat or "custom",
                 qc = 0,
                 spells = {},
@@ -257,8 +282,10 @@ function BfBot.Persist._ValidateConfig(config)
     -- Presets
     if type(config.presets) ~= "table" then
         config.presets = {
-            [1] = { name = "Long Buffs",  cat = "long",  spells = {} },
-            [2] = { name = "Short Buffs", cat = "short", spells = {} },
+            [1] = { name = _LocalizedDefault("default.preset.long", "Long Buffs"),
+                cat = "long", spells = {} },
+            [2] = { name = _LocalizedDefault("default.preset.short", "Short Buffs"),
+                cat = "short", spells = {} },
         }
     end
 
@@ -273,9 +300,13 @@ function BfBot.Persist._ValidateConfig(config)
     -- Validate each preset
     for idx, preset in pairs(config.presets) do
         if type(preset) ~= "table" then
-            config.presets[idx] = { name = "Preset " .. idx, cat = "custom", spells = {} }
+            config.presets[idx] = {
+                name = _LocalizedIndexedPreset(idx), cat = "custom", spells = {},
+            }
         else
-            if type(preset.name) ~= "string" then preset.name = "Preset " .. idx end
+            if type(preset.name) ~= "string" then
+                preset.name = _LocalizedIndexedPreset(idx)
+            end
             if type(preset.cat) ~= "string" then preset.cat = "custom" end
             if type(preset.qc) ~= "number" or preset.qc < 0 or preset.qc > 2 then
                 preset.qc = 0
@@ -1296,19 +1327,41 @@ end
 
 --- Export a character's full config to a Lua file in the presets directory.
 -- @param sprite  character sprite
--- @return true, safeName on success; false, errorMsg on failure
+-- @return true, safeName on success; false, reasonCode, detail on failure
 function BfBot.Persist.ExportConfig(sprite)
-    if BfBot._noIO then return false, "LuaJIT required for export" end
-    if not sprite then return false, "no sprite" end
+    if BfBot._noIO then
+        return false, "reason.export.luajit_required", {}
+    end
+    if not sprite then return false, "reason.export.no_sprite", {} end
 
     local config = BfBot.Persist.GetConfig(sprite)
-    if not config then return false, "no config" end
+    if not config then return false, "reason.export.no_config", {} end
 
     -- Get character name and sanitize for filename
     local rawName = BfBot._GetName(sprite)
-    if not rawName or rawName == "?" then rawName = "Unknown" end
+    if type(rawName) ~= "string" then rawName = tostring(rawName or "?") end
     local safeName = rawName:gsub("[^%w_]", "")
-    if safeName == "" then safeName = "Unknown" end
+    if safeName == "" then
+        local indexOk, characterIndex = false, nil
+        if type(EEex_Sprite_GetCharacterIndex) == "function" then
+            indexOk, characterIndex = pcall(
+                EEex_Sprite_GetCharacterIndex, sprite)
+        end
+        if indexOk and type(characterIndex) == "number"
+            and characterIndex == math.floor(characterIndex)
+            and characterIndex >= 0 and characterIndex <= 5 then
+            safeName = "BuffBot-Player" .. tostring(characterIndex + 1)
+        else
+            -- Export is normally party-only, so the join-order branch above is
+            -- authoritative. Keep a deterministic ASCII fallback for unusual
+            -- direct callers where the character-index API is unavailable.
+            local bytes = {}
+            for i = 1, #rawName do
+                bytes[#bytes + 1] = string.format("%02X", rawName:byte(i))
+            end
+            safeName = "BuffBot-Name-" .. table.concat(bytes)
+        end
+    end
 
     -- Prevent path traversal (extra safety — gsub already strips . and /)
     safeName = safeName:gsub("%.%.", ""):gsub("[/\\]", "")
@@ -1318,7 +1371,8 @@ function BfBot.Persist.ExportConfig(sprite)
     local filepath = BfBot.Persist._PRESETS_DIR .. "/" .. safeName .. ".lua"
     local f, err = io.open(filepath, "w")
     if not f then
-        return false, "cannot open file: " .. tostring(err)
+        return false, "reason.export.cannot_open_file",
+            { error = tostring(err) }
     end
 
     -- Write header comment
@@ -1357,28 +1411,32 @@ end
 -- Filters out spells the character cannot cast. Syncs overrides to classifier.
 -- @param sprite    character sprite
 -- @param filename  filename (just the name, e.g. "Jaheira.lua")
--- @return true, presetCount, skippedCount on success; false, errorMsg on failure
+-- @return true, presetCount, skippedCount on success;
+--         false, reasonCode, detail on failure
 function BfBot.Persist.ImportConfig(sprite, filename)
-    if BfBot._noIO then return false, "LuaJIT required for import" end
-    if not sprite then return false, "no sprite" end
-    if not filename then return false, "no filename" end
+    if BfBot._noIO then
+        return false, "reason.import.luajit_required", {}
+    end
+    if not sprite then return false, "reason.import.no_sprite", {} end
+    if not filename then return false, "reason.import.no_filename", {} end
 
     -- Sanitize filename to prevent path traversal
     if filename:find("%.%.") or filename:find("[/\\]") then
-        return false, "invalid filename"
+        return false, "reason.import.invalid_filename", {}
     end
 
     local filepath = BfBot.Persist._PRESETS_DIR .. "/" .. filename
     local f, err = io.open(filepath, "r")
     if not f then
-        return false, "cannot open file: " .. tostring(err)
+        return false, "reason.import.cannot_open_file",
+            { error = tostring(err) }
     end
 
     local content = f:read("*a")
     f:close()
 
     if not content or content == "" then
-        return false, "empty file"
+        return false, "reason.import.empty_file", {}
     end
 
     -- Execute the file content to populate BfBot._import
@@ -1386,20 +1444,22 @@ function BfBot.Persist.ImportConfig(sprite, filename)
     local chunk, loadErr = loadstring(content)
     if not chunk then
         BfBot._import = nil
-        return false, "parse error: " .. tostring(loadErr)
+        return false, "reason.import.parse_error",
+            { error = tostring(loadErr) }
     end
 
     local execOk, execErr = pcall(chunk)
     if not execOk then
         BfBot._import = nil
-        return false, "exec error: " .. tostring(execErr)
+        return false, "reason.import.exec_error",
+            { error = tostring(execErr) }
     end
 
     local imported = BfBot._import
     BfBot._import = nil  -- cleanup global immediately
 
     if type(imported) ~= "table" then
-        return false, "file did not set BfBot._import to a table"
+        return false, "reason.import.invalid_data", {}
     end
 
     -- Validate and migrate
@@ -1783,18 +1843,18 @@ end
 --        (ClassifySummonSprite shape; a sprite field, if present, is
 --        IGNORED — the builder always fresh-resolves from oid+name)
 -- @param presetIdx  preset index 1..BfBot.MAX_PRESETS
--- @return queue array compatible with BfBot.Exec.Start(), or nil + reason
+-- @return queue array compatible with BfBot.Exec.Start(), or nil + code + detail
 function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     if type(summonEntry) ~= "table" or type(summonEntry.oid) ~= "number"
         or type(summonEntry.name) ~= "string" then
-        return nil, "invalid summon entry"
+        return nil, "reason.queue.invalid_summon", {}
     end
 
     local preset = BfBot.Persist.PeekSummonPreset(summonEntry.identity, presetIdx)
     if not preset or type(preset.spells) ~= "table"
         or next(preset.spells) == nil then
-        return nil, "no configured summon preset " .. tostring(presetIdx)
-            .. " for '" .. tostring(summonEntry.identity) .. "'"
+        return nil, "reason.queue.no_summon_preset",
+            { index = presetIdx, identity = summonEntry.identity }
     end
 
     -- Build-time sprite: ALWAYS a fresh oid+name resolve — never the
@@ -1805,21 +1865,23 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     -- resolver also carries the anti-recycle name guard, so a recycled
     -- object id never builds a queue for the wrong sprite.
     if not (BfBot.Exec and BfBot.Exec._ResolveCaster) then
-        return nil, "caster resolver unavailable"
+        return nil, "reason.queue.caster_resolver_unavailable", {}
     end
     local sprite = BfBot.Exec._ResolveCaster({ kind = "summon",
         oid = summonEntry.oid, name = summonEntry.name })
     if not sprite then
         BfBot._Warn("[Persist] BuildQueueForSummon: summon gone ("
             .. summonEntry.name .. ", oid " .. summonEntry.oid .. ")")
-        return nil, "summon gone (" .. summonEntry.name .. ")"
+        return nil, "reason.queue.summon_gone",
+            { name = summonEntry.name, oid = summonEntry.oid }
     end
 
     -- Fresh scan (same invalidate-then-scan the party builders do)
     BfBot.Scan.Invalidate(sprite)
     local ok, castable, _ = pcall(BfBot.Scan.GetCastableSpells, sprite)
     if not ok or not castable then
-        return nil, "scan failed for summon " .. summonEntry.name
+        return nil, "reason.queue.summon_scan_failed",
+            { name = summonEntry.name, error = not ok and tostring(castable) or nil }
     end
 
     local casterRef = { kind = "summon", oid = summonEntry.oid,
@@ -1893,8 +1955,8 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     end
 
     if #queue == 0 then
-        return nil, "no castable spells in summon preset " .. presetIdx
-            .. " for '" .. tostring(summonEntry.identity) .. "'"
+        return nil, "reason.queue.no_castable_summon_spells",
+            { index = presetIdx, identity = summonEntry.identity }
     end
 
     return queue
@@ -1902,9 +1964,9 @@ end
 
 --- Build an execution queue from a preset across all party members, plus
 --- (issue #19) any configured allied summons/clones in the leader's area.
--- Returns queue compatible with BfBot.Exec.Start(), or nil + error message.
+-- Returns queue compatible with BfBot.Exec.Start(), or nil + code + detail.
 function BfBot.Persist.BuildQueueFromPreset(presetIndex)
-    if not presetIndex then return nil, "no preset index" end
+    if not presetIndex then return nil, "reason.queue.no_preset_index", {} end
 
     local queue = {}
 
@@ -2060,7 +2122,8 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
     end
 
     if #queue == 0 then
-        return nil, "no castable spells in preset " .. presetIndex
+        return nil, "reason.queue.no_castable_preset_spells",
+            { index = presetIndex }
     end
 
     return queue
@@ -2162,7 +2225,7 @@ function BfBot.Persist.CreatePreset(sprite, name)
     end
 
     config.presets[idx] = {
-        name = name or ("Preset " .. idx),
+        name = name or _LocalizedIndexedPreset(idx),
         cat = "custom",
         qc = 0,
         spells = spells,
@@ -2254,7 +2317,7 @@ function BfBot.Persist.CreatePresetAll(name)
                     }
                 end
                 config.presets[idx] = {
-                    name = name or ("Preset " .. idx),
+                    name = name or _LocalizedIndexedPreset(idx),
                     cat = "custom",
                     qc = 0,
                     spells = spells,
@@ -2289,32 +2352,43 @@ function BfBot.Persist.RenamePresetAll(presetIndex, newName)
 end
 
 --- Build an execution queue for a single character's preset.
--- Returns queue compatible with BfBot.Exec.Start(), or nil + error.
+-- Returns queue compatible with BfBot.Exec.Start(), or nil + reason + detail.
 function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
-    if not slot or not presetIndex then return nil, "missing slot or preset" end
+    if not slot or not presetIndex then
+        return nil, "reason.queue.missing_slot_or_preset", {}
+    end
 
     local sprite = EEex_Sprite_GetInPortrait(slot)
-    if not sprite then return nil, "no sprite in slot " .. slot end
+    if not sprite then
+        return nil, "reason.queue.no_sprite_in_slot", { slot = slot }
+    end
 
     -- Multiplayer: refuse to build a queue for a caster this machine doesn't
     -- control (the cast would never run locally and would hang the engine).
     if BfBot.Mp and BfBot.Mp.IsLocallyControlled
         and not BfBot.Mp.IsLocallyControlled(sprite) then
-        return nil, "not locally controlled"
+        return nil, "reason.queue.not_locally_controlled",
+            { slot = slot, name = BfBot._GetName(sprite) }
     end
 
     local config = BfBot.Persist.GetConfig(sprite)
-    if not config then return nil, "no config for slot " .. slot end
+    if not config then
+        return nil, "reason.queue.no_config_for_slot", { slot = slot }
+    end
 
     local preset = config.presets[presetIndex]
     if not preset or not preset.spells then
-        return nil, "no preset " .. presetIndex .. " for slot " .. slot
+        return nil, "reason.queue.no_preset_for_slot",
+            { preset = presetIndex, slot = slot }
     end
 
     -- Invalidate scan cache for fresh data
     BfBot.Scan.Invalidate(sprite)
     local ok, castable, _ = pcall(BfBot.Scan.GetCastableSpells, sprite)
-    if not ok or not castable then return nil, "scan failed for slot " .. slot end
+    if not ok or not castable then
+        return nil, "reason.queue.scan_failed_for_slot",
+            { slot = slot, error = not ok and tostring(castable) or nil }
+    end
 
     -- Collect enabled, castable spells with priority
     local entries = {}
@@ -2388,9 +2462,11 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
 
     if #queue == 0 then
         if puppetLocked == 1 then
-            return nil, "puppet-locked"
+            return nil, "reason.queue.project_image_locked",
+                { slot = slot, name = BfBot._GetName(sprite) }
         end
-        return nil, "no castable spells in preset " .. presetIndex .. " for slot " .. slot
+        return nil, "reason.queue.no_castable_spells_for_slot",
+            { preset = presetIndex, slot = slot }
     end
 
     return queue

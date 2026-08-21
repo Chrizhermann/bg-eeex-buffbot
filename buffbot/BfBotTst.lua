@@ -4447,8 +4447,8 @@ function BfBot.Test.SummonCasters()
                     end
                 end
                 _check(qa == nil, "PI-locked owner: per-char build returns nil")
-                _check(qaReason == "puppet-locked",
-                    "PI-locked owner: distinct 'puppet-locked' reason (got "
+                _check(qaReason == "reason.queue.project_image_locked",
+                    "PI-locked owner: stable project-image reason code (got "
                     .. tostring(qaReason) .. ")")
                 _check(skipSeen, "PI-locked owner: skip recorded via _LogBuildSkips")
 

@@ -203,11 +203,14 @@ def test_character_builder_surfaces_fully_unresolved_targets_as_a_build_skip(
         BfBot._CloseLog = function() BfBot._logHandle = nil end
         BfBot.Persist.DrainBuildSkips()
 
-        local queue, reason = BfBot.Persist.BuildQueueForCharacter(0, 1)
+        local queue, reason, detail =
+            BfBot.Persist.BuildQueueForCharacter(0, 1)
         local skips = BfBot.Persist.DrainBuildSkips()
         return {
             queueMissing = queue == nil,
             reason = reason,
+            reasonPreset = detail and detail.preset,
+            reasonSlot = detail and detail.slot,
             skipCount = #skips,
             skip = skips[1],
             logged = logged[1],
@@ -216,7 +219,9 @@ def test_character_builder_surfaces_fully_unresolved_targets_as_a_build_skip(
     )
 
     assert facts["queueMissing"]
-    assert "no castable spells" in facts["reason"]
+    assert facts["reason"] == "reason.queue.no_castable_spells_for_slot"
+    assert facts["reasonPreset"] == 1
+    assert facts["reasonSlot"] == 0
     assert facts["skipCount"] == 1
     assert "Caster" in facts["skip"]
     assert "Protective Ward" in facts["skip"]
@@ -333,11 +338,12 @@ def test_cast_all_builder_surfaces_unresolved_targets_without_queueing_them(
         BfBot._CloseLog = function() BfBot._logHandle = nil end
         BfBot.Persist.DrainBuildSkips()
 
-        local queue, reason = BfBot.Persist.BuildQueueFromPreset(1)
+        local queue, reason, detail = BfBot.Persist.BuildQueueFromPreset(1)
         local skips = BfBot.Persist.DrainBuildSkips()
         return {
             queueMissing = queue == nil,
             reason = reason,
+            reasonIndex = detail and detail.index,
             skipCount = #skips,
             skip = skips[1],
         }
@@ -345,7 +351,8 @@ def test_cast_all_builder_surfaces_unresolved_targets_without_queueing_them(
     )
 
     assert facts["queueMissing"]
-    assert "no castable spells" in facts["reason"]
+    assert facts["reason"] == "reason.queue.no_castable_preset_spells"
+    assert facts["reasonIndex"] == 1
     assert facts["skipCount"] == 1
     assert "Caster" in facts["skip"]
     assert "Protective Ward" in facts["skip"]
