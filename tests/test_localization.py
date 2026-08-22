@@ -923,10 +923,10 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "Only the eight generated F12 innate names remain TLK-backed" in languages
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
-    unreleased = changelog.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
-    assert "Runtime UI localization is file-backed" in unreleased
-    assert "`override/bfbot_l10n.tra`" in unreleased
-    assert "Only the eight generated F12 SPL names remain TLK-backed" in unreleased
+    current_release = changelog.split("\n## ", 1)[1].split("\n## ", 1)[0]
+    assert "Runtime UI localization is file-backed" in current_release
+    assert "`override/bfbot_l10n.tra`" in current_release
+    assert "Only the eight generated F12 SPL names remain TLK-backed" in current_release
 
     design = FILE_BACKED_DESIGN_PATH.read_text(encoding="utf-8")
     decision = design.split("## Decision", 1)[1].split("## Considered Approaches", 1)[0]
@@ -941,18 +941,18 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
-def test_unreleased_changelog_records_final_automated_and_live_boundary():
+def test_current_release_changelog_records_final_automated_and_live_boundary():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
-    unreleased = source.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
-    normalized = unreleased.casefold()
+    current_release = source.split("\n## ", 1)[1].split("\n## ", 1)[0]
+    normalized = current_release.casefold()
 
     assert "native startup crash" in normalized
     assert "infinity_fetchstring" in normalized
     assert "file-backed" in normalized
     assert "override/bfbot_l10n.tra" in normalized
-    assert "@200" in unreleased and "@207" in unreleased
+    assert "@200" in current_release and "@207" in current_release
     assert "bfbot_strrefs.txt" in normalized
-    assert "WeiDU 249" in unreleased
+    assert "WeiDU 249" in current_release
     assert "map-backed candidate migration" in normalized
     assert "ownership" in normalized and "restor" in normalized
     assert "full automated suite passes **408 tests**" in normalized

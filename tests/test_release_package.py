@@ -30,7 +30,7 @@ DEPLOY_SCRIPT = ROOT / "tools/deploy.sh"
 WORKFLOW = ROOT / ".github/workflows/release.yml"
 README = ROOT / "README.md"
 TP2_PATH = ROOT / "buffbot/setup-buffbot.tp2"
-VERSION = "v1.7.4-alpha"
+VERSION = "v1.8.0-alpha"
 
 # This is deliberately explicit: recursive packaging must not silently publish
 # a backup, installer-generated state, local state, or a future development-only file.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.8.0-alpha (2026-08-22)
 
 ### Added
 - **BuffBot is fully localizable and ships complete English and Simplified Chinese catalogs.** The selected language now covers the WeiDU installer, generated F12 innate names, every player-facing panel and runtime message, EEex Options, and default names for genuinely new presets. Existing saved, imported, inherited, and user-renamed preset names remain unchanged.

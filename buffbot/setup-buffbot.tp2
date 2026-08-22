@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.7.4-alpha~
+VERSION ~v1.8.0-alpha~
 
 ALWAYS
 // Shared by both components so main validates exactly the state the helper
