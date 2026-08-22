@@ -351,28 +351,42 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "English" in source
     assert "Simplified Chinese" in source
     assert "weiDU".casefold() in normalized
+    assert "selected UTF-8 catalog".casefold() in normalized
+    assert "`override/bfbot_l10n.tra`" in source
+    assert "reads directly" in normalized
+    assert "no BuffBot-owned UI string is fetched from the game TLK".casefold() in normalized
     assert "raw development deploy" in normalized
     assert "English fallback".casefold() in normalized
+    assert "preserves an existing `override/bfbot_l10n.tra`" in source
     assert "source checkout" in normalized
     assert "development-only" in normalized
     assert "f12 innate tooltip names" in normalized
+    assert "only the eight generated F12 innate names".casefold() in normalized
+    assert "`@200` through `@207`" in source
+    assert "`bfbot_strrefs.txt`" in source
     assert "language pull requests are welcome" in normalized
     assert "buffbot/lang/english/setup.tra" in source
-    assert "lowercase" in normalized
+    assert "safe lowercase folder name" in normalized
+    assert "`a-z`, `0-9`, and underscores" in source
     assert "complete catalog" in normalized
     assert "exact `@` IDs" in source
-    assert "semantic" in normalized
+    assert "all comments" in normalized
     assert "named placeholder" in normalized
     assert "WeiDU token".casefold() in normalized
+    assert "`@113`" in source
+    assert "exact folder name" in normalized
+    assert "non-translatable" in normalized
     assert "UTF-8" in source
     assert "one-line" in normalized and "tilde" in normalized
     assert "python -m pytest tests/test_localization.py" in source
+    assert "tests/test_release_package.py" in source
     assert "`LANGUAGE` stanza" in source
-    assert "package manifest" in normalized
+    assert "package manifest is derived from the `language` declarations" in normalized
     assert "translator credit" in normalized
     assert "robovoid" in normalized
     assert "[robovoid](https://github.com/robvoid)" in source
     assert "#50" in source
+    assert "bfbot_l10n.txt" not in source
 
 
 def test_raw_deploy_leaves_runtime_catalog_absent_and_reports_english_fallback(

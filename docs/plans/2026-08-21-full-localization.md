@@ -1,5 +1,7 @@
 # Full Localization Implementation Plan
 
+> **SUPERSEDED** — The runtime-TLK architecture in this document was replaced by [File-Backed Runtime Localization Correction](./2026-08-22-file-backed-runtime-localization-design.md) after live startup-crash evidence. The body below is preserved as a historical implementation record; use the correction for the current architecture.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers-extended-cc:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add complete English and Simplified Chinese localization to current BuffBot without injecting translations into executable source or regressing installer/runtime safety.

@@ -20,6 +20,17 @@ INNATE_PATH = ROOT / "buffbot" / "BfBotInn.lua"
 UI_PATH = ROOT / "buffbot" / "BfBotUI.lua"
 THEME_PATH = ROOT / "buffbot" / "BfBotThm.lua"
 MENU_PATH = ROOT / "buffbot" / "BuffBot.menu"
+CHANGELOG_PATH = ROOT / "CHANGELOG.md"
+FULL_LOCALIZATION_DESIGN_PATH = (
+    ROOT / "docs/plans/2026-08-21-full-localization-design.md"
+)
+FULL_LOCALIZATION_PLAN_PATH = ROOT / "docs/plans/2026-08-21-full-localization.md"
+FILE_BACKED_DESIGN_PATH = (
+    ROOT / "docs/plans/2026-08-22-file-backed-runtime-localization-design.md"
+)
+FILE_BACKED_PLAN_PATH = (
+    ROOT / "docs/plans/2026-08-22-file-backed-runtime-localization.md"
+)
 
 ENTRY_RE = re.compile(r"^@(\d+)\s*=\s*~([^~]*)~\s*$")
 EMPTY_ID_RE = re.compile(r"^@\s*=", re.ASCII)
@@ -29,8 +40,8 @@ WEIDU_SENTINEL_RE = re.compile(r"%([A-Za-z_][A-Za-z0-9_]*)%")
 WEIDU_PLACEHOLDER_CONTRACT = {108: {"lua_version"}}
 
 
-# Catalog IDs are deliberately grouped so the later Lua registry and WeiDU
-# id-to-strref map can be audited against translator-facing semantic comments.
+# Catalog IDs are deliberately grouped so the Lua registry and selected catalog
+# can be audited against translator-facing semantic comments.
 # Task 2 must derive or validate its runtime registry from this machine-readable
 # schema (or these same catalog comments), not introduce an uncontrolled fourth
 # hand-maintained copy of the ID/key contract.
@@ -767,7 +778,6 @@ def test_bootstrap_loads_core_then_localization_before_all_consumers():
     source = MAIN_PATH.read_text(encoding="utf-8")
 
     assert "file-backed localization with English fallback" in source
-    assert "TLK-backed localization" not in source
     core_pos = source.index('Infinity_DoFile("BfBotCor")')
     loc_pos = source.index('Infinity_DoFile("BfBotLoc")')
     no_luajit_pos = source.index("if BfBot._noIO then")
@@ -841,6 +851,104 @@ def test_installer_localization_contract_copies_selected_catalog_and_resolves_on
     assert "bfbot_l10n.txt" not in source
     assert "bfbot_l10n_" not in source
     assert "COPY ~buffbot/BfBotLoc.lua~" in source
+
+
+def test_localization_documentation_describes_the_selected_directory_marker():
+    design = FILE_BACKED_DESIGN_PATH.read_text(encoding="utf-8")
+    plan = FILE_BACKED_PLAN_PATH.read_text(encoding="utf-8")
+
+    for source in (design, plan):
+        assert "@113" in source
+        assert "OUTER_SPRINT" in source
+        assert "%bfbot_selected_language%" in source
+        assert "non-translatable" in source.casefold()
+        assert "WeiDU 249" in source
+        assert "%LANGUAGE%" in source
+        assert "same-process" in source.casefold()
+
+
+def test_file_backed_plan_documentation_names_real_tests_and_truthful_atomic_stage_set():
+    source = FILE_BACKED_PLAN_PATH.read_text(encoding="utf-8")
+    task_1 = source.split("### Task 1:", 1)[1].split("### Task 2:", 1)[0]
+    task_2 = source.split("### Task 2:", 1)[1].split("### Task 3:", 1)[0]
+
+    assert "tests/test_repeat_ui.py" in task_1
+    assert "tests/test_ui_selection.py" in task_1
+    assert "tests/test_repeat_counts.py" not in task_1
+    assert "tests/test_selection_refresh.py" not in task_1
+
+    assert "buffbot/M_BfBot.lua" in task_2
+    assert "buffbot/lang/english/setup.tra" in task_2
+    assert "buffbot/lang/schinese/setup.tra" in task_2
+    assert "buffbot/BfBotUI.lua" not in task_2
+
+
+def test_historical_localization_documentation_uses_banners_not_rewrites():
+    design = FULL_LOCALIZATION_DESIGN_PATH.read_text(encoding="utf-8")
+    plan = FULL_LOCALIZATION_PLAN_PATH.read_text(encoding="utf-8")
+
+    for source in (design, plan):
+        opening = "\n".join(source.splitlines()[:8])
+        assert "**SUPERSEDED**" in opening
+        assert "2026-08-22-file-backed-runtime-localization-design.md" in opening
+        assert "historical" in opening.casefold()
+
+    old_architecture = "TLK-backed " + "runtime localization"
+    assert f"### {old_architecture} (selected)" in design
+    assert f"### Task 2: Build the {old_architecture} API" in plan
+
+
+def test_repository_documentation_avoids_obsolete_runtime_claims_outside_history():
+    historical_paths = {
+        FULL_LOCALIZATION_DESIGN_PATH.resolve(),
+        FULL_LOCALIZATION_PLAN_PATH.resolve(),
+    }
+    checked_paths = [ROOT / "README.md", ROOT / "CHANGELOG.md"]
+    checked_paths.extend((ROOT / "docs").rglob("*.md"))
+    checked_paths.extend((ROOT / "tests").glob("test_*.py"))
+    stale_patterns = (
+        re.compile("numeric " + "localization map", re.IGNORECASE),
+        re.compile(r"tlk-backed runtime[- ]localization", re.IGNORECASE),
+    )
+
+    for path in checked_paths:
+        if path.resolve() in historical_paths:
+            continue
+        source = path.read_text(encoding="utf-8")
+        for pattern in stale_patterns:
+            assert pattern.search(source) is None, (
+                f"obsolete runtime claim in current-facing file {path}: "
+                f"{pattern.pattern}"
+            )
+
+
+def test_unreleased_changelog_documentation_is_count_neutral_and_live_honest():
+    source = CHANGELOG_PATH.read_text(encoding="utf-8")
+    unreleased = source.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
+    normalized = unreleased.casefold()
+
+    assert "native startup crash" in normalized
+    assert "infinity_fetchstring" in normalized
+    assert "file-backed" in normalized
+    assert "override/bfbot_l10n.tra" in normalized
+    assert "@200" in unreleased and "@207" in unreleased
+    assert "bfbot_strrefs.txt" in normalized
+    assert "WeiDU 249" in unreleased
+    assert "map-backed candidate migration" in normalized
+    assert "ownership" in normalized and "restor" in normalized
+    assert "test count" not in normalized
+    assert re.search(r"\b\d+\s+tests\b", normalized) is None
+    assert "still pending" in normalized
+    for pending in (
+        "project image",
+        "non-ascii export",
+        "save/reload",
+        "bg1ee",
+        "eet",
+        "alternate resolutions",
+        "project infinity",
+    ):
+        assert pending in normalized
 
 
 def test_all_literal_runtime_localization_keys_exist_and_dynamic_calls_are_explicit():

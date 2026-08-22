@@ -1,5 +1,7 @@
 # Full Localization Design
 
+> **SUPERSEDED** — The runtime-TLK architecture in this document was replaced by [File-Backed Runtime Localization Correction](./2026-08-22-file-backed-runtime-localization-design.md) after live startup-crash evidence. The body below is preserved as a historical design record; use the correction for the current architecture.
+
 **Date:** 2026-08-21
 **Status:** Approved
 **Source contribution:** GitHub PR #50 by robovoid

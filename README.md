@@ -49,7 +49,9 @@ EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enabl
 - English
 - Simplified Chinese (简体中文)
 
-The WeiDU installer asks which BuffBot translation to use and writes the localized strings to the selected game-language TLK. Use WeiDU for a localized installation. In a source checkout, the raw development deploy (`tools/deploy.sh`) does not generate the numeric localization map, so it intentionally uses the checked-in English fallback.
+The WeiDU installer asks which BuffBot translation to use and copies the selected UTF-8 catalog to `override/bfbot_l10n.tra`. BuffBot reads directly from that file for its UI, options, defaults, and player feedback; no BuffBot-owned UI string is fetched from the game TLK. Only the eight generated F12 innate names remain TLK-backed because SPL resources require numeric strrefs: WeiDU resolves catalog entries `@200` through `@207` and records them in `bfbot_strrefs.txt`.
+
+In a source checkout, the raw development deploy (`tools/deploy.sh`) preserves an existing `override/bfbot_l10n.tra`; without one, BuffBot uses its checked-in English fallback. The deploy helper still patches the configured game's TLK for the eight F12 innate tooltip names.
 
 The catalogs and Chinese installer path have automated coverage. Live in-game Chinese glyph and layout acceptance is still pending and is not claimed here.
 
@@ -72,7 +74,7 @@ For **EET**, BuffBot can be installed after `EET_end`; EEex and LuaJIT must be r
 
 ### Manual Development Copy
 
-Raw/manual copying is a development-only path from a source checkout, not the normal release installation. Only use it when EEex LuaJIT is already active, because it bypasses the prerequisite check. Copy the runtime Lua, menu, BAM, MOS, and PVRZ files from `buffbot/` to your game's `override/` directory. Use a clean development target or uninstall a localized WeiDU BuffBot first; the deploy helper deliberately does not delete a pre-existing WeiDU-owned localization map. This path uses English fallback text when no map is present, and F12 innate tooltip names may be blank; players should use WeiDU for complete localized strings.
+Raw/manual copying is a development-only path from a source checkout, not the normal release installation. Only use it when EEex LuaJIT is already active, because it bypasses the prerequisite check. Copy the runtime Lua, menu, BAM, MOS, and PVRZ files from `buffbot/` to your game's `override/` directory. The deploy helper preserves an existing `override/bfbot_l10n.tra`; otherwise it leaves the selected catalog absent and the runtime uses English fallback text. F12 innate tooltip names require the separate TLK patch step that `tools/deploy.sh` runs for its configured game; copying files manually without that step may leave those names blank. Players should use WeiDU for complete localized strings.
 
 ## Usage
 
@@ -171,12 +173,13 @@ Found a bug? Have a feature idea? [Open an issue](https://github.com/Chrizherman
 
 Language pull requests are welcome. BuffBot accepts complete catalogs so players never see a half-translated panel:
 
-1. Copy `buffbot/lang/english/setup.tra` to `buffbot/lang/<language>/setup.tra`, using a lowercase language-folder name.
-2. Translate every entry while preserving the exact `@` IDs, the semantic comment above each entry, all named placeholders such as `{name}`, and any WeiDU token such as `%lua_version%`.
-3. Keep the file UTF-8 and use the existing one-line tilde format (`@123 = ~Text~`). Do not add or omit catalog entries.
-4. Add the matching `LANGUAGE` stanza to `buffbot/setup-buffbot.tp2`, then update and validate the release package manifest/tests so the catalog ships in the archive.
-5. Run `python -m pytest tests/test_localization.py -q` (and ideally the full test suite) before opening the PR.
-6. Include the translator credit you would like shown in the README and release notes.
+1. Copy `buffbot/lang/english/setup.tra` to `buffbot/lang/<language>/setup.tra`. Choose a safe lowercase folder name that starts with a letter and uses only `a-z`, `0-9`, and underscores.
+2. Set `@113` to that exact folder name. This directory marker is non-translatable.
+3. Translate every other value while preserving the exact `@` IDs, all comments, all named placeholders such as `{name}`, and every WeiDU token such as `%lua_version%`. Do not add or omit entries.
+4. Keep the file UTF-8 and preserve the existing one-line tilde grammar (`@123 = ~Text~`).
+5. Add the matching `LANGUAGE` stanza to `buffbot/setup-buffbot.tp2`. The release package manifest is derived from the `LANGUAGE` declarations, and the tests reject missing or undeclared catalogs.
+6. Run `python -m pytest tests/test_localization.py tests/test_release_package.py -q` (and ideally the full test suite) before opening the PR.
+7. Include the translator credit you would like shown in the README and release notes.
 
 ### Developer Setup
 
@@ -200,7 +203,7 @@ bg-eeex-buffbot/
 │   ├── setup-buffbot.tp2 # WeiDU installer
 │   ├── M_BfBot.lua       # Bootstrap (auto-loaded by EEex)
 │   ├── BfBotCor.lua      # Core namespace, logging, field resolution, caches
-│   ├── BfBotLoc.lua      # TLK-backed localization with English fallback
+│   ├── BfBotLoc.lua      # File-backed UTF-8 localization with English fallback
 │   ├── BfBotCls.lua      # Buff classifier (opcode scoring)
 │   ├── BfBotScn.lua      # Spellbook scanner (known spells iterators)
 │   ├── BfBotExe.lua      # Execution engine (parallel per-caster)

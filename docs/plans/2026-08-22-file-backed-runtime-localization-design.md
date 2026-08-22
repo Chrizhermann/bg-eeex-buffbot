@@ -38,19 +38,25 @@ The engine TLK remains the correct owner for the eight generated F12 innate
 spell names because SPL resources store numeric strrefs. Those eight existing
 `bfbot_strrefs.txt` mappings remain unchanged.
 
-This decision replaces only the TLK-backed runtime-localization sections of
-the parent design and implementation plan. The catalog, UI, persistence,
-packaging, translation-contribution, and acceptance scopes remain in force.
+This decision replaces only the native runtime-TLK sections of the parent
+design and implementation plan. The catalog, UI, persistence, packaging,
+translation-contribution, and acceptance scopes remain in force.
 
 ## Considered Approaches
 
 ### Copy and parse the selected `.tra` catalog (selected)
 
-WeiDU exposes the chosen mod-language directory as `%LANGUAGE%`. The main
-component copies `buffbot/lang/%LANGUAGE%/setup.tra` to
-`override/bfbot_l10n.tra`. The runtime parser accepts the project's already
-validated one-line grammar, `@ID = ~text~`, and indexes only registered runtime
-IDs.
+Each catalog reserves non-translatable `@113` as its exact safe directory
+name. After WeiDU activates the newly selected TRA table, the main component
+captures that marker with `OUTER_SPRINT bfbot_selected_language @113` and
+copies `buffbot/lang/%bfbot_selected_language%/setup.tra` to
+`override/bfbot_l10n.tra`.
+
+The marker is necessary because WeiDU 249 can restore the previously installed
+raw `%LANGUAGE%` value while replaying an uninstall during a same-process
+language switch, even though the newly selected TRA table is already active.
+The runtime parser accepts the project's already validated one-line grammar,
+`@ID = ~text~`, and indexes only registered runtime IDs.
 
 This keeps the checked-in `.tra` catalogs canonical, avoids a second string
 generator, matches EEex's own use of direct UTF-8 Lua strings, and removes all
@@ -74,8 +80,11 @@ approach is rejected.
 
 1. The selected WeiDU language still controls installer text and the eight
    innate TLK strings.
-2. During main-component installation, WeiDU byte-copies the selected
-   `setup.tra` to `override/bfbot_l10n.tra`.
+2. During main-component installation, WeiDU captures the selected catalog's
+   non-translatable directory marker with
+   `OUTER_SPRINT bfbot_selected_language @113`, then byte-copies
+   `buffbot/lang/%bfbot_selected_language%/setup.tra` to
+   `override/bfbot_l10n.tra`.
 3. `M_BfBot.lua` loads `BfBotLoc.lua` immediately after Core, as before.
 4. `BfBotLoc.lua` reads the copied file once, parses supported ID/value rows,
    and stores only IDs present in its registry.
@@ -96,6 +105,8 @@ preserving the existing helper ownership and component-order safety rules.
 
 - Input must be valid bytes for the shipped UTF-8 catalog and use one
   `@digits = ~text~` entry per line.
+- Catalog entry `@113` must equal its safe lowercase directory name exactly
+  and is metadata, not translator-facing text.
 - An optional UTF-8 BOM is not required by shipped files; malformed or
   unsupported rows are ignored at runtime and rejected by repository tests.
 - Only registered runtime IDs are retained. Installer-only and innate-only IDs

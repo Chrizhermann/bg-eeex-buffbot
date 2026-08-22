@@ -4,7 +4,7 @@
 
 **Goal:** Replace BuffBot's startup-unsafe native TLK lookups with a selected UTF-8 runtime catalog while retaining TLK ownership only for generated innate SPL names.
 
-**Architecture:** WeiDU copies `buffbot/lang/%LANGUAGE%/setup.tra` byte-for-byte to `override/bfbot_l10n.tra`. `BfBotLoc.lua` parses registered one-line `@ID = ~text~` entries through LuaJIT I/O and serves them through the existing semantic-key API, falling back per key to checked-in English without ever calling `Infinity_FetchString`.
+**Architecture:** Every catalog carries its exact, non-translatable directory in `@113`. After the selected TRA table is active, WeiDU captures that marker with `OUTER_SPRINT bfbot_selected_language @113` and copies `buffbot/lang/%bfbot_selected_language%/setup.tra` byte-for-byte to `override/bfbot_l10n.tra`. This avoids WeiDU 249's stale raw `%LANGUAGE%` value during a same-process uninstall/reinstall switch. `BfBotLoc.lua` parses registered one-line `@ID = ~text~` entries through LuaJIT I/O and serves them through the existing semantic-key API, falling back per key to checked-in English without ever calling `Infinity_FetchString`.
 
 **Tech Stack:** WeiDU 249, Lua 5.1/LuaJIT, EEex, UTF-8 `.tra`, Python/pytest/lupa, PowerShell, ProcDump/cdb, Git.
 
@@ -200,7 +200,7 @@ after `BfBotLoc.lua` loads.
 Run:
 
 ```powershell
-python -m pytest tests/test_localization.py tests/test_runtime_compatibility.py tests/test_innate_recharge.py tests/test_repeat_counts.py tests/test_selection_refresh.py -q
+python -m pytest tests/test_localization.py tests/test_runtime_compatibility.py tests/test_innate_recharge.py tests/test_repeat_ui.py tests/test_ui_selection.py -q
 ```
 
 Expected: all selected tests PASS and the poisoned native function is never
@@ -222,6 +222,9 @@ and the complete affected suite are green.
 - Modify: `tests/test_release_package.py:1-20`
 - Modify: `tests/test_release_package.py:380-505`
 - Create: `tests/fixtures/setup-buffbot-map-backed-v1.7.4-alpha.tp2`
+- Verify/stage if changed: `buffbot/M_BfBot.lua`
+- Modify: `buffbot/lang/english/setup.tra`
+- Modify: `buffbot/lang/schinese/setup.tra`
 - Modify: `buffbot/setup-buffbot.tp2:325-503`
 - Modify: `buffbot/setup-buffbot.tp2:505-519`
 - Modify: `buffbot/setup-buffbot.tp2:547-714`
@@ -232,10 +235,12 @@ Change the static contract to require:
 
 ```python
 assert re.search(
-    r"COPY\s+~buffbot/lang/%LANGUAGE%/setup\.tra~\s+"
+    r"COPY\s+~buffbot/lang/%bfbot_selected_language%/setup\.tra~\s+"
     r"~override/bfbot_l10n\.tra~",
     source,
 )
+assert source.count("@113") == 1
+assert "OUTER_SPRINT bfbot_selected_language @113" in source
 assert "bfbot_l10n.generated" not in source
 assert "bfbot_l10n.txt" not in source
 assert "bfbot_l10n_" not in source
@@ -294,8 +299,8 @@ Run:
 python -m pytest tests/test_localization.py tests/test_eeex_compatibility_installer.py -q -k "installer_localization or selects_one_tlk"
 ```
 
-Expected: FAIL because current TP2 emits the numeric map and resolves 163
-runtime strings.
+Expected: FAIL because current TP2 emits the obsolete catalog-to-strref map
+and resolves 163 runtime strings.
 
 **Step 3: Simplify the TP2**
 
@@ -308,11 +313,17 @@ OUTER_SET bfbot_strref_8 = RESOLVE_STR_REF(@207)
 ```
 
 Delete every `bfbot_l10n_* = RESOLVE_STR_REF(...)` line and the inlined
-`bfbot_l10n.generated` map. Add this copy next to `BfBotLoc.lua`:
+`bfbot_l10n.generated` map. Capture the selected catalog's non-translatable
+directory marker and add this copy next to `BfBotLoc.lua`:
 
 ```weidu
-COPY ~buffbot/lang/%LANGUAGE%/setup.tra~ ~override/bfbot_l10n.tra~
+OUTER_SPRINT bfbot_selected_language @113
+COPY ~buffbot/lang/%bfbot_selected_language%/setup.tra~ ~override/bfbot_l10n.tra~
 ```
+
+Do not use raw `%LANGUAGE%` for the path: WeiDU 249 restores the previously
+installed value while replaying the uninstall half of a same-process language
+switch, after the newly selected TRA table (and therefore `@113`) is active.
 
 Use plain `COPY` with no `EVALUATE_BUFFER`: the selected UTF-8 bytes, including
 the literal installer-only `%lua_version%` placeholder, must remain exact.
@@ -344,9 +355,13 @@ Expected: collection and all affected tests PASS.
 **Step 6: Commit the atomic runtime + installer correction**
 
 ```powershell
-git add -- buffbot/BfBotLoc.lua buffbot/BfBotUI.lua buffbot/setup-buffbot.tp2 tests/test_localization.py tests/test_eeex_compatibility_installer.py tests/test_release_package.py tests/fixtures/setup-buffbot-map-backed-v1.7.4-alpha.tp2
+git add -- buffbot/BfBotLoc.lua buffbot/M_BfBot.lua buffbot/lang/english/setup.tra buffbot/lang/schinese/setup.tra buffbot/setup-buffbot.tp2 tests/test_localization.py tests/test_eeex_compatibility_installer.py tests/test_release_package.py tests/fixtures/setup-buffbot-map-backed-v1.7.4-alpha.tp2
 git commit -m "fix: load selected runtime catalog without native TLK calls"
 ```
+
+Include `M_BfBot.lua` for its corrected file-backed bootstrap comment. The UI
+module is excluded from the atomic stage set because the activation-removal
+check left it unchanged in the completed correction.
 
 ### Task 3: Rewrite language-switch and package acceptance around file ownership
 
@@ -440,7 +455,10 @@ git commit -m "test: verify file-backed localization lifecycle"
 - Modify: `CHANGELOG.md:3-18`
 - Modify: `docs/plans/2026-08-21-full-localization-design.md:1-8`
 - Modify: `docs/plans/2026-08-21-full-localization.md:1-10`
-- Reference: `docs/plans/2026-08-22-file-backed-runtime-localization-design.md`
+- Modify: `docs/plans/2026-08-22-file-backed-runtime-localization-design.md`
+- Modify: `docs/plans/2026-08-22-file-backed-runtime-localization.md`
+- Modify: `tests/test_localization.py`
+- Modify: `tests/test_release_package.py`
 
 **Step 1: Add documentation assertions**
 
@@ -450,8 +468,13 @@ Extend the existing README/package tests to require these truthful concepts:
 - raw deploy uses English fallback unless it preserves an existing
   WeiDU-selected catalog;
 - F12 innate names remain TLK-backed;
-- language contributors still preserve IDs, placeholders, UTF-8, the TP2
-  `LANGUAGE` stanza, and package tests.
+- `@113` supplies the exact non-translatable catalog folder instead of raw
+  `%LANGUAGE%` during WeiDU 249 same-process switches;
+- language contributors preserve IDs, comments, placeholders, WeiDU tokens,
+  UTF-8, one-line grammar, the TP2 `LANGUAGE` stanza, and both catalog/package
+  tests; the package manifest derives from those declarations;
+- the CHANGELOG remains automated-count-neutral until Task 5 and keeps every
+  untested live compatibility boundary explicit.
 
 **Step 2: Run the documentation tests to verify RED**
 
@@ -471,13 +494,13 @@ Replace the failed post-main-menu deferral claim with the native-crash
 regression and file-backed protection. Do not claim completed Chinese visual
 acceptance yet. Refresh the automated test count only after Task 5's final run.
 
-Add a prominent banner to both 2026-08-21 historical localization documents
+Add a prominent banner only to both 2026-08-21 historical localization documents
 stating that their runtime-TLK architecture is superseded by
 `2026-08-22-file-backed-runtime-localization-design.md`; preserve their
 historical tasks rather than rewriting them. Add a repository-wide assertion
-that stale phrases such as `numeric localization map` and `TLK-backed runtime
-localization` do not describe current UI behavior, while allowing explicit
-innate-only TLK documentation.
+that obsolete catalog-to-strref and native runtime-TLK descriptions do not
+describe current UI behavior, while allowing both historical records,
+migration-fixture evidence, and explicit innate-only TLK documentation.
 
 **Step 4: Verify documentation and diff hygiene**
 
@@ -493,7 +516,7 @@ Expected: PASS; only normal Windows LF/CRLF notices may appear.
 **Step 5: Commit**
 
 ```powershell
-git add -- README.md CHANGELOG.md tests/test_release_package.py tests/test_localization.py docs/plans/2026-08-21-full-localization-design.md docs/plans/2026-08-21-full-localization.md
+git add -- README.md CHANGELOG.md tests/test_release_package.py tests/test_localization.py docs/plans/2026-08-21-full-localization-design.md docs/plans/2026-08-21-full-localization.md docs/plans/2026-08-22-file-backed-runtime-localization-design.md docs/plans/2026-08-22-file-backed-runtime-localization.md
 git commit -m "docs: explain file-backed runtime localization"
 ```
 
