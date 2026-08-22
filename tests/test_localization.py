@@ -434,6 +434,20 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
             ), f"WeiDU placeholder mismatch in {catalog_path} @{tra_id}"
 
 
+def test_text_size_descriptions_disclose_fixed_engine_button_captions():
+    english, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+    chinese, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
+
+    assert "all panel text" not in english[709].lower()
+    assert "stone-button captions remain at the engine's default size" in english[
+        709
+    ].lower()
+    assert "close and reopen" not in english[709].lower()
+    assert "石质按钮上的文字" in chinese[709]
+    assert "引擎默认字号" in chinese[709]
+    assert "关闭并重新打开" not in chinese[709]
+
+
 def test_catalog_directory_metadata_is_safe_and_matches_its_language_folder():
     for catalog_path in shipped_catalogs():
         catalog, semantics = parse_tra(catalog_path)
@@ -927,7 +941,7 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
-def test_unreleased_changelog_documentation_is_count_neutral_and_live_honest():
+def test_unreleased_changelog_records_final_automated_and_live_boundary():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
     unreleased = source.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
     normalized = unreleased.casefold()
@@ -941,13 +955,22 @@ def test_unreleased_changelog_documentation_is_count_neutral_and_live_honest():
     assert "WeiDU 249" in unreleased
     assert "map-backed candidate migration" in normalized
     assert "ownership" in normalized and "restor" in normalized
-    assert "test count" not in normalized
-    assert re.search(r"\b\d+\s+tests\b", normalized) is None
+    assert "full automated suite passes **408 tests**" in normalized
+    assert "live validation (2026-08-22)" in normalized
+    assert "copy copy" in normalized
+    assert "readable cjk" in normalized
+    assert "tested resolution/font" in normalized
+    assert "stone-button captions" in normalized
+    assert "engine's default size" in normalized
+    assert "automated english startup" in normalized
+    assert "no explicit english visual sign-off" in normalized
     assert "still pending" in normalized
     for pending in (
+        "interaction/casting matrix",
         "project image",
-        "non-ascii export",
+        "non-ascii import/export",
         "save/reload",
+        "area-transition",
         "bg1ee",
         "eet",
         "alternate resolutions",

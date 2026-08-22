@@ -351,7 +351,7 @@
 // options.text_size
 @708 = ~Text Size~
 // options.text_size_description
-@709 = ~Scale all panel text. Close and reopen the BuffBot panel after changing this for the new size to take effect.~
+@709 = ~Scale titles, lists, and clickable text. Classic stone-button captions remain at the engine's default size.~
 // options.text_size_small
 @710 = ~Small~
 // options.text_size_medium

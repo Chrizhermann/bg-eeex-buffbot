@@ -60,8 +60,8 @@ else
         echo "ERROR: English fallback TLK patcher is missing: $PATCH_TLK_SCRIPT" >&2
         exit 1
     fi
-    if [ ! -f "$ENGLISH_TLK" ]; then
-        echo "ERROR: English fallback requires a regular lang/en_US/dialog.tlk: $ENGLISH_TLK" >&2
+    if [ -L "$ENGLISH_TLK" ] || [ ! -f "$ENGLISH_TLK" ]; then
+        echo "ERROR: English fallback requires lang/en_US/dialog.tlk to be a regular non-symlink file: $ENGLISH_TLK" >&2
         exit 1
     fi
     for python_candidate in python3 python; do

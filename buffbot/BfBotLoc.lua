@@ -154,7 +154,7 @@ local _registry = {
     ["options.color_scheme_sod"] = { id = 706, fallback = [=[Siege of Dragonspear]=] },
     ["options.color_scheme_bg1"] = { id = 707, fallback = [=[Baldur's Gate 1]=] },
     ["options.text_size"] = { id = 708, fallback = [=[Text Size]=] },
-    ["options.text_size_description"] = { id = 709, fallback = [=[Scale all panel text. Close and reopen the BuffBot panel after changing this for the new size to take effect.]=] },
+    ["options.text_size_description"] = { id = 709, fallback = [=[Scale titles, lists, and clickable text. Classic stone-button captions remain at the engine's default size.]=] },
     ["options.text_size_small"] = { id = 710, fallback = [=[Small]=] },
     ["options.text_size_medium"] = { id = 711, fallback = [=[Medium]=] },
     ["options.text_size_large"] = { id = 712, fallback = [=[Large]=] },

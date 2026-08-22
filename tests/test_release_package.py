@@ -427,6 +427,11 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "only the eight generated F12 innate names".casefold() in normalized
     assert "`@200` through `@207`" in source
     assert "`bfbot_strrefs.txt`" in source
+    assert "Copy Copy" in source
+    assert "readable CJK labels" in source
+    assert "tested resolution/font" in source
+    assert "alternate resolutions/fonts remain pending" in normalized
+    assert "live in-game Chinese glyph and layout acceptance is still pending".casefold() not in normalized
     assert "language pull requests are welcome" in normalized
     assert "buffbot/lang/english/setup.tra" in source
     assert "safe lowercase folder name" in normalized
@@ -671,6 +676,38 @@ def test_raw_deploy_rejects_missing_english_tlk_before_copying_payload(
     assert not (override / "M_BfBot.lua").exists()
     assert not (override / "bfbot_presets").exists()
     assert not (override / "bfbot_strrefs.txt").exists()
+    assert "Done. Files deployed:" not in transcript
+
+
+def test_raw_deploy_rejects_symlinked_english_tlk_before_writes(
+    tmp_path: Path,
+) -> None:
+    game = tmp_path / "synthetic symlinked English TLK game"
+    override = game / "override"
+    override.mkdir(parents=True)
+    existing_runtime = override / "BfBotLoc.lua"
+    runtime_sentinel = b"symlinked TLK runtime sentinel\r\n"
+    existing_runtime.write_bytes(runtime_sentinel)
+
+    victim = tmp_path / "outside dialog.tlk"
+    _write_deploy_sentinel_tlk(victim, "Outside victim")
+    victim_before = victim.read_bytes()
+    english_tlk = game / "lang/en_US/dialog.tlk"
+    english_tlk.parent.mkdir(parents=True)
+    english_tlk.symlink_to(victim)
+
+    result = _run_raw_deploy(game)
+
+    transcript = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "lang/en_US/dialog.tlk" in transcript
+    assert "regular non-symlink file" in transcript
+    assert existing_runtime.read_bytes() == runtime_sentinel
+    assert not (override / "M_BfBot.lua").exists()
+    assert not (override / "bfbot_presets").exists()
+    assert not (override / "bfbot_strrefs.txt").exists()
+    assert english_tlk.is_symlink()
+    assert victim.read_bytes() == victim_before
     assert "Done. Files deployed:" not in transcript
 
 

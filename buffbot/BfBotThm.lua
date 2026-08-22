@@ -268,14 +268,14 @@ function BfBot.Theme._RefreshStyles()
     end
 end
 
--- Map IE font name → BuffBot's base point. After reparenting bb_button to
--- "normal", every body/button/edit/cell style uses NORMAL; bb_title uses
--- REALMS. STONESML stays in the map as a safety net for any leftover
--- engine style we didn't migrate. Engine items in OTHER menus aren't
--- touched — iteration is scoped to our owned menus.
+-- Map IE font name → BuffBot's base point. Body/edit/cell styles use NORMAL,
+-- bb_button inherits the engine's STONESML button font, and bb_title uses
+-- REALMS. Engine items in OTHER menus aren't touched — iteration is scoped
+-- to our owned menus. ITEM_BUTTON ignores the point update, but retaining its
+-- mapping keeps this traversal harmless and makes that limitation explicit.
 BfBot.Theme._FONT_TO_BASE_POINT = {
-    NORMAL   = 12,  -- bb_normal, bb_button, bb_normal_parchment, bb_edit
-    STONESML = 14,  -- legacy fallback (no bb_* style currently uses STONESML)
+    NORMAL   = 12,  -- bb_normal, bb_normal_parchment, bb_edit
+    STONESML = 14,  -- bb_button (point ignored by ITEM_BUTTON renderer)
     REALMS   = 18,  -- bb_title
 }
 
@@ -336,10 +336,9 @@ end
 
 --- Register per-frame render listeners that update each item's text.point
 -- right before render. The one-shot mutation in _ApplyFontSizesToMenus only
--- updates the visible state on items the engine re-reads from `text.point`
--- per frame (ITEM_TEXT does, ITEM_BUTTON often snapshots at push). With a
--- BeforeUIItemRenderListener per named item, point gets re-applied every
--- frame so it survives any internal snapshot/cache.
+-- updates item types that re-read `text.point`; ITEM_BUTTON ignores the field
+-- even here. A BeforeUIItemRenderListener per named item keeps scalable item
+-- types synchronized across internal snapshots and menu pushes.
 --
 -- For lists, BeforeListRendersItemListener fires per cell render — perfect
 -- for the spell-row cells that re-instantiate from column templates per row.
@@ -385,8 +384,8 @@ end
 -- Mutates the styles table (for future reparses + content-height math) and
 -- writes the scaled point directly into every live BuffBot menu item.
 -- The render listeners registered in _RegisterFontRenderListeners then
--- re-apply this on each subsequent frame so types that snapshot text.point
--- (e.g. buttons) still pick up the new size.
+-- re-apply this on each subsequent frame for item types that support dynamic
+-- point sizing. Engine ITEM_BUTTON captions remain fixed-size.
 function BfBot.Theme._SetFontSize(n)
     n = tonumber(n) or 2
     if n < 1 then n = 1 end

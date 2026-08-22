@@ -351,7 +351,7 @@
 // options.text_size
 @708 = ~文本大小~
 // options.text_size_description
-@709 = ~缩放面板中的所有文字。更改后请关闭并重新打开 BuffBot 面板，使新字号生效。~
+@709 = ~缩放标题、列表和可点击文字。经典石质按钮上的文字仍使用引擎默认字号。~
 // options.text_size_small
 @710 = ~小~
 // options.text_size_medium
