@@ -51,7 +51,7 @@ EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enabl
 
 The WeiDU installer asks which BuffBot translation to use and copies the selected UTF-8 catalog to `override/bfbot_l10n.tra`. BuffBot reads directly from that file for its UI, options, defaults, and player feedback; no BuffBot-owned UI string is fetched from the game TLK. Only the eight generated F12 innate names remain TLK-backed because SPL resources require numeric strrefs: WeiDU resolves catalog entries `@200` through `@207` and records them in `bfbot_strrefs.txt`.
 
-In a source checkout, the raw development deploy (`tools/deploy.sh`) preserves an existing `override/bfbot_l10n.tra`; without one, BuffBot uses its checked-in English fallback. The deploy helper still patches the configured game's TLK for the eight F12 innate tooltip names.
+In a source checkout, the raw development deploy (`tools/deploy.sh`) has two explicit paths. When `override/bfbot_l10n.tra` and `override/bfbot_strrefs.txt` both exist, it preserves an existing `override/bfbot_l10n.tra` together with its innate references, preserves both files byte-for-byte, and skips TLK patching entirely. If the catalog exists without the reference file, the helper stops before copying runtime files and asks you to reinstall BuffBot with WeiDU. When no selected catalog exists, the clean English-fallback path patches only `lang/en_US/dialog.tlk` with the English F12 names and generates `bfbot_strrefs.txt`, leaving the root and other language TLKs untouched. This fallback requires Python 3 and an existing `lang/en_US/dialog.tlk`; it also refuses an unsafe catalog or reference path. If a prerequisite is missing, the helper refuses the fallback before copying files. An obsolete `bfbot_l10n.txt` alone is preserved but does not select localized deployment.
 
 The catalogs and Chinese installer path have automated coverage. Live in-game Chinese glyph and layout acceptance is still pending and is not claimed here.
 
@@ -74,7 +74,7 @@ For **EET**, BuffBot can be installed after `EET_end`; EEex and LuaJIT must be r
 
 ### Manual Development Copy
 
-Raw/manual copying is a development-only path from a source checkout, not the normal release installation. Only use it when EEex LuaJIT is already active, because it bypasses the prerequisite check. Copy the runtime Lua, menu, BAM, MOS, and PVRZ files from `buffbot/` to your game's `override/` directory. The deploy helper preserves an existing `override/bfbot_l10n.tra`; otherwise it leaves the selected catalog absent and the runtime uses English fallback text. F12 innate tooltip names require the separate TLK patch step that `tools/deploy.sh` runs for its configured game; copying files manually without that step may leave those names blank. Players should use WeiDU for complete localized strings.
+Raw/manual copying is a development-only path from a source checkout, not the normal release installation. Only use it when EEex LuaJIT is already active, because it bypasses the prerequisite check. Copy the runtime Lua, menu, BAM, MOS, and PVRZ files from `buffbot/` to your game's `override/` directory. The deploy helper treats a pre-existing `bfbot_l10n.tra` plus `bfbot_strrefs.txt` as one WeiDU-owned localized pair: it preserves both and does not patch any TLK. A catalog without its reference file is refused as inconsistent installer state. With no catalog, the runtime uses English fallback text and the helper patches only the English TLK to create the eight F12 innate references. Copying files manually without either a coherent WeiDU pair or that fallback patch may leave the innate names blank; players should use WeiDU for complete localized strings.
 
 ## Usage
 
@@ -193,7 +193,7 @@ echo 'BGEE_DIR="/path/to/your/game"' > tools/deploy.conf
 bash tools/deploy.sh
 ```
 
-Requires Python 3 for TLK patching (innate ability tooltip names).
+Requires Python 3 only for the clean English-fallback TLK patch (innate ability tooltip names). Localized WeiDU state is preserved without invoking the patcher.
 
 ### Repo Structure
 

@@ -801,6 +801,7 @@ def test_deploy_verifies_and_copies_runtime_localization_module():
     source = DEPLOY_PATH.read_text(encoding="utf-8")
     file_loops = re.findall(r"for f in ([^;]+); do", source)
 
+    assert source.startswith("#!/bin/bash\nset -e\n")
     assert len(file_loops) >= 2
     assert "BfBotLoc.lua" in file_loops[0].split()
     assert "BfBotLoc.lua" in file_loops[1].split()
@@ -808,6 +809,8 @@ def test_deploy_verifies_and_copies_runtime_localization_module():
     assert "preserving existing WeiDU-selected runtime catalog" in source
     assert "English fallback" in source
     assert "setup.tra" not in source
+    assert 'PATCH_TLK_SCRIPT="$SCRIPT_DIR/patch_tlk.py"' in source
+    assert '[ ! -f "$PATCH_TLK_SCRIPT" ]' in source
 
 
 def test_installer_localization_contract_copies_selected_catalog_and_resolves_only_innates():
@@ -898,28 +901,30 @@ def test_historical_localization_documentation_uses_banners_not_rewrites():
     assert f"### Task 2: Build the {old_architecture} API" in plan
 
 
-def test_repository_documentation_avoids_obsolete_runtime_claims_outside_history():
-    historical_paths = {
-        FULL_LOCALIZATION_DESIGN_PATH.resolve(),
-        FULL_LOCALIZATION_PLAN_PATH.resolve(),
-    }
-    checked_paths = [ROOT / "README.md", ROOT / "CHANGELOG.md"]
-    checked_paths.extend((ROOT / "docs").rglob("*.md"))
-    checked_paths.extend((ROOT / "tests").glob("test_*.py"))
-    stale_patterns = (
-        re.compile("numeric " + "localization map", re.IGNORECASE),
-        re.compile(r"tlk-backed runtime[- ]localization", re.IGNORECASE),
-    )
+def test_current_facing_localization_sections_state_file_and_tlk_ownership():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    languages = readme.split("## Languages", 1)[1].split("## Installation", 1)[0]
+    assert "`override/bfbot_l10n.tra`" in languages
+    assert "no BuffBot-owned UI string is fetched from the game TLK" in languages
+    assert "Only the eight generated F12 innate names remain TLK-backed" in languages
 
-    for path in checked_paths:
-        if path.resolve() in historical_paths:
-            continue
-        source = path.read_text(encoding="utf-8")
-        for pattern in stale_patterns:
-            assert pattern.search(source) is None, (
-                f"obsolete runtime claim in current-facing file {path}: "
-                f"{pattern.pattern}"
-            )
+    changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
+    unreleased = changelog.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
+    assert "Runtime UI localization is file-backed" in unreleased
+    assert "`override/bfbot_l10n.tra`" in unreleased
+    assert "Only the eight generated F12 SPL names remain TLK-backed" in unreleased
+
+    design = FILE_BACKED_DESIGN_PATH.read_text(encoding="utf-8")
+    decision = design.split("## Decision", 1)[1].split("## Considered Approaches", 1)[0]
+    normalized_decision = " ".join(decision.split())
+    assert "will not use `Infinity_FetchString` for UI" in normalized_decision
+    assert "selected UTF-8 `.tra` catalog" in normalized_decision
+    assert "eight generated F12 innate spell names" in normalized_decision
+
+    plan = FILE_BACKED_PLAN_PATH.read_text(encoding="utf-8")
+    summary = plan.split("---", 1)[0]
+    assert "selected UTF-8 runtime catalog" in summary
+    assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
 def test_unreleased_changelog_documentation_is_count_neutral_and_live_honest():
