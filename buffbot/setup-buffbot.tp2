@@ -119,6 +119,11 @@ LANGUAGE
   ~schinese~
   ~buffbot/lang/schinese/setup.tra~
 
+LANGUAGE
+  ~Italian~
+  ~italian~
+  ~buffbot/lang/italian/setup.tra~
+
 // ============================================================
 // Component 1: EEex LuaJIT (required prerequisite for main)
 // Keep DESIGNATED 1 for compatibility with existing WeiDU logs/backups.
