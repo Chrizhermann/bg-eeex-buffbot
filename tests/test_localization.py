@@ -935,10 +935,12 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "Only the eight generated F12 innate names remain TLK-backed" in languages
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
-    current_release = changelog.split("\n## ", 1)[1].split("\n## ", 1)[0]
-    assert "Runtime UI localization is file-backed" in current_release
-    assert "`override/bfbot_l10n.tra`" in current_release
-    assert "Only the eight generated F12 SPL names remain TLK-backed" in current_release
+    localization_release = changelog.split("\n## v1.8.0-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    assert "Runtime UI localization is file-backed" in localization_release
+    assert "`override/bfbot_l10n.tra`" in localization_release
+    assert "Only the eight generated F12 SPL names remain TLK-backed" in localization_release
 
     design = FILE_BACKED_DESIGN_PATH.read_text(encoding="utf-8")
     decision = design.split("## Decision", 1)[1].split("## Considered Approaches", 1)[0]
@@ -953,18 +955,33 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
-def test_current_release_changelog_records_final_automated_and_live_boundary():
+def test_release_changelog_records_final_automated_and_live_boundaries():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
     current_release = source.split("\n## ", 1)[1].split("\n## ", 1)[0]
-    normalized = current_release.casefold()
+    current_normalized = current_release.casefold()
+
+    assert current_release.startswith("v1.8.1-alpha (2026-08-25)")
+    assert "nine complete language catalogs" in current_normalized
+    assert "italian was contributed and tested in game" in current_normalized
+    assert "six other new catalogs began as ai-authored translations" in current_normalized
+    assert "german reviewed by the german-speaking maintainer" in current_normalized
+    assert "native-speaker corrections remain welcome" in current_normalized
+    assert "full automated suite passes **450 tests**" in current_normalized
+    assert "have not been validated in game" in current_normalized
+    assert "alternate resolutions/fonts" in current_normalized
+
+    localization_release = source.split("\n## v1.8.0-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    normalized = localization_release.casefold()
 
     assert "native startup crash" in normalized
     assert "infinity_fetchstring" in normalized
     assert "file-backed" in normalized
     assert "override/bfbot_l10n.tra" in normalized
-    assert "@200" in current_release and "@207" in current_release
+    assert "@200" in localization_release and "@207" in localization_release
     assert "bfbot_strrefs.txt" in normalized
-    assert "WeiDU 249" in current_release
+    assert "WeiDU 249" in localization_release
     assert "map-backed candidate migration" in normalized
     assert "ownership" in normalized and "restor" in normalized
     assert "full automated suite passes **408 tests**" in normalized

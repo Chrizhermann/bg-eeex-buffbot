@@ -34,7 +34,7 @@ DEPLOY_SCRIPT = ROOT / "tools/deploy.sh"
 WORKFLOW = ROOT / ".github/workflows/release.yml"
 README = ROOT / "README.md"
 TP2_PATH = ROOT / "buffbot/setup-buffbot.tp2"
-VERSION = "v1.8.0-alpha"
+VERSION = "v1.8.1-alpha"
 
 # This is deliberately explicit: recursive packaging must not silently publish
 # a backup, installer-generated state, local state, or a future development-only file.
@@ -424,9 +424,13 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
         "Brazilian Portuguese",
     ):
         assert language_name in source
-    assert "AI-authored drafts".casefold() in normalized
-    assert "German awaits maintainer curation".casefold() in normalized
-    assert "not yet validated in-game".casefold() in normalized
+    assert "six new catalogs began as AI-authored translations".casefold() in normalized
+    assert "German catalog has since been reviewed".casefold() in normalized
+    assert "none has yet been validated in-game".casefold() in normalized
+    assert "native-speaker corrections remain welcome".casefold() in normalized
+    assert "German reviewed by the maintainer".casefold() in normalized
+    assert "AI-authored drafts".casefold() not in normalized
+    assert "German awaits maintainer curation".casefold() not in normalized
     assert "weiDU".casefold() in normalized
     assert "selected UTF-8 catalog".casefold() in normalized
     assert "`override/bfbot_l10n.tra`" in source

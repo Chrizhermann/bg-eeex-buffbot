@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.8.1-alpha (2026-08-25)
+
+### Added
+- **BuffBot now ships nine complete language catalogs.** Italian, German, French, Spanish, Polish, Russian, and Brazilian Portuguese join English and Simplified Chinese. Italian was contributed and tested in game by Sauler89; the six other new catalogs began as AI-authored translations, with German reviewed by the German-speaking maintainer. Native-speaker corrections remain welcome. (#71, #72)
+- **WeiDU and release packaging cover every shipped language.** All nine installer selections publish the matching UTF-8 runtime catalog while retaining TLK ownership only for the eight generated F12 innate names. The release archive includes every declared catalog and rejects missing, undeclared, or case-colliding language paths.
+
+### Compatibility and scope
+- This release adds catalogs, installer declarations, packaging coverage, and documentation only. It does not change runtime Lua, menu behavior, persistence, or the config schema.
+
+### Testing
+- The full automated suite passes **450 tests**. Coverage validates catalog parity, semantic keys and placeholders, all nine WeiDU language selections, same-process language switching, exact catalog/TLK ownership, and packaged-archive installs for every non-English language.
+- The Italian contributor tested the translated UI and buff casting in game. The new German, French, Spanish, Polish, Russian, and Brazilian Portuguese catalogs have not been validated in game or at alternate resolutions/fonts. German received native-speaker review; the other five still await native-speaker review.
+
 ## v1.8.0-alpha (2026-08-22)
 
 ### Added
