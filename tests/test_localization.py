@@ -38,6 +38,17 @@ SEMANTIC_COMMENT_RE = re.compile(r"^//\s*([a-z][a-z0-9_.]*)\s*$")
 NAMED_PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 WEIDU_SENTINEL_RE = re.compile(r"%([A-Za-z_][A-Za-z0-9_]*)%")
 WEIDU_PLACEHOLDER_CONTRACT = {108: {"lua_version"}}
+EXPECTED_CATALOG_DIRECTORIES = {
+    "brazilian_portuguese",
+    "english",
+    "french",
+    "german",
+    "italian",
+    "polish",
+    "russian",
+    "schinese",
+    "spanish",
+}
 
 
 # Catalog IDs are deliberately grouped so the Lua registry and selected catalog
@@ -417,9 +428,10 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
 
     catalogs = shipped_catalogs()
     shipped_languages = {path.parent.name for path in catalogs}
-    required_languages = {"english", "schinese"}
-    assert not required_languages - shipped_languages, (
-        f"missing required catalog(s): {sorted(required_languages - shipped_languages)}"
+    assert shipped_languages == EXPECTED_CATALOG_DIRECTORIES, (
+        "shipped catalog mismatch: "
+        f"missing={sorted(EXPECTED_CATALOG_DIRECTORIES - shipped_languages)}, "
+        f"unexpected={sorted(shipped_languages - EXPECTED_CATALOG_DIRECTORIES)}"
     )
     for catalog_path in catalogs:
         catalog, semantics = parse_tra(catalog_path)
@@ -834,8 +846,8 @@ def test_installer_localization_contract_copies_selected_catalog_and_resolves_on
 
     assert source.index("ALWAYS") < language_pos < helper_label_pos
     assert source[:language_pos].rstrip().endswith("END")
-    assert "~buffbot/lang/english/setup.tra~" in source
-    assert "~buffbot/lang/schinese/setup.tra~" in source
+    for directory in EXPECTED_CATALOG_DIRECTORIES:
+        assert f"~buffbot/lang/{directory}/setup.tra~" in source
     assert "BEGIN @100" in source
     assert "BEGIN @111" in source
     expected_installer_ref_counts = {

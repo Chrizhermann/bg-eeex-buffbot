@@ -124,6 +124,36 @@ LANGUAGE
   ~italian~
   ~buffbot/lang/italian/setup.tra~
 
+LANGUAGE
+  ~German~
+  ~german~
+  ~buffbot/lang/german/setup.tra~
+
+LANGUAGE
+  ~French~
+  ~french~
+  ~buffbot/lang/french/setup.tra~
+
+LANGUAGE
+  ~Spanish~
+  ~spanish~
+  ~buffbot/lang/spanish/setup.tra~
+
+LANGUAGE
+  ~Polish~
+  ~polish~
+  ~buffbot/lang/polish/setup.tra~
+
+LANGUAGE
+  ~Russian~
+  ~russian~
+  ~buffbot/lang/russian/setup.tra~
+
+LANGUAGE
+  ~Brazilian Portuguese~
+  ~brazilian_portuguese~
+  ~buffbot/lang/brazilian_portuguese/setup.tra~
+
 // ============================================================
 // Component 1: EEex LuaJIT (required prerequisite for main)
 // Keep DESIGNATED 1 for compatibility with existing WeiDU logs/backups.

@@ -1,0 +1,360 @@
+// installer.component.luajit
+@100 = ~BuffBot: compatibilidad con EEex LuaJIT (detección automática)~
+// installer.require.game
+@101 = ~BuffBot requiere BG:EE, BG2:EE o EET.~
+// installer.require.eeex
+@102 = ~BuffBot requiere EEex v0.11.0-alpha o posterior. Instala primero EEex: https://github.com/Bubb13/EEex/releases~
+// installer.luajit.already_active
+@103 = ~LuaJIT ya está activo. Se omite la instalación.~
+// installer.luajit.missing_ini
+@104 = ~No se encontró InfinityLoader.ini. Reinstala EEex antes de activar la compatibilidad de BuffBot con LuaJIT.~
+// installer.luajit.missing_dlls
+@105 = ~No se encontraron las DLL de origen de EEex LuaJIT en EEex/loader/LuaJIT/. Reinstala EEex con sus archivos LuaJIT / Experimental antes de activar la compatibilidad de BuffBot con LuaJIT.~
+// installer.luajit.invalid_general
+@106 = ~InfinityLoader.ini no contiene una única primera sección [General] válida. Reinstala EEex antes de activar la compatibilidad de BuffBot con LuaJIT.~
+// installer.luajit.installing
+@107 = ~Instalando el componente EEex LuaJIT (normalmente instalado por el instalador de EEex).~
+// installer.luajit.required_version
+@108 = ~LuaVersionExternal requerido: %lua_version%~
+// installer.luajit.installed
+@109 = ~LuaJIT se instaló correctamente. BuffBot tendrá todas sus funciones disponibles.~
+// installer.luajit.postcondition_failed
+@110 = ~El asistente de LuaJIT de BuffBot no generó el estado requerido del cargador de EEex. Reinstala EEex con compatibilidad LuaJIT / Experimental y vuelve a ejecutar BuffBot.~
+// installer.component.main
+@111 = ~BuffBot: automatización de mejoras en el juego~
+// installer.main.luajit_required
+@112 = ~BuffBot requiere que EEex LuaJIT esté activo antes de instalar el componente principal. Instala primero "BuffBot: compatibilidad con EEex LuaJIT" o activa el componente LuaJIT / Experimental de EEex y vuelve a instalar BuffBot. Los usuarios de Project Infinity deben colocar el componente LuaJIT antes de "BuffBot: automatización de mejoras en el juego".~
+// installer.catalog_directory
+@113 = ~spanish~
+
+// innate.preset_1
+@200 = ~BuffBot 1~
+// innate.preset_2
+@201 = ~BuffBot 2~
+// innate.preset_3
+@202 = ~BuffBot 3~
+// innate.preset_4
+@203 = ~BuffBot 4~
+// innate.preset_5
+@204 = ~BuffBot 5~
+// innate.preset_6
+@205 = ~BuffBot 6~
+// innate.preset_7
+@206 = ~BuffBot 7~
+// innate.preset_8
+@207 = ~BuffBot 8~
+
+// common.buffbot
+@300 = ~BuffBot~
+// common.party
+@301 = ~Grupo~
+// common.summons
+@302 = ~Invocaciones~
+// common.self
+@303 = ~Sí mismo~
+// common.none
+@304 = ~Ninguno~
+// common.reset
+@305 = ~Restablecer~
+// common.rename
+@306 = ~Renombrar~
+// common.new
+@307 = ~Nuevo~
+// common.add_spell
+@308 = ~Añadir conj./obj.~
+// common.remove
+@309 = ~Eliminar~
+// common.export
+@310 = ~Exportar~
+// common.import
+@311 = ~Importar~
+// common.up
+@312 = ~Subir~
+// common.down
+@313 = ~Bajar~
+// common.sort
+@314 = ~Ordenar~
+// common.delete_preset
+@315 = ~Eliminar preajuste~
+// common.delete_preset_compact
+@316 = ~Elim. preaj.~
+// common.stop
+@317 = ~Alto~
+// common.close
+@318 = ~Cerrar~
+// common.all_party
+@319 = ~Todo el grupo~
+// common.clear
+@320 = ~Despejar~
+// common.done
+@321 = ~Listo~
+// common.unlock_targeting
+@322 = ~Desbloquear objetivos~
+// common.ok
+@323 = ~Aceptar~
+// common.cancel
+@324 = ~Cancelar~
+// common.delete
+@325 = ~Borrar~
+// common.select
+@326 = ~Seleccionar~
+// common.enable
+@327 = ~Activar~
+// common.disable
+@328 = ~Desactivar~
+// common.target
+@329 = ~Objetivo~
+// common.variant
+@330 = ~Variante~
+// common.spells
+@331 = ~Conjuros~
+// common.items
+@332 = ~Objetos~
+
+// ui.tooltip.configuration
+@400 = ~Configuración de BuffBot~
+// ui.no_allied_summons
+@401 = ~No se detectaron invocaciones aliadas~
+// ui.title.preset
+@402 = ~BuffBot - {preset}~
+// ui.title.summons
+@403 = ~BuffBot - Invocaciones~
+// ui.title.summon_preset
+@404 = ~BuffBot - {summon} - {preset}~
+// ui.clone.mislead
+@405 = ~Doble engañoso de {owner}~
+// ui.clone.project_image
+@406 = ~{owner}: Proyectar imagen~
+// ui.clone.simulacrum
+@407 = ~Simulacro de {owner}~
+// ui.clone.generic
+@408 = ~Clon de {owner}~
+// ui.cast.all
+@409 = ~Lanzar todo~
+// ui.cast.character
+@410 = ~Lanzar con PJ~
+// ui.cast.named
+@411 = ~Lanzar: {name}~
+// ui.cast.summon
+@412 = ~Lanzar con invoc.~
+// ui.qualifier.self_only
+@413 = ~(solo sobre sí)~
+// ui.qualifier.party_wide
+@414 = ~(todo el grupo)~
+// ui.rename_preset_title
+@415 = ~Renombrar preajuste:~
+// ui.add_spell_title
+@416 = ~Añadir conjuro u objeto~
+// ui.add_to_buff_list
+@417 = ~Añadir a la lista de mejoras~
+// ui.import_config_title
+@418 = ~Importar configuración~
+// ui.select_variant_title
+@419 = ~Seleccionar variante: {spell}~
+// ui.delete_preset_confirm
+@420 = ~¿Eliminar el preajuste "{name}" de TODOS los miembros del grupo?~
+// ui.variant.selected
+@421 = ~Var.: {name}~
+// ui.target.selected
+@422 = ~Objetivo: {target}~
+// ui.repeat.label
+@423 = ~Repetir: {count}~
+// ui.repeat.spell_tooltip
+@424 = ~Número de lanzamientos de este conjuro por cada objetivo determinado: {count}. Cada intento consume un espacio de conjuro y sigue las reglas normales de lanzamiento. Clic izquierdo para aumentar; clic derecho para reducir. Intervalo: 1–{max}.~
+// ui.repeat.item_tooltip
+@425 = ~Número de usos de este objeto por cada objetivo determinado: {count}. Cada intento consume una unidad de una pila o una carga y sigue las reglas normales de uso de objetos. Clic izquierdo para aumentar; clic derecho para reducir. Intervalo: 1–{max}.~
+// ui.target.player
+@426 = ~Jugador {index}~
+// ui.target.multiple
+@427 = ~{name} +{count}~
+// ui.status.casting
+@428 = ~Lanzando...~
+// ui.status.casting_quick_long
+@429 = ~Lanzando (rápido: largas)...~
+// ui.status.casting_quick_all
+@430 = ~Lanzando (rápido: todas)...~
+// ui.status.done
+@431 = ~Listo~
+// ui.status.stopped
+@432 = ~Detenido~
+// ui.quick_cast.off
+@433 = ~Rápido: desactivado~
+// ui.quick_cast.long
+@434 = ~Rápido: largas~
+// ui.quick_cast.all
+@435 = ~Rápido: todas~
+// ui.quick_cast.tooltip_unavailable
+@436 = ~Velocidad de lanzamiento normal~
+// ui.quick_cast.tooltip_off
+@437 = ~Velocidad de lanzamiento normal: los conjuros respetan la recarga del aura. Haz clic para cambiar de modo.~
+// ui.quick_cast.tooltip_long
+@438 = ~Lanzamiento rápido para mejoras «largas» (300 s o más). Las mejoras cortas se lanzan con normalidad. Haz clic para cambiar de modo.~
+// ui.quick_cast.tooltip_all
+@439 = ~Lanzamiento rápido para TODAS las mejoras, sin importar su duración (trampa). Haz clic para cambiar de modo.~
+// ui.duration.permanent
+@440 = ~Perm.~
+// ui.duration.instant
+@441 = ~Inst.~
+// ui.duration.hours_minutes
+@442 = ~{hours} h {minutes} min~
+// ui.duration.hours
+@443 = ~{hours} h~
+// ui.duration.minutes_seconds
+@444 = ~{minutes} min {seconds} s~
+// ui.duration.minutes
+@445 = ~{minutes} min~
+// ui.duration.seconds
+@446 = ~{seconds} s~
+// ui.category.permanent
+@447 = ~permanente~
+// ui.category.long
+@448 = ~larga~
+// ui.category.short
+@449 = ~corta~
+// ui.category.instant
+@450 = ~instantánea~
+// ui.category.unknown
+@451 = ~desconocida~
+// ui.repeat.compact
+@452 = ~R{count}~
+// ui.lock.compact
+@453 = ~[B]~
+
+// feedback.no_luajit
+@500 = ~BuffBot: no se detectó LuaJIT. Las aptitudes especiales de F12, el lanzamiento rápido, la exportación/importación y el registro están desactivados. Instala el componente EEex LuaJIT para disponer de todas las funciones.~
+// feedback.combat_stopped
+@501 = ~BuffBot: combate detectado; lanzamiento detenido~
+// feedback.cast_timeout
+@502 = ~BuffBot: se agotó el tiempo de lanzamiento; proceso detenido~
+// feedback.party_changed_after_run
+@503 = ~BuffBot: el grupo ha cambiado; vuelve a intentarlo cuando termine el proceso actual~
+// feedback.party_changed_refreshing
+@504 = ~BuffBot: el grupo ha cambiado; actualizando aptitudes especiales, inténtalo de nuevo~
+// feedback.no_spells_with_reason
+@505 = ~BuffBot: no hay conjuros ni objetos que usar ({reason})~
+// feedback.innate_error
+@506 = ~Error de aptitud especial de BuffBot: {error}~
+// feedback.no_spells_preset
+@507 = ~BuffBot: no hay conjuros ni objetos que usar en este preajuste~
+// feedback.character_remote_control
+@508 = ~BuffBot: otro jugador controla a {name}~
+// feedback.character_project_image_locked
+@509 = ~BuffBot: Proyectar imagen impide actuar a {name}; inténtalo de nuevo cuando desaparezca la imagen~
+// feedback.no_spells_character
+@510 = ~BuffBot: no hay conjuros ni objetos que usar con este personaje~
+// feedback.no_summon_selected
+@511 = ~BuffBot: no hay ninguna invocación seleccionada~
+// feedback.no_spells_summon
+@512 = ~BuffBot: no hay conjuros que lanzar con esta invocación~
+// feedback.no_spells_summon_with_reason
+@513 = ~BuffBot: no hay conjuros que lanzar con esta invocación ({reason})~
+// feedback.no_additional_spells
+@514 = ~BuffBot: no hay más conjuros ni objetos que añadir~
+// feedback.export_success
+@515 = ~BuffBot: configuración exportada como «{file}»~
+// feedback.export_failed
+@516 = ~BuffBot: error al exportar: {reason}~
+// feedback.no_exported_configs
+@517 = ~BuffBot: no se encontraron configuraciones en bfbot_presets/~
+// feedback.import_success
+@518 = ~BuffBot: se importó «{file}» (preajustes: {presets}; entradas omitidas: {skipped})~
+// feedback.import_failed
+@519 = ~BuffBot: error al importar: {reason}~
+// reason.exec.empty_queue
+@520 = ~cola vacía~
+// reason.exec.no_valid_entries
+@521 = ~no hay entradas válidas tras la expansión~
+// reason.exec.already_running
+@522 = ~ya está en ejecución~
+// reason.export.luajit_required
+@523 = ~se requiere LuaJIT para exportar~
+// reason.export.no_sprite
+@524 = ~no hay ningún personaje seleccionado~
+// reason.export.no_config
+@525 = ~no se encontró ninguna configuración~
+// reason.export.cannot_open_file
+@526 = ~no se puede abrir el archivo: {error}~
+// reason.import.luajit_required
+@527 = ~se requiere LuaJIT para importar~
+// reason.import.no_sprite
+@528 = ~no hay ningún personaje seleccionado~
+// reason.import.no_filename
+@529 = ~no se seleccionó ningún nombre de archivo~
+// reason.import.invalid_filename
+@530 = ~nombre de archivo no válido~
+// reason.import.cannot_open_file
+@531 = ~no se puede abrir el archivo: {error}~
+// reason.import.empty_file
+@532 = ~archivo vacío~
+// reason.import.parse_error
+@533 = ~error de análisis: {error}~
+// reason.import.exec_error
+@534 = ~error de ejecución: {error}~
+// reason.import.invalid_data
+@535 = ~el archivo no contiene una configuración válida de BuffBot~
+// reason.queue.invalid_summon
+@536 = ~entrada de invocación no válida~
+// reason.queue.no_summon_preset
+@537 = ~no hay un preajuste {index} configurado para la invocación~
+// reason.queue.caster_resolver_unavailable
+@538 = ~no se puede determinar el lanzador~
+// reason.queue.summon_gone
+@539 = ~la invocación ya no está ({name})~
+// reason.queue.summon_scan_failed
+@540 = ~falló el análisis de la invocación {name}~
+// reason.queue.no_castable_summon_spells
+@541 = ~no hay conjuros lanzables en el preajuste de invocación {index}~
+// reason.queue.no_preset_index
+@542 = ~falta el índice del preajuste~
+// reason.queue.no_castable_preset_spells
+@543 = ~no hay conjuros lanzables ni objetos utilizables en el preajuste {index}~
+// reason.queue.missing_slot_or_preset
+@544 = ~falta la posición del personaje o el preajuste~
+// reason.queue.no_sprite_in_slot
+@545 = ~no hay ningún personaje en la posición {slot}~
+// reason.queue.not_locally_controlled
+@546 = ~sin control local~
+// reason.queue.no_config_for_slot
+@547 = ~no hay configuración para la posición {slot}~
+// reason.queue.no_preset_for_slot
+@548 = ~no hay preajuste {preset} para la posición {slot}~
+// reason.queue.scan_failed_for_slot
+@549 = ~falló el análisis de la posición {slot}~
+// reason.queue.project_image_locked
+@550 = ~Proyectar imagen impide actuar~
+// reason.queue.no_castable_spells_for_slot
+@551 = ~no hay conjuros lanzables ni objetos utilizables en el preajuste {preset} de la posición {slot}~
+
+// default.preset.long
+@600 = ~Mejoras largas~
+// default.preset.short
+@601 = ~Mejoras cortas~
+// default.preset.indexed
+@602 = ~Preajuste {index}~
+
+// options.tab
+@700 = ~BuffBot~
+// options.dark_mode
+@701 = ~Modo oscuro~
+// options.dark_mode_description
+@702 = ~Oscurece el pergamino del panel para jugar con poca luz. La paleta de realce se mantiene.~
+// options.color_scheme
+@703 = ~Esquema de color~
+// options.color_scheme_description
+@704 = ~Elige la paleta de realce del panel: pergamino clásico de BG2, azul acero de Siege of Dragonspear o ámbar cálido de BG1.~
+// options.color_scheme_bg2
+@705 = ~Baldur's Gate 2~
+// options.color_scheme_sod
+@706 = ~Siege of Dragonspear~
+// options.color_scheme_bg1
+@707 = ~Baldur's Gate 1~
+// options.text_size
+@708 = ~Tamaño del texto~
+// options.text_size_description
+@709 = ~Ajusta el tamaño de títulos, listas y texto interactivo. Los rótulos de los botones clásicos de piedra mantienen el tamaño predeterminado del motor.~
+// options.text_size_small
+@710 = ~Pequeño~
+// options.text_size_medium
+@711 = ~Mediano~
+// options.text_size_large
+@712 = ~Grande~

@@ -1,0 +1,360 @@
+// installer.component.luajit
+@100 = ~BuffBot: поддержка EEex LuaJIT (определяется автоматически)~
+// installer.require.game
+@101 = ~BuffBot требует BG:EE, BG2:EE или EET.~
+// installer.require.eeex
+@102 = ~BuffBot требует EEex версии 0.11.0-alpha или новее. Сначала установите EEex: https://github.com/Bubb13/EEex/releases~
+// installer.luajit.already_active
+@103 = ~LuaJIT уже активен. Установка будет пропущена.~
+// installer.luajit.missing_ini
+@104 = ~Файл InfinityLoader.ini не найден. Переустановите EEex, прежде чем включать поддержку LuaJIT для BuffBot.~
+// installer.luajit.missing_dlls
+@105 = ~Исходные DLL EEex LuaJIT не найдены в EEex/loader/LuaJIT/. Переустановите EEex с файлами LuaJIT / Experimental, прежде чем включать поддержку LuaJIT для BuffBot.~
+// installer.luajit.invalid_general
+@106 = ~В InfinityLoader.ini нет единственного корректно оформленного первого раздела [General]. Переустановите EEex, прежде чем включать поддержку LuaJIT для BuffBot.~
+// installer.luajit.installing
+@107 = ~Установка компонента EEex LuaJIT (обычно устанавливается программой установки EEex).~
+// installer.luajit.required_version
+@108 = ~Требуемое значение LuaVersionExternal: %lua_version%~
+// installer.luajit.installed
+@109 = ~LuaJIT успешно установлен. Все функции BuffBot будут доступны.~
+// installer.luajit.postcondition_failed
+@110 = ~Вспомогательный модуль LuaJIT для BuffBot не создал требуемое состояние загрузчика EEex. Переустановите EEex с поддержкой LuaJIT / Experimental, затем снова запустите установку BuffBot.~
+// installer.component.main
+@111 = ~BuffBot: автоматизация усилений в игре~
+// installer.main.luajit_required
+@112 = ~Перед установкой главного компонента BuffBot требуется активный EEex LuaJIT. Сначала установите «BuffBot: поддержка EEex LuaJIT» либо включите компонент LuaJIT / Experimental в EEex, а затем снова установите BuffBot. Пользователи Project Infinity должны разместить компонент LuaJIT перед «BuffBot: автоматизация усилений в игре».~
+// installer.catalog_directory
+@113 = ~russian~
+
+// innate.preset_1
+@200 = ~BuffBot 1~
+// innate.preset_2
+@201 = ~BuffBot 2~
+// innate.preset_3
+@202 = ~BuffBot 3~
+// innate.preset_4
+@203 = ~BuffBot 4~
+// innate.preset_5
+@204 = ~BuffBot 5~
+// innate.preset_6
+@205 = ~BuffBot 6~
+// innate.preset_7
+@206 = ~BuffBot 7~
+// innate.preset_8
+@207 = ~BuffBot 8~
+
+// common.buffbot
+@300 = ~BuffBot~
+// common.party
+@301 = ~Группа~
+// common.summons
+@302 = ~Призванные~
+// common.self
+@303 = ~На себя~
+// common.none
+@304 = ~Нет~
+// common.reset
+@305 = ~Сброс~
+// common.rename
+@306 = ~Переименовать~
+// common.new
+@307 = ~Новый~
+// common.add_spell
+@308 = ~Добавить~
+// common.remove
+@309 = ~Удалить~
+// common.export
+@310 = ~Экспорт~
+// common.import
+@311 = ~Импорт~
+// common.up
+@312 = ~Вверх~
+// common.down
+@313 = ~Вниз~
+// common.sort
+@314 = ~Сорт.~
+// common.delete_preset
+@315 = ~Удалить набор~
+// common.delete_preset_compact
+@316 = ~Удал. набор~
+// common.stop
+@317 = ~Стоп~
+// common.close
+@318 = ~Закрыть~
+// common.all_party
+@319 = ~Вся группа~
+// common.clear
+@320 = ~Очистить~
+// common.done
+@321 = ~Готово~
+// common.unlock_targeting
+@322 = ~Снять блок цели~
+// common.ok
+@323 = ~OK~
+// common.cancel
+@324 = ~Отмена~
+// common.delete
+@325 = ~Удалить~
+// common.select
+@326 = ~Выбрать~
+// common.enable
+@327 = ~Включить~
+// common.disable
+@328 = ~Отключить~
+// common.target
+@329 = ~Цель~
+// common.variant
+@330 = ~Вариант~
+// common.spells
+@331 = ~Заклинания~
+// common.items
+@332 = ~Предметы~
+
+// ui.tooltip.configuration
+@400 = ~Настройка BuffBot~
+// ui.no_allied_summons
+@401 = ~Нет союзных призванных~
+// ui.title.preset
+@402 = ~BuffBot - {preset}~
+// ui.title.summons
+@403 = ~BuffBot - Призванные~
+// ui.title.summon_preset
+@404 = ~BuffBot - {summon} - {preset}~
+// ui.clone.mislead
+@405 = ~{owner}: Заблуждение~
+// ui.clone.project_image
+@406 = ~{owner}: Проекция образа~
+// ui.clone.simulacrum
+@407 = ~{owner}: Подобие~
+// ui.clone.generic
+@408 = ~{owner}: клон~
+// ui.cast.all
+@409 = ~Прим. всё~
+// ui.cast.character
+@410 = ~Прим. перс.~
+// ui.cast.named
+@411 = ~Прим.: {name}~
+// ui.cast.summon
+@412 = ~Прим. призв.~
+// ui.qualifier.self_only
+@413 = ~(только на себя)~
+// ui.qualifier.party_wide
+@414 = ~(на всю группу)~
+// ui.rename_preset_title
+@415 = ~Переименовать набор:~
+// ui.add_spell_title
+@416 = ~Добавить заклинание или предмет в список усилений~
+// ui.add_to_buff_list
+@417 = ~Добавить к усилениям~
+// ui.import_config_title
+@418 = ~Импорт конфигурации~
+// ui.select_variant_title
+@419 = ~Выбрать вариант: {spell}~
+// ui.delete_preset_confirm
+@420 = ~Удалить набор «{name}» у ВСЕХ членов группы?~
+// ui.variant.selected
+@421 = ~Вар.: {name}~
+// ui.target.selected
+@422 = ~Цель: {target}~
+// ui.repeat.label
+@423 = ~Повтор: {count}~
+// ui.repeat.spell_tooltip
+@424 = ~Число применений этого заклинания к каждой выбранной цели: {count}. Каждая попытка расходует ячейку заклинания и подчиняется обычным правилам. ЛКМ увеличивает, ПКМ уменьшает. Диапазон: 1–{max}.~
+// ui.repeat.item_tooltip
+@425 = ~Число использований этого предмета для каждой выбранной цели: {count}. Каждая попытка расходует предмет из стопки или заряд и подчиняется обычным правилам использования предметов. ЛКМ увеличивает, ПКМ уменьшает. Диапазон: 1–{max}.~
+// ui.target.player
+@426 = ~Игрок {index}~
+// ui.target.multiple
+@427 = ~{name} +{count}~
+// ui.status.casting
+@428 = ~Применение...~
+// ui.status.casting_quick_long
+@429 = ~Применение (быстро: долгие)...~
+// ui.status.casting_quick_all
+@430 = ~Применение (быстро: все)...~
+// ui.status.done
+@431 = ~Готово~
+// ui.status.stopped
+@432 = ~Остановлено~
+// ui.quick_cast.off
+@433 = ~Быстро: выкл.~
+// ui.quick_cast.long
+@434 = ~Быстро: долгие~
+// ui.quick_cast.all
+@435 = ~Быстро: все~
+// ui.quick_cast.tooltip_unavailable
+@436 = ~Обычная скорость применения~
+// ui.quick_cast.tooltip_off
+@437 = ~Обычная скорость применения — заклинания учитывают перезарядку ауры. Щёлкните, чтобы сменить режим.~
+// ui.quick_cast.tooltip_long
+@438 = ~Быстрое применение «долгих» усилений (длительность от 300 с). Короткие применяются обычно. Щёлкните, чтобы сменить режим.~
+// ui.quick_cast.tooltip_all
+@439 = ~Быстрое применение ВСЕХ усилений независимо от длительности (чит). Щёлкните, чтобы сменить режим.~
+// ui.duration.permanent
+@440 = ~Пост.~
+// ui.duration.instant
+@441 = ~Мгн.~
+// ui.duration.hours_minutes
+@442 = ~{hours} ч {minutes} мин~
+// ui.duration.hours
+@443 = ~{hours} ч~
+// ui.duration.minutes_seconds
+@444 = ~{minutes} мин {seconds} с~
+// ui.duration.minutes
+@445 = ~{minutes} мин~
+// ui.duration.seconds
+@446 = ~{seconds} с~
+// ui.category.permanent
+@447 = ~постоянные~
+// ui.category.long
+@448 = ~долгие~
+// ui.category.short
+@449 = ~короткие~
+// ui.category.instant
+@450 = ~мгновенные~
+// ui.category.unknown
+@451 = ~неизвестные~
+// ui.repeat.compact
+@452 = ~П{count}~
+// ui.lock.compact
+@453 = ~[Б]~
+
+// feedback.no_luajit
+@500 = ~BuffBot: LuaJIT не обнаружен. Врождённые способности F12, быстрое применение, экспорт/импорт и журналирование отключены. Для полной функциональности установите компонент EEex LuaJIT.~
+// feedback.combat_stopped
+@501 = ~BuffBot: обнаружен бой — применение остановлено~
+// feedback.cast_timeout
+@502 = ~BuffBot: превышено время ожидания — применение остановлено~
+// feedback.party_changed_after_run
+@503 = ~BuffBot: состав группы изменился — повторите после завершения текущего запуска~
+// feedback.party_changed_refreshing
+@504 = ~BuffBot: состав группы изменился — врождённые способности обновляются, попробуйте снова~
+// feedback.no_spells_with_reason
+@505 = ~BuffBot: нет заклинаний или предметов для применения ({reason})~
+// feedback.innate_error
+@506 = ~Ошибка врождённой способности BuffBot: {error}~
+// feedback.no_spells_preset
+@507 = ~BuffBot: в этом наборе нет заклинаний или предметов для применения~
+// feedback.character_remote_control
+@508 = ~BuffBot: персонаж {name} находится под управлением другого игрока~
+// feedback.character_project_image_locked
+@509 = ~BuffBot: персонаж {name} заблокирован Проекцией образа — повторите после исчезновения проекции~
+// feedback.no_spells_character
+@510 = ~BuffBot: у этого персонажа нет заклинаний или предметов для применения~
+// feedback.no_summon_selected
+@511 = ~BuffBot: призванное существо не выбрано~
+// feedback.no_spells_summon
+@512 = ~BuffBot: у этого призванного нет заклинаний для применения~
+// feedback.no_spells_summon_with_reason
+@513 = ~BuffBot: у этого призванного нет заклинаний для применения ({reason})~
+// feedback.no_additional_spells
+@514 = ~BuffBot: нет дополнительных заклинаний или предметов для добавления~
+// feedback.export_success
+@515 = ~BuffBot: конфигурация экспортирована как «{file}»~
+// feedback.export_failed
+@516 = ~BuffBot: ошибка экспорта — {reason}~
+// feedback.no_exported_configs
+@517 = ~BuffBot: в bfbot_presets/ нет конфигураций~
+// feedback.import_success
+@518 = ~BuffBot: импортирован файл «{file}» (наборов: {presets}, пропущено записей: {skipped})~
+// feedback.import_failed
+@519 = ~BuffBot: ошибка импорта — {reason}~
+// reason.exec.empty_queue
+@520 = ~пустая очередь~
+// reason.exec.no_valid_entries
+@521 = ~после развёртывания нет допустимых записей~
+// reason.exec.already_running
+@522 = ~уже выполняется~
+// reason.export.luajit_required
+@523 = ~для экспорта требуется LuaJIT~
+// reason.export.no_sprite
+@524 = ~персонаж не выбран~
+// reason.export.no_config
+@525 = ~конфигурация не найдена~
+// reason.export.cannot_open_file
+@526 = ~не удалось открыть файл: {error}~
+// reason.import.luajit_required
+@527 = ~для импорта требуется LuaJIT~
+// reason.import.no_sprite
+@528 = ~персонаж не выбран~
+// reason.import.no_filename
+@529 = ~имя файла не выбрано~
+// reason.import.invalid_filename
+@530 = ~недопустимое имя файла~
+// reason.import.cannot_open_file
+@531 = ~не удалось открыть файл: {error}~
+// reason.import.empty_file
+@532 = ~пустой файл~
+// reason.import.parse_error
+@533 = ~ошибка разбора: {error}~
+// reason.import.exec_error
+@534 = ~ошибка выполнения: {error}~
+// reason.import.invalid_data
+@535 = ~файл не содержит допустимой конфигурации BuffBot~
+// reason.queue.invalid_summon
+@536 = ~недопустимая запись призванного~
+// reason.queue.no_summon_preset
+@537 = ~нет настроенного набора {index} для призванного~
+// reason.queue.caster_resolver_unavailable
+@538 = ~определитель заклинателя недоступен~
+// reason.queue.summon_gone
+@539 = ~призванный исчез ({name})~
+// reason.queue.summon_scan_failed
+@540 = ~ошибка сканирования: {name}~
+// reason.queue.no_castable_summon_spells
+@541 = ~в наборе {index} призванного нет доступных заклинаний~
+// reason.queue.no_preset_index
+@542 = ~нет индекса набора~
+// reason.queue.no_castable_preset_spells
+@543 = ~в наборе {index} нет доступных заклинаний или предметов~
+// reason.queue.missing_slot_or_preset
+@544 = ~нет слота персонажа или набора~
+// reason.queue.no_sprite_in_slot
+@545 = ~в слоте {slot} нет персонажа~
+// reason.queue.not_locally_controlled
+@546 = ~нет локального управления~
+// reason.queue.no_config_for_slot
+@547 = ~нет конфигурации для слота {slot}~
+// reason.queue.no_preset_for_slot
+@548 = ~в слоте {slot} нет набора {preset}~
+// reason.queue.scan_failed_for_slot
+@549 = ~ошибка сканирования слота {slot}~
+// reason.queue.project_image_locked
+@550 = ~блокировка Проекцией образа~
+// reason.queue.no_castable_spells_for_slot
+@551 = ~в наборе {preset} слота {slot} нет доступных заклинаний или предметов~
+
+// default.preset.long
+@600 = ~Долгие бафы~
+// default.preset.short
+@601 = ~Короткие бафы~
+// default.preset.indexed
+@602 = ~Набор {index}~
+
+// options.tab
+@700 = ~BuffBot~
+// options.dark_mode
+@701 = ~Тёмный режим~
+// options.dark_mode_description
+@702 = ~Затемняет пергамент панели для игры при слабом освещении. Цвета акцентов сохраняются.~
+// options.color_scheme
+@703 = ~Цветовая схема~
+// options.color_scheme_description
+@704 = ~Выберите палитру акцентов панели: классический пергамент BG2, стально-синюю палитру Siege of Dragonspear или тёплый янтарь BG1.~
+// options.color_scheme_bg2
+@705 = ~Baldur's Gate 2~
+// options.color_scheme_sod
+@706 = ~Siege of Dragonspear~
+// options.color_scheme_bg1
+@707 = ~Baldur's Gate 1~
+// options.text_size
+@708 = ~Размер текста~
+// options.text_size_description
+@709 = ~Масштабирует заголовки, списки и кликабельный текст. Надписи на классических каменных кнопках остаются стандартного размера движка.~
+// options.text_size_small
+@710 = ~Мелкий~
+// options.text_size_medium
+@711 = ~Средний~
+// options.text_size_large
+@712 = ~Крупный~
