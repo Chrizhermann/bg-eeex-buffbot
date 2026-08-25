@@ -960,15 +960,32 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = source.split("\n## ", 1)[1].split("\n## ", 1)[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.8.1-alpha (2026-08-25)")
-    assert "nine complete language catalogs" in current_normalized
-    assert "italian was contributed and tested in game" in current_normalized
-    assert "six other new catalogs began as ai-authored translations" in current_normalized
-    assert "german reviewed by the german-speaking maintainer" in current_normalized
-    assert "native-speaker corrections remain welcome" in current_normalized
-    assert "full automated suite passes **450 tests**" in current_normalized
-    assert "have not been validated in game" in current_normalized
-    assert "alternate resolutions/fonts" in current_normalized
+    assert current_release.startswith("v1.8.2-alpha (2026-08-26)")
+    assert "permanent administrative residue" in current_normalized
+    assert "opcode-282/328 state markers" in current_normalized
+    assert "resource-driven rather than specific to free action" in current_normalized
+    assert "markerless spells" in current_normalized
+    assert "item behavior is unchanged" in current_normalized
+    assert "full automated suite passes **456 tests**" in current_normalized
+    assert "live bg2:ee validation" in current_normalized
+    assert "death ward independently activating shared state 67" in current_normalized
+    assert "cast: 1 | skipped: 0" in current_normalized
+    assert "reporter's complete bg:ee/gog/eeex v1.0 mod stack" in current_normalized
+    assert "three-recipient queue" in current_normalized
+
+    translation_release = source.split("\n## v1.8.1-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    translation_normalized = translation_release.casefold()
+
+    assert "nine complete language catalogs" in translation_normalized
+    assert "italian was contributed and tested in game" in translation_normalized
+    assert "six other new catalogs began as ai-authored translations" in translation_normalized
+    assert "german reviewed by the german-speaking maintainer" in translation_normalized
+    assert "native-speaker corrections remain welcome" in translation_normalized
+    assert "full automated suite passes **450 tests**" in translation_normalized
+    assert "have not been validated in game" in translation_normalized
+    assert "alternate resolutions/fonts" in translation_normalized
 
     localization_release = source.split("\n## v1.8.0-alpha", 1)[1].split(
         "\n## ", 1

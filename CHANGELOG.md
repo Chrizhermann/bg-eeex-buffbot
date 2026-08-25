@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.8.2-alpha (2026-08-26)
+
+### Fixed
+- **Active-buff detection no longer confuses permanent administrative residue with a live spell on heavily modded installs.** For spells that declare opcode-282/328 state markers, BuffBot now confirms an active buff using the matching source resource, marker opcode, and state ID. This fixes later Free Action casts being skipped when Klatu component 2070 leaves a permanent `SPPR403` opcode-101 effect and SCS Detectable Spells shares state 67 with another protection. (#69)
+
+### Compatibility
+- The fix is resource-driven rather than specific to Free Action. Marker identity is tracked separately for wrapper parents, opcode-146 children, opcode-214 variants, and caster-level-specific abilities. Markerless spells retain the existing source-effect fallback, item behavior is unchanged, and the save schema is unchanged.
+
+### Testing
+- The full automated suite passes **456 tests**, including opcode-282/328 markers, same-source residue, shared states from other resources, wrapper and child spells, variants, caster-level-dependent abilities, markerless spells, items, and queue metadata propagation.
+- **Live BG2:EE validation:** BuffBot cast Free Action normally and skipped it while its own marker remained active. After resting, Klatu's permanent opcode-101 residue remained while Free Action's marker expired. With Death Ward independently activating shared state 67, BuffBot correctly cast Free Action again (`Cast: 1 | Skipped: 0`).
+- The reporter's complete BG:EE/GOG/EEex v1.0 mod stack, BG1EE, the broader compatibility matrix, a three-recipient queue, and the full in-game `BfBot.Test.RunAll()` suite were not rerun for this release.
+
 ## v1.8.1-alpha (2026-08-25)
 
 ### Added
