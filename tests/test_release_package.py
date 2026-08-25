@@ -34,7 +34,7 @@ DEPLOY_SCRIPT = ROOT / "tools/deploy.sh"
 WORKFLOW = ROOT / ".github/workflows/release.yml"
 README = ROOT / "README.md"
 TP2_PATH = ROOT / "buffbot/setup-buffbot.tp2"
-VERSION = "v1.8.0-alpha"
+VERSION = "v1.8.1-alpha"
 
 # This is deliberately explicit: recursive packaging must not silently publish
 # a backup, installer-generated state, local state, or a future development-only file.
@@ -70,9 +70,15 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/MOS9922.PVRZ",
     "buffbot/MOS9923.PVRZ",
     "buffbot/M_BfBot.lua",
+    "buffbot/lang/brazilian_portuguese/setup.tra",
     "buffbot/lang/english/setup.tra",
+    "buffbot/lang/french/setup.tra",
+    "buffbot/lang/german/setup.tra",
     "buffbot/lang/italian/setup.tra",
+    "buffbot/lang/polish/setup.tra",
+    "buffbot/lang/russian/setup.tra",
     "buffbot/lang/schinese/setup.tra",
+    "buffbot/lang/spanish/setup.tra",
     "buffbot/setup-buffbot.tp2",
 }
 ARCHIVE_FILES = {
@@ -217,7 +223,7 @@ def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 39
+    assert len(names) == 45
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)
@@ -408,6 +414,23 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "## Languages" in source
     assert "English" in source
     assert "Simplified Chinese" in source
+    for language_name in (
+        "Italian",
+        "German",
+        "French",
+        "Spanish",
+        "Polish",
+        "Russian",
+        "Brazilian Portuguese",
+    ):
+        assert language_name in source
+    assert "six new catalogs began as AI-authored translations".casefold() in normalized
+    assert "German catalog has since been reviewed".casefold() in normalized
+    assert "none has yet been validated in-game".casefold() in normalized
+    assert "native-speaker corrections remain welcome".casefold() in normalized
+    assert "German reviewed by the maintainer".casefold() in normalized
+    assert "AI-authored drafts".casefold() not in normalized
+    assert "German awaits maintainer curation".casefold() not in normalized
     assert "weiDU".casefold() in normalized
     assert "selected UTF-8 catalog".casefold() in normalized
     assert "`override/bfbot_l10n.tra`" in source

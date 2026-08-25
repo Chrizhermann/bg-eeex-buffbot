@@ -38,6 +38,17 @@ SEMANTIC_COMMENT_RE = re.compile(r"^//\s*([a-z][a-z0-9_.]*)\s*$")
 NAMED_PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 WEIDU_SENTINEL_RE = re.compile(r"%([A-Za-z_][A-Za-z0-9_]*)%")
 WEIDU_PLACEHOLDER_CONTRACT = {108: {"lua_version"}}
+EXPECTED_CATALOG_DIRECTORIES = {
+    "brazilian_portuguese",
+    "english",
+    "french",
+    "german",
+    "italian",
+    "polish",
+    "russian",
+    "schinese",
+    "spanish",
+}
 
 
 # Catalog IDs are deliberately grouped so the Lua registry and selected catalog
@@ -417,9 +428,10 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
 
     catalogs = shipped_catalogs()
     shipped_languages = {path.parent.name for path in catalogs}
-    required_languages = {"english", "schinese"}
-    assert not required_languages - shipped_languages, (
-        f"missing required catalog(s): {sorted(required_languages - shipped_languages)}"
+    assert shipped_languages == EXPECTED_CATALOG_DIRECTORIES, (
+        "shipped catalog mismatch: "
+        f"missing={sorted(EXPECTED_CATALOG_DIRECTORIES - shipped_languages)}, "
+        f"unexpected={sorted(shipped_languages - EXPECTED_CATALOG_DIRECTORIES)}"
     )
     for catalog_path in catalogs:
         catalog, semantics = parse_tra(catalog_path)
@@ -834,8 +846,8 @@ def test_installer_localization_contract_copies_selected_catalog_and_resolves_on
 
     assert source.index("ALWAYS") < language_pos < helper_label_pos
     assert source[:language_pos].rstrip().endswith("END")
-    assert "~buffbot/lang/english/setup.tra~" in source
-    assert "~buffbot/lang/schinese/setup.tra~" in source
+    for directory in EXPECTED_CATALOG_DIRECTORIES:
+        assert f"~buffbot/lang/{directory}/setup.tra~" in source
     assert "BEGIN @100" in source
     assert "BEGIN @111" in source
     expected_installer_ref_counts = {
@@ -923,10 +935,12 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "Only the eight generated F12 innate names remain TLK-backed" in languages
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
-    current_release = changelog.split("\n## ", 1)[1].split("\n## ", 1)[0]
-    assert "Runtime UI localization is file-backed" in current_release
-    assert "`override/bfbot_l10n.tra`" in current_release
-    assert "Only the eight generated F12 SPL names remain TLK-backed" in current_release
+    localization_release = changelog.split("\n## v1.8.0-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    assert "Runtime UI localization is file-backed" in localization_release
+    assert "`override/bfbot_l10n.tra`" in localization_release
+    assert "Only the eight generated F12 SPL names remain TLK-backed" in localization_release
 
     design = FILE_BACKED_DESIGN_PATH.read_text(encoding="utf-8")
     decision = design.split("## Decision", 1)[1].split("## Considered Approaches", 1)[0]
@@ -941,18 +955,33 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
-def test_current_release_changelog_records_final_automated_and_live_boundary():
+def test_release_changelog_records_final_automated_and_live_boundaries():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
     current_release = source.split("\n## ", 1)[1].split("\n## ", 1)[0]
-    normalized = current_release.casefold()
+    current_normalized = current_release.casefold()
+
+    assert current_release.startswith("v1.8.1-alpha (2026-08-25)")
+    assert "nine complete language catalogs" in current_normalized
+    assert "italian was contributed and tested in game" in current_normalized
+    assert "six other new catalogs began as ai-authored translations" in current_normalized
+    assert "german reviewed by the german-speaking maintainer" in current_normalized
+    assert "native-speaker corrections remain welcome" in current_normalized
+    assert "full automated suite passes **450 tests**" in current_normalized
+    assert "have not been validated in game" in current_normalized
+    assert "alternate resolutions/fonts" in current_normalized
+
+    localization_release = source.split("\n## v1.8.0-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    normalized = localization_release.casefold()
 
     assert "native startup crash" in normalized
     assert "infinity_fetchstring" in normalized
     assert "file-backed" in normalized
     assert "override/bfbot_l10n.tra" in normalized
-    assert "@200" in current_release and "@207" in current_release
+    assert "@200" in localization_release and "@207" in localization_release
     assert "bfbot_strrefs.txt" in normalized
-    assert "WeiDU 249" in current_release
+    assert "WeiDU 249" in localization_release
     assert "map-backed candidate migration" in normalized
     assert "ownership" in normalized and "restor" in normalized
     assert "full automated suite passes **408 tests**" in normalized

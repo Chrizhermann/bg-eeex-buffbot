@@ -31,11 +31,23 @@ LANGUAGE_CASES = (
     (0, "en_US", "english"),
     (1, "zh_CN", "schinese"),
     (2, "it_IT", "italian"),
+    (3, "de_DE", "german"),
+    (4, "fr_FR", "french"),
+    (5, "es_ES", "spanish"),
+    (6, "pl_PL", "polish"),
+    (7, "ru_RU", "russian"),
+    (8, "pt_BR", "brazilian_portuguese"),
 )
 GAME_TLK_ATTRIBUTES = {
     "en_US": "lang_tlk",
     "zh_CN": "schinese_tlk",
     "it_IT": "italian_tlk",
+    "de_DE": "german_tlk",
+    "fr_FR": "french_tlk",
+    "es_ES": "spanish_tlk",
+    "pl_PL": "polish_tlk",
+    "ru_RU": "russian_tlk",
+    "pt_BR": "brazilian_portuguese_tlk",
 }
 ENGLISH_CATALOG, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
 INNATE_CATALOG_IDS = set(range(200, 208))
@@ -341,6 +353,12 @@ class ProductState:
     lang_tlk: bytes
     schinese_tlk: bytes
     italian_tlk: bytes
+    german_tlk: bytes
+    french_tlk: bytes
+    spanish_tlk: bytes
+    polish_tlk: bytes
+    russian_tlk: bytes
+    brazilian_portuguese_tlk: bytes
     override: dict[str, bytes]
     eeex: dict[str, bytes]
     eeex_scripts: dict[str, bytes]
@@ -369,10 +387,22 @@ class BuffBotGame:
         self.lang_tlk = root / "lang/en_US/dialog.tlk"
         self.schinese_tlk = root / "lang/zh_CN/dialog.tlk"
         self.italian_tlk = root / "lang/it_IT/dialog.tlk"
+        self.german_tlk = root / "lang/de_DE/dialog.tlk"
+        self.french_tlk = root / "lang/fr_FR/dialog.tlk"
+        self.spanish_tlk = root / "lang/es_ES/dialog.tlk"
+        self.polish_tlk = root / "lang/pl_PL/dialog.tlk"
+        self.russian_tlk = root / "lang/ru_RU/dialog.tlk"
+        self.brazilian_portuguese_tlk = root / "lang/pt_BR/dialog.tlk"
         write_minimal_tlk(self.root_tlk)
         write_minimal_tlk(self.lang_tlk)
         write_minimal_tlk(self.schinese_tlk)
         write_minimal_tlk(self.italian_tlk)
+        write_minimal_tlk(self.german_tlk)
+        write_minimal_tlk(self.french_tlk)
+        write_minimal_tlk(self.spanish_tlk)
+        write_minimal_tlk(self.polish_tlk)
+        write_minimal_tlk(self.russian_tlk)
+        write_minimal_tlk(self.brazilian_portuguese_tlk)
         shutil.copytree(ROOT / "buffbot", root / "buffbot")
         (self.override / "KEEP.ME").write_bytes(KEEP_BYTES)
         self._build_layout(layout, with_log=with_log)
@@ -513,6 +543,12 @@ class BuffBotGame:
             lang_tlk=self.lang_tlk.read_bytes(),
             schinese_tlk=self.schinese_tlk.read_bytes(),
             italian_tlk=self.italian_tlk.read_bytes(),
+            german_tlk=self.german_tlk.read_bytes(),
+            french_tlk=self.french_tlk.read_bytes(),
+            spanish_tlk=self.spanish_tlk.read_bytes(),
+            polish_tlk=self.polish_tlk.read_bytes(),
+            russian_tlk=self.russian_tlk.read_bytes(),
+            brazilian_portuguese_tlk=self.brazilian_portuguese_tlk.read_bytes(),
             override=_file_tree(self.override),
             eeex=_file_tree(self.root / "EEex"),
             eeex_scripts=_file_tree(self.root / "EEex_scripts"),
@@ -627,8 +663,10 @@ class BuffBotGame:
         assert after.root_lua51 == before.root_lua51
         assert after.root_provider == before.root_provider
         assert after.lang_tlk != before.lang_tlk
-        assert after.schinese_tlk == before.schinese_tlk
-        assert after.italian_tlk == before.italian_tlk
+        for inactive_language in GAME_TLK_ATTRIBUTES.keys() - {"en_US"}:
+            assert _state_tlk(after, inactive_language) == _state_tlk(
+                before, inactive_language
+            )
         _assert_english_innate_catalog_in_tlk(self.lang_tlk)
         assert after.override.keys() == before.override.keys() | MAIN_OUTPUT_FILES
         for name, payload in before.override.items():
