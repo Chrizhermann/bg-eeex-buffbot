@@ -2247,6 +2247,407 @@ def test_project_image_flag_propagates_through_party_and_summon_builders(
     assert facts["summonRepeat"] == 1
 
 
+def test_scanner_records_state_markers_for_parent_leaf_and_variant_resrefs(
+    project_image_lua: LuaRuntime,
+) -> None:
+    facts = project_image_lua.execute(
+        SCAN_SOURCE
+        + """
+        local parentAbility = BfBot_TestAbility({
+            { effectID = 328, dwFlags = 29, durationType = 0, duration = 60 },
+            { effectID = 146, res = "LEAF" },
+        })
+        local leafAbility = BfBot_TestAbility({
+            { effectID = 328, dwFlags = 67, durationType = 0, duration = 60 },
+        })
+        local variantAbility = BfBot_TestAbility({
+            { effectID = 282, dwFlags = 126, durationType = 0, duration = 60 },
+        })
+        BfBot_TestResources.PARENT = BfBot_TestHeader(parentAbility)
+        BfBot_TestResources.LEAF = BfBot_TestHeader(leafAbility)
+        BfBot_TestResources.VARIANT = BfBot_TestHeader(variantAbility)
+
+        local scoreCalls = {}
+        local originalScoreOpcodes = BfBot.Class.ScoreOpcodes
+        BfBot.Class.ScoreOpcodes = function(header, ability, resref)
+            scoreCalls[resref] = (scoreCalls[resref] or 0) + 1
+            return originalScoreOpcodes(header, ability, resref)
+        end
+
+        BfBot.Class._DetectVariants = function()
+            return { { resref = "VARIANT", label = "Variant" } }
+        end
+
+        local sprite = { m_id = 92 }
+        sprite.getCasterLevelForSpell = function(_, spell)
+            assert(spell == "PARENT")
+            return 14
+        end
+        sprite.GetQuickButtons = function() return nil end
+
+        EEex_Sprite_GetKnownMageSpellsWithAbilityIterator = function(seen)
+            assert(seen == sprite)
+            local yielded = false
+            return function()
+                if yielded then return nil end
+                yielded = true
+                return 7, 0, "PARENT", parentAbility
+            end
+        end
+        EEex_Sprite_GetKnownPriestSpellsWithAbilityIterator = function()
+            return function() return nil end
+        end
+        EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator = function()
+            return function() return nil end
+        end
+
+        local entry = assert(BfBot.Scan.GetCastableSpells(sprite).PARENT)
+        BfBot.Scan.Invalidate(sprite)
+        local rescanned = assert(BfBot.Scan.GetCastableSpells(sprite).PARENT)
+        local markers = entry.stateMarkersByResref or {}
+        local rescannedMarkers = rescanned.stateMarkersByResref or {}
+        return {
+            parent = markers.PARENT and markers.PARENT[1] or -1,
+            leaf = markers.LEAF and markers.LEAF[1] or -1,
+            variant = markers.VARIANT and markers.VARIANT[1] or -1,
+            rescannedLeaf = rescannedMarkers.LEAF
+                and rescannedMarkers.LEAF[1] or -1,
+            leafScoreCalls = scoreCalls.LEAF or 0,
+            variantScoreCalls = scoreCalls.VARIANT or 0,
+        }
+        """
+    )
+
+    assert facts["parent"] == 29
+    assert facts["leaf"] == 67
+    assert facts["variant"] == 126
+    assert facts["rescannedLeaf"] == 67
+    assert facts["leafScoreCalls"] == 1
+    assert facts["variantScoreCalls"] == 1
+
+
+def test_scanner_uses_current_level_ability_for_marker_leaf_resrefs(
+    project_image_lua: LuaRuntime,
+) -> None:
+    facts = project_image_lua.execute(
+        SCAN_SOURCE
+        + """
+        local lowParent = BfBot_TestAbility({
+            { effectID = 146, res = "LOWLEAF" },
+        })
+        local highParent = BfBot_TestAbility({
+            { effectID = 146, res = "HIGHLEAF" },
+        })
+        local lowLeaf = BfBot_TestAbility({
+            { effectID = 328, dwFlags = 67, durationType = 0, duration = 60 },
+        })
+        local highLeaf = BfBot_TestAbility({
+            { effectID = 328, dwFlags = 68, durationType = 0, duration = 60 },
+        })
+        local lowVariant = BfBot_TestAbility({
+            { effectID = 328, dwFlags = 69, durationType = 0, duration = 60 },
+        })
+        local highVariant = BfBot_TestAbility({
+            { effectID = 328, dwFlags = 70, durationType = 0, duration = 60 },
+        })
+
+        local parentHeader = BfBot_TestHeader(lowParent)
+        parentHeader.getAbilityForLevel = function(_, level)
+            if level >= 10 then return highParent end
+            return lowParent
+        end
+        BfBot_TestResources.PARENT = parentHeader
+        BfBot_TestResources.LOWLEAF = BfBot_TestHeader(lowLeaf)
+        BfBot_TestResources.HIGHLEAF = BfBot_TestHeader(highLeaf)
+        BfBot_TestResources.LOWVAR = BfBot_TestHeader(lowVariant)
+        BfBot_TestResources.HIGHVAR = BfBot_TestHeader(highVariant)
+        BfBot.Class._DetectVariants = function(_, ability)
+            if ability == highParent then
+                return { { resref = "HIGHVAR", label = "High" } }
+            end
+            return { { resref = "LOWVAR", label = "Low" } }
+        end
+
+        local currentLevel = 5
+        local sprite = { m_id = 93 }
+        sprite.getCasterLevelForSpell = function(_, spell)
+            assert(spell == "PARENT")
+            return currentLevel
+        end
+        sprite.GetQuickButtons = function() return nil end
+
+        EEex_Sprite_GetKnownMageSpellsWithAbilityIterator = function(seen)
+            assert(seen == sprite)
+            local yielded = false
+            return function()
+                if yielded then return nil end
+                yielded = true
+                return 1, 0, "PARENT", lowParent
+            end
+        end
+        EEex_Sprite_GetKnownPriestSpellsWithAbilityIterator = function()
+            return function() return nil end
+        end
+        EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator = function()
+            return function() return nil end
+        end
+
+        local lowEntry = assert(BfBot.Scan.GetCastableSpells(sprite).PARENT)
+        currentLevel = 14
+        BfBot.Scan.Invalidate(sprite)
+        local highEntry = assert(BfBot.Scan.GetCastableSpells(sprite).PARENT)
+        local lowMarkers = lowEntry.stateMarkersByResref or {}
+        local highMarkers = highEntry.stateMarkersByResref or {}
+        return {
+            low = lowMarkers.LOWLEAF and lowMarkers.LOWLEAF[1] or -1,
+            lowHasHigh = highMarkers.LOWLEAF ~= nil,
+            high = highMarkers.HIGHLEAF and highMarkers.HIGHLEAF[1] or -1,
+            lowVariant = lowMarkers.LOWVAR and lowMarkers.LOWVAR[1] or -1,
+            highHasLowVariant = highMarkers.LOWVAR ~= nil,
+            highVariant = highMarkers.HIGHVAR
+                and highMarkers.HIGHVAR[1] or -1,
+        }
+        """
+    )
+
+    assert facts["low"] == 67
+    assert not facts["lowHasHigh"]
+    assert facts["high"] == 68
+    assert facts["lowVariant"] == 69
+    assert not facts["highHasLowVariant"]
+    assert facts["highVariant"] == 70
+
+
+def test_build_queue_carries_state_markers_by_resref(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local markerMap = { PARENT = { 29 }, LEAF = { 67 }, VARIANT = { 126 } }
+        BfBot_TestQueueWorld({
+            PARENT = {
+                count = 1, name = "Parent", class = { splstates = { 29 } },
+                leafResrefs = { "LEAF" }, stateMarkersByResref = markerMap,
+            },
+        }, 1)
+        local byCaster = assert(BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "PARENT", target = "self", var = "VARIANT" },
+        }, 0))
+        local entry = assert(byCaster.p0[1])
+        return {
+            sameMap = entry.stateMarkersByResref == markerMap,
+            variant = entry.stateMarkersByResref
+                and entry.stateMarkersByResref.VARIANT
+                and entry.stateMarkersByResref.VARIANT[1] or -1,
+        }
+        """
+    )
+
+    assert facts["sameMap"]
+    assert facts["variant"] == 126
+
+
+@pytest.mark.parametrize("marker_opcode", [282, 328])
+def test_check_entry_requires_the_spells_own_active_state_marker(
+    exec_lua: LuaRuntime,
+    marker_opcode: int,
+) -> None:
+    facts = exec_lua.execute(
+        f"""
+        local function effect(source, opcode, state)
+            return {{
+                m_sourceRes = {{ get = function() return source end }},
+                m_effectId = opcode,
+                m_dWFlags = state,
+            }}
+        end
+        local target = {{
+            name = "Target", m_id = 101,
+            m_baseStats = {{ m_generalState = 0 }},
+            m_timedEffectList = {{}},
+        }}
+        target.getSpellState = function(_, state) return state == 67 end
+        local caster = {{
+            name = "Caster", m_id = 100,
+            m_baseStats = {{ m_generalState = 0 }},
+        }}
+        EEex_Utility_IterateCPtrList = function(list, fn)
+            for _, value in ipairs(list) do
+                if fn(value) then return end
+            end
+        end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function()
+            return {{ SPPR403 = {{ count = 1 }} }}
+        end
+        BfBot.Exec._IsAlive = function() return true end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._log = {{}}
+
+        local entry = {{
+            casterName = "Caster", spellName = "Free Action",
+            targetName = "Target", targetObj = "Player2", targetSprite = target,
+            resref = "SPPR403", kind = "spl", leafResrefs = {{ "SPPR403" }},
+            splstates = {{ 67 }},
+            stateMarkersByResref = {{ SPPR403 = {{ 67 }} }},
+        }}
+
+        -- Klatu-style same-source residue is not proof that the timed buff remains.
+        target.m_timedEffectList = {{ effect("SPPR403", 101, 126) }}
+        local residueCasts = BfBot.Exec._CheckEntry(entry, caster)
+        local residueSkips = BfBot.Exec._skipCount
+
+        -- A shared active state from another source must not change that answer.
+        target.m_timedEffectList = {{
+            effect("SPPR403", 101, 126),
+            effect("OTHER", {marker_opcode}, 67),
+        }}
+        local sharedStateCasts = BfBot.Exec._CheckEntry(entry, caster)
+        local sharedStateSkips = BfBot.Exec._skipCount
+
+        -- The spell's own matching marker is authoritative positive evidence.
+        target.m_timedEffectList = {{
+            effect("SPPR403", 101, 126),
+            effect("SPPR403", {marker_opcode}, 67),
+        }}
+        local ownMarkerCasts = BfBot.Exec._CheckEntry(entry, caster)
+        return {{
+            residueCasts = residueCasts,
+            residueSkips = residueSkips,
+            sharedStateCasts = sharedStateCasts,
+            sharedStateSkips = sharedStateSkips,
+            ownMarkerCasts = ownMarkerCasts,
+            finalSkips = BfBot.Exec._skipCount,
+        }}
+        """
+    )
+
+    assert facts["residueCasts"]
+    assert facts["residueSkips"] == 0
+    assert facts["sharedStateCasts"]
+    assert facts["sharedStateSkips"] == 0
+    assert not facts["ownMarkerCasts"]
+    assert facts["finalSkips"] == 1
+
+
+def test_check_entry_uses_leaf_and_variant_markers_but_items_keep_source_fallback(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = exec_lua.execute(
+        """
+        local function effect(source, opcode, state)
+            return {
+                m_sourceRes = { get = function() return source end },
+                m_effectId = opcode,
+                m_dWFlags = state,
+            }
+        end
+        local target = {
+            name = "Target", m_id = 101,
+            m_baseStats = { m_generalState = 0 },
+            m_timedEffectList = {},
+        }
+        target.getSpellState = function(_, state)
+            return state == 29 or state == 67 or state == 126
+        end
+        local caster = {
+            name = "Caster", m_id = 100,
+            m_baseStats = { m_generalState = 0 },
+        }
+        EEex_Utility_IterateCPtrList = function(list, fn)
+            for _, value in ipairs(list) do
+                if fn(value) then return end
+            end
+        end
+        BfBot.Scan.Invalidate = function() end
+        BfBot.Scan.GetCastableSpells = function()
+            return {
+                WRAPPER = { count = 1 },
+                PARENT = { count = 1 },
+                PLAIN = { count = 1 },
+                POTION = { count = 1 },
+            }
+        end
+        BfBot.Exec._IsAlive = function() return true end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._skipCount = 0
+        BfBot.Exec._log = {}
+
+        local base = {
+            casterName = "Caster", spellName = "Buff", targetName = "Target",
+            targetObj = "Player2", targetSprite = target, splstates = {},
+        }
+
+        local wrapper = {
+            casterName = base.casterName, spellName = base.spellName,
+            targetName = base.targetName, targetObj = base.targetObj,
+            targetSprite = target, splstates = {}, kind = "spl",
+            resref = "WRAPPER", leafResrefs = { "LEAF" },
+            stateMarkersByResref = { WRAPPER = { 29 }, LEAF = { 67 } },
+        }
+        target.m_timedEffectList = { effect("WRAPPER", 328, 29) }
+        local parentMarkerCasts = BfBot.Exec._CheckEntry(wrapper, caster)
+        target.m_timedEffectList = { effect("LEAF", 101, 126) }
+        local leafResidueCasts = BfBot.Exec._CheckEntry(wrapper, caster)
+        target.m_timedEffectList = { effect("LEAF", 328, 67) }
+        local leafMarkerCasts = BfBot.Exec._CheckEntry(wrapper, caster)
+
+        local variant = {
+            casterName = base.casterName, spellName = base.spellName,
+            targetName = base.targetName, targetObj = base.targetObj,
+            targetSprite = target, splstates = { 29 }, kind = "spl",
+            resref = "PARENT", var = "VARIANT", leafResrefs = { "PARENT" },
+            stateMarkersByResref = { PARENT = { 29 }, VARIANT = { 126 } },
+        }
+        target.m_timedEffectList = { effect("VARIANT", 101, 126) }
+        local variantResidueCasts = BfBot.Exec._CheckEntry(variant, caster)
+        target.m_timedEffectList = { effect("VARIANT", 282, 126) }
+        local variantMarkerCasts = BfBot.Exec._CheckEntry(variant, caster)
+
+        local markerless = {
+            casterName = base.casterName, spellName = "Markerless",
+            targetName = base.targetName, targetObj = base.targetObj,
+            targetSprite = target, splstates = {}, kind = "spl",
+            resref = "PLAIN", leafResrefs = { "PLAIN" },
+            stateMarkersByResref = {},
+        }
+        target.m_timedEffectList = { effect("PLAIN", 101, 126) }
+        local markerlessCasts = BfBot.Exec._CheckEntry(markerless, caster)
+
+        local item = {
+            casterName = base.casterName, spellName = "Potion",
+            targetName = base.targetName, targetObj = base.targetObj,
+            targetSprite = target, splstates = { 67 }, kind = "itm",
+            resref = "POTION", leafResrefs = { "POTION" },
+            stateMarkersByResref = { POTION = { 67 } },
+        }
+        target.m_timedEffectList = { effect("POTION", 101, 126) }
+        local itemCasts = BfBot.Exec._CheckEntry(item, caster)
+
+        return {
+            parentMarkerCasts = parentMarkerCasts,
+            leafResidueCasts = leafResidueCasts,
+            leafMarkerCasts = leafMarkerCasts,
+            variantResidueCasts = variantResidueCasts,
+            variantMarkerCasts = variantMarkerCasts,
+            markerlessCasts = markerlessCasts,
+            itemCasts = itemCasts,
+            skips = BfBot.Exec._skipCount,
+        }
+        """
+    )
+
+    assert not facts["parentMarkerCasts"]
+    assert facts["leafResidueCasts"]
+    assert not facts["leafMarkerCasts"]
+    assert facts["variantResidueCasts"]
+    assert not facts["variantMarkerCasts"]
+    assert not facts["markerlessCasts"]
+    assert not facts["itemCasts"]
+    assert facts["skips"] == 5
+
+
 def test_project_image_repeat_is_copied_and_forced_to_one_by_structural_flag(
     exec_lua: LuaRuntime,
 ) -> None:

@@ -7,6 +7,8 @@
 -- ============================================================
 
 BfBot.Scan = {}
+BfBot.Scan._stateMarkerCache = {}
+BfBot.Scan._variantCache = {}
 
 -- Inventory access — all verified 2026-07-03 via remote console on BG2EE.
 -- See tools/items_probe_findings.md (folded into bg-modding refs in Task 18).
@@ -43,8 +45,96 @@ local function _tryStrref(strref)
     return nil
 end
 
+--- Return the ability a spell uses at the caster's current level, falling back
+--- to ability 0 for hidden sub-spells / variants that are not in the spellbook.
+local function _abilityForLevel(header, casterLevel)
+    if not header then return nil end
+    local ability = nil
+    local ok = pcall(function()
+        ability = header:getAbilityForLevel(casterLevel or 1)
+    end)
+    if ok and ability then return ability end
+    local fallbackOk, fallback = pcall(function() return header:getAbility(0) end)
+    return fallbackOk and fallback or nil
+end
+
+--- Resolve opcode-214 variants for the current ability. Classify() caches by
+--- resref, so its variant list can belong to another caster-level ability.
+--- Keep a scan-local static cache keyed by resref + caster level.
+local function _variantsForLevel(resref, header, ability, casterLevel)
+    local cacheKey = resref:upper() .. ":" .. tostring(casterLevel or 1)
+    local cached = BfBot.Scan._variantCache[cacheKey]
+    if cached ~= nil then
+        return cached ~= false and cached or nil, true
+    end
+
+    local ok, variants = pcall(BfBot.Class._DetectVariants, header, ability)
+    if not ok then return nil, false end
+    BfBot.Scan._variantCache[cacheKey] = variants or false
+    return variants, true
+end
+
+--- Collect the SPLSTATE marker IDs declared by every concrete spell resource
+--- that may put effects on the target: the parent, op=146 children, and opcode
+--- 214 variants. The map is transient scanner metadata, never persisted.
+local function _buildStateMarkerMap(resref, header, ability, casterLevel,
+                                    leafResrefs, variants)
+    local markersByResref = {}
+    local seen = {}
+
+    local function add(actualResref, actualHeader, actualAbility)
+        if type(actualResref) ~= "string" or actualResref == ""
+            or seen[actualResref] then
+            return
+        end
+        seen[actualResref] = true
+
+        -- Scan.Invalidate() rebuilds slot counts before every cast. Marker
+        -- definitions are static resource data, so cache them separately by
+        -- resref + caster level instead of re-walking every SPL each time.
+        local cacheKey = actualResref:upper() .. ":" .. tostring(casterLevel or 1)
+        local cached = BfBot.Scan._stateMarkerCache[cacheKey]
+        if cached then
+            if #cached > 0 then markersByResref[actualResref] = cached end
+            return
+        end
+
+        if not actualHeader then
+            local hdrOk, demanded = pcall(EEex_Resource_Demand, actualResref, "SPL")
+            if not hdrOk or not demanded then return end
+            actualHeader = demanded
+        end
+        actualAbility = actualAbility or _abilityForLevel(actualHeader, casterLevel)
+        if not actualAbility then return end
+
+        -- ScoreOpcodes already owns the canonical opcode 282/328 extraction.
+        -- Call it directly so manual classifier overrides cannot erase marker
+        -- metadata needed by execution's active-buff check.
+        local ok, _, extras = pcall(
+            BfBot.Class.ScoreOpcodes, actualHeader, actualAbility, actualResref)
+        local states = ok and extras and extras.splstates or nil
+        if ok and extras then
+            states = states or {}
+            BfBot.Scan._stateMarkerCache[cacheKey] = states
+        end
+        if states and #states > 0 then
+            markersByResref[actualResref] = states
+        end
+    end
+
+    add(resref, header, ability)
+    for _, leafResref in ipairs(leafResrefs or {}) do
+        add(leafResref)
+    end
+    for _, variant in ipairs(variants or {}) do
+        add(variant.resref)
+    end
+
+    return markersByResref
+end
+
 --- Internal: Build a catalog entry from known spells iterator data + SPL header.
-local function _buildCatalogEntry(sprite, resref, header, ability)
+local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
     -- Name: try genericName (unidentified, 0x08) first — Spell Revisions
     -- puts the real name there and sets identifiedName (0x0C) to dummy 9999999.
     local name = _tryStrref(header.genericName)
@@ -79,8 +169,9 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
     -- Duration (per caster level)
     local duration = 0
     local durCat = "instant"
+    local durationLeafResrefs = nil
     if header and ability then
-        duration = BfBot.Class.GetDuration(header, ability)
+        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(header, ability)
         durCat = BfBot.Class.GetDurationCategory(duration)
     end
 
@@ -89,8 +180,20 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
     local isSelfOnly = (classResult and classResult.isSelfOnly) and 1 or 0
 
     -- Variant detection (0/1 integer flag + variant array)
-    local hasVariants = (classResult and classResult.hasVariants) and 1 or 0
-    local variants = (classResult and classResult.variants) or nil
+    local variants, variantsKnown = _variantsForLevel(
+        resref, header, ability, casterLevel)
+    if not variantsKnown then
+        variants = (classResult and classResult.variants) or nil
+    end
+    local hasVariants = (variants and #variants > 0) and 1 or 0
+
+    -- Concrete effect-source resrefs used by active-buff detection. GetDuration
+    -- returns an empty list for direct-effect spells, so retain the parent as
+    -- the fallback in that case.
+    local leafResrefs = (durationLeafResrefs and #durationLeafResrefs > 0)
+        and durationLeafResrefs or { resref }
+    local stateMarkersByResref = _buildStateMarkerMap(
+        resref, header, ability, casterLevel, leafResrefs, variants)
 
     -- Structural Project Image identity (opcode 236, image type 2). Keep the
     -- transient scan shape marshal-safe and consistent with its other flags.
@@ -113,13 +216,12 @@ local function _buildCatalogEntry(sprite, resref, header, ability)
         hasVariants = hasVariants,
         variants = variants,
         class = classResult,
+        stateMarkersByResref = stateMarkersByResref,
         -- Invariant: catalog entries ALWAYS carry a non-empty leafResrefs.
         -- GetDuration returns an EMPTY list for direct-effect spells (the
         -- self-fallback is the caller's job) — an empty list here would make
         -- the exec pre-flight loop check nothing and never skip active buffs.
-        leafResrefs = (classResult and classResult.leafResrefs
-                       and #classResult.leafResrefs > 0)
-                      and classResult.leafResrefs or { resref },
+        leafResrefs = leafResrefs,
     }
 end
 
@@ -348,7 +450,8 @@ function BfBot.Scan.GetCastableSpells(sprite)
                             end
 
                             if useAbility then
-                                local entry = _buildCatalogEntry(sprite, resref, header, useAbility)
+                                local entry = _buildCatalogEntry(
+                                    sprite, resref, header, useAbility, casterLevel)
                                 spells[resref] = entry
                                 count = count + 1
                             end

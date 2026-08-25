@@ -185,6 +185,47 @@ function BfBot.Exec._HasActiveEffect(sprite, resref)
     return ok and found
 end
 
+--- Check whether any of the supplied SPLSTATE IDs is active on a sprite.
+--- A positive is only a hint because modded spells may share state IDs.
+function BfBot.Exec._HasAnySpellState(sprite, stateIDs)
+    if not sprite or not stateIDs then return false end
+    for _, stateID in ipairs(stateIDs) do
+        local ok, active = pcall(function()
+            return sprite:getSpellState(stateID)
+        end)
+        if ok and active then return true end
+    end
+    return false
+end
+
+--- Confirm that a spell's own active SPLSTATE marker is on the target.
+--- Matching source resref alone is deliberately insufficient: other permanent
+--- administrative effects from the same spell may outlive the real buff.
+function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
+    if not sprite or not resref or not stateIDs or #stateIDs == 0 then
+        return false
+    end
+
+    local wanted = {}
+    for _, stateID in ipairs(stateIDs) do wanted[stateID] = true end
+
+    local found = false
+    local ok = pcall(function()
+        EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
+            local effectRes = effect.m_sourceRes:get()
+            local opcode = effect.m_effectId
+            local stateID = effect.m_dWFlags
+            if effectRes == resref
+                and (opcode == 282 or opcode == 328)
+                and wanted[stateID] then
+                found = true
+                return true -- stop iteration
+            end
+        end)
+    end)
+    return ok and found
+end
+
 --- Programmatically consume one spell slot for a given spell resref.
 --- Sets m_flags = 0 on the first available memorized entry matching the resref.
 --- Used by the variant spell path to consume the parent spell slot before
@@ -477,7 +518,8 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                 -- fresh via _ResolveCaster every step, never through
                 -- build-time userdata. The literal creates a distinct
                 -- top-level table for every attempt; read-only casterRef,
-                -- targetSprite, and splstates references may be shared.
+                -- targetSprite, splstates, and stateMarkersByResref references
+                -- may be shared.
                 table.insert(byCaster[casterKey], {
                     casterRef = casterRef,
                     casterName = casterName,
@@ -490,6 +532,8 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                     targetSprite = tgt.targetSprite,
                     targetName = tgt.targetName,
                     splstates = splstates,
+                    stateMarkersByResref = kind == "spl"
+                        and spellData.stateMarkersByResref or nil,
                     isAoE = isAoE,
                     cheat = isCheat,
                     var = entry.var,
@@ -554,36 +598,69 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
     -- for AoE entries resolved via "all", targetSprite is already the caster)
     local targetSprite = entry.targetSprite
 
-    local splstatePositive = false
-
-    -- SPLSTATE check (fast negative — trust "none active" as proof spell is absent)
-    if entry.splstates and #entry.splstates > 0 then
-        for _, stateID in ipairs(entry.splstates) do
-            local ok, active = pcall(function()
-                return targetSprite:getSpellState(stateID)
-            end)
-            if ok and active then
-                splstatePositive = true
-                break
+    -- Effect list check. Catalog entries always carry non-empty leafResrefs
+    -- (see BfBotScn.lua); the fallback covers hand-built Exec.Start queues.
+    local markerMap = entry.kind ~= "itm" and entry.stateMarkersByResref or nil
+    local checkResrefs = {}
+    if entry.var then
+        -- Variants always override: the variant resref produces the actual
+        -- buff effects, not the selection spell's parent/leaf resources.
+        checkResrefs[1] = entry.var
+    else
+        local seenResrefs = {}
+        -- A wrapper may apply a short parent marker before its child begins
+        -- producing effects (for example True Seeing). Include that parent
+        -- when it declares a marker, then add every concrete child source.
+        if markerMap and markerMap[entry.resref] then
+            checkResrefs[#checkResrefs + 1] = entry.resref
+            seenResrefs[entry.resref] = true
+        end
+        for _, r in ipairs(entry.leafResrefs or { entry.resref }) do
+            if not seenResrefs[r] then
+                checkResrefs[#checkResrefs + 1] = r
+                seenResrefs[r] = true
             end
         end
-        if not splstatePositive then
-            -- No SPLSTATE active → spell definitely not on target, skip effect list walk
-            return true
-        end
-        -- SPLSTATE positive → could be false positive, verify with effect list below
     end
 
-    -- Effect list check (authoritative — runs when SPLSTATEs ambiguous or spell has none)
-    -- Catalog entries always carry non-empty leafResrefs (see BfBotScn.lua);
-    -- the fallback covers hand-built queues from direct Exec.Start callers.
-    local checkResrefs = entry.leafResrefs or { entry.var or entry.resref }
-    -- Variants always override: the variant resref produces the actual buff effects
-    if entry.var then checkResrefs = { entry.var } end
-
     local foundActive = nil
+    local splstatePositive = false
+
+    -- Items deliberately retain their legacy fast-negative + source-resref
+    -- behavior. Their ability semantics differ from SPL delivery, and this
+    -- issue's marker hardening is spell-only.
+    if entry.kind == "itm" and entry.splstates and #entry.splstates > 0 then
+        splstatePositive = BfBot.Exec._HasAnySpellState(
+            targetSprite, entry.splstates)
+        if not splstatePositive then return true end
+    end
+
     for _, r in ipairs(checkResrefs) do
-        if BfBot.Exec._HasActiveEffect(targetSprite, r) then
+        local markerStates = markerMap and markerMap[r] or nil
+
+        -- Compatibility for direct hand-built queue entries that predate the
+        -- per-resref marker map. Parent markers must never be borrowed by a
+        -- wrapper leaf or selected variant.
+        if not markerMap and entry.kind ~= "itm" and not entry.var
+            and #checkResrefs == 1 and r == entry.resref then
+            markerStates = entry.splstates
+        end
+
+        local active = false
+        if markerStates and #markerStates > 0 then
+            local stateActive = BfBot.Exec._HasAnySpellState(
+                targetSprite, markerStates)
+            if stateActive then
+                splstatePositive = true
+                active = BfBot.Exec._HasActiveStateMarker(
+                    targetSprite, r, markerStates)
+            end
+            -- No declared state active is a fast negative for this resref.
+        else
+            active = BfBot.Exec._HasActiveEffect(targetSprite, r)
+        end
+
+        if active then
             foundActive = r
             break
         end
