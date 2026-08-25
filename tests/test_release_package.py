@@ -14,10 +14,14 @@ import pytest
 from tests.ie_formats import write_minimal_tlk
 from tests.test_eeex_compatibility_installer import (
     BuffBotGame,
+    GAME_TLK_ATTRIBUTES,
+    LANGUAGE_CASES,
+    _game_tlk,
     _assert_installed,
     _assert_weidu_249,
     _read_innate_strrefs,
     _read_tlk_strings,
+    _state_tlk,
     _write_tlk_strings,
     _weidu,
 )
@@ -67,6 +71,7 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/MOS9923.PVRZ",
     "buffbot/M_BfBot.lua",
     "buffbot/lang/english/setup.tra",
+    "buffbot/lang/italian/setup.tra",
     "buffbot/lang/schinese/setup.tra",
     "buffbot/setup-buffbot.tp2",
 }
@@ -212,7 +217,7 @@ def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 38
+    assert len(names) == 39
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)
@@ -869,9 +874,16 @@ def test_raw_deploy_rejects_nonregular_catalog_path_before_writes(
     assert "Done. Files deployed:" not in transcript
 
 
-def test_built_archive_installs_simplified_chinese_with_weidu_249(
+@pytest.mark.parametrize(
+    ("mod_language", "game_language", "catalog_directory"),
+    LANGUAGE_CASES[1:],
+)
+def test_built_archive_installs_selected_translation_with_weidu_249(
     release_archive: Path,
     tmp_path: Path,
+    mod_language: int,
+    game_language: str,
+    catalog_directory: str,
 ) -> None:
     version = subprocess.run(
         [str(_weidu()), "--version"],
@@ -900,9 +912,9 @@ def test_built_archive_installs_simplified_chinese_with_weidu_249(
             "1",
             "0",
             "--language",
-            "1",
+            str(mod_language),
             "--use-lang",
-            "zh_CN",
+            game_language,
             "--no-exit-pause",
             "--quick-log",
             "--noautoupdate",
@@ -917,17 +929,25 @@ def test_built_archive_installs_simplified_chinese_with_weidu_249(
     )
     _assert_installed(game, process)
 
-    assert game.lang_tlk.read_bytes() == before.lang_tlk
     assert game.root_tlk.read_bytes() == before.root_tlk
-    assert game.schinese_tlk.read_bytes() != before.schinese_tlk
-    packaged_catalog = game.root / "buffbot/lang/schinese/setup.tra"
+    active_tlk = _game_tlk(game, game_language)
+    for installed_game_language in GAME_TLK_ATTRIBUTES:
+        installed_tlk = _game_tlk(game, installed_game_language).read_bytes()
+        before_tlk = _state_tlk(before, installed_game_language)
+        if installed_game_language == game_language:
+            assert installed_tlk != before_tlk
+        else:
+            assert installed_tlk == before_tlk
+    packaged_catalog = (
+        game.root / "buffbot" / "lang" / catalog_directory / "setup.tra"
+    )
     catalog, _ = parse_tra(packaged_catalog)
     assert (game.override / "bfbot_l10n.tra").read_bytes() == (
         packaged_catalog.read_bytes()
     )
     assert not (game.override / "bfbot_l10n.txt").exists()
 
-    strings = _read_tlk_strings(game.schinese_tlk)
+    strings = _read_tlk_strings(active_tlk)
     refs = _read_innate_strrefs(game)
     assert all(0 <= strref < len(strings) for strref in refs)
     assert [strings[strref] for strref in refs] == [

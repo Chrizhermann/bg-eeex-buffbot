@@ -1,0 +1,360 @@
+// installer.component.luajit
+@100 = ~BuffBot: supporto EEex LuaJIT (rilevato automaticamente)~
+// installer.require.game
+@101 = ~BuffBot richiede BG:EE, BG2:EE o EET.~
+// installer.require.eeex
+@102 = ~BuffBot richiede EEex v0.11.0-alpha o una versione successiva. Installa prima EEex: https://github.com/Bubb13/EEex/releases~
+// installer.luajit.already_active
+@103 = ~LuaJIT è già attivo. Installazione saltata.~
+// installer.luajit.missing_ini
+@104 = ~InfinityLoader.ini non è stato trovato. Reinstalla EEex prima di attivare il supporto LuaJIT di BuffBot.~
+// installer.luajit.missing_dlls
+@105 = ~Le DLL di EEex LuaJIT non sono state trovate in EEex/loader/LuaJIT/. Reinstalla EEex includendo i file LuaJIT / Experimental prima di attivare il supporto LuaJIT di BuffBot.~
+// installer.luajit.invalid_general
+@106 = ~InfinityLoader.ini non contiene una sola sezione [General] iniziale correttamente formata. Reinstalla EEex prima di attivare il supporto LuaJIT di BuffBot.~
+// installer.luajit.installing
+@107 = ~Installazione del componente EEex LuaJIT (normalmente installato dal programma di installazione di EEex).~
+// installer.luajit.required_version
+@108 = ~Valore LuaVersionExternal richiesto: %lua_version%~
+// installer.luajit.installed
+@109 = ~LuaJIT installato correttamente. Tutte le funzionalità di BuffBot saranno disponibili.~
+// installer.luajit.postcondition_failed
+@110 = ~Il componente ausiliario LuaJIT di BuffBot non ha configurato il loader di EEex nello stato richiesto. Reinstalla EEex con il supporto LuaJIT / Experimental, quindi esegui nuovamente BuffBot.~
+// installer.component.main
+@111 = ~BuffBot: automazione dei Buffs in gioco~
+// installer.main.luajit_required
+@112 = ~BuffBot richiede che EEex LuaJIT sia attivo prima di installare il componente principale. Installa prima "BuffBot: supporto EEex LuaJIT", oppure attiva il componente LuaJIT / Experimental di EEex, quindi installa nuovamente BuffBot. Gli utenti di Project Infinity devono posizionare il componente LuaJIT prima di "BuffBot: automazione dei Buffs in gioco".~
+// installer.catalog_directory
+@113 = ~italian~
+
+// innate.preset_1
+@200 = ~BuffBot 1~
+// innate.preset_2
+@201 = ~BuffBot 2~
+// innate.preset_3
+@202 = ~BuffBot 3~
+// innate.preset_4
+@203 = ~BuffBot 4~
+// innate.preset_5
+@204 = ~BuffBot 5~
+// innate.preset_6
+@205 = ~BuffBot 6~
+// innate.preset_7
+@206 = ~BuffBot 7~
+// innate.preset_8
+@207 = ~BuffBot 8~
+
+// common.buffbot
+@300 = ~BuffBot~
+// common.party
+@301 = ~Gruppo~
+// common.summons
+@302 = ~Evocazioni~
+// common.self
+@303 = ~Se stesso~
+// common.none
+@304 = ~Nessuno~
+// common.reset
+@305 = ~Reimposta~
+// common.rename
+@306 = ~Rinomina~
+// common.new
+@307 = ~Nuovo~
+// common.add_spell
+@308 = ~Aggiungi~
+// common.remove
+@309 = ~Rimuovi~
+// common.export
+@310 = ~Esporta~
+// common.import
+@311 = ~Importa~
+// common.up
+@312 = ~Su~
+// common.down
+@313 = ~Giù~
+// common.sort
+@314 = ~Ordina~
+// common.delete_preset
+@315 = ~Elimina preset~
+// common.delete_preset_compact
+@316 = ~Elim. preset~
+// common.stop
+@317 = ~Interrompi~
+// common.close
+@318 = ~Chiudi~
+// common.all_party
+@319 = ~Tutto il gruppo~
+// common.clear
+@320 = ~Cancella~
+// common.done
+@321 = ~Fatto~
+// common.unlock_targeting
+@322 = ~Sblocca selezione bersaglio~
+// common.ok
+@323 = ~OK~
+// common.cancel
+@324 = ~Annulla~
+// common.delete
+@325 = ~Elimina~
+// common.select
+@326 = ~Seleziona~
+// common.enable
+@327 = ~Attiva~
+// common.disable
+@328 = ~Disattiva~
+// common.target
+@329 = ~Bersaglio~
+// common.variant
+@330 = ~Variante~
+// common.spells
+@331 = ~Incantesimi~
+// common.items
+@332 = ~Oggetti~
+
+// ui.tooltip.configuration
+@400 = ~Configurazione di BuffBot~
+// ui.no_allied_summons
+@401 = ~Nessuna creatura evocata alleata rilevata~
+// ui.title.preset
+@402 = ~BuffBot - {preset}~
+// ui.title.summons
+@403 = ~BuffBot - Evocazioni~
+// ui.title.summon_preset
+@404 = ~BuffBot - {summon} - {preset}~
+// ui.clone.mislead
+@405 = ~Ingannare ({owner})~
+// ui.clone.project_image
+@406 = ~Ologramma ({owner})~
+// ui.clone.simulacrum
+@407 = ~Simulacro ({owner})~
+// ui.clone.generic
+@408 = ~Clone ({owner})~
+// ui.cast.all
+@409 = ~Lancia tutto~
+// ui.cast.character
+@410 = ~Lancia: personaggio~
+// ui.cast.named
+@411 = ~Lancia: {name}~
+// ui.cast.summon
+@412 = ~Lancia: evocazione~
+// ui.qualifier.self_only
+@413 = ~(Solo su se stesso)~
+// ui.qualifier.party_wide
+@414 = ~(Su tutto il gruppo)~
+// ui.rename_preset_title
+@415 = ~Rinomina preset:~
+// ui.add_spell_title
+@416 = ~Aggiungi incantesimo o oggetto alla lista dei Buffs~
+// ui.add_to_buff_list
+@417 = ~Aggiungi alla lista dei Buffs~
+// ui.import_config_title
+@418 = ~Importa configurazione~
+// ui.select_variant_title
+@419 = ~Seleziona variante: {spell}~
+// ui.delete_preset_confirm
+@420 = ~Eliminare il preset "{name}" per TUTTI i membri del gruppo?~
+// ui.variant.selected
+@421 = ~Var.: {name}~
+// ui.target.selected
+@422 = ~Bersaglio: {target}~
+// ui.repeat.label
+@423 = ~Ripeti: {count}~
+// ui.repeat.spell_tooltip
+@424 = ~Lancia questo incantesimo {count} volte per ogni bersaglio individuato. Ogni tentativo consuma uno slot di incantesimo e segue le normali regole di lancio. Clic sinistro per aumentare; clic destro per diminuire. Intervallo: 1–{max}.~
+// ui.repeat.item_tooltip
+@425 = ~Usa questo oggetto {count} volte per ogni bersaglio individuato. Ogni tentativo consuma un’unità dell’oggetto cumulabile oppure una carica e segue le normali regole di utilizzo degli oggetti. Clic sinistro per aumentare; clic destro per diminuire. Intervallo: 1–{max}.~
+// ui.target.player
+@426 = ~Giocatore {index}~
+// ui.target.multiple
+@427 = ~{name} +{count}~
+// ui.status.casting
+@428 = ~Lancio in corso...~
+// ui.status.casting_quick_long
+@429 = ~Lancio in corso (rapido: lunga durata)...~
+// ui.status.casting_quick_all
+@430 = ~Lancio in corso (rapido: tutti)...~
+// ui.status.done
+@431 = ~Fatto~
+// ui.status.stopped
+@432 = ~Interrotto~
+// ui.quick_cast.off
+@433 = ~Lancio rapido: disattivato~
+// ui.quick_cast.long
+@434 = ~Lancio rapido: lunga durata~
+// ui.quick_cast.all
+@435 = ~Lancio rapido: tutti~
+// ui.quick_cast.tooltip_unavailable
+@436 = ~Velocità di lancio normale~
+// ui.quick_cast.tooltip_off
+@437 = ~Velocità di lancio normale — gli incantesimi rispettano il consueto intervallo tra un lancio e l’altro. Clicca per cambiare modalità.~
+// ui.quick_cast.tooltip_long
+@438 = ~Lancio rapido per i Buffs a lunga durata (300 s o più). I Buffs a breve durata vengono lanciati normalmente. Clicca per cambiare modalità.~
+// ui.quick_cast.tooltip_all
+@439 = ~Lancio rapido per TUTTI i Buffs, indipendentemente dalla durata (trucco). Clicca per cambiare modalità.~
+// ui.duration.permanent
+@440 = ~Perm.~
+// ui.duration.instant
+@441 = ~Istant.~
+// ui.duration.hours_minutes
+@442 = ~{hours} h {minutes} min~
+// ui.duration.hours
+@443 = ~{hours} h~
+// ui.duration.minutes_seconds
+@444 = ~{minutes} min {seconds} s~
+// ui.duration.minutes
+@445 = ~{minutes} min~
+// ui.duration.seconds
+@446 = ~{seconds} s~
+// ui.category.permanent
+@447 = ~permanente~
+// ui.category.long
+@448 = ~lunga durata~
+// ui.category.short
+@449 = ~breve durata~
+// ui.category.instant
+@450 = ~istantaneo~
+// ui.category.unknown
+@451 = ~sconosciuto~
+// ui.repeat.compact
+@452 = ~R{count}~
+// ui.lock.compact
+@453 = ~[B]~
+
+// feedback.no_luajit
+@500 = ~BuffBot: LuaJIT non rilevato. Le abilità speciali F12, il lancio rapido, l’esportazione/importazione e la registrazione nel log non sono disponibili. Installa il componente EEex LuaJIT per avere tutte le funzionalità.~
+// feedback.combat_stopped
+@501 = ~BuffBot: rilevato un combattimento — lancio interrotto~
+// feedback.cast_timeout
+@502 = ~BuffBot: tempo massimo di lancio superato — operazione interrotta~
+// feedback.party_changed_after_run
+@503 = ~BuffBot: il gruppo è cambiato — riprova al termine dell’esecuzione corrente~
+// feedback.party_changed_refreshing
+@504 = ~BuffBot: il gruppo è cambiato — aggiornamento delle abilità speciali in corso, riprova~
+// feedback.no_spells_with_reason
+@505 = ~BuffBot: nessun incantesimo o oggetto da usare ({reason})~
+// feedback.innate_error
+@506 = ~BuffBot: errore dell’abilità speciale: {error}~
+// feedback.no_spells_preset
+@507 = ~BuffBot: nessun incantesimo o oggetto da usare in questo preset~
+// feedback.character_remote_control
+@508 = ~BuffBot: il personaggio {name} è controllato da un altro giocatore~
+// feedback.character_project_image_locked
+@509 = ~BuffBot: Ologramma impedisce a {name} di agire — riprova quando l’immagine sarà svanita~
+// feedback.no_spells_character
+@510 = ~BuffBot: nessun incantesimo o oggetto da usare per questo personaggio~
+// feedback.no_summon_selected
+@511 = ~BuffBot: nessuna creatura evocata selezionata~
+// feedback.no_spells_summon
+@512 = ~BuffBot: nessun incantesimo da lanciare per questa creatura evocata~
+// feedback.no_spells_summon_with_reason
+@513 = ~BuffBot: nessun incantesimo da lanciare per questa creatura evocata ({reason})~
+// feedback.no_additional_spells
+@514 = ~BuffBot: nessun altro incantesimo o oggetto da aggiungere~
+// feedback.export_success
+@515 = ~BuffBot: configurazione esportata nel file '{file}'~
+// feedback.export_failed
+@516 = ~BuffBot: esportazione non riuscita — {reason}~
+// feedback.no_exported_configs
+@517 = ~BuffBot: nessuna configurazione trovata in bfbot_presets/~
+// feedback.import_success
+@518 = ~BuffBot: importato il file '{file}' ({presets} preset, {skipped} voci ignorate)~
+// feedback.import_failed
+@519 = ~BuffBot: importazione non riuscita — {reason}~
+// reason.exec.empty_queue
+@520 = ~coda vuota~
+// reason.exec.no_valid_entries
+@521 = ~nessuna voce valida dopo l’espansione~
+// reason.exec.already_running
+@522 = ~già in esecuzione~
+// reason.export.luajit_required
+@523 = ~LuaJIT necessario per esportare~
+// reason.export.no_sprite
+@524 = ~nessun personaggio selezionato~
+// reason.export.no_config
+@525 = ~nessuna configurazione trovata~
+// reason.export.cannot_open_file
+@526 = ~impossibile aprire il file: {error}~
+// reason.import.luajit_required
+@527 = ~LuaJIT necessario per importare~
+// reason.import.no_sprite
+@528 = ~nessun personaggio selezionato~
+// reason.import.no_filename
+@529 = ~nessun nome di file selezionato~
+// reason.import.invalid_filename
+@530 = ~nome file non valido~
+// reason.import.cannot_open_file
+@531 = ~impossibile aprire il file: {error}~
+// reason.import.empty_file
+@532 = ~file vuoto~
+// reason.import.parse_error
+@533 = ~errore di analisi: {error}~
+// reason.import.exec_error
+@534 = ~errore di esecuzione: {error}~
+// reason.import.invalid_data
+@535 = ~il file non contiene una configurazione BuffBot valida~
+// reason.queue.invalid_summon
+@536 = ~voce della creatura evocata non valida~
+// reason.queue.no_summon_preset
+@537 = ~nessun preset {index} configurato per la creatura evocata~
+// reason.queue.caster_resolver_unavailable
+@538 = ~impossibile determinare il lanciatore~
+// reason.queue.summon_gone
+@539 = ~creatura evocata non più presente ({name})~
+// reason.queue.summon_scan_failed
+@540 = ~impossibile analizzare la creatura evocata {name}~
+// reason.queue.no_castable_summon_spells
+@541 = ~nessun incantesimo lanciabile nel preset {index} della creatura evocata~
+// reason.queue.no_preset_index
+@542 = ~indice del preset mancante~
+// reason.queue.no_castable_preset_spells
+@543 = ~nessun incantesimo lanciabile o oggetto utilizzabile nel preset {index}~
+// reason.queue.missing_slot_or_preset
+@544 = ~slot del personaggio o preset mancante~
+// reason.queue.no_sprite_in_slot
+@545 = ~nessun personaggio nello slot {slot}~
+// reason.queue.not_locally_controlled
+@546 = ~personaggio non controllato localmente~
+// reason.queue.no_config_for_slot
+@547 = ~nessuna configurazione per lo slot {slot}~
+// reason.queue.no_preset_for_slot
+@548 = ~nessun preset {preset} per lo slot {slot}~
+// reason.queue.scan_failed_for_slot
+@549 = ~analisi non riuscita per lo slot {slot}~
+// reason.queue.project_image_locked
+@550 = ~personaggio bloccato da Ologramma~
+// reason.queue.no_castable_spells_for_slot
+@551 = ~nessun incantesimo lanciabile o oggetto utilizzabile nel preset {preset} per lo slot {slot}~
+
+// default.preset.long
+@600 = ~Buffs a lunga durata~
+// default.preset.short
+@601 = ~Buffs a breve durata~
+// default.preset.indexed
+@602 = ~Preset {index}~
+
+// options.tab
+@700 = ~BuffBot~
+// options.dark_mode
+@701 = ~Modalità scura~
+// options.dark_mode_description
+@702 = ~Scurisce la pergamena del pannello per giocare in condizioni di scarsa illuminazione. La tavolozza dei colori d’accento resta invariata.~
+// options.color_scheme
+@703 = ~Schema colori~
+// options.color_scheme_description
+@704 = ~Scegli la tavolozza dei colori d’accento del pannello: la pergamena classica di BG2, il blu acciaio di Siege of Dragonspear o l’ambra calda di BG1.~
+// options.color_scheme_bg2
+@705 = ~Baldur's Gate 2~
+// options.color_scheme_sod
+@706 = ~Siege of Dragonspear~
+// options.color_scheme_bg1
+@707 = ~Baldur's Gate 1~
+// options.text_size
+@708 = ~Dimensione testo~
+// options.text_size_description
+@709 = ~Ridimensiona titoli, elenchi e testi cliccabili. Le etichette dei classici pulsanti in pietra restano alla dimensione predefinita del motore.~
+// options.text_size_small
+@710 = ~Piccolo~
+// options.text_size_medium
+@711 = ~Medio~
+// options.text_size_large
+@712 = ~Grande~

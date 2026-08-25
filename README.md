@@ -48,6 +48,7 @@ EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enabl
 
 - English
 - Simplified Chinese (简体中文)
+- Italian (Italiano)
 
 The WeiDU installer asks which BuffBot translation to use and copies the selected UTF-8 catalog to `override/bfbot_l10n.tra`. BuffBot reads directly from that file for its UI, options, defaults, and player feedback; no BuffBot-owned UI string is fetched from the game TLK. Only the eight generated F12 innate names remain TLK-backed because SPL resources require numeric strrefs: WeiDU resolves catalog entries `@200` through `@207` and records them in `bfbot_strrefs.txt`.
 
@@ -225,6 +226,7 @@ bg-eeex-buffbot/
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
 - **[robovoid](https://github.com/robvoid)** — original Simplified Chinese translation in [PR #50](https://github.com/Chrizhermann/bg-eeex-buffbot/pull/50); the implementation was reworked on BuffBot's current localization architecture
+- **[Sauler89](https://github.com/Sauler89)** — Italian translation
 - **[Claude Code](https://claude.ai/code)** by Anthropic — AI development assistant
 
 ## License

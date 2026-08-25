@@ -30,7 +30,13 @@ MAIN_LUAJIT_REQUIREMENT_TEXT = (
 LANGUAGE_CASES = (
     (0, "en_US", "english"),
     (1, "zh_CN", "schinese"),
+    (2, "it_IT", "italian"),
 )
+GAME_TLK_ATTRIBUTES = {
+    "en_US": "lang_tlk",
+    "zh_CN": "schinese_tlk",
+    "it_IT": "italian_tlk",
+}
 ENGLISH_CATALOG, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
 INNATE_CATALOG_IDS = set(range(200, 208))
 
@@ -258,6 +264,15 @@ def _read_innate_strrefs(game: "BuffBotGame") -> list[int]:
     return [int(row) for row in rows]
 
 
+def _game_tlk(game: "BuffBotGame", game_language: str) -> Path:
+    try:
+        attribute = GAME_TLK_ATTRIBUTES[game_language]
+    except KeyError as error:
+        message = f"unsupported synthetic game language: {game_language}"
+        raise AssertionError(message) from error
+    return getattr(game, attribute)
+
+
 def _assert_selected_runtime_catalog(
     game: "BuffBotGame",
     *,
@@ -270,9 +285,7 @@ def _assert_selected_runtime_catalog(
     assert (game.override / "bfbot_l10n.tra").read_bytes() == catalog_path.read_bytes()
     assert not (game.override / "bfbot_l10n.txt").exists()
 
-    active_tlk = (
-        game.lang_tlk if game_language == "en_US" else game.schinese_tlk
-    )
+    active_tlk = _game_tlk(game, game_language)
     active_strings = _read_tlk_strings(active_tlk)
 
     if expected_tlk_strings is None:
@@ -327,12 +340,22 @@ class ProductState:
     root_tlk: bytes
     lang_tlk: bytes
     schinese_tlk: bytes
+    italian_tlk: bytes
     override: dict[str, bytes]
     eeex: dict[str, bytes]
     eeex_scripts: dict[str, bytes]
     loader_ini: bytes | None
     root_lua51: bytes | None
     root_provider: bytes | None
+
+
+def _state_tlk(state: ProductState, game_language: str) -> bytes:
+    try:
+        attribute = GAME_TLK_ATTRIBUTES[game_language]
+    except KeyError as error:
+        message = f"unsupported synthetic game language: {game_language}"
+        raise AssertionError(message) from error
+    return getattr(state, attribute)
 
 
 class BuffBotGame:
@@ -345,9 +368,11 @@ class BuffBotGame:
         self.root_tlk = root / "dialog.tlk"
         self.lang_tlk = root / "lang/en_US/dialog.tlk"
         self.schinese_tlk = root / "lang/zh_CN/dialog.tlk"
+        self.italian_tlk = root / "lang/it_IT/dialog.tlk"
         write_minimal_tlk(self.root_tlk)
         write_minimal_tlk(self.lang_tlk)
         write_minimal_tlk(self.schinese_tlk)
+        write_minimal_tlk(self.italian_tlk)
         shutil.copytree(ROOT / "buffbot", root / "buffbot")
         (self.override / "KEEP.ME").write_bytes(KEEP_BYTES)
         self._build_layout(layout, with_log=with_log)
@@ -487,6 +512,7 @@ class BuffBotGame:
             root_tlk=self.root_tlk.read_bytes(),
             lang_tlk=self.lang_tlk.read_bytes(),
             schinese_tlk=self.schinese_tlk.read_bytes(),
+            italian_tlk=self.italian_tlk.read_bytes(),
             override=_file_tree(self.override),
             eeex=_file_tree(self.root / "EEex"),
             eeex_scripts=_file_tree(self.root / "EEex_scripts"),
@@ -602,6 +628,7 @@ class BuffBotGame:
         assert after.root_provider == before.root_provider
         assert after.lang_tlk != before.lang_tlk
         assert after.schinese_tlk == before.schinese_tlk
+        assert after.italian_tlk == before.italian_tlk
         _assert_english_innate_catalog_in_tlk(self.lang_tlk)
         assert after.override.keys() == before.override.keys() | MAIN_OUTPUT_FILES
         for name, payload in before.override.items():
@@ -770,16 +797,10 @@ def test_installer_localization_selects_one_tlk_and_installs_exact_runtime_catal
     assert "%lua_version%" not in transcript
     assert catalog[109] in transcript
 
-    active_tlk = (
-        game.lang_tlk if game_language == "en_US" else game.schinese_tlk
-    )
-    inactive_tlk = (
-        game.schinese_tlk if game_language == "en_US" else game.lang_tlk
-    )
-    inactive_before = (
-        before.schinese_tlk if game_language == "en_US" else before.lang_tlk
-    )
-    assert inactive_tlk.read_bytes() == inactive_before
+    for inactive_language in GAME_TLK_ATTRIBUTES.keys() - {game_language}:
+        assert _game_tlk(game, inactive_language).read_bytes() == _state_tlk(
+            before, inactive_language
+        )
     assert game.root_tlk.read_bytes() == before.root_tlk
     _assert_selected_runtime_catalog(
         game,
@@ -896,8 +917,16 @@ def test_map_backed_candidate_migrates_in_one_forced_uninstall_install(
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
+@pytest.mark.parametrize(
+    ("target_mod_language", "target_game_language", "target_catalog_directory"),
+    LANGUAGE_CASES[1:],
+)
 def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
-    game_factory, layout: str
+    game_factory,
+    layout: str,
+    target_mod_language: int,
+    target_game_language: str,
+    target_catalog_directory: str,
 ) -> None:
     game = game_factory(layout)
     game.configure_loader(
@@ -911,7 +940,9 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
     )
     baseline = game.snapshot()
     english_catalog, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
-    chinese_catalog, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
+    target_catalog, _ = parse_tra(
+        ROOT / "buffbot" / "lang" / target_catalog_directory / "setup.tra"
+    )
 
     fresh_english = game.install_many(
         1,
@@ -933,7 +964,10 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
     assert after_english.bif == baseline.bif
     assert after_english.root_tlk == baseline.root_tlk
     assert after_english.lang_tlk != baseline.lang_tlk
-    assert after_english.schinese_tlk == baseline.schinese_tlk
+    for inactive_language in GAME_TLK_ATTRIBUTES.keys() - {"en_US"}:
+        assert _state_tlk(after_english, inactive_language) == _state_tlk(
+            baseline, inactive_language
+        )
     _assert_selected_runtime_catalog(
         game,
         game_language="en_US",
@@ -955,47 +989,56 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
     assert helper_backup
     assert _active_buffbot_log_entries(game) == [(0, 1), (0, 0)]
 
-    switch_to_chinese = game.run_args(
+    switch_to_target = game.run_args(
         "--force-uninstall-list",
         0,
         "--force-install-list",
         0,
-        mod_language=1,
-        game_language="zh_CN",
+        mod_language=target_mod_language,
+        game_language=target_game_language,
     )
-    chinese_transcript = _assert_installed(game, switch_to_chinese)
-    assert chinese_transcript.count("SUCCESSFULLY REMOVED") == 1
-    assert chinese_transcript.count("SUCCESSFULLY INSTALLED") == 1
-    assert "NOT INSTALLED DUE TO ERRORS" not in chinese_transcript
-    assert "ERROR Installing" not in chinese_transcript
-    assert chinese_transcript.index("SUCCESSFULLY REMOVED") < chinese_transcript.rindex(
+    target_transcript = _assert_installed(game, switch_to_target)
+    assert target_transcript.count("SUCCESSFULLY REMOVED") == 1
+    assert target_transcript.count("SUCCESSFULLY INSTALLED") == 1
+    assert "NOT INSTALLED DUE TO ERRORS" not in target_transcript
+    assert "ERROR Installing" not in target_transcript
+    assert target_transcript.index("SUCCESSFULLY REMOVED") < target_transcript.rindex(
         "SUCCESSFULLY INSTALLED"
     )
-    assert chinese_catalog[111] in chinese_transcript
+    assert target_catalog[111] in target_transcript
 
-    after_chinese = game.snapshot()
-    assert after_chinese.key == baseline.key
-    assert after_chinese.bif == baseline.bif
-    assert after_chinese.root_tlk == baseline.root_tlk
-    assert after_chinese.lang_tlk == after_english.lang_tlk
-    assert after_chinese.schinese_tlk != baseline.schinese_tlk
+    after_target = game.snapshot()
+    assert after_target.key == baseline.key
+    assert after_target.bif == baseline.bif
+    assert after_target.root_tlk == baseline.root_tlk
+    assert after_target.lang_tlk == after_english.lang_tlk
+    assert _state_tlk(after_target, target_game_language) != _state_tlk(
+        baseline, target_game_language
+    )
+    for inactive_language in GAME_TLK_ATTRIBUTES.keys() - {
+        "en_US",
+        target_game_language,
+    }:
+        assert _state_tlk(after_target, inactive_language) == _state_tlk(
+            baseline, inactive_language
+        )
     _assert_selected_runtime_catalog(
         game,
-        game_language="zh_CN",
-        catalog_directory="schinese",
+        game_language=target_game_language,
+        catalog_directory=target_catalog_directory,
     )
     assert {
         name: payload
-        for name, payload in after_chinese.override.items()
+        for name, payload in after_target.override.items()
         if name not in {"bfbot_l10n.tra", "bfbot_strrefs.txt"}
     } == english_payload
     assert (
-        after_chinese.loader_ini,
-        after_chinese.root_lua51,
-        after_chinese.root_provider,
+        after_target.loader_ini,
+        after_target.root_lua51,
+        after_target.root_provider,
     ) == helper_state
     assert _file_tree(game.root / "weidu_external/backup/buffbot/1") == helper_backup
-    assert _active_buffbot_log_entries(game) == [(0, 1), (1, 0)]
+    assert _active_buffbot_log_entries(game) == [(0, 1), (target_mod_language, 0)]
 
     switch_back_to_english = game.run_args(
         "--force-uninstall-list",
@@ -1020,7 +1063,16 @@ def test_language_switch_reinstalls_main_and_reuses_selected_tlk_strrefs(
     assert after_return.bif == baseline.bif
     assert after_return.root_tlk == baseline.root_tlk
     assert after_return.lang_tlk == after_english.lang_tlk
-    assert after_return.schinese_tlk == after_chinese.schinese_tlk
+    assert _state_tlk(after_return, target_game_language) == _state_tlk(
+        after_target, target_game_language
+    )
+    for inactive_language in GAME_TLK_ATTRIBUTES.keys() - {
+        "en_US",
+        target_game_language,
+    }:
+        assert _state_tlk(after_return, inactive_language) == _state_tlk(
+            baseline, inactive_language
+        )
     _assert_selected_runtime_catalog(
         game,
         game_language="en_US",
