@@ -1741,7 +1741,9 @@ end
 
 function BfBot.UI.ToggleSpell(row)
     local entry = buffbot_spellTable[row]
-    if not entry or entry.castable == 0 then return end
+    -- Availability is transient; preset configuration remains editable for
+    -- a later rest or when the spell otherwise becomes available again.
+    if not entry then return end
 
     -- Enable gate: variant spell without variant selected → open picker instead
     if entry.hasVariants == 1 and entry.on == 0 and not entry.var then

@@ -298,6 +298,73 @@ def test_main_spell_list_routes_row_actions_through_selection_controller() -> No
     assert 'action      "BfBot.UI._OnSpellRowAction(cellNumber)"' in MENU_SOURCE
 
 
+def test_unavailable_spell_remains_muted_but_can_be_toggled(
+    ui_lua: LuaRuntime,
+) -> None:
+    facts = ui_lua.execute(
+        """
+        BfBot.UI._view = "party"
+        BfBot.UI._charSlot = 0
+        BfBot.UI._presetIdx = 2
+        BfBot.UI._T = function(key)
+            if key == "textMuted" then return "{4, 5, 6}" end
+            return "{7, 8, 9}"
+        end
+        buffbot_spellTable = {
+            {
+                resref = "SPWI101", kind = "spl", on = 0,
+                castable = 0, hasVariants = 0,
+            },
+        }
+
+        local writes = {}
+        BfBot.Persist.SetSpellEnabled = function(
+            sprite, preset, resref, value, kind)
+            table.insert(writes, {
+                sprite = sprite, preset = preset, resref = resref,
+                value = value, kind = kind,
+            })
+        end
+
+        local colorBefore = BfBot.UI._SpellNameColor(1)
+        BfBot.UI.ToggleSpell(1)
+        local checkboxEnabled = BfBot.UI._CheckboxText(1)
+        BfBot.UI.ToggleSpell(1)
+        local colorAfter = BfBot.UI._SpellNameColor(1)
+
+        return {
+            writeCount = #writes,
+            firstValue = writes[1] and writes[1].value,
+            secondValue = writes[2] and writes[2].value,
+            preset = writes[1] and writes[1].preset,
+            kind = writes[1] and writes[1].kind,
+            checkboxEnabled = checkboxEnabled,
+            checkboxDisabled = BfBot.UI._CheckboxText(1),
+            finalState = buffbot_spellTable[1].on,
+            finalCastable = buffbot_spellTable[1].castable,
+            colorBeforeR = colorBefore[1],
+            colorAfterR = colorAfter[1],
+        }
+        """
+    )
+
+    assert facts["writeCount"] == 2
+    assert facts["firstValue"] == 1
+    assert facts["secondValue"] == 0
+    assert facts["preset"] == 2
+    assert facts["kind"] == "spl"
+    assert facts["checkboxEnabled"] == "[X]"
+    assert facts["checkboxDisabled"] == "[ ]"
+    assert facts["finalState"] == 0
+    assert facts["finalCastable"] == 0
+    assert facts["colorBeforeR"] == 4
+    assert facts["colorAfterR"] == 4
+    assert (
+        'greyscale lua "buffbot_spellTable[rowNumber].castable == 0"'
+        in MENU_SOURCE
+    )
+
+
 def test_row_action_controller_preserves_repeat_and_lock_cells(
     ui_lua: LuaRuntime,
 ) -> None:
