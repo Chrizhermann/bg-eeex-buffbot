@@ -960,18 +960,33 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = source.split("\n## ", 1)[1].split("\n## ", 1)[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.8.2-alpha (2026-08-26)")
-    assert "permanent administrative residue" in current_normalized
-    assert "opcode-282/328 state markers" in current_normalized
-    assert "resource-driven rather than specific to free action" in current_normalized
-    assert "markerless spells" in current_normalized
-    assert "item behavior is unchanged" in current_normalized
-    assert "full automated suite passes **456 tests**" in current_normalized
+    assert current_release.startswith("v1.8.3-alpha (2026-08-31)")
+    assert "unavailable or exhausted spells" in current_normalized
+    assert "stay greyed out" in current_normalized
+    assert "enabled or disabled" in current_normalized
+    assert "casting still requires live availability" in current_normalized
+    assert "full automated suite passes **457 tests**" in current_normalized
     assert "live bg2:ee validation" in current_normalized
-    assert "death ward independently activating shared state 67" in current_normalized
-    assert "cast: 1 | skipped: 0" in current_normalized
-    assert "reporter's complete bg:ee/gog/eeex v1.0 mod stack" in current_normalized
-    assert "three-recipient queue" in current_normalized
+    assert "the user confirmed the behavior works" in current_normalized
+    assert "bg1ee, the broader compatibility matrix" in current_normalized
+    assert "`bfbot.test.runall()` suite were not rerun" in current_normalized
+
+    marker_release = source.split("\n## v1.8.2-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    marker_normalized = marker_release.casefold()
+
+    assert "permanent administrative residue" in marker_normalized
+    assert "opcode-282/328 state markers" in marker_normalized
+    assert "resource-driven rather than specific to free action" in marker_normalized
+    assert "markerless spells" in marker_normalized
+    assert "item behavior is unchanged" in marker_normalized
+    assert "full automated suite passes **456 tests**" in marker_normalized
+    assert "live bg2:ee validation" in marker_normalized
+    assert "death ward independently activating shared state 67" in marker_normalized
+    assert "cast: 1 | skipped: 0" in marker_normalized
+    assert "reporter's complete bg:ee/gog/eeex v1.0 mod stack" in marker_normalized
+    assert "three-recipient queue" in marker_normalized
 
     translation_release = source.split("\n## v1.8.1-alpha", 1)[1].split(
         "\n## ", 1

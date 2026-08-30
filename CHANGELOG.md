@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.8.3-alpha (2026-08-31)
+
+### Fixed
+- **Unavailable or exhausted spells in preset lists remain configurable.** Rows with no current cast availability stay greyed out, but their checkboxes can now be enabled or disabled for a later rest or any other availability change. Casting still requires live availability; this changes preset editing only.
+
+### Testing
+- The full automated suite passes **457 tests**, including a regression that toggles a count-zero spell both on and off while preserving its muted presentation and unavailable state.
+- **Live BG2:EE validation:** the deployed fix kept an unavailable spell greyed out while allowing both enable and disable actions; the user confirmed the behavior works.
+- BG1EE, the broader compatibility matrix, and the in-game `BfBot.Test.RunAll()` suite were not rerun for this release.
+
 ## v1.8.2-alpha (2026-08-26)
 
 ### Fixed
