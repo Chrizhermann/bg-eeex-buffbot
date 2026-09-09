@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.8.4-alpha (2026-09-10)
+
+### Fixed
+- **Unidentified items stay hidden in BuffBot.** Inventory scans now check each item's identification flag before reading its name or abilities. Unidentified potions and equipment cannot appear in preset lists or the Add picker, including through saved settings or classification overrides. Mixed stacks count only identified copies; items become visible after identification and the next panel refresh.
+
+### Testing
+- The full automated suite passes **489 tests**, including 32 new regressions covering inventory regions, combined item flags, mixed stacks, unavailable identification flags, saved settings, and visibility after identification or replacement by unidentified copies.
+- In-game validation is pending. BG1EE, BG2EE, and the in-game `BfBot.Test.RunAll()` suite were not run for this fix.
+
 ## v1.8.3-alpha (2026-08-31)
 
 ### Fixed

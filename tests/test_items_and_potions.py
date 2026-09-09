@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+import pytest
 from lupa.luajit21 import LuaRuntime
 
 
@@ -318,7 +319,7 @@ def test_disallowed_backpack_copy_does_not_hide_equipped_copy() -> None:
             genericName = 2,
         }
         local function item()
-            return { pRes = { resref = { get = function() return "DUPITM" end } } }
+            return { m_flags = 1, pRes = { resref = { get = function() return "DUPITM" end } } }
         end
         local slots = { [21] = item(), [35] = item() }
         local sprite = { m_equipment = { m_items = {
@@ -372,7 +373,7 @@ def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
             TESTSCRL = { abilityCount = 1, itemType = 11, identifiedName = 2 },
         }
         local function item(resref)
-            return { pRes = { resref = { get = function() return resref end } } }
+            return { m_flags = 1, pRes = { resref = { get = function() return resref end } } }
         end
         local slots = { [15] = item("TESTWAND"), [16] = item("TESTSCRL") }
         local sprite = { m_equipment = { m_items = {
@@ -423,7 +424,7 @@ def test_excluded_buff_item_remains_in_catalog_for_picker_recovery() -> None:
         """
         local ability = { quickSlotIcon = { get = function() return "ICON" end } }
         local header = { abilityCount = 1, itemType = 1, identifiedName = 1 }
-        local carried = { pRes = { resref = {
+        local carried = { m_flags = 1, pRes = { resref = {
             get = function() return "EXCLITM" end,
         } } }
         local sprite = { m_equipment = { m_items = {
@@ -473,6 +474,7 @@ def test_item_catalog_sums_multiple_eligible_stacks() -> None:
         local header = { abilityCount = 1, itemType = 9, identifiedName = 1 }
         local function item(ptr)
             return {
+                m_flags = 1,
                 ptr = ptr,
                 pRes = { resref = { get = function() return "STACKITM" end } },
             }
@@ -505,6 +507,178 @@ def test_item_catalog_sums_multiple_eligible_stacks() -> None:
     )
 
     assert count == 5
+
+
+def _identification_runtime() -> LuaRuntime:
+    lua = _persist_runtime()
+    lua.execute(
+        """
+        BfBot.UI = {}
+        BfBot.Exec = {}
+        BfBot._cache = { class = {}, scan = {} }
+        warnings = {}
+        BfBot._Warn = function(message) warnings[#warnings + 1] = message end
+        slots = {}
+        sprite = {
+            m_id = 100,
+            m_equipment = { m_items = {
+                get = function(_, slot) return slots[slot] end,
+            } },
+            GetQuickButtons = function() return nil end,
+        }
+        function makeItem(flags, count)
+            return {
+                m_flags = flags,
+                ptr = count * 1000,
+                pRes = { resref = { get = function() return "TESTPOT" end } },
+            }
+        end
+        metadataReads = 0
+        EEex_Sprite_GetPortraitIndex = function(_) return 0 end
+        EEex_Resource_Demand = function(resref, kind)
+            assert(resref == "TESTPOT" and kind == "ITM")
+            metadataReads = metadataReads + 1
+            return { abilityCount = 1, itemType = 9, identifiedName = 1 }
+        end
+        EEex_UDToPtr = function(value) return value.ptr or 500 end
+        EEex_ReadU16 = function(address)
+            return (address - BfBot.Scan._ITEM_COUNT_OFF) / 1000
+        end
+        EEex_ReadU8 = function(_) return 5 end
+        Infinity_FetchString = function(_) return "Identified Potion" end
+        local function emptyIterator() return function() return nil end end
+        EEex_Sprite_GetKnownMageSpellsWithAbilityIterator = emptyIterator
+        EEex_Sprite_GetKnownPriestSpellsWithAbilityIterator = emptyIterator
+        EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator = emptyIterator
+        BfBot.Class.Classify = function()
+            return { isBuff = true, isSelfOnly = true }
+        end
+        BfBot.Class.GetDuration = function() return 30, nil, {} end
+        BfBot.Class.GetDurationCategory = function() return "short" end
+        """
+    )
+    lua.execute(SCAN_SOURCE)
+    lua.execute(UI_SOURCE)
+    lua.execute(
+        """
+        BfBot.Scan._GetItemAbility = function()
+            return { quickSlotIcon = { get = function() return "ICON" end } }
+        end
+        """
+    )
+    return lua
+
+
+@pytest.mark.parametrize("slot", [0, 15, 18, 21, 34, 35, 38])
+@pytest.mark.parametrize("flags, visible", [(0, False), (14, False), (1, True), (15, True)])
+def test_item_identification_filters_every_inventory_region(
+    slot: int, flags: int, visible: bool,
+) -> None:
+    lua = _identification_runtime()
+    lua.globals().test_slot = slot
+    lua.globals().test_flags = flags
+    facts = lua.execute(
+        """
+        slots[test_slot] = makeItem(test_flags, 2)
+        local catalog, count = BfBot.Scan.GetCastableSpells(sprite)
+        return {
+            visible = catalog.TESTPOT ~= nil,
+            count = count,
+            metadataReads = metadataReads,
+            flags = slots[test_slot].m_flags,
+            warnings = #warnings,
+        }
+        """
+    )
+    assert facts["visible"] == visible
+    assert facts["count"] == int(visible)
+    assert facts["metadataReads"] == int(visible)
+    assert facts["flags"] == flags
+    assert facts["warnings"] == 0
+
+
+@pytest.mark.parametrize("unidentified_first", [True, False])
+def test_unidentified_stacks_neither_mask_nor_inflate_identified_copies(
+    unidentified_first: bool,
+) -> None:
+    lua = _identification_runtime()
+    lua.globals().unidentified_first = unidentified_first
+    facts = lua.execute(
+        """
+        slots[21] = makeItem(unidentified_first and 0 or 1, 2)
+        slots[22] = makeItem(unidentified_first and 1 or 0, 3)
+        slots[23] = makeItem(5, 4) -- identified + stolen still counts
+        local catalog = BfBot.Scan.GetCastableSpells(sprite)
+        return { count = catalog.TESTPOT.count, name = catalog.TESTPOT.name }
+        """
+    )
+    assert facts["count"] == (7 if unidentified_first else 6)
+    assert facts["name"] == "Identified Potion"
+
+
+def test_unknown_item_flags_hide_only_that_copy() -> None:
+    lua = _identification_runtime()
+    facts = lua.execute(
+        """
+        slots[21] = makeItem(nil, 2)
+        slots[22] = makeItem(1, 3)
+        local catalog = BfBot.Scan.GetCastableSpells(sprite)
+        return { count = catalog.TESTPOT.count, warnings = #warnings }
+        """
+    )
+    assert facts["count"] == 3
+    assert facts["warnings"] == 1
+
+
+def test_identification_refresh_controls_saved_rows_and_excluded_item_picker() -> None:
+    lua = _identification_runtime()
+    facts = lua.execute(
+        """
+        slots[21] = makeItem(0, 2)
+        local saved = { kind = "itm", on = 1, tgt = "s", pri = 1, rep = 1 }
+        local preset = { spells = { TESTPOT = saved } }
+        local config = { presets = { [1] = preset }, ovr = { TESTPOT = -1 } }
+        BfBot.UI._presetIdx = 1
+        BfBot.UI._GetSelectedSprite = function() return sprite end
+        BfBot.Persist.GetConfig = function() return config end
+
+        local function visibleCounts()
+            local rows = BfBot.UI._BuildSpellRows(
+                sprite, preset, BfBot.Scan.GetCastableSpells(sprite), config.ovr)
+            -- Simulate the same item removed from the preset, so the Add
+            -- picker must respect identification even with a saved exclusion.
+            preset.spells.TESTPOT = nil
+            BfBot.UI._BuildPickerList()
+            preset.spells.TESTPOT = saved
+            return #rows, #buffbot_pickerSpells
+        end
+
+        local hiddenRows, hiddenPicker = visibleCounts()
+        local hiddenReads = metadataReads
+        slots[21].m_flags = 1 -- game identifies the item
+        BfBot.Scan.InvalidateAll() -- panel-open refresh
+        local knownRows, knownPicker = visibleCounts()
+        local knownName = buffbot_pickerSpells[2] and buffbot_pickerSpells[2].name
+        slots[21] = makeItem(0, 5) -- known stack replaced by unknown copies
+        BfBot.Scan.InvalidateAll()
+        local replacedRows, replacedPicker = visibleCounts()
+        return {
+            hiddenRows = hiddenRows, hiddenPicker = hiddenPicker,
+            hiddenReads = hiddenReads,
+            knownRows = knownRows, knownPicker = knownPicker, knownName = knownName,
+            replacedRows = replacedRows, replacedPicker = replacedPicker,
+            preserved = preset.spells.TESTPOT == saved and saved.on == 1,
+            warnings = #warnings,
+        }
+        """
+    )
+    assert facts["hiddenRows"] == facts["hiddenPicker"] == facts["hiddenReads"] == 0
+    assert facts["knownRows"] == 1
+    assert facts["knownPicker"] == 2  # section header plus the identified item
+    assert facts["knownName"] == "Identified Potion"
+    assert facts["replacedRows"] == facts["replacedPicker"] == 0
+    assert facts["preserved"]
+    assert facts["warnings"] == 0
 
 
 def test_absent_imported_items_stay_persisted_but_hidden_from_rows() -> None:

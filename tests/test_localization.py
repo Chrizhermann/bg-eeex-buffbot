@@ -957,19 +957,33 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
 
 def test_release_changelog_records_final_automated_and_live_boundaries():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
-    current_release = source.split("\n## ", 1)[1].split("\n## ", 1)[0]
+    releases = source.split("\n## ")[1:]
+    if releases[0].startswith("Unreleased\n"):
+        releases = releases[1:]
+    current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.8.3-alpha (2026-08-31)")
-    assert "unavailable or exhausted spells" in current_normalized
-    assert "stay greyed out" in current_normalized
-    assert "enabled or disabled" in current_normalized
-    assert "casting still requires live availability" in current_normalized
-    assert "full automated suite passes **457 tests**" in current_normalized
-    assert "live bg2:ee validation" in current_normalized
-    assert "the user confirmed the behavior works" in current_normalized
-    assert "bg1ee, the broader compatibility matrix" in current_normalized
-    assert "`bfbot.test.runall()` suite were not rerun" in current_normalized
+    assert current_release.startswith("v1.8.4-alpha (2026-09-10)")
+    assert "unidentified items stay hidden" in current_normalized
+    assert "preset lists or the add picker" in current_normalized
+    assert "mixed stacks count only identified copies" in current_normalized
+    assert "full automated suite passes **489 tests**" in current_normalized
+    assert "in-game validation is pending" in current_normalized
+    assert "bg1ee, bg2ee" in current_normalized
+    assert "`bfbot.test.runall()` suite were not run" in current_normalized
+
+    availability_release = source.split("\n## v1.8.3-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert "unavailable or exhausted spells" in availability_release
+    assert "stay greyed out" in availability_release
+    assert "enabled or disabled" in availability_release
+    assert "casting still requires live availability" in availability_release
+    assert "full automated suite passes **457 tests**" in availability_release
+    assert "live bg2:ee validation" in availability_release
+    assert "the user confirmed the behavior works" in availability_release
+    assert "bg1ee, the broader compatibility matrix" in availability_release
+    assert "`bfbot.test.runall()` suite were not rerun" in availability_release
 
     marker_release = source.split("\n## v1.8.2-alpha", 1)[1].split(
         "\n## ", 1

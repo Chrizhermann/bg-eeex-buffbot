@@ -368,6 +368,16 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         for slot = 0, BfBot.Scan._SLOT_WEAPON_MAX do
             local it = arr:get(slot)
             if it then
+                -- Identification belongs to this CItem instance (INVITEM.IDS
+                -- bit 0), not the shared ITM header or classifier cache. Hide
+                -- unknown copies before reading names or aggregating stacks.
+                local flagsOk, flags = pcall(function() return it.m_flags end)
+                if not flagsOk or type(flags) ~= "number" then
+                    BfBot._Warn("Item identification flags unavailable in slot " .. slot)
+                    goto nextItem
+                end
+                if bit.band(flags, 0x1) == 0 then goto nextItem end
+
                 local resref = nil
                 pcall(function() resref = it.pRes.resref:get() end)
                 if resref and resref ~= "FIST" then
@@ -379,6 +389,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
                     _consider(resref, count, allowAnyCat)
                 end
             end
+            ::nextItem::
         end
     end)
     if not ok then
