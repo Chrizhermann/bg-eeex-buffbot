@@ -45,6 +45,7 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/BFBOTFR2.PVRZ",
     "buffbot/BFBOTFR3.PVRZ",
     "buffbot/BFBOTIB.BAM",
+    "buffbot/BfBot5e.lua",
     "buffbot/BfBotCls.lua",
     "buffbot/BfBotCor.lua",
     "buffbot/BfBotExe.lua",
@@ -223,7 +224,7 @@ def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 45
+    assert len(names) == 46
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)

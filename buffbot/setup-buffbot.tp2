@@ -383,6 +383,7 @@ COPY ~buffbot/BfBotLoc.lua~  ~override~
 COPY ~buffbot/lang/%bfbot_selected_language%/setup.tra~ ~override/bfbot_l10n.tra~
 COPY ~buffbot/BfBotCls.lua~  ~override~
 COPY ~buffbot/BfBotScn.lua~  ~override~
+COPY ~buffbot/BfBot5e.lua~   ~override~
 COPY ~buffbot/BfBotExe.lua~  ~override~
 COPY ~buffbot/BfBotMp.lua~   ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~

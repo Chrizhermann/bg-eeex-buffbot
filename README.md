@@ -147,6 +147,7 @@ This is an alpha release. Everything works, but some things are unfinished:
 - **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 - **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
 - **Equipped weapon activations** — `UseItem` currently fires ability 0 only, so weapon buffs stored at a higher ability index remain excluded (#53)
+- **5E Spellcasting support is experimental** — casters converted by [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) cast through that mod's wrapper innates, so its preparation rules and shared per-level slots apply. Spells that open a variant selection popup are skipped for converted casters (cast those manually), and the integration has not yet been validated in game. Run `BfBot.FiveE.Diagnose()` and attach `buffbot_5e.log` to any 5E bug report (#27)
 
 ## Testing & Bug Reports
 

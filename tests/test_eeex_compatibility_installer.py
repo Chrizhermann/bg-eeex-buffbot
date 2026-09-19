@@ -58,6 +58,7 @@ MAIN_OUTPUT_FILES = {
     "bfbotloc.lua",
     "bfbotcls.lua",
     "bfbotscn.lua",
+    "bfbot5e.lua",
     "bfbotexe.lua",
     "bfbotmp.lua",
     "bfbotper.lua",

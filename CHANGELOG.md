@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **5E Spellcasting compatibility (experimental, not yet validated in game).** With UnearthedArcana/Subtledoctor's [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) installed, BuffBot now works through that mod's own casting rules instead of around them. Converted casters show their spells under the normal spell names with the shared per-level casts left, the generated `d5z<N>i` wrapper innates no longer appear as separate rows, and casting goes through the wrapper so preparation, the level pool, and the refresh stay under 5E's control. Spells of a converted caster are never cast from a native memorization slot, active-buff detection follows the spell the wrapper really casts, and BuffBot waits out 5E's ~1 second slot refresh between casts. Without the mod installed nothing changes. (#27)
+- **`BfBot.FiveE.Diagnose()`** — console command that writes a 5E report (mapping table, per-character states, wrappers, and row availability) to `buffbot_5e.log` for bug reports.
+
+### Compatibility
+- Converted casters skip spells that open a variant selection popup (for example Protection from Elemental Energy); cast those manually. Skip reasons name the cause: `no slot - 5E: spell not prepared` and `no slot - 5E: no casts left at this level`.
+- A preset entry that pointed at a `d5z<N>i` wrapper innate (only reachable through the Add picker's non-buff section before this change) stops casting — enable the real spell instead.
+- No save-schema change; all 5E data is derived at scan time.
+
+### Testing
+- The full automated suite passes **516 tests**, including 27 new regressions covering the mapping table, wrapper validation, shared pools, unprepared and exhausted rows, the strip/regrant window, mixed-family indices, stale resume callbacks, and the wrapper cast path.
+- **No in-game validation.** No isolated 5E Spellcasting installation was available, so every engine-facing assumption (wrapper button listing, `SpellRES` on the wrapper, refresh timing, clone behavior) still needs live confirmation. BG1EE, BG2EE, and the in-game `BfBot.Test.RunAll()` suite were not run.
+
 ## v1.8.4-alpha (2026-09-10)
 
 ### Fixed

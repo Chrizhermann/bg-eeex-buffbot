@@ -226,9 +226,12 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
 end
 
 --- Internal: Build {[resref] = count} from GetQuickButtons.
---- type 2 = wizard+priest, type 4 = innate.
+--- type 2 = wizard+priest, type 4 = innate. Also returns the same counts
+--- split per button type ({[type] = {[resref] = count}}) for callers that
+--- must not sum a resource listed under both buttons (5E wrappers).
 local function _buildCountMap(sprite)
     local counts = {}
+    local byType = { [2] = {}, [4] = {} }
 
     local function processButtons(btnType)
         local ok, buttonList = pcall(function()
@@ -248,6 +251,7 @@ local function _buildCountMap(sprite)
                 if bdCount <= 0 then bdCount = 1 end
 
                 counts[resref] = (counts[resref] or 0) + bdCount
+                byType[btnType][resref] = (byType[btnType][resref] or 0) + bdCount
             end)
         end)
 
@@ -262,7 +266,33 @@ local function _buildCountMap(sprite)
     processButtons(2)  -- wizard + priest
     processButtons(4)  -- innate
 
-    return counts
+    return counts, byType
+end
+BfBot.Scan._BuildCountMap = _buildCountMap
+
+--- Internal: catalog entry for one spell resref using the caster-level
+--- ability (falling back to the iterator's ability, then ability 0), or nil
+--- when the SPL cannot be loaded.
+local function _catalogEntryForResref(sprite, resref, iterAbility)
+    local hdrOk, header = pcall(EEex_Resource_Demand, resref, "SPL")
+    if not hdrOk or not header then return nil end
+
+    local casterLevel = 1
+    local clOk, cl = pcall(function()
+        return sprite:getCasterLevelForSpell(resref, true)
+    end)
+    if clOk and cl and cl > 0 then
+        casterLevel = cl
+    end
+
+    local levelAbility = header:getAbilityForLevel(casterLevel)
+    local useAbility = levelAbility or iterAbility
+    if not useAbility then
+        useAbility = header:getAbility(0)
+    end
+    if not useAbility then return nil end
+
+    return _buildCatalogEntry(sprite, resref, header, useAbility, casterLevel)
 end
 
 --- Walk a sprite's inventory (one array: equipped 0-17, quickitems 18-20,
@@ -441,31 +471,11 @@ function BfBot.Scan.GetCastableSpells(sprite)
                     if resref:sub(1, 4) ~= "BFBT" then
                         seen[resref] = true
 
-                        -- Load SPL header for classification + metadata
-                        local hdrOk, header = pcall(EEex_Resource_Demand, resref, "SPL")
-                        if hdrOk and header then
-                            -- Use caster-level-appropriate ability if available
-                            local casterLevel = 1
-                            local clOk, cl = pcall(function()
-                                return sprite:getCasterLevelForSpell(resref, true)
-                            end)
-                            if clOk and cl and cl > 0 then
-                                casterLevel = cl
-                            end
-
-                            local levelAbility = header:getAbilityForLevel(casterLevel)
-                            -- Fall back to iterator-provided ability, then ability index 0
-                            local useAbility = levelAbility or ability
-                            if not useAbility then
-                                useAbility = header:getAbility(0)
-                            end
-
-                            if useAbility then
-                                local entry = _buildCatalogEntry(
-                                    sprite, resref, header, useAbility, casterLevel)
-                                spells[resref] = entry
-                                count = count + 1
-                            end
+                        -- SPL header + caster-level ability -> catalog entry
+                        local entry = _catalogEntryForResref(sprite, resref, ability)
+                        if entry then
+                            spells[resref] = entry
+                            count = count + 1
                         end
                     end
                 end
@@ -480,13 +490,35 @@ function BfBot.Scan.GetCastableSpells(sprite)
     end
 
     -- Phase 2: Overlay slot counts from GetQuickButtons
-    local countMap = _buildCountMap(sprite)
+    local countMap, countsByType = _buildCountMap(sprite)
     for resref, slotCount in pairs(countMap) do
         if spells[resref] then
             spells[resref].count = slotCount
         end
         -- Spells in countMap but NOT in known iterators are engine-internal
         -- or temporary — silently ignored (not part of the character's spellbook).
+    end
+
+    -- Phase 2b: 5E Spellcasting wrappers (no-op unless its d5zclons.2da is
+    -- installed). Runs before the item merge so it only ever sees spells.
+    if BfBot.FiveE and BfBot.FiveE.ApplyToCatalog then
+        local fiveOk, fiveErr = pcall(BfBot.FiveE.ApplyToCatalog, sprite, spells,
+            countsByType, function(resref)
+                return _catalogEntryForResref(sprite, resref, nil)
+            end)
+        if not fiveOk then
+            BfBot._Warn("5E Spellcasting overlay failed: " .. tostring(fiveErr))
+            -- Never let a broken overlay turn 5E spells into native casts.
+            local closedOk, closedErr = pcall(BfBot.FiveE.FailClosed, spells)
+            if not closedOk then
+                BfBot._Warn("5E Spellcasting fail-closed pass failed: "
+                    .. tostring(closedErr))
+            end
+        end
+        -- The overlay may have hidden or added rows, possibly before it
+        -- raised: recount instead of trusting incremental bookkeeping.
+        count = 0
+        for _ in pairs(spells) do count = count + 1 end
     end
 
     -- Phase 3: Merge item catalog. Spells take precedence on resref collision

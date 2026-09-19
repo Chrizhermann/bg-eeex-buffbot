@@ -1819,6 +1819,17 @@ function BfBot.Persist.DrainBuildSkips()
     return msgs
 end
 
+--- 5E Spellcasting: a prepared spell whose casts are missing only because
+--- upstream is between stripping and regranting its wrappers stays in the
+--- queue — the executor waits for the regrant instead of the builder
+--- dropping the entry unseen. Everything else needs a live cast count.
+local function _Queueable(scanData)
+    if not scanData then return false end
+    if scanData.count > 0 then return true end
+    return BfBot.FiveE ~= nil and BfBot.FiveE.AwaitingRefresh ~= nil
+        and BfBot.FiveE.AwaitingRefresh(scanData) == true
+end
+
 local function _NoTargetSkip(casterName, spellName)
     return {
         msg = tostring(casterName) .. ": " .. tostring(spellName)
@@ -1897,7 +1908,7 @@ function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
             -- scanner cannot produce item rows, but keep this guard here as a
             -- last line of defense for synthetic seams and future callers that
             -- resolve a party sprite through a summon-shaped reference.
-            if scanData and scanData.kind ~= "itm" and scanData.count > 0 then
+            if scanData and scanData.kind ~= "itm" and _Queueable(scanData) then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, casterRef, resref, spellCfg.pri or 999)
                 if #resolved == 0 then
@@ -2005,7 +2016,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
         for resref, spellCfg in pairs(preset.spells) do
             if spellCfg.on == 1 then
                 local scanData = castable[resref]
-                if scanData and scanData.count > 0 then
+                if _Queueable(scanData) then
                     local resolved = BfBot.Persist._ResolveConfigTarget(
                         spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                     if #resolved == 0 then
@@ -2396,7 +2407,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
     for resref, spellCfg in pairs(preset.spells) do
         if spellCfg.on == 1 then
             local scanData = castable[resref]
-            if scanData and scanData.count > 0 then
+            if _Queueable(scanData) then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
                     spellCfg.tgt, slot, resref, spellCfg.pri or 999)
                 if #resolved == 0 then

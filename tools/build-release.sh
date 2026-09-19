@@ -65,6 +65,7 @@ buffbot_files = (
     "BfBotThm.lua",
     "BfBotCls.lua",
     "BfBotScn.lua",
+    "BfBot5e.lua",
     "BfBotExe.lua",
     "BfBotMp.lua",
     "BfBotPer.lua",

@@ -537,6 +537,11 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                     isAoE = isAoE,
                     cheat = isCheat,
                     var = entry.var,
+                    -- 5E Spellcasting: build-time marker that this spell is
+                    -- cast through an upstream wrapper (read-only, shared).
+                    -- The live wrapper is re-read from the fresh scan at
+                    -- cast time; this only gates the refresh wait.
+                    d5 = kind == "spl" and spellData.d5 or nil,
                 })
                 totalEntries = totalEntries + 1
             end
@@ -580,7 +585,14 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
     local spells = BfBot.Scan.GetCastableSpells(casterSprite)
     local spellData = spells and spells[entry.resref]
     if not spellData or spellData.count <= 0 then
-        BfBot.Exec._LogEntry("SKIP", label .. " (no slot)")
+        local why = "no slot"
+        if spellData and spellData.d5 and BfBot.FiveE
+            and BfBot.FiveE.UnavailableReason then
+            local okWhy, detail = pcall(
+                BfBot.FiveE.UnavailableReason, casterSprite, spellData)
+            if okWhy and detail then why = detail end
+        end
+        BfBot.Exec._LogEntry("SKIP", label .. " (" .. why .. ")")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
         return false
     end
@@ -611,9 +623,13 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
         -- A wrapper may apply a short parent marker before its child begins
         -- producing effects (for example True Seeing). Include that parent
         -- when it declares a marker, then add every concrete child source.
-        if markerMap and markerMap[entry.resref] then
-            checkResrefs[#checkResrefs + 1] = entry.resref
-            seenResrefs[entry.resref] = true
+        -- 5E Spellcasting rows keep their spellbook resref (MEM) while the
+        -- wrapper delivers CAST, so the parent that can carry a marker is
+        -- CAST, not the row's own resref.
+        local parent = (entry.d5 and entry.d5.cast) or entry.resref
+        if markerMap and markerMap[parent] then
+            checkResrefs[#checkResrefs + 1] = parent
+            seenResrefs[parent] = true
         end
         for _, r in ipairs(entry.leafResrefs or { entry.resref }) do
             if not seenResrefs[r] then
@@ -737,19 +753,89 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     caster.index = index
     local entry = caster.queue[index]
 
+    -- 5E Spellcasting: a wrapper cast strips every wrapper and upstream
+    -- regrants them after the delay the wrapper itself declares. Wait for
+    -- that refresh before the next wrapper-backed attempt — its preflight
+    -- would otherwise read the gap as "no slot". The wait re-enters this
+    -- same index via _Resume (engine-driven, so no Lua stack growth).
+    if entry.d5 and BfBot.FiveE and not caster.d5Refresh and not caster.d5Seeded then
+        -- First wrapper-backed entry of this run for this caster: upstream may
+        -- still be between a previous cast's strip and its delayed regrant
+        -- (that cast can be BuffBot's from an earlier run, or the player's).
+        -- The scan marks such rows pending; wait instead of reading the gap
+        -- as "no slot". Checked once per caster per run.
+        caster.d5Seeded = true
+        BfBot.Scan.Invalidate(sprite)
+        local fresh = BfBot.Scan.GetCastableSpells(sprite)
+        local row = fresh and fresh[entry.resref]
+        if row and BfBot.FiveE.AwaitingRefresh and BfBot.FiveE.AwaitingRefresh(row) then
+            caster.d5Refresh = BfBot.FiveE.NewRefresh(row.d5)
+            caster.d5Refresh.since = BfBot.Exec._GetGameTime()
+        end
+    end
+
+    if caster.d5Refresh and entry.d5 and BfBot.FiveE then
+        local refresh = caster.d5Refresh
+        local okWait, waitTicks = pcall(BfBot.FiveE.RefreshWait,
+            caster, entry, sprite, BfBot.Exec._GetGameTime())
+        if not okWait then
+            BfBot._Warn("[Exec] 5E refresh wait failed: " .. tostring(waitTicks))
+            caster.d5Refresh = nil
+        elseif waitTicks then
+            if not refresh.logged then
+                refresh.logged = true
+                BfBot.Exec._LogEntry("INFO", entry.casterName
+                    .. " waiting for 5E spell slots to refresh")
+            end
+            -- Only the resume belonging to this wait may continue the chain:
+            -- a callback left over from a stopped run reaches a rebuilt
+            -- caster record whose stamp does not match, and is ignored.
+            caster.d5WaitIndex = index
+            EEex_Action_QueueResponseStringOnAIBase(
+                string.format("SmallWait(%d)", waitTicks), sprite)
+            EEex_Action_QueueResponseStringOnAIBase(string.format(
+                "EEex_LuaAction(\"BfBot.Exec._Resume([[%s]])\")", key), sprite)
+            return
+        end
+    end
+
     -- Pre-flight checks — skip immediately recurses to next
     if not BfBot.Exec._CheckEntry(entry, sprite) then
         return BfBot.Exec._ProcessCasterEntry(key, index + 1)
     end
 
+    -- Fresh scan data for this step (cache filled by _CheckEntry's rescan)
+    local scanSpells = BfBot.Scan.GetCastableSpells(sprite)
+    local spellScan = scanSpells and scanSpells[entry.resref]
+    local d5 = entry.kind ~= "itm" and spellScan and spellScan.d5 or nil
+
     -- Safety: variant spell with no variant configured — skip
     if not entry.var then
-        local scanSpells = BfBot.Scan.GetCastableSpells(sprite)
-        local spellScan = scanSpells and scanSpells[entry.resref]
         if spellScan and spellScan.hasVariants == 1 then
             BfBot.Exec._LogEntry("SKIP",
                 entry.casterName .. " -> " .. entry.spellName
                 .. " (variant spell — no variant configured)")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            return BfBot.Exec._ProcessCasterEntry(key, index + 1)
+        end
+    end
+
+    -- 5E Spellcasting: only upstream's wrapper may spend a 5E slot. A
+    -- selected variant would need the wrapper's debit/refresh without its
+    -- own cast (which opens upstream's picker) — unsupported, so skip
+    -- rather than force-cast around the shared pool or a native slot.
+    if d5 then
+        local reason = nil
+        if entry.var then
+            reason = "5E Spellcasting: variant selection is not supported"
+                .. " for converted casters — cast it manually"
+        elseif d5.available ~= 1 or type(d5.wrapper) ~= "string" then
+            reason = "5E: no castable wrapper"
+        end
+        if reason then
+            BfBot.Exec._LogEntry("SKIP", entry.casterName .. " -> "
+                .. entry.spellName .. " -> " .. entry.targetName
+                .. " (" .. reason .. ")")
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
             return BfBot.Exec._ProcessCasterEntry(key, index + 1)
         end
@@ -793,6 +879,19 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
             entry.casterName .. " -> " .. entry.spellName .. " (item) -> " .. entry.targetName)
         BfBot.Exec._castCount = BfBot.Exec._castCount + 1
 
+    elseif d5 then
+        -- 5E Spellcasting: the upstream wrapper enforces preparation, spends
+        -- the shared per-level slot once, casts the real spell, and starts
+        -- its own refresh. BuffBot never debits anything itself.
+        local spellAction = string.format('SpellRES("%s",%s)', d5.wrapper, entry.targetObj)
+        EEex_Action_QueueResponseStringOnAIBase(spellAction, sprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
+        caster.d5Refresh = BfBot.FiveE.NewRefresh(d5)
+        BfBot.Exec._LogEntry("CAST",
+            entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
+            .. " (5E " .. d5.wrapper .. ")")
+        BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+
     elseif entry.var then
         -- Variant spell path: consume parent spell slot, then cast the variant
         -- directly via ReallyForceSpellRES (variant SPL is not in the spellbook)
@@ -820,12 +919,13 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     end
 end
 
---- Called by the engine via EEex_LuaAction after a caster's spell completes.
--- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
-function BfBot.Exec._Advance(key)
-    if BfBot.Exec._state ~= "running" then return end
+--- Shared guard for engine-driven chain callbacks (_Advance / _Resume):
+--- returns the caster record when its chain may continue, else nil after
+--- finishing a gone caster or stopping the run on combat.
+local function _continueChain(key)
+    if BfBot.Exec._state ~= "running" then return nil end
     local caster = BfBot.Exec._casters[key]
-    if not caster or caster.done then return end
+    if not caster or caster.done then return nil end
 
     -- Caster vanished between steps (summon expired/killed, slot emptied),
     -- changed occupant (portrait reshuffle — never route the chain through
@@ -835,7 +935,7 @@ function BfBot.Exec._Advance(key)
     local sprite = BfBot.Exec._ResolveCasterForStep(caster)
     if not sprite then
         BfBot.Exec._FinishGoneCaster(caster)
-        return
+        return nil
     end
 
     -- Combat detection: abort all casters if hostiles detected
@@ -850,9 +950,36 @@ function BfBot.Exec._Advance(key)
                     BfBot.L10N.Get("feedback.combat_stopped"))
             end
         end)
-        return
+        return nil
+    end
+    return caster
+end
+
+--- Called by the engine via EEex_LuaAction after a 5E refresh wait: re-run
+--- the SAME queue index (the wait happened before its preflight).
+-- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
+function BfBot.Exec._Resume(key)
+    local caster = BfBot.Exec._casters[key]
+    if not caster or caster.d5WaitIndex ~= caster.index then return end
+    caster.d5WaitIndex = nil
+    if not _continueChain(key) then return end
+    BfBot.Exec._ProcessCasterEntry(key, caster.index)
+end
+
+--- Called by the engine via EEex_LuaAction after a caster's spell completes.
+-- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
+function BfBot.Exec._Advance(key)
+    if BfBot.Exec._state ~= "running" then return end
+    local caster = BfBot.Exec._casters[key]
+    if not caster or caster.done then return end
+
+    -- 5E Spellcasting: the wrapper's delayed refresh counts from the moment
+    -- its cast finished, which is now.
+    if caster.d5Refresh and caster.d5Refresh.since == nil then
+        caster.d5Refresh.since = BfBot.Exec._GetGameTime()
     end
 
+    if not _continueChain(key) then return end
     BfBot.Exec._ProcessCasterEntry(key, caster.index + 1)
 end
 

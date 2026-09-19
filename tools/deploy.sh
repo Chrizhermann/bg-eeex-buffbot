@@ -23,7 +23,7 @@ PATCH_TLK_SCRIPT="$SCRIPT_DIR/patch_tlk.py"
 ENGLISH_TLK="$GAME_DIR/lang/en_US/dialog.tlk"
 
 # Verify source files exist
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     if [ ! -f "$SRC_DIR/$f" ]; then
         echo "ERROR: $SRC_DIR/$f not found"
         exit 1
@@ -87,7 +87,7 @@ else
 fi
 
 # Copy source files
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 
