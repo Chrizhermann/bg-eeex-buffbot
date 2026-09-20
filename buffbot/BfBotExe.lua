@@ -5,6 +5,10 @@
 
 BfBot.Exec = {}
 
+-- Never reset this between runs, including _HardReset: queued callbacks
+-- from an earlier run must not match a newly scheduled 5E refresh wait.
+local _next5eWaitToken = 0
+
 -- State
 BfBot.Exec._state = "idle"       -- "idle" | "running" | "done" | "stopped"
 BfBot.Exec._casters = {}         -- {[casterKey] = {ref=..., queue={}, index=0, done=false, name=n, cheatBoundary=0, cheatApplied=false}}
@@ -787,14 +791,16 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
                 BfBot.Exec._LogEntry("INFO", entry.casterName
                     .. " waiting for 5E spell slots to refresh")
             end
-            -- Only the resume belonging to this wait may continue the chain:
-            -- a callback left over from a stopped run reaches a rebuilt
-            -- caster record whose stamp does not match, and is ignored.
+            -- Each scheduled wait has its own token, even when an earlier
+            -- run stopped at the same caster and queue index.
+            _next5eWaitToken = _next5eWaitToken + 1
+            caster.d5WaitToken = _next5eWaitToken
             caster.d5WaitIndex = index
             EEex_Action_QueueResponseStringOnAIBase(
                 string.format("SmallWait(%d)", waitTicks), sprite)
             EEex_Action_QueueResponseStringOnAIBase(string.format(
-                "EEex_LuaAction(\"BfBot.Exec._Resume([[%s]])\")", key), sprite)
+                "EEex_LuaAction(\"BfBot.Exec._Resume([[%s]],%d)\")",
+                key, caster.d5WaitToken), sprite)
             return
         end
     end
@@ -958,9 +964,12 @@ end
 --- Called by the engine via EEex_LuaAction after a 5E refresh wait: re-run
 --- the SAME queue index (the wait happened before its preflight).
 -- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
-function BfBot.Exec._Resume(key)
+-- @param token number: unique identifier of the scheduled wait
+function BfBot.Exec._Resume(key, token)
     local caster = BfBot.Exec._casters[key]
-    if not caster or caster.d5WaitIndex ~= caster.index then return end
+    if not caster or token == nil or token ~= caster.d5WaitToken
+        or caster.d5WaitIndex ~= caster.index then return end
+    caster.d5WaitToken = nil
     caster.d5WaitIndex = nil
     if not _continueChain(key) then return end
     BfBot.Exec._ProcessCasterEntry(key, caster.index)

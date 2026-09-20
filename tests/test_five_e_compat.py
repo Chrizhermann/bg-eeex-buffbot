@@ -446,6 +446,109 @@ def test_two_prepared_spells_share_the_level_pool_count(
     assert facts["exhaustedReason"] == "no slot - 5E: no casts left at this level"
 
 
+@pytest.mark.parametrize("wrapper_present", [True, False])
+@pytest.mark.parametrize(
+    "mem_target, cast_target, expected_aoe, expected_self, target, attempts",
+    [(1, 4, True, False, "all", 1), (4, 1, False, False, "all", 3),
+     (1, 5, False, True, "self", 1)],
+)
+def test_mapped_spell_uses_delivered_targeting_in_catalog_and_queue(
+    scan_lua: LuaRuntime, wrapper_present: bool, mem_target: int,
+    cast_target: int, expected_aoe: bool, expected_self: bool,
+    target: str, attempts: int,
+) -> None:
+    scan_lua.execute(EXEC_SOURCE)
+    facts = scan_lua.eval(
+        """function(present, memTarget, castTarget, target)
+        T_Table = { T_Row("101", "MEMBUFF", "CASTBUFF", "arcane") }
+        T_Spell("MEMBUFF", { actionType = memTarget, nameRef = 11 })
+        T_Spell("CASTBUFF", { actionType = castTarget, nameRef = 12 })
+        T_Wrapper(101, "CASTBUFF", { area = castTarget == 4 })
+        local sprite = T_Sprite({ mage = { "MEMBUFF" },
+            innate = present and { "D5Z101I" } or {},
+            buttons = present and { [2] = { D5Z101I = 3 } } or {},
+            states = { [190] = true } })
+        local row = BfBot.Scan.GetCastableSpells(sprite).MEMBUFF
+        sprite.slot = 0
+        local party = { sprite, { name = "Ally 1", slot = 1 },
+                                { name = "Ally 2", slot = 2 } }
+        EEex_Sprite_GetInPortrait = function(slot) return party[slot + 1] end
+        EEex_Sprite_GetCharacterIndex = function(s) return s.slot end
+        BfBot.Exec._IsAlive = function(s) return s ~= nil end
+        local queues, attempts = BfBot.Exec._BuildQueue({
+            { caster = 0, spell = "MEMBUFF", target = target }
+        }, 0)
+        return { resref = row.resref, name = row.name, aoe = row.isAoE,
+            selfOnly = row.isSelfOnly, classAoE = row.class.isAoE,
+            classSelf = row.class.isSelfOnly, defaultTarget = row.class.defaultTarget,
+            queuedResref = queues.p0[1].resref, attempts = attempts }
+        end"""
+    )(wrapper_present, mem_target, cast_target, target)
+
+    assert facts["resref"] == facts["queuedResref"] == "MEMBUFF"
+    assert facts["name"] == scan_lua.eval("Infinity_FetchString(11)")
+    assert facts["aoe"] == int(expected_aoe)
+    assert facts["selfOnly"] == int(expected_self)
+    assert facts["classAoE"] is expected_aoe
+    assert facts["classSelf"] is expected_self
+    assert facts["defaultTarget"] == ("p" if expected_aoe else "s")
+    assert facts["attempts"] == attempts
+
+
+@pytest.mark.parametrize("override", [True, False])
+def test_mapped_spell_preserves_its_manual_override_without_changing_cast_cache(
+    scan_lua: LuaRuntime, override: bool,
+) -> None:
+    facts = scan_lua.eval(
+        """function(override)
+        T_Table = { T_Row("101", "MEMBUFF", "CASTBUFF", "arcane") }
+        T_Spell("MEMBUFF", { actionType = 1 })
+        T_Spell("CASTBUFF", { actionType = 4 })
+        T_Wrapper(101, "CASTBUFF", { area = true })
+        BfBot.Class.SetOverride("MEMBUFF", override)
+        local sprite = T_Sprite({ mage = { "MEMBUFF" }, innate = { "D5Z101I" },
+            buttons = { [2] = { D5Z101I = 3 } }, states = { [190] = true } })
+        local row = BfBot.Scan.GetCastableSpells(sprite).MEMBUFF
+        local original = BfBot._cache.class.CASTBUFF
+        return { buff = row.class.isBuff, overridden = row.class.overridden,
+            ambiguous = row.class.isAmbiguous, aoe = row.class.isAoE,
+            castBuff = original.isBuff, castOverridden = original.overridden }
+        end"""
+    )(override)
+
+    assert facts["buff"] is override
+    assert facts["overridden"] is True
+    assert facts["ambiguous"] is False
+    assert facts["aoe"] is True
+    assert facts["castBuff"] is True
+    assert facts["castOverridden"] is False
+
+
+@pytest.mark.parametrize("delivered_image", [True, False])
+def test_project_image_flag_describes_the_delivered_spell(
+    scan_lua: LuaRuntime, delivered_image: bool,
+) -> None:
+    facts = scan_lua.eval(
+        """function(deliveredImage)
+        T_Table = { T_Row("101", "MEMBUFF", "CASTBUFF", "arcane") }
+        local function effects(image)
+            return { { effectID = image and 236 or 16, dwFlags = 2,
+                durationType = 0, duration = 300, targetType = 2 } }
+        end
+        T_Spell("MEMBUFF", { effects = effects(not deliveredImage) })
+        T_Spell("CASTBUFF", { effects = effects(deliveredImage) })
+        T_Wrapper(101, "CASTBUFF")
+        local sprite = T_Sprite({ mage = { "MEMBUFF" }, innate = { "D5Z101I" },
+            buttons = { [2] = { D5Z101I = 3 } }, states = { [190] = true } })
+        local row = BfBot.Scan.GetCastableSpells(sprite).MEMBUFF
+        return { image = row.isProjectImage, classImage = row.class.isProjectImage }
+        end"""
+    )(delivered_image)
+
+    assert facts["image"] == int(delivered_image)
+    assert facts["classImage"] is delivered_image
+
+
 def test_shared_index_with_mem_different_from_cast_uses_cast_effect_identity(
     scan_lua: LuaRuntime,
 ) -> None:
@@ -957,9 +1060,9 @@ def exec5_lua() -> LuaRuntime:
         function T_RunNextLuaAction()
             while #T_Actions > 0 do
                 local action = table.remove(T_Actions, 1)
-                local fn, key = action:match('EEex_LuaAction%("BfBot%.Exec%.(_%a+)%(%[%[(%w+)%]%]%)"%)')
+                local fn, key, token = action:match('EEex_LuaAction%("BfBot%.Exec%.(_%a+)%(%[%[(%w+)%]%],?%s*(%d*)%)"%)')
                 if fn then
-                    BfBot.Exec[fn](key)
+                    BfBot.Exec[fn](key, tonumber(token))
                     return fn
                 end
                 T_Done[#T_Done + 1] = action
@@ -1033,11 +1136,11 @@ def test_exec_casts_through_wrapper_and_waits_for_upstream_refresh(
     )
     assert facts["stepped"] == "_Advance"
     assert facts["waited"] == (
-        'SmallWait(3)|EEex_LuaAction("BfBot.Exec._Resume([[p0]])")'
+        'SmallWait(3)|EEex_LuaAction("BfBot.Exec._Resume([[p0]],1)")'
     )
     assert facts["resumed1"] == "_Resume"
     assert facts["stillWaiting"] == (
-        'SmallWait(3)|EEex_LuaAction("BfBot.Exec._Resume([[p0]])")'
+        'SmallWait(3)|EEex_LuaAction("BfBot.Exec._Resume([[p0]],2)")'
     )
     assert facts["resumed2"] == "_Resume"
     assert facts["final"] == (
@@ -1257,7 +1360,7 @@ def test_exec_waits_out_a_refresh_that_started_before_the_run(
     )
 
     assert facts["waiting"] == (
-        'SmallWait(3)|EEex_LuaAction("BfBot.Exec._Resume([[p0]])")'
+        'SmallWait(3)|EEex_LuaAction("BfBot.Exec._Resume([[p0]],1)")'
     )
     assert facts["cast"] == (
         'SpellRES("D5Z101I",Myself)|'
@@ -1315,22 +1418,19 @@ def test_exec_ignores_a_resume_left_over_from_a_stopped_run(
         -- SmallWait + _Resume pair is still in the engine's action queue and
         -- must not drive the new run's chain a second time.
         local spells = {
-            SPWI305 = T_Row5("SPWI305", "D5Z101I", 1),
+            SPWI305 = T_Row5("SPWI305", "D5Z101I", 0),
             SPPR101 = { count = 2, name = "Bless", kind = "spl",
                         class = { splstates = {} }, leafResrefs = { "SPPR101" } },
         }
+        spells.SPWI305.d5.pending = 1
         T_ExecWorld(spells)
         T_Start({ { caster = 0, spell = "SPWI305", target = "self" } })
-        spells.SPWI305.count = 0
-        spells.SPWI305.d5.available = 0
-        T_RunNextLuaAction()                          -- _Advance -> wait queued
-        T_Actions = {}                                -- engine still holds them
-        BfBot.Exec._state = "stopped"
+        BfBot.Exec.Stop()
 
         -- New run, fresh caster record, native spell.
         T_Start({ { caster = 0, spell = "SPPR101", target = "self" } })
-        local first = table.concat(T_Actions, "|")
-        BfBot.Exec._Resume("p0")                      -- the stale callback
+        local first = T_Actions[3] .. "|" .. T_Actions[4]
+        assert(T_RunNextLuaAction() == "_Resume")     -- the stale callback
         return { first = first, after = table.concat(T_Actions, "|"),
                  casts = BfBot.Exec._castCount }
         """
@@ -1342,6 +1442,61 @@ def test_exec_ignores_a_resume_left_over_from_a_stopped_run(
     )
     assert facts["after"] == facts["first"]
     assert facts["casts"] == 1
+
+
+@pytest.mark.parametrize("hard_reset", [False, True])
+def test_old_resume_cannot_continue_a_new_run_that_is_also_waiting(
+    exec5_lua: LuaRuntime, hard_reset: bool,
+) -> None:
+    facts = exec5_lua.eval(
+        """function(hardReset)
+        local row = T_Row5("SPWI305", "D5Z101I", 0)
+        row.d5.pending = 1
+        T_ExecWorld({ SPWI305 = row })
+        local queue = { { caster = 0, spell = "SPWI305", target = "self" } }
+        T_Start(queue)
+        BfBot.Exec.Stop()
+        if hardReset then BfBot.Exec._HardReset() end
+        T_Start(queue)
+        local currentWait = T_Actions[3] .. "|" .. T_Actions[4]
+        local before = BfBot.Exec._casters.p0.d5Refresh.polls
+        T_Now = T_Now + 3
+        local oldCallback = T_RunNextLuaAction()
+        local afterOld = BfBot.Exec._casters.p0.d5Refresh.polls
+        local actionsAfterOld = table.concat(T_Actions, "|")
+        local newCallback = T_RunNextLuaAction()
+        return { before = before, afterOld = afterOld,
+            afterNew = BfBot.Exec._casters.p0.d5Refresh.polls,
+            currentWait = currentWait, actionsAfterOld = actionsAfterOld,
+            oldCallback = oldCallback, newCallback = newCallback,
+            casts = BfBot.Exec._castCount }
+        end"""
+    )(hard_reset)
+
+    assert facts["oldCallback"] == facts["newCallback"] == "_Resume"
+    assert facts["afterOld"] == facts["before"]
+    assert facts["actionsAfterOld"] == facts["currentWait"]
+    assert facts["afterNew"] == facts["before"] + 1
+    assert facts["casts"] == 0
+
+
+def test_unprepared_spell_in_normal_preset_is_not_queued(exec5_lua: LuaRuntime) -> None:
+    facts = exec5_lua.execute(
+        """
+        T_ExecWorld({ SPWI305 = T_Row5("SPWI305", "D5Z101I", 0) })
+        BfBot.Persist.GetConfig = function() return {
+            presets = { { spells = { SPWI305 = { on = 1, tgt = "s", pri = 1 } } } }
+        } end
+        local queue, reason = BfBot.Persist.BuildQueueForCharacter(0, 1)
+        return { hasQueue = queue ~= nil, reason = reason,
+            actions = #T_Actions, log = T_LogText() }
+        """
+    )
+
+    assert facts["hasQueue"] is False
+    assert facts["reason"] == "reason.queue.no_castable_spells_for_slot"
+    assert facts["actions"] == 0
+    assert facts["log"] == ""
 
 
 def test_exec_skips_an_active_buff_delivered_under_a_different_mem_resref(

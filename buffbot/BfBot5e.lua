@@ -404,21 +404,37 @@ end
 -- ============================================================
 
 --- The wrapper delivers CAST, so CAST's resources are what land on the
---- target: give a MEM row CAST's effect identity (skip detection, duration,
---- variants). The executor copies these fields into queue entries at build
+--- target: give a MEM row CAST's classification, targeting and effect identity.
+--- The executor copies these fields into queue entries at build
 --- time, so this must hold whether or not a wrapper is present right now.
 --- @return false when CAST cannot be loaded (the row must stay uncastable)
 local function _adoptCastIdentity(entry, cast, buildEntry)
     if cast == _resref(entry.resref) then return true end
     local okCast, castEntry = pcall(buildEntry, cast)
     if not okCast or not castEntry then return false end
+    entry.class = castEntry.class
+    -- Keep the player's include/exclude choice on the visible MEM row.
+    -- Classifier results are shared: copy before applying that choice so
+    -- another spell mapped to CAST does not inherit MEM's override.
+    local override = BfBot.Class.GetOverride(entry.resref)
+    if entry.class and override ~= nil then
+        local class = {}
+        for k, v in pairs(entry.class) do class[k] = v end
+        class.isBuff = override
+        class.isAmbiguous = false
+        class.overridden = true
+        class.score = override and 10 or -10
+        entry.class = class
+    end
+    entry.isAoE = castEntry.isAoE
+    entry.isSelfOnly = castEntry.isSelfOnly
     entry.leafResrefs = castEntry.leafResrefs
     entry.stateMarkersByResref = castEntry.stateMarkersByResref
     entry.duration = castEntry.duration
     entry.durCat = castEntry.durCat
     entry.hasVariants = castEntry.hasVariants
     entry.variants = castEntry.variants
-    if castEntry.isProjectImage == 1 then entry.isProjectImage = 1 end
+    entry.isProjectImage = castEntry.isProjectImage
     return true
 end
 

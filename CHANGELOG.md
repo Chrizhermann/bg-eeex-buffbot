@@ -7,12 +7,13 @@
 - **`BfBot.FiveE.Diagnose()`** — console command that writes a 5E report (mapping table, per-character states, wrappers, and row availability) to `buffbot_5e.log` for bug reports.
 
 ### Compatibility
-- Converted casters skip spells that open a variant selection popup (for example Protection from Elemental Energy); cast those manually. Skip reasons name the cause: `no slot - 5E: spell not prepared` and `no slot - 5E: no casts left at this level`.
+- Converted casters skip spells that open a variant selection popup (for example Protection from Elemental Energy); cast those manually. Unavailable spells are left out when building a preset's cast list. If a queued spell becomes unavailable, its skip message explains whether it is unprepared or has no casts left at its level.
+- When the prepared spell and the spell actually cast differ, BuffBot uses the delivered spell's targeting and classification while preserving the visible spell's name and manual include/exclude choice. Delayed 5E refresh callbacks from a stopped run cannot resume a later run.
 - A preset entry that pointed at a `d5z<N>i` wrapper innate (only reachable through the Add picker's non-buff section before this change) stops casting — enable the real spell instead.
 - No save-schema change; all 5E data is derived at scan time.
 
 ### Testing
-- The full automated suite passes **516 tests**, including 27 new regressions covering the mapping table, wrapper validation, shared pools, unprepared and exhausted rows, the strip/regrant window, mixed-family indices, stale resume callbacks, and the wrapper cast path.
+- The full automated suite passes **529 tests**, including 40 new regressions covering the mapping table, wrapper validation, shared pools, unprepared and exhausted rows, the strip/regrant window, mixed-family indices, delivered-spell targeting and Project Image identity, manual overrides, stop/restart callbacks, and the wrapper cast path.
 - **No in-game validation.** No isolated 5E Spellcasting installation was available, so every engine-facing assumption (wrapper button listing, `SpellRES` on the wrapper, refresh timing, clone behavior) still needs live confirmation. BG1EE, BG2EE, and the in-game `BfBot.Test.RunAll()` suite were not run.
 
 ## v1.8.4-alpha (2026-09-10)
