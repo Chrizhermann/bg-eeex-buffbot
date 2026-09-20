@@ -963,14 +963,27 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.8.4-alpha (2026-09-10)")
-    assert "unidentified items stay hidden" in current_normalized
-    assert "preset lists or the add picker" in current_normalized
-    assert "mixed stacks count only identified copies" in current_normalized
-    assert "full automated suite passes **489 tests**" in current_normalized
-    assert "in-game validation is pending" in current_normalized
-    assert "bg1ee, bg2ee" in current_normalized
-    assert "`bfbot.test.runall()` suite were not run" in current_normalized
+    assert current_release.startswith("v1.9.0-alpha (2026-09-21)")
+    assert "experimental 5e spellcasting compatibility" in current_normalized
+    assert "full automated suite passes **535 tests**" in current_normalized
+    assert "user playtest" in current_normalized
+    assert "eeex 1.2.0/luajit and 5e spellcasting 2.7.2" in current_normalized
+    assert "short arcane buff preset with quick cast worked well" in current_normalized
+    assert "one-second refresh still applies" in current_normalized
+    assert "exact shared-slot consumption/exhaustion" in current_normalized
+    assert "were not fully playtested" in current_normalized
+    assert "automated coverage does not replace those checks" in current_normalized
+
+    identification_release = source.split("\n## v1.8.4-alpha", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert "unidentified items stay hidden" in identification_release
+    assert "preset lists or the add picker" in identification_release
+    assert "mixed stacks count only identified copies" in identification_release
+    assert "full automated suite passes **489 tests**" in identification_release
+    assert "in-game validation is pending" in identification_release
+    assert "bg1ee, bg2ee" in identification_release
+    assert "`bfbot.test.runall()` suite were not run" in identification_release
 
     availability_release = source.split("\n## v1.8.3-alpha", 1)[1].split(
         "\n## ", 1

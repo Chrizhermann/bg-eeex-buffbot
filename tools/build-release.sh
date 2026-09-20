@@ -56,6 +56,7 @@ root_files = (
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "docs/5e-spellcasting.md",
 )
 buffbot_files = (
     "setup-buffbot.tp2",

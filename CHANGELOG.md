@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## v1.9.0-alpha (2026-09-21)
 
 ### Added
-- **5E Spellcasting compatibility (experimental, not yet validated in game).** With UnearthedArcana/Subtledoctor's [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) installed, BuffBot now works through that mod's own casting rules instead of around them. Converted casters show their spells under the normal spell names with the shared per-level casts left, the generated `d5z<N>i` wrapper innates no longer appear as separate rows, and casting goes through the wrapper so preparation, the level pool, and the refresh stay under 5E's control. Spells of a converted caster are never cast from a native memorization slot, active-buff detection follows the spell the wrapper really casts, and BuffBot waits out 5E's ~1 second slot refresh between casts. Without the mod installed nothing changes. (#27)
+- **Experimental 5E Spellcasting compatibility.** With subtledoctor's [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) installed, converted casters use normal spell names and presets while 5E handles preparation and shared spell slots. BuffBot casts through 5E's own abilities, hides their duplicate internal entries, and waits for the spell-list refresh between casts. Basic BG2:EE casting has been user-tested; wider compatibility remains experimental. (#27)
 - **`BfBot.FiveE.Diagnose()`** — console command that writes a 5E report (mapping table, per-character states, wrappers, and row availability) to `buffbot_5e.log` for bug reports.
+- **5E documentation and tester guide** — the README describes the current state, expected delay, and limitations; the release archive includes [a short playtest checklist](docs/5e-spellcasting.md).
 
 ### Compatibility
 - Converted casters skip spells that open a variant selection popup (for example Protection from Elemental Energy); cast those manually. Unavailable spells are left out when building a preset's cast list. If a queued spell becomes unavailable, its skip message explains whether it is unprepared or has no casts left at its level.
@@ -17,7 +18,8 @@
 
 ### Testing
 - The full automated suite passes **535 tests**, including 46 new regressions covering the mapping table, wrapper validation, shared pools, unprepared and exhausted rows, the strip/regrant window, mixed-family indices, delivered-spell targeting and Project Image identity, manual overrides, stop/restart callbacks, the wrapper cast path, helper-scan avoidance, and batched panel refreshes.
-- An initial user playtest in a disposable BG2:EE install exposed severe slowdown during Cast/F12. The execution log recorded three 5E cast attempts and a completed run; that does not establish correct slot consumption or applied effects. The performance correction awaits another user playtest. Refresh timing, clone behavior, BG1EE, and the in-game `BfBot.Test.RunAll()` suite remain unverified.
+- **User playtest:** BG2:EE 2.6.6 with EEex 1.2.0/LuaJIT and 5E Spellcasting 2.7.2. After the performance correction, the user reported that a short arcane buff preset with Quick Cast worked well, with a small pause between casts. Logs show completed runs and active-buff skips. 5E's scheduled one-second refresh still applies; BuffBot's readiness checks can add a little extra time.
+- Exact shared-slot consumption/exhaustion, rest and preparation changes, divine and multiclass/dual-class casters, mod-added spells, clones, BG:EE, EET, and the in-game `BfBot.Test.RunAll()` suite were not fully playtested for this release. Automated coverage does not replace those checks.
 
 ## v1.8.4-alpha (2026-09-10)
 

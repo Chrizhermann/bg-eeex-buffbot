@@ -87,6 +87,7 @@ ARCHIVE_FILES = {
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "docs/5e-spellcasting.md",
     *BUFFBOT_RELEASE_FILES,
 }
 
@@ -209,8 +210,10 @@ def _copy_release_source(tmp_path: Path) -> Path:
     (repo / "tools").mkdir(parents=True)
     shutil.copy2(BUILD_SCRIPT, repo / "tools/build-release.sh")
     shutil.copytree(ROOT / "buffbot", repo / "buffbot")
-    for name in ("README.md", "CHANGELOG.md", "LICENSE"):
-        shutil.copy2(ROOT / name, repo / name)
+    for name in ("README.md", "CHANGELOG.md", "LICENSE", "docs/5e-spellcasting.md"):
+        destination = repo / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, destination)
     return repo
 
 
@@ -224,7 +227,7 @@ def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 46
+    assert len(names) == 47
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)

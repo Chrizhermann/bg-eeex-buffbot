@@ -17,13 +17,14 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **In-game config panel** — per-character tabs, scrollable buff list with enable/disable, duration display, target assignment, per-entry R1–R5 repeat counts, priority ordering, sort-by-duration, and row locks
 - **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, Undead Prebuff, etc.) with create/rename/delete
 - **Summons and clones as casters** — configure Project Images, Simulacra, and other allied spellcasting summons in a dedicated Summons view; cast one summon alone or let configured summons join Cast All
-- **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for instant casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally
+- **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for fast casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally. 5E casters still pause while that mod refreshes their spell slots
 - **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
 - **Skip active buffs** — detects already-active buffs via spell state + effect list checks, including wrapper potion leaf spells. No wasted spell slots, stacks, or charges
 - **Manual override** — the Add picker can include spells the classifier missed and recover removed spells or items, grouped into separate sections
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
 - **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
-- **Subwindow selection spells** — spells like Protection from Elemental Energy that normally open a selection popup are handled seamlessly. Pre-configure which variant to cast, and BuffBot bypasses the popup entirely
+- **Subwindow selection spells** — pre-configure which variant to cast for spells like Protection from Elemental Energy, and BuffBot bypasses the popup. Converted 5E casters must cast these spells manually
+- **Experimental 5E Spellcasting compatibility** — use normal spell names and presets while [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) handles preparation and shared spell slots. See the [current state and limitations](#5e-spellcasting-experimental)
 - **Mod-friendly** — tested with SCS, Spell Revisions, and kit mods. Reads spell data dynamically, so mod-added spells show up automatically
 
 ## Requirements
@@ -136,9 +137,23 @@ Project Image locks its owner while active. BuffBot limits the Project Image cas
 - Spells the target character doesn't have are silently skipped
 - Files are saved in `override/bfbot_presets/` — share them with other players or use across playthroughs
 
+## 5E Spellcasting (experimental)
+
+Starting with **v1.9.0-alpha**, BuffBot can work with the existing [5E Spellcasting mod](https://github.com/UnearthedArcana/5E_spellcasting). Install 5E Spellcasting before BuffBot, prepare spells through 5E's own interface, then rest. BuffBot detects the mod automatically; there is no separate compatibility component. This adds compatibility with that mod, not a separate implementation of 5e casting in EEex.
+
+Your spells appear under their normal names. Available casts come from 5E's shared pool for that spell level, so spending one level-2 slot also reduces the availability of other level-2 spells. A short pause between casts is expected, including with Quick Cast: 5E schedules a one-second spell-list refresh, and BuffBot waits for casting to become available again.
+
+**Current state:** a user playtest with BG2:EE 2.6.6, EEex 1.2.0 with LuaJIT, and 5E Spellcasting 2.7.2 confirmed that a short arcane buff preset with Quick Cast runs responsively after a performance fix. The logs also show active-buff skips. The release has 535 passing automated tests, but this is not a complete in-game compatibility test.
+
+- **Cast variant-selection spells manually** on converted casters; BuffBot skips them even if a variant is configured.
+- **Wider testing is still needed:** shared-slot exhaustion and rest/preparation changes, divine and multiclass/dual-class casters, mod-added spells, summons/clones, BG:EE, and EET.
+- **Existing presets:** entries that directly referenced an old internal `D5Z...I` casting ability must be replaced with the spell's normal entry. During an unfinished dual-class conversion or preparation step, BuffBot may leave affected spells unavailable; it will not spend ordinary memorization slots as a fallback.
+
+Feedback is welcome. The [5E tester guide](docs/5e-spellcasting.md) has a short checklist and explains which logs to include in a bug report.
+
 ## Known Limitations (Alpha)
 
-This is an alpha release. Everything works, but some things are unfinished:
+These limitations remain in the alpha release:
 
 - **Placeholder innate icons** — F12 abilities use the Stoneskin icon. Custom icons are planned
 - **Panel visuals** — functional but unpolished. The layout works, the aesthetics don't win awards
@@ -147,7 +162,7 @@ This is an alpha release. Everything works, but some things are unfinished:
 - **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 - **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
 - **Equipped weapon activations** — `UseItem` currently fires ability 0 only, so weapon buffs stored at a higher ability index remain excluded (#53)
-- **5E Spellcasting support is experimental** — casters converted by [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) cast through that mod's wrapper innates, so its preparation rules and shared per-level slots apply. Spells that open a variant selection popup are skipped for converted casters (cast those manually), and the integration has not yet been validated in game. Run `BfBot.FiveE.Diagnose()` and attach `buffbot_5e.log` to any 5E bug report (#27)
+- **5E Spellcasting support is experimental** — basic BG2:EE casting has been user-tested; the [limitations and wider testing needs](#5e-spellcasting-experimental) above still apply
 
 ## Testing & Bug Reports
 
@@ -160,6 +175,8 @@ BfBot.UI.Toggle()           -- open/close config panel
 ```
 
 Log files are written to the game directory: `buffbot_test.log`, `buffbot_exec.log`.
+
+For 5E Spellcasting reports, also run `BfBot.FiveE.Diagnose()` in the console and include `buffbot_5e.log` and `WeiDU.log`. See the [5E tester guide](docs/5e-spellcasting.md#reporting-a-problem).
 
 **Reporting bugs:** please open an issue at [GitHub Issues](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) with:
 - Game version (BG:EE / BG2:EE / EET) and EEex version
@@ -214,6 +231,7 @@ bg-eeex-buffbot/
 │   ├── BfBotLoc.lua      # File-backed UTF-8 localization with English fallback
 │   ├── BfBotCls.lua      # Buff classifier (opcode scoring)
 │   ├── BfBotScn.lua      # Spellbook scanner (known spells iterators)
+│   ├── BfBot5e.lua       # Optional 5E Spellcasting compatibility
 │   ├── BfBotExe.lua      # Execution engine (parallel per-caster)
 │   ├── BfBotPer.lua      # Persistence (marshal handlers, presets, export/import)
 │   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
@@ -232,6 +250,8 @@ bg-eeex-buffbot/
 
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
+- **[5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting)** by subtledoctor — the casting system used by BuffBot's experimental 5E compatibility
+- **Endarire** — encouragement and the request for 5E Spellcasting compatibility
 - **[robovoid](https://github.com/robvoid)** — original Simplified Chinese translation in [PR #50](https://github.com/Chrizhermann/bg-eeex-buffbot/pull/50); the implementation was reworked on BuffBot's current localization architecture
 - **[Sauler89](https://github.com/Sauler89)** — Italian translation
 - **OpenAI Codex** — initial AI-authored German, French, Spanish, Polish, Russian, and Brazilian Portuguese translations; German reviewed by the maintainer
