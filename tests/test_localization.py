@@ -1125,8 +1125,9 @@ def test_menu_localization_does_not_change_actions_layout_or_list_structure():
         for line in source.splitlines()
         if not re.match(r"^\s*(?:text|tooltip)\b", line)
     ) + "\n"
+    # Includes the zero-area label that drains deferred 5E spell-list updates.
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
-        "bc9e7d88c60706d1eca3e393be8f8807d4c08a27d1fba709d18fadab93865380"
+        "ad7f0022e20224d820601f4772fea7b4cec9ce47be6536c78bf91cdf9a6e6a0d"
     )
 
 

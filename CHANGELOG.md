@@ -12,9 +12,12 @@
 - A preset entry that pointed at a `d5z<N>i` wrapper innate (only reachable through the Add picker's non-buff section before this change) stops casting — enable the real spell instead.
 - No save-schema change; all 5E data is derived at scan time.
 
+### Fixed
+- **Avoid repeated spell-list work during 5E casts.** Notifications from 5E removing and restoring casting abilities now schedule one panel refresh instead of rebuilding the open panel for every change. Generated 5E casting abilities also bypass normal buff analysis, which previously followed their large internal helper spells.
+
 ### Testing
-- The full automated suite passes **529 tests**, including 40 new regressions covering the mapping table, wrapper validation, shared pools, unprepared and exhausted rows, the strip/regrant window, mixed-family indices, delivered-spell targeting and Project Image identity, manual overrides, stop/restart callbacks, and the wrapper cast path.
-- **No in-game validation.** No isolated 5E Spellcasting installation was available, so every engine-facing assumption (wrapper button listing, `SpellRES` on the wrapper, refresh timing, clone behavior) still needs live confirmation. BG1EE, BG2EE, and the in-game `BfBot.Test.RunAll()` suite were not run.
+- The full automated suite passes **535 tests**, including 46 new regressions covering the mapping table, wrapper validation, shared pools, unprepared and exhausted rows, the strip/regrant window, mixed-family indices, delivered-spell targeting and Project Image identity, manual overrides, stop/restart callbacks, the wrapper cast path, helper-scan avoidance, and batched panel refreshes.
+- An initial user playtest in a disposable BG2:EE install exposed severe slowdown during Cast/F12. The execution log recorded three 5E cast attempts and a completed run; that does not establish correct slot consumption or applied effects. The performance correction awaits another user playtest. Refresh timing, clone behavior, BG1EE, and the in-game `BfBot.Test.RunAll()` suite remain unverified.
 
 ## v1.8.4-alpha (2026-09-10)
 

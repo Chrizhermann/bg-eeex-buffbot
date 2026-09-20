@@ -635,6 +635,13 @@ menu
 		scrollbar   "GUISCRC"
 	}
 
+	-- Coalesce 5E's spell-list notifications into one panel refresh.
+	label
+	{
+		enabled "BfBot.UI._SpellListRefreshTick()"
+		area 0 0 0 0
+	}
+
 	-- One-shot row reconciliation after a backing-table replacement. The Lua
 	-- function is inert unless a refresh has scheduled a two-frame token.
 	label

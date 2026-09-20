@@ -1148,6 +1148,87 @@ def test_bfbt_event_invalidates_without_visible_refresh(
     assert facts["refreshes"] == 0
 
 
+def test_5e_spell_update_burst_refreshes_once_after_the_engine_finishes(
+    ui_lua: LuaRuntime,
+) -> None:
+    facts = ui_lua.execute(
+        """
+        buffbot_isOpen = true
+        BfBot.FiveE = { IsInstalled = function() return true end }
+        local sprite = EEex_Sprite_GetInPortrait(0)
+        local invalidations, refreshes = 0, 0
+        BfBot.Scan.Invalidate = function(_) invalidations = invalidations + 1 end
+        BfBot.UI._Refresh = function() refreshes = refreshes + 1 end
+        for i = 1, 32 do
+            BfBot.UI._OnSpellRemoved(sprite, "D5Z" .. (100 + i) .. "I")
+            BfBot.UI._OnSpellListChanged(sprite, "D5Z" .. (100 + i) .. "I", 3)
+        end
+        BfBot.UI._OnSpellCountsReset(sprite)
+        local immediate = refreshes
+        BfBot.UI._SpellListRefreshTick()
+        BfBot.UI._SpellListRefreshTick()
+        return { immediate = immediate, refreshes = refreshes,
+                 invalidations = invalidations }
+        """
+    )
+
+    assert facts["immediate"] == 0
+    assert facts["refreshes"] == 1
+    assert facts["invalidations"] == 65
+
+
+def test_closing_panel_cancels_pending_5e_refresh(ui_lua: LuaRuntime) -> None:
+    facts = ui_lua.execute(
+        """
+        buffbot_isOpen = true
+        BfBot.FiveE = { IsInstalled = function() return true end }
+        local refreshes = 0
+        BfBot.UI._Refresh = function() refreshes = refreshes + 1 end
+        BfBot.UI._SaveLayout = function() end
+        BfBot.UI._OnSpellRemoved(EEex_Sprite_GetInPortrait(0), "D5Z101I")
+        BfBot.UI._OnClose()
+        buffbot_isOpen = true
+        BfBot.UI._SpellListRefreshTick()
+        return { refreshes = refreshes }
+        """
+    )
+
+    assert facts["refreshes"] == 0
+
+
+def test_5e_notification_during_refresh_does_not_reenter_refresh(
+    ui_lua: LuaRuntime,
+) -> None:
+    facts = ui_lua.execute(
+        """
+        buffbot_isOpen = true
+        BfBot.FiveE = { IsInstalled = function() return true end }
+        local sprite = EEex_Sprite_GetInPortrait(0)
+        local refreshes, depth, maxDepth = 0, 0, 0
+        BfBot.UI._Refresh = function()
+            refreshes = refreshes + 1
+            depth = depth + 1
+            maxDepth = math.max(maxDepth, depth)
+            if refreshes == 1 then BfBot.UI._OnSpellCountsReset(sprite) end
+            depth = depth - 1
+        end
+        BfBot.UI._OnSpellCountsReset(sprite)
+        BfBot.UI._SpellListRefreshTick()
+        local firstFrame = refreshes
+        BfBot.UI._SpellListRefreshTick()
+        return { firstFrame = firstFrame, total = refreshes, depth = maxDepth }
+        """
+    )
+
+    assert facts["firstFrame"] == 1
+    assert facts["total"] == 2
+    assert facts["depth"] == 1
+
+
+def test_menu_drains_pending_spell_list_updates() -> None:
+    assert 'enabled "BfBot.UI._SpellListRefreshTick()"' in MENU_SOURCE
+
+
 def test_spell_listener_registration_is_idempotent_and_hot_reload_safe(
     ui_lua: LuaRuntime,
 ) -> None:

@@ -334,6 +334,73 @@ def test_missing_table_is_a_cached_no_op_without_loading_the_2da(
 # ----------------------------------------------------------------------
 
 
+def test_scanner_does_not_classify_5e_wrappers_or_their_bookkeeping_helpers(
+    scan_lua: LuaRuntime,
+) -> None:
+    facts = scan_lua.execute(
+        """
+        T_Table = { T_Row("101", "SPWI305", "SPWI305", "arcane") }
+        T_Spell("SPWI305")
+        T_Wrapper(101, "SPWI305")
+        -- The real strip helper has hundreds of effects. It should never
+        -- participate in player-spell classification or duration discovery.
+        local helper = T_Spell("D5ZZ172", { effects = {
+            { effectID = 172, res = "D5Z101I", durationType = 1 },
+        } })
+        local walkedHelper, classifiedWrapper = 0, 0
+        local walk = BfBot.Class._IterateFeatureBlocks
+        BfBot.Class._IterateFeatureBlocks = function(h, a, fn)
+            if h == helper then walkedHelper = walkedHelper + 1 end
+            return walk(h, a, fn)
+        end
+        local classify = BfBot.Class.Classify
+        BfBot.Class.Classify = function(resref, ...)
+            if resref == "D5Z101I" then classifiedWrapper = classifiedWrapper + 1 end
+            return classify(resref, ...)
+        end
+        local sprite = T_Sprite({ mage = { "SPWI305" }, innate = { "D5Z101I" },
+            buttons = { [2] = { D5Z101I = 2 } }, states = { [190] = true } })
+        local spells, count = BfBot.Scan.GetCastableSpells(sprite)
+        return { helpers = walkedHelper, wrappers = classifiedWrapper,
+            rows = count, count = spells.SPWI305.count,
+            leaf = spells.SPWI305.leafResrefs[1], hidden = spells.D5Z101I == nil }
+        """
+    )
+
+    assert facts["helpers"] == 0
+    assert facts["wrappers"] == 0
+    assert facts["rows"] == 1
+    assert facts["count"] == 2
+    assert facts["leaf"] == "SPWI305"
+    assert facts["hidden"] is True
+
+
+def test_zero_count_known_wrapper_still_marks_its_family_as_converted(
+    scan_lua: LuaRuntime,
+) -> None:
+    facts = scan_lua.execute(
+        """
+        T_Table = { T_Row("101", "SPWI305", "SPWI305", "arcane") }
+        T_Spell("SPWI305")
+        T_Wrapper(101, "SPWI305")
+        -- A wrapper in the known-innate iterator can have no quick button.
+        -- Keep that presence evidence even though it needs no classification.
+        local sprite = T_Sprite({ mage = { "SPWI305" }, innate = { "D5Z101I" },
+            buttons = { [2] = { SPWI305 = 2 } } })
+        local spells, count = BfBot.Scan.GetCastableSpells(sprite)
+        return { rows = count, count = spells.SPWI305.count,
+            managed = spells.SPWI305.d5 ~= nil, pending = spells.SPWI305.d5.pending,
+            hidden = spells.D5Z101I == nil }
+        """
+    )
+
+    assert facts["rows"] == 1
+    assert facts["count"] == 0
+    assert facts["managed"] is True
+    assert facts["pending"] is None
+    assert facts["hidden"] is True
+
+
 def test_prepared_spell_takes_wrapper_count_and_unprepared_spell_is_gated(
     scan_lua: LuaRuntime,
 ) -> None:

@@ -25,6 +25,7 @@ BfBot.UI._view = "party"      -- active view: "party" (portrait tabs) or "summon
 BfBot.UI._initialized = false
 BfBot.UI._spellSel = nil       -- canonical spell selection {context, resref}; NEVER a row index
 BfBot.UI._pendingSpellSelectionSync = nil
+BfBot.UI._spellListRefreshPending = nil
 BfBot.UI._targetSpellAnchor = nil
 BfBot.UI._variantSpellAnchor = nil
 
@@ -1182,6 +1183,7 @@ end
 
 function BfBot.UI._OnClose()
     buffbot_isOpen = false
+    BfBot.UI._spellListRefreshPending = nil
     BfBot.UI._SaveLayout()
 end
 
@@ -1193,6 +1195,7 @@ end
 -- Called on: panel open, tab switch, spell change listeners.
 -- Tab switches do NOT invalidate scan cache — reads cached data.
 function BfBot.UI._Refresh()
+    BfBot.UI._spellListRefreshPending = nil
     -- Keep identity canonical across automatic table replacement. The numeric
     -- row is only the list widget's projection and is rebuilt below.
     BfBot.UI._PrepareSpellSelectionForRebuild()
@@ -2304,24 +2307,43 @@ function BfBot.UI._IsBuffBotGeneratedResref(resref)
     return type(resref) == "string" and resref:upper():sub(1, 4) == "BFBT"
 end
 
+local function _requestSpellListRefresh()
+    if BfBot.FiveE and BfBot.FiveE.IsInstalled and BfBot.FiveE.IsInstalled() then
+        -- 5E removes/regrants many abilities per cast. Let the engine finish
+        -- that batch before rebuilding the panel once on its next update.
+        BfBot.UI._spellListRefreshPending = true
+    else
+        BfBot.UI._Refresh()
+    end
+end
+
+function BfBot.UI._SpellListRefreshTick()
+    if not BfBot.UI._spellListRefreshPending then return false end
+    -- Clear before refreshing: a notification during the refresh belongs to
+    -- the next update and must not recursively rebuild the panel.
+    BfBot.UI._spellListRefreshPending = nil
+    if buffbot_isOpen then BfBot.UI._Refresh() end
+    return false
+end
+
 function BfBot.UI._OnSpellListChanged(sprite, resref, changeAmount)
     BfBot.Scan.Invalidate(sprite)
     if not BfBot.UI._IsBuffBotGeneratedResref(resref)
         and BfBot.UI._IsDisplayedSpellEventSprite(sprite) then
-        BfBot.UI._Refresh()
+        _requestSpellListRefresh()
     end
 end
 
 function BfBot.UI._OnSpellCountsReset(sprite)
     BfBot.Scan.Invalidate(sprite)
-    if BfBot.UI._IsDisplayedSpellEventSprite(sprite) then BfBot.UI._Refresh() end
+    if BfBot.UI._IsDisplayedSpellEventSprite(sprite) then _requestSpellListRefresh() end
 end
 
 function BfBot.UI._OnSpellRemoved(sprite, resref)
     BfBot.Scan.Invalidate(sprite)
     if not BfBot.UI._IsBuffBotGeneratedResref(resref)
         and BfBot.UI._IsDisplayedSpellEventSprite(sprite) then
-        BfBot.UI._Refresh()
+        _requestSpellListRefresh()
     end
 end
 

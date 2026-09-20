@@ -471,8 +471,17 @@ function BfBot.Scan.GetCastableSpells(sprite)
                     if resref:sub(1, 4) ~= "BFBT" then
                         seen[resref] = true
 
-                        -- SPL header + caster-level ability -> catalog entry
-                        local entry = _catalogEntryForResref(sprite, resref, ability)
+                        local entry
+                        if BfBot.FiveE and BfBot.FiveE.IsWrapper
+                            and BfBot.FiveE.IsWrapper(resref) then
+                            -- The 5E overlay replaces wrappers with player
+                            -- spells. Keep their presence even at zero count,
+                            -- without classifying their bookkeeping effects.
+                            entry = { resref = resref, kind = "spl", count = 0 }
+                        else
+                            -- SPL header + caster-level ability -> catalog entry
+                            entry = _catalogEntryForResref(sprite, resref, ability)
+                        end
                         if entry then
                             spells[resref] = entry
                             count = count + 1

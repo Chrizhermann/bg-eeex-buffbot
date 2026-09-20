@@ -226,6 +226,13 @@ function BfBot.FiveE.IsInstalled()
     return BfBot.FiveE.GetMap() ~= nil
 end
 
+--- Wrapper entries need counts, but must not enter the normal buff classifier:
+--- their payload includes upstream's large strip/regrant helper spells.
+function BfBot.FiveE.IsWrapper(resref)
+    local map = BfBot.FiveE.GetMap()
+    return map ~= nil and map.byWrapper[_resref(resref)] ~= nil
+end
+
 -- ============================================================
 -- Per-caster conversion state
 -- ============================================================
