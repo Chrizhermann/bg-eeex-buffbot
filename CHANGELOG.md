@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.9.0 (2026-09-27)
+
+### Stable release
+- BuffBot graduates from alpha with the existing v1.9.0-alpha functionality. This release updates version numbers and documentation; it makes no gameplay or save-format changes.
+- Existing presets remain compatible. Install the update through WeiDU using the normal two-component update procedure in the README.
+- 5E Spellcasting compatibility remains explicitly experimental, with the same documented limitations and playtest coverage.
+
+### Testing
+- The full automated suite passes **535 tests**, including installer and release-package checks.
+- No new in-game testing was performed for this version-and-documentation release. Existing playtest evidence and compatibility limits are unchanged.
+
 ## v1.9.0-alpha (2026-09-21)
 
 ### Added

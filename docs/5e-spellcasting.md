@@ -1,6 +1,6 @@
 # 5E Spellcasting compatibility and testing
 
-BuffBot **v1.9.0-alpha** adds experimental compatibility with [subtledoctor's 5E Spellcasting mod](https://github.com/UnearthedArcana/5E_spellcasting). It uses that mod's preparation and shared spell slots. It does not recreate 5e casting inside EEex.
+BuffBot includes experimental compatibility with [subtledoctor's 5E Spellcasting mod](https://github.com/UnearthedArcana/5E_spellcasting), introduced in **v1.9.0-alpha**. It uses that mod's preparation and shared spell slots. It does not recreate 5e casting inside EEex.
 
 ## Current state
 

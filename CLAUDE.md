@@ -6,7 +6,7 @@ BuffBot is a mod for Baldur's Gate: Enhanced Edition (BG:EE) and BG2:EE that pro
 
 ## Current Phase
 
-Alpha — all MVP features implemented and verified in-game. See `CHANGELOG.md` for the release timeline and `gh issue list --repo Chrizhermann/bg-eeex-buffbot` for open work.
+Stable — core BuffBot features are supported; 5E Spellcasting compatibility remains experimental. See `CHANGELOG.md` for the release timeline and `gh issue list --repo Chrizhermann/bg-eeex-buffbot` for open work.
 
 ### Modules
 

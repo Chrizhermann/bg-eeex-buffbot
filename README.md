@@ -4,7 +4,7 @@
 
 Cast all your pre-battle buffs with one click. BuffBot scans each character's spellbook, lets you configure which buffs to cast, in what order, on which targets — then executes the entire sequence automatically across all party members in parallel.
 
-> **Alpha Release** — fully functional but rough around the edges. [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
+> **Stable release** — [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
 
 > **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**
 
@@ -151,9 +151,9 @@ Your spells appear under their normal names. Available casts come from 5E's shar
 
 Feedback is welcome. The [5E tester guide](docs/5e-spellcasting.md) has a short checklist and explains which logs to include in a bug report.
 
-## Known Limitations (Alpha)
+## Known Limitations
 
-These limitations remain in the alpha release:
+The following limitations remain:
 
 - **Placeholder innate icons** — F12 abilities use the Stoneskin icon. Custom icons are planned
 - **Panel visuals** — functional but unpolished. The layout works, the aesthetics don't win awards

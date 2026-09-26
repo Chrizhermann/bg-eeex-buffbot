@@ -963,16 +963,26 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.9.0-alpha (2026-09-21)")
-    assert "experimental 5e spellcasting compatibility" in current_normalized
+    assert current_release.startswith("v1.9.0 (2026-09-27)")
+    assert "no gameplay or save-format changes" in current_normalized
+    assert "existing presets remain compatible" in current_normalized
+    assert "5e spellcasting compatibility remains explicitly experimental" in current_normalized
     assert "full automated suite passes **535 tests**" in current_normalized
-    assert "user playtest" in current_normalized
-    assert "eeex 1.2.0/luajit and 5e spellcasting 2.7.2" in current_normalized
-    assert "short arcane buff preset with quick cast worked well" in current_normalized
-    assert "one-second refresh still applies" in current_normalized
-    assert "exact shared-slot consumption/exhaustion" in current_normalized
-    assert "were not fully playtested" in current_normalized
-    assert "automated coverage does not replace those checks" in current_normalized
+    assert "no new in-game testing was performed" in current_normalized
+    assert "playtest evidence and compatibility limits are unchanged" in current_normalized
+
+    five_e_release = source.split("\n## v1.9.0-alpha (2026-09-21)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert "experimental 5e spellcasting compatibility" in five_e_release
+    assert "full automated suite passes **535 tests**" in five_e_release
+    assert "user playtest" in five_e_release
+    assert "eeex 1.2.0/luajit and 5e spellcasting 2.7.2" in five_e_release
+    assert "short arcane buff preset with quick cast worked well" in five_e_release
+    assert "one-second refresh still applies" in five_e_release
+    assert "exact shared-slot consumption/exhaustion" in five_e_release
+    assert "were not fully playtested" in five_e_release
+    assert "automated coverage does not replace those checks" in five_e_release
 
     identification_release = source.split("\n## v1.8.4-alpha", 1)[1].split(
         "\n## ", 1
