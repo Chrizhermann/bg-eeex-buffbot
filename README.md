@@ -67,7 +67,7 @@ All catalogs and installer paths have automated coverage. Live validation in the
 
 ### WeiDU (recommended)
 
-1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases) and extract it into your game directory
+1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases/latest) and extract it into your game directory
 2. Run `setup-buffbot.exe` (or use your preferred WeiDU launcher)
 3. Select **BuffBot: EEex LuaJIT Support** first if EEex did not already activate LuaJIT
 4. Select **BuffBot: In-Game Buff Automation** after LuaJIT is active
