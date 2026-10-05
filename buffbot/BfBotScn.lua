@@ -10,13 +10,13 @@ BfBot.Scan = {}
 BfBot.Scan._stateMarkerCache = {}
 BfBot.Scan._variantCache = {}
 
--- Inventory access — all verified 2026-07-03 via remote console on BG2EE.
--- See tools/items_probe_findings.md (folded into bg-modding refs in Task 18).
-BfBot.Scan._SLOT_EQUIP_MAX = 17   -- 0-17 equipped body slots (10 = FIST pseudo-item;
-                                  --   UI quickitems observed at 15-17)
-BfBot.Scan._SLOT_QUICK_MIN = 18   -- 18-20 console/CreateItem fill slots; UseItem-verified
-BfBot.Scan._SLOT_QUICK_MAX = 20
-BfBot.Scan._SLOT_PACK_MAX  = 34   -- 21-34 backpack
+-- Live CGameSpriteEquipment indices, also used by SLOTS.IDS action arguments.
+-- 10 is the fist pseudo-item; 34 is the magical weapon slot, not backpack.
+BfBot.Scan._SLOT_EQUIP_MAX = 14
+BfBot.Scan._SLOT_QUICK_MIN = 15
+BfBot.Scan._SLOT_QUICK_MAX = 17
+BfBot.Scan._SLOT_PACK_MIN  = 18
+BfBot.Scan._SLOT_PACK_MAX  = 33
 BfBot.Scan._SLOT_WEAPON_MIN = 35  -- 35-38 equipped weapon slots (m_selectedWeapon
 BfBot.Scan._SLOT_WEAPON_MAX = 38  --   indexes m_items directly; verified: STAF11@35)
 BfBot.Scan._ITEM_COUNT_OFF = 0x1C -- CItem: count/charges u16 (no named field)
@@ -295,13 +295,232 @@ local function _catalogEntryForResref(sprite, resref, iterAbility)
     return _buildCatalogEntry(sprite, resref, header, useAbility, casterLevel)
 end
 
---- Walk a sprite's inventory (one array: equipped 0-17, quickitems 18-20,
--- backpack 21-34, equipped weapons 35-38), classify item abilities, return
--- {[resref] = entry}. Slot rules: equipped/quickitem/weapon slots admit usable
--- activatables except deferred scrolls/wands; backpack admits ONLY potions
--- (cat 9). The engine would
--- happily UseItem an unequipped ring from the backpack (verified!), so this
--- filter is the game-balance enforcement, not just cosmetics.
+--- Stable preset identity. Ability zero retains existing save/export keys;
+--- additional powers are independent rows, never silently substituted for it.
+function BfBot.Scan._ItemKey(resref, index)
+    return index == 0 and resref or ("itm:" .. resref .. ":" .. index)
+end
+
+local _itemClassMasks = {
+    [1]=0x40000, [2]=0x800, [3]=0x80, [4]=0x400000, [5]=0x40,
+    [6]=0x100000, [7]=0x2000, [8]=0x4000, [9]=0x20000,
+    [10]=0x10000, [11]=0x40000000, [12]=0x200000, [13]=0x80000,
+    [14]=0x100, [15]=0x200, [16]=0x1000, [17]=0x8000, [18]=0x400,
+    [19]=0x40000, [20]=0x20000000, [21]=0x40000000,
+}
+local _itemRaceMasks = {
+    [1]=0x08000000, [2]=0x00800000, [3]=0x02000000, [4]=0x01000000,
+    [5]=0x04000000, [6]=0x10000000, [7]=0x80000000,
+}
+
+-- XEquipItem bypasses the inventory UI's eligibility checks. Cover normal
+-- restrictions here; unknown custom conditional usability is not guessed.
+function BfBot.Scan._CanWearItem(sprite, header)
+    local ok, allowed, reason = pcall(function()
+        local ptr = EEex_UDToPtr(header)
+        local restrictions = EEex_ReadU32(ptr + 0x1E)
+        if restrictions ~= 0 then
+            local ai = sprite.m_typeAI
+            local cls, race, alignment = ai.m_Class, ai.m_Race, ai.m_Alignment
+            local ethic = ({ [1]=0x10, [2]=0x20, [3]=0x01 })[math.floor(alignment / 16)]
+            local moral = ({ [1]=0x04, [2]=0x08, [3]=0x02 })[alignment % 16]
+            if not _itemClassMasks[cls] or not _itemRaceMasks[race] or not ethic or not moral then
+                return false, "unknown item usability"
+            end
+            if bit.band(restrictions, bit.bor(_itemClassMasks[cls],
+                _itemRaceMasks[race], ethic, moral)) ~= 0 then
+                return false, "item cannot be worn by this character"
+            end
+        end
+        local kits = bit.bor(bit.lshift(EEex_ReadU8(ptr + 0x29), 24),
+            bit.lshift(EEex_ReadU8(ptr + 0x2B), 16),
+            bit.lshift(EEex_ReadU8(ptr + 0x2D), 8), EEex_ReadU8(ptr + 0x2F))
+        if kits ~= 0 then
+            local kit = sprite:getStat(152)
+            local table2da = EEex_Resource_Load2DA("KITLIST")
+            local idCol, maskCol = table2da:findColumnLabel("KITIDS"),
+                table2da:findColumnLabel("UNUSABLE")
+            local _, rows = table2da:getDimensions()
+            local found = false
+            for y = 0, rows - 1 do
+                if tonumber(table2da:getAtPoint(idCol, y)) == kit then
+                    local mask = tonumber(table2da:getAtPoint(maskCol, y))
+                    if not mask or bit.band(kits, mask) ~= 0 then
+                        return false, "item kit restriction"
+                    end
+                    found = true
+                    break
+                end
+            end
+            if not found then return false, "unknown item kit restriction" end
+        end
+        for _, req in ipairs({ {0x26,36,2}, {0x2A,38,1}, {0x2C,40,1},
+            {0x2E,39,1}, {0x30,41,1}, {0x32,42,2} }) do
+            local value = req[3] == 2 and EEex_ReadU16(ptr + req[1]) or EEex_ReadU8(ptr + req[1])
+            if value > 0 and sprite:getStat(req[2]) < value then
+                return false, "item minimum ability score"
+            end
+        end
+        local strengthExtra = EEex_ReadU8(ptr + 0x28)
+        if strengthExtra > 0 and sprite:getStat(36) <= 18
+            and sprite:getStat(37) < strengthExtra then
+            return false, "item minimum strength"
+        end
+        local minimumLevel = EEex_ReadU16(ptr + 0x24)
+        if minimumLevel > 0 then
+            local total, classes = 0, 0
+            for _, stat in ipairs({34,68,69}) do
+                local level = sprite:getStat(stat)
+                if level > 0 then total, classes = total + level, classes + 1 end
+            end
+            if classes == 0 or math.ceil(total / classes) < minimumLevel then
+                return false, "item minimum level"
+            end
+        end
+        -- Equipping effects can impose mod-defined SPLPROT usability.
+        local start, count = EEex_ReadU16(ptr + 0x6E), EEex_ReadU16(ptr + 0x70)
+        for i = start, start + count - 1 do
+            if EEex_ReadU16(ptr + header.effectsOffset + i * Item_effect_st.sizeof) == 319 then
+                return false, "conditional item usability; equip manually"
+            end
+        end
+        return true
+    end)
+    if not ok then return false, "item usability unavailable" end
+    return allowed, reason
+end
+
+function BfBot.Scan._ItemEquipSlots(header)
+    local itemType = header.itemType
+    local mapped
+    pcall(function()
+        local tda = EEex_Resource_Load2DA("ITEMTYPE")
+        mapped = tonumber(tda:getAtPoint(tda:findColumnLabel("SLOT"),
+            tda:findRowLabel(tostring(itemType))))
+    end)
+    -- Chest armor (including robes) is never automatically exchanged.
+    if mapped == 1 or itemType == 2 or (itemType >= 60 and itemType <= 68) then return {} end
+    if mapped and mapped >= 0 then
+        if mapped == 7 or mapped == 8 then return {7,8} end
+        if mapped >= 35 and mapped <= 38 then return {35,36,37,38} end
+        if mapped <= 9 then return {mapped} end
+        return {}
+    end
+    local slots = { [1]={0}, [3]={2}, [4]={3}, [6]={5}, [7]={6},
+        [10]={7,8}, [12]={9}, [32]={4} }
+    if slots[itemType] then return slots[itemType] end
+    if itemType >= 15 and itemType <= 30 then return {35,36,37,38} end
+    return {}
+end
+
+function BfBot.Scan._PlanItemSwap(sprite, row)
+    local header = EEex_Resource_Demand(row.itemResref, "ITM")
+    if not header then return nil, "item unavailable" end
+    local destinations = BfBot.Scan._ItemEquipSlots(header)
+    if #destinations == 0 then return nil, "item must be equipped manually" end
+    local allowed, reason = BfBot.Scan._CanWearItem(sprite, header)
+    if not allowed then return nil, reason end
+    local arr, copies = sprite.m_equipment.m_items, {}
+    for i = 0, 38 do
+        local item = arr:get(i)
+        if item then
+            local r = item.pRes.resref:get()
+            copies[r] = (copies[r] or 0) + 1
+        end
+    end
+    if copies[row.itemResref] ~= 1 then return nil, "duplicate equipment; equip the desired copy manually" end
+    local source = arr:get(row.itemSlot)
+    if not source or source.pRes.resref:get() ~= row.itemResref then return nil, "item moved" end
+    local function movable(item, hdr)
+        return bit.band(item.m_flags, 8) == 0
+            and bit.band(EEex_ReadU32(EEex_UDToPtr(hdr) + 0x18), 0x10) == 0
+    end
+    if not movable(source, header) then return nil, "cursed or undroppable item" end
+    -- Prefer a free ring/weapon slot to disturbing another piece of gear.
+    table.sort(destinations, function(a,b)
+        local emptyA, emptyB = arr:get(a) == nil, arr:get(b) == nil
+        if emptyA ~= emptyB then return emptyA end
+        return a < b
+    end)
+    for _, destination in ipairs(destinations) do
+        local old = arr:get(destination)
+        local oldResref = old and old.pRes.resref:get() or ""
+        local oldHeader = old and EEex_Resource_Demand(oldResref, "ITM")
+        if old and (copies[oldResref] ~= 1 or not oldHeader or not movable(old, oldHeader)) then
+            goto nextDestination
+        end
+        -- Do not replace an off-hand while a two-handed weapon is selected,
+        -- or select a two-handed backpack weapon while using an off-hand.
+        if destination >= 35 and arr:get(9)
+            and bit.band(EEex_ReadU32(EEex_UDToPtr(header) + 0x18), 2) ~= 0 then
+            goto nextDestination
+        end
+        if destination == 9 then
+            local selected = arr:get(sprite.m_equipment.m_selectedWeapon)
+            local selectedHeader = selected and EEex_Resource_Demand(selected.pRes.resref:get(), "ITM")
+            if selectedHeader and bit.band(EEex_ReadU32(EEex_UDToPtr(selectedHeader) + 0x18), 2) ~= 0 then
+                goto nextDestination
+            end
+        end
+        do return {
+            item = row.itemResref, previous = oldResref,
+            pack = row.itemSlot, equip = destination,
+            weapon = sprite.m_equipment.m_selectedWeapon,
+            weaponAbility = sprite.m_equipment.m_selectedWeaponAbility,
+        } end
+        ::nextDestination::
+    end
+    return nil, "no safe equipment slot"
+end
+
+BfBot.Scan._itemNames = {}
+local function _itemAbilityName(resref, index)
+    local key = resref .. ":" .. index
+    if BfBot.Scan._itemNames[key] ~= nil then
+        return BfBot.Scan._itemNames[key] or nil
+    end
+    local name
+    pcall(function()
+        local tda = EEex_Resource_Load2DA("TOOLTIP")
+        local cols, rows = tda:getDimensions()
+        if index >= cols then return end
+        for y = 0, rows - 1 do
+            if tda:getRowLabel(y):upper() == resref:upper() then
+                name = _tryStrref(tonumber(tda:getAtPoint(index, y)))
+                break
+            end
+        end
+    end)
+    BfBot.Scan._itemNames[key] = name or false
+    return name
+end
+
+-- Only timed, substantive buff effects are useful evidence that THIS power
+-- is active. Two powers may share an ITM source resref (e.g. invisibility and
+-- haste), so matching that resref alone would make one suppress the other.
+local function _itemEffectSignatures(header, ability)
+    local effects = {}
+    pcall(function()
+        local f = BfBot._fields
+        BfBot.Class._IterateFeatureBlocks(header, ability, function(fb)
+            local op = fb[f.fb_opcode]
+            local score = BfBot.Class._OPCODE_SCORES[op] or 0
+            local timing = bit.band(fb[f.fb_timing], 0xFF)
+            if score > 0 and op ~= 17 and op ~= 171
+                and op ~= 318 and op ~= 324 and op ~= 282 and op ~= 328
+                and (timing == 0 or timing == 3 or timing == 4 or timing == 5) then
+                effects[#effects + 1] = {
+                    opcode = op, amount = fb[f.fb_param1], flags = fb[f.fb_param2],
+                }
+            end
+        end)
+    end)
+    return effects
+end
+
+--- Walk the character's complete carried inventory. Containers remain out of
+--- scope. Every F8/quick-item power has its own identity, charges and source
+--- slots; weapon attacks and passive equipped effects never become actions.
 function BfBot.Scan._BuildItemCatalog(sprite)
     local items = {}
 
@@ -314,9 +533,8 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         return items
     end
 
-    local function _consider(resref, count, allowAnyCat)
+    local function _consider(resref, item, slot)
         if not resref or resref == "" then return end
-        if count <= 0 then return end
 
         -- Skip BuffBot's own generated resrefs (defensive)
         if resref:sub(1, 4) == "BFBT" then return end
@@ -331,37 +549,39 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             or itemType == BfBot.Scan._CAT_WAND then
             return
         end
-        if not allowAnyCat and itemType ~= BfBot.Scan._CAT_POTION then
-            return  -- backpack: potions only
+        for index = 0, header.abilityCount - 1 do
+        local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, index)
+        if not (aOk and ability) then goto nextAbility end
+        local ptr = EEex_UDToPtr(ability)
+        -- ITM type=magical and location=item are the actual F8 powers.
+        if EEex_ReadU8(ptr) ~= 3 or EEex_ReadU8(ptr + 2) ~= 3 then
+            goto nextAbility
         end
-
-        -- A resref can occupy more than one eligible slot/stack. Once its
-        -- admission has been proven, aggregate the usable count instead of
-        -- hiding later stacks. Ineligible backpack copies never reach here,
-        -- so they cannot mask or inflate an equipped copy of the same item.
-        if items[resref] then
-            items[resref].count = items[resref].count + count
-            return
-        end
-
-        -- UseItem(resref, target) ALWAYS fires ability 0 — BCS has no ability
-        -- selector (verified 2026-07-05: RING39 a0=op20 invis, a1=op16 haste;
-        -- after UseItem only op20 landed). An item is therefore listable ONLY
-        -- if ability 0 classifies as the buff. Items with the buff buried at
-        -- index >= 1 (e.g. STAF11: a0 melee, buff wrapper at a2) are excluded
-        -- for safety — firing them would trigger the wrong ability. Issue #53
-        -- tracks ability-index selection.
-        local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, 0)
-        if not (aOk and ability) then return end
         -- target byte (== ability.actionType; raw read verified in-game)
-        local target = EEex_ReadU8(EEex_UDToPtr(ability) + BfBot.Scan._ABIL_TARGET_OFF)
-        if target ~= 1 and target ~= 5 and target ~= 7 then return end
+        local target = EEex_ReadU8(ptr + BfBot.Scan._ABIL_TARGET_OFF)
+        if target ~= 1 and target ~= 5 and target ~= 7 then goto nextAbility end
+        local key = BfBot.Scan._ItemKey(resref, index)
+        local chargeIndex = index < 3 and index or 0
+        local count = EEex_ReadU16(EEex_UDToPtr(item)
+            + BfBot.Scan._ITEM_COUNT_OFF + chargeIndex * 2)
+        -- A zero maximum means at-will, not exhausted. Stackable potions
+        -- still use their stack size, even if a mod leaves max charges zero.
+        if itemType ~= BfBot.Scan._CAT_POTION and EEex_ReadU16(ptr + 0x22) == 0 then
+            count = 1
+        end
+        if items[key] then
+            items[key].count = items[key].count + count
+            if count > 0 then
+                table.insert(items[key].sources, { slot = slot, count = count })
+            end
+            goto nextAbility
+        end
         local cOk, classResult = pcall(
-            BfBot.Class.Classify, resref, header, ability, "itm")
-        if not (cOk and classResult) then return end
+            BfBot.Class.Classify, resref, header, ability, "itm", key)
+        if not (cOk and classResult) then goto nextAbility end
         -- Keep a user-excluded buff in the transient catalog so the Add
         -- picker can recover it. Ordinary non-buffs remain out of scope.
-        if not classResult.isBuff and not classResult.overridden then return end
+        if not classResult.isBuff and not classResult.overridden then goto nextAbility end
 
         local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
         -- ITM naming: identifiedName FIRST (genericName is the
@@ -369,12 +589,22 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         local name = _tryStrref(header.identifiedName)
                      or _tryStrref(header.genericName)
                      or resref
+        if header.abilityCount > 1 then
+            local abilityName = _itemAbilityName(resref, index)
+            name = name .. (abilityName and (" — " .. abilityName)
+                or (" [" .. (index + 1) .. "]"))
+        end
         local icon = ""
         pcall(function() icon = ability.quickSlotIcon:get() end)
-        items[resref] = {
-            resref = resref,
+        items[key] = {
+            resref = key,
             kind = "itm",
-            abilityIdx = 0,
+            itemResref = resref,
+            abilityIdx = index,
+            itemType = itemType,
+            sources = count > 0 and { { slot = slot, count = count } } or {},
+            itemEffects = _itemEffectSignatures(header, ability),
+            itemMultiAbility = header.abilityCount > 1 and 1 or 0,
             name = name,
             icon = icon,
             count = count,
@@ -390,12 +620,15 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             class = classResult,
             leafResrefs = (leafs and #leafs > 0) and leafs or { resref },
         }
+        ::nextAbility::
+        end
     end
 
     -- Single walk over the one real inventory array. items:get(i) → CItem|nil.
     local ok = pcall(function()
         local arr = sprite.m_equipment.m_items
         for slot = 0, BfBot.Scan._SLOT_WEAPON_MAX do
+            if slot == 10 or slot == 34 then goto nextItem end
             local it = arr:get(slot)
             if it then
                 -- Identification belongs to this CItem instance (INVITEM.IDS
@@ -411,12 +644,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
                 local resref = nil
                 pcall(function() resref = it.pRes.resref:get() end)
                 if resref and resref ~= "FIST" then
-                    local count = EEex_ReadU16(EEex_UDToPtr(it) + BfBot.Scan._ITEM_COUNT_OFF)
-                    -- equipped (0-17) + quickitems (18-20) + weapons (35-38):
-                    -- any category; backpack (21-34): potions only
-                    local allowAnyCat = slot <= BfBot.Scan._SLOT_QUICK_MAX
-                                        or slot >= BfBot.Scan._SLOT_WEAPON_MIN
-                    _consider(resref, count, allowAnyCat)
+                    _consider(resref, it, slot)
                 end
             end
             ::nextItem::
@@ -424,6 +652,16 @@ function BfBot.Scan._BuildItemCatalog(sprite)
     end)
     if not ok then
         BfBot._Warn("Item catalog walk failed")
+    end
+
+    for _, entry in pairs(items) do
+        table.sort(entry.sources, function(a, b)
+            local aPack = a.slot >= 18 and a.slot <= 33
+            local bPack = b.slot >= 18 and b.slot <= 33
+            if aPack ~= bPack then return not aPack end
+            return a.slot < b.slot
+        end)
+        entry.itemSlot = entry.sources[1] and entry.sources[1].slot or nil
     end
 
     return items

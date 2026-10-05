@@ -729,8 +729,11 @@ end
 --- Full classification of a spell or item ability. Returns a ClassResult table.
 --- SPL results retain the legacy bare-resref cache key; ITM callers pass
 --- sourceKind="itm" so a same-resref SPL can never supply the item verdict.
-function BfBot.Class.Classify(resref, header, ability, sourceKind)
-    local cacheKey = sourceKind == "itm" and ("itm:" .. resref) or resref
+function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
+    -- An item's powers have independent classifications and overrides. Keep
+    -- the actual resource for effect analysis (self references, wrappers).
+    local identity = catalogKey or resref
+    local cacheKey = sourceKind == "itm" and ("itm:" .. identity) or identity
     -- Unlike the resref-level scoring metadata below, Project Image identity
     -- belongs to the currently selected ability header. Compute it on every
     -- call so a multi-ability resource cannot inherit another ability's flag.
@@ -767,7 +770,7 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind)
     result.leafResrefs = leafResrefs
 
     -- Check user override
-    local override = BfBot.Class.GetOverride(resref)
+    local override = BfBot.Class.GetOverride(identity)
     if override ~= nil then
         result.isBuff = override
         result.isAmbiguous = false

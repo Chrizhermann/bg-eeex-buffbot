@@ -12,8 +12,8 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 
 ## Features
 
-- **Dynamic buff-source scanning** — discovers buff spells from memorized, innate, HLA, and kit sources, plus activated equipped items, quickitems, and potions carried by party members. No hardcoded spell or item lists
-- **Items and potions** — configure party-held buff items by resref, independent of their current slot. Item rows are visually distinct and disabled by default; BuffBot finds the current stack or equipped copy when casting
+- **Dynamic buff-source scanning** — discovers buff spells from memorized, innate, HLA, and kit sources, plus the F8 Use Item buff powers of identified equipment and potions carried by party members. No hardcoded spell or item lists
+- **Items and potions** — configure each item power independently, including powers beyond the first ability and items carried in the backpack. Item rows are visually distinct and disabled by default; BuffBot finds the current stack or equipped copy when casting
 - **In-game config panel** — per-character tabs, scrollable buff list with enable/disable, duration display, target assignment, per-entry R1–R5 repeat counts, priority ordering, sort-by-duration, and row locks
 - **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, Undead Prebuff, etc.) with create/rename/delete
 - **Summons and clones as casters** — configure Project Images, Simulacra, and other allied spellcasting summons in a dedicated Summons view; cast one summon alone or let configured summons join Cast All
@@ -117,6 +117,19 @@ Each spell or item row shows R1–R5. Click its repeat cell to increase the coun
 
 Repeats are target-major. With targets A and B at R2, BuffBot attempts A, A, B, B. A party-wide AoE at R2 is cast twice total, not twice per party member. Every repeat rechecks availability, target state, and active effects. A spell attempt consumes one available use and follows normal aura/casting rules; an item attempt consumes a stack or charge and follows normal item-use rules. Quick Cast applies only to spells. Skipped attempts consume nothing.
 
+### Items and Potions
+
+BuffBot scans identified items in a party character's equipment, quick slots, and backpack. Each supported buff power from **F8 Use Item** gets its own row, including secondary powers on weapons. Powers keep their configuration when the item moves between slots. Exhausted powers remain visible with zero uses; the engine handles normal charges, consumption, and recharge rules.
+
+In **EEex options → BuffBot → Inventory item use**, choose:
+
+- **Use from inventory** (default) — activate the chosen power from its current slot.
+- **Equip, use, and restore** — temporarily equip carried gear, activate the chosen power, then restore the previous equipment. Potions are consumed directly in either mode.
+
+Automatic swapping skips chest armor, gear the character cannot wear, and items with conditional usability restrictions. It also skips ambiguous equipment copies with the same item resource; equip the desired copy manually to use it. Unfinished swaps are recorded in the save for recovery after interruption or loading. If the relevant equipment has changed manually, BuffBot leaves it alone instead of overwriting the change.
+
+Scrolls, wands, and items inside containers or Bags of Holding remain unsupported. The expanded item support has been inspected offline against BG2:EE 2.6.6.0; deployment and in-game acceptance on BG:EE/BG2:EE are still pending.
+
 ### Summons and Clones
 
 1. Create the allied summon or clone, then open BuffBot and switch from **Party** to **Summons**.
@@ -161,7 +174,7 @@ The following limitations remain:
 - **Windows only for export/import listing** — the file picker uses Windows `dir /b` for directory listing. The core export/import file I/O works on any platform, but the picker won't list files on macOS/Linux
 - **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 - **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
-- **Equipped weapon activations** — `UseItem` currently fires ability 0 only, so weapon buffs stored at a higher ability index remain excluded (#53)
+- **Automatic equipment swaps** — chest armor, unusable or conditionally usable gear, and ambiguous duplicate equipment copies require manual equipping; see [Items and Potions](#items-and-potions)
 - **5E Spellcasting support is experimental** — basic BG2:EE casting has been user-tested; the [limitations and wider testing needs](#5e-spellcasting-experimental) above still apply
 
 ## Testing & Bug Reports

@@ -11,6 +11,38 @@ BfBot.Persist._SCHEMA_VERSION = 10
 BfBot.Persist._KEY = "BB"        -- UDAux storage key
 BfBot.Persist._HANDLER = "BuffBot" -- marshal handler name
 
+-- An interrupted equipment swap is a save-bound recovery journal, separate
+-- from portable presets. Only these scalar fields may cross the save boundary.
+function BfBot.Persist._ValidateItemSwap(value)
+    if type(value) ~= "table" then return nil end
+    local function resref(v, empty)
+        return type(v) == "string" and #v <= 8 and (empty or #v > 0)
+            and not v:find('[%c"\\]')
+    end
+    local function integer(v, low, high)
+        return type(v) == "number" and v == math.floor(v) and v >= low and v <= high
+    end
+    if not resref(value.item, false) or not resref(value.previous, true)
+        or not integer(value.pack, 18, 33) or not integer(value.equip, 0, 38)
+        or value.equip == 1 or value.equip == 10 or value.equip == 34
+        or (value.equip >= 18 and value.equip <= 33) then return nil end
+    local clean = { item = value.item, previous = value.previous,
+        pack = value.pack, equip = value.equip }
+    if integer(value.weapon, 0, 38) and integer(value.weaponAbility, 0, 65535) then
+        clean.weapon, clean.weaponAbility = value.weapon, value.weaponAbility
+    end
+    return clean
+end
+
+function BfBot.Persist.GetItemSwap(sprite)
+    local ok, value = pcall(function() return EEex_GetUDAux(sprite).BBItemSwap end)
+    return ok and value or nil
+end
+
+function BfBot.Persist.SetItemSwap(sprite, value)
+    EEex_GetUDAux(sprite).BBItemSwap = value
+end
+
 local function _LocalizedDefault(key, fallback)
     local l10n = BfBot.L10N
     if l10n and type(l10n.Get) == "function" then
@@ -51,6 +83,7 @@ BfBot.Persist._INI_DEFAULTS = {
     MpControlMode = "auto",  -- multiplayer caster filter: "auto" | "manual" | "all"
     MpControlNames = "",     -- manual mode: comma-separated names the local player controls
     SummonsJoinCast = 1,     -- allied summons/clones with configured presets join party casts (#19)
+    ItemUseMode = "inventory", -- "inventory" | "swap" (equip/use/restore)
 }
 
 -- ---- Default config ----
@@ -690,7 +723,9 @@ function BfBot.Persist._Export(sprite)
                 pcall(BfBot._Warn, "[Persist] Save export dropped " .. dropped
                     .. " marshal-unsafe entries")
             end
-            if safe then return { cfg = safe } end
+            if safe then return { cfg = safe,
+                itemSwap = BfBot.Persist._ValidateItemSwap(
+                    BfBot.Persist.GetItemSwap(sprite)) } end
         end
         return {}
     end)
@@ -717,6 +752,8 @@ function BfBot.Persist._Import(sprite, data)
         end
 
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
+        BfBot.Persist.SetItemSwap(sprite,
+            BfBot.Persist._ValidateItemSwap(data.itemSwap))
 
         -- Sync persisted overrides to classifier
         if config.ovr then

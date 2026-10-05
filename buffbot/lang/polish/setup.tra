@@ -358,3 +358,11 @@
 @711 = ~Średni~
 // options.text_size_large
 @712 = ~Duży~
+// options.item_use_mode
+@713 = ~Używanie przedmiotów z plecaka~
+// options.item_use_mode_description
+@714 = ~Wybierz, jak BuffBot używa przedmiotów noszonych przez tę postać. Tryb zakładania tymczasowo zakłada przedmiot, którego postać może używać, aktywuje go, a następnie przywraca poprzednie wyposażenie. Pancerze tułowia oraz przedmioty, których postać nie może używać, nie są automatycznie zamieniane.~
+// options.item_use_inventory
+@715 = ~Użyj z plecaka~
+// options.item_use_swap
+@716 = ~Załóż, użyj i przywróć~

@@ -358,3 +358,11 @@
 @711 = ~中~
 // options.text_size_large
 @712 = ~大~
+// options.item_use_mode
+@713 = ~背包物品使用方式~
+// options.item_use_mode_description
+@714 = ~选择 BuffBot 如何使用此角色携带的物品。装备模式会临时穿戴可用装备，使用其能力，然后恢复原有装备。胸甲和此角色无法使用的物品不会自动更换。~
+// options.item_use_inventory
+@715 = ~直接从背包使用~
+// options.item_use_swap
+@716 = ~装备、使用并还原~

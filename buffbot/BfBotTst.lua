@@ -2850,14 +2850,15 @@ function BfBot.Test.Items()
     P("=== Items + potions support ===")
 
     -- ---- [1] Inventory slot layout constants ----
-    -- Locks the verified layout (equip 0-17, quickitem 18-20, backpack
-    -- 21-34, weapons 35-38) against accidental edits in BfBotScn.
+    -- Live equipment indices: equipment 0-14, quickitem 15-17, backpack
+    -- 18-33, weapons 35-38. Fist 10 and magical weapon 34 are not sources.
     P("  [1] Inventory slot layout constants")
     local slotChecks = {
-        { "_SLOT_EQUIP_MAX",  17 },
-        { "_SLOT_QUICK_MIN",  18 },
-        { "_SLOT_QUICK_MAX",  20 },
-        { "_SLOT_PACK_MAX",   34 },
+        { "_SLOT_EQUIP_MAX",  14 },
+        { "_SLOT_QUICK_MIN",  15 },
+        { "_SLOT_QUICK_MAX",  17 },
+        { "_SLOT_PACK_MIN",   18 },
+        { "_SLOT_PACK_MAX",   33 },
         { "_SLOT_WEAPON_MIN", 35 },
         { "_SLOT_WEAPON_MAX", 38 },
     }
@@ -2944,14 +2945,38 @@ function BfBot.Test.Items()
             if e.kind ~= "itm" then
                 table.insert(bad, r .. " kind=" .. tostring(e.kind))
             end
-            if e.abilityIdx ~= 0 then
+            if type(e.itemResref) ~= "string" or e.itemResref == "" then
+                table.insert(bad, r .. " itemResref=" .. tostring(e.itemResref))
+            end
+            if type(e.abilityIdx) ~= "number" or e.abilityIdx < 0
+                or e.abilityIdx ~= math.floor(e.abilityIdx) then
                 table.insert(bad, r .. " abilityIdx=" .. tostring(e.abilityIdx))
             end
             if type(e.leafResrefs) ~= "table" or #e.leafResrefs == 0 then
                 table.insert(bad, r .. " leafResrefs empty")
             end
-            if type(e.count) ~= "number" or e.count <= 0 then
+            if type(e.count) ~= "number" or e.count < 0 then
                 table.insert(bad, r .. " count=" .. tostring(e.count))
+            end
+            if type(e.sources) ~= "table" then
+                table.insert(bad, r .. " sources missing")
+            else
+                local sourceCount = 0
+                for _, source in ipairs(e.sources) do
+                    if type(source.slot) ~= "number" or source.slot < 0
+                        or source.slot > 38 or source.slot == 10 or source.slot == 34
+                        or source.slot ~= math.floor(source.slot) then
+                        table.insert(bad, r .. " invalid source slot=" .. tostring(source.slot))
+                    end
+                    if type(source.count) ~= "number" or source.count <= 0 then
+                        table.insert(bad, r .. " invalid source count=" .. tostring(source.count))
+                    else
+                        sourceCount = sourceCount + source.count
+                    end
+                end
+                if sourceCount ~= e.count then
+                    table.insert(bad, r .. " source counts do not match available uses")
+                end
             end
             if e.hasVariants ~= 0 then
                 table.insert(bad, r .. " hasVariants=" .. tostring(e.hasVariants))
@@ -2966,7 +2991,7 @@ function BfBot.Test.Items()
             _ok(nItems .. " item entr"
                 .. (nItems == 1 and "y satisfies" or "ies satisfy")
                 .. " all invariants"
-                .. " (kind/abilityIdx/leafResrefs/count/variants/class)")
+                .. " (kind/itemResref/abilityIdx/sources/leafResrefs/count/variants/class)")
         else
             _nok("catalog invariant violations: " .. table.concat(bad, "; "))
         end
@@ -2974,7 +2999,8 @@ function BfBot.Test.Items()
 
     -- ---- [5] Catalog merge rule ----
     -- GetCastableSpells merges the item catalog under the spell catalog
-    -- (spells win on resref collision, e.g. staf11.SPL vs STAF11.ITM).
+    -- (spells win on a legacy ability-0 resref collision; higher item
+    -- abilities have their own source-qualified keys).
     -- Every merged entry carries a valid kind; itm entries never carry
     -- variants (hasVariants stays 0 by construction).
     P("")
@@ -2988,8 +3014,9 @@ function BfBot.Test.Items()
             nSpl = nSpl + 1
         elseif e.kind == "itm" then
             nItm = nItm + 1
-            -- Deterministic pick for [6]: lowest resref
-            if sampleItem == nil or r < sampleItem then sampleItem = r end
+            -- Deterministic pick for [6]: lowest available item-power key.
+            if type(e.count) == "number" and e.count > 0
+                and (sampleItem == nil or r < sampleItem) then sampleItem = r end
             if e.variants ~= nil then
                 table.insert(mergeBad, r .. " itm entry carries variants")
             end
@@ -3009,7 +3036,7 @@ function BfBot.Test.Items()
     P("")
     P("  [6] _BuildQueue item entry (fixture-guarded)")
     if not sampleItem then
-        _warning("no item entries in merged catalog - skipping queue check"
+        _warning("no available item powers in merged catalog - skipping queue check"
             .. " (put a buff potion in the leader's pack to exercise it)")
         return _summary("Items")
     end
@@ -3035,6 +3062,9 @@ function BfBot.Test.Items()
                 sampleItem .. ": rep=2 creates two distinct attempts")
             _check(entry.kind == "itm",
                 sampleItem .. ": queue entry kind == \"itm\"")
+            _check(entry.itemResref == merged[sampleItem].itemResref
+                and entry.abilityIdx == merged[sampleItem].abilityIdx,
+                sampleItem .. ": queue retains the exact item resource and ability")
             _check(entry.cheat == false, sampleItem
                 .. ": cheat == false under qcMode=2 (Quick Cast bypasses items)")
             _check(type(entry.leafResrefs) == "table" and #entry.leafResrefs > 0,

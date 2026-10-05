@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.10.0 (2026-10-06)
+
+### Added
+- Discover each F8 Use Item buff power on identified carried items, including secondary weapon abilities and backpack equipment. Each power has its own configuration and available-use count; existing spell and item presets remain supported.
+- **Inventory item use** in EEex options: use powers from inventory by default, or equip, use, and restore wearable gear. Potions are consumed directly in either mode, with normal engine charge and consumption rules.
+- Save unfinished equipment swaps for recovery after interruption or loading. Recovery checks the expected equipment before restoring it, preserving intervening manual changes.
+
+### Limitations
+- Automatic swaps exclude chest armor, unusable or conditionally usable gear, and ambiguous copies sharing an item resource. Equip the desired item manually in these cases. Scrolls, wands, and container contents remain deferred.
+
+### Testing
+- The full automated suite passes **652 tests**, including per-ability scanning, charge selection, the EEex setting, equipment eligibility, interrupted exchanges, save/load recovery, and existing installer/release-package checks. Built-in item tests now check all ability indices, carried sources, and precise queue identities.
+- Offline inspection of BG2:EE 2.6.6.0 confirmed the native equipment-swap behavior and ability charge-counter selection.
+- No deployment or live-game validation has been performed for this change. BG:EE/BG2:EE acceptance, including interrupted swaps and save/load recovery, remains pending; the maintainer explicitly deferred playtesting until after release.
+
 ## v1.9.0 (2026-09-27)
 
 ### Stable release

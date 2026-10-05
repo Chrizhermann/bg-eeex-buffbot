@@ -358,3 +358,11 @@
 @711 = ~Medium~
 // options.text_size_large
 @712 = ~Large~
+// options.item_use_mode
+@713 = ~Inventory item use~
+// options.item_use_mode_description
+@714 = ~Choose how BuffBot uses items carried by this character. Equip mode temporarily equips wearable gear, uses it, then restores the previous equipment. Chest armor and unusable items are not automatically swapped.~
+// options.item_use_inventory
+@715 = ~Use from inventory~
+// options.item_use_swap
+@716 = ~Equip, use, and restore~

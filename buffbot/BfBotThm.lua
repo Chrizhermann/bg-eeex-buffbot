@@ -508,16 +508,12 @@ end
 -- ============================================================
 -- EEex Options tab registration
 -- ============================================================
--- Adds a "BuffBot" tab to the EEex Options menu (Esc → Options) with three
--- controls: Dark Mode toggle, Color Scheme radio (3 options), Text Size
--- radio (3 options). Calls into the helpers above for value get/set.
+-- Adds a "BuffBot" tab to the EEex Options menu (Esc → Options) with
+-- appearance controls and the inventory item-use mode.
 --
--- Persistence note: each option uses a custom storage that bridges directly
--- to BfBot.Theme — read() derives the current value from the live theme
--- (no separate INI key for these options), write() applies the value via
--- BfBot.Theme.Apply / _SetFontSize. Those helpers themselves call
--- _SaveToINI, so the existing [BuffBot]Theme + [BuffBot]FontSize INI keys
--- remain the single source of truth. No new INI keys are introduced.
+-- Persistence note: appearance options bridge to live BfBot.Theme state,
+-- using the existing [BuffBot]Theme + [BuffBot]FontSize keys. Item use
+-- bridges to the [BuffBot]ItemUseMode preference (inventory or swap).
 --
 -- _registered guards against double-registration (e.g., Infinity_DoFile
 -- reloading BfBotThm during dev) — EEex has no AddTab counterpart for
@@ -544,13 +540,15 @@ local function _populateUiStrings()
     uiStrings.BuffBot_TextSize_Small = BfBot.L10N.Get("options.text_size_small")
     uiStrings.BuffBot_TextSize_Medium = BfBot.L10N.Get("options.text_size_medium")
     uiStrings.BuffBot_TextSize_Large = BfBot.L10N.Get("options.text_size_large")
+    uiStrings.BuffBot_ItemUseMode = BfBot.L10N.Get("options.item_use_mode")
+    uiStrings.BuffBot_ItemUseMode_Desc = BfBot.L10N.Get("options.item_use_mode_description")
+    uiStrings.BuffBot_ItemUseMode_Inventory = BfBot.L10N.Get("options.item_use_inventory")
+    uiStrings.BuffBot_ItemUseMode_Swap = BfBot.L10N.Get("options.item_use_swap")
 end
 
 --- Build a custom storage class that bridges between an EEex option's
--- numeric value and live BfBot.Theme state. `getter` reads the current
--- value (number); `setter(value)` applies it. Both sides go through
--- BfBot.Theme helpers, which themselves persist to baldur.ini via
--- _SaveToINI — so this storage is effectively a thin adapter.
+-- numeric value and live BuffBot preferences. `getter` reads the current
+-- value (number); `setter(value)` applies and persists it.
 local function _makeBridgeStorage(getter, setter)
     -- Inherit from EEex_Options_Private_Storage so canReadEarly() is false
     -- (we want late-phase read so all dependencies are loaded).
@@ -586,6 +584,7 @@ function BfBot.Theme._RegisterOptionsTab()
     if not EEex_Options_Option then return end
     if not EEex_Options_DisplayEntry then return end
     if not EEex_Options_ToggleType or not EEex_Options_ToggleWidget then return end
+    if not EEex_Options_Widget then return end
     if not EEex_Options_ClampedAccessor then return end
     if not EEex_Options_Private_Storage then return end
 
@@ -628,6 +627,18 @@ function BfBot.Theme._RegisterOptionsTab()
         ["type"]     = EEex_Options_ToggleType.new(),
         ["accessor"] = EEex_Options_ClampedAccessor.new({ ["min"] = 1, ["max"] = 3 }),
         ["storage"]  = SizeBridge.new(),
+    }))
+
+    -- Inventory items (2-way radio: 1=direct inventory use, 2=equip/use/restore)
+    local ItemUseBridge = _makeBridgeStorage(
+        function() return BfBot.Persist.GetPref("ItemUseMode") == "swap" and 2 or 1 end,
+        function(v) BfBot.Persist.SetPref("ItemUseMode", v == 2 and "swap" or "inventory") end
+    )
+    EEex_Options_Register("BuffBot_ItemUseMode", EEex_Options_Option.new({
+        ["default"]  = 1,
+        ["type"]     = EEex_Options_ToggleType.new(),
+        ["accessor"] = EEex_Options_ClampedAccessor.new({ ["min"] = 1, ["max"] = 2 }),
+        ["storage"]  = ItemUseBridge.new(),
     }))
 
     -- Build the radio-group DisplayEntries up front so we can capture them
@@ -694,9 +705,31 @@ function BfBot.Theme._RegisterOptionsTab()
         }),
     }
 
-    -- Tab definition: 3 groups separated by dividers in the UI.
+    local itemUseEntries = {
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_ItemUseMode",
+            ["label"]       = "BuffBot_ItemUseMode_Inventory",
+            ["description"] = "BuffBot_ItemUseMode_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 1,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_ItemUseMode",
+            ["label"]       = "BuffBot_ItemUseMode_Swap",
+            ["description"] = "BuffBot_ItemUseMode_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 2,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+    }
+
+    -- Outer groups are columns. Keep inventory controls in the first
+    -- column to avoid widening the tab with a fourth column.
     EEex_Options_AddTab("BuffBot_Tab", function() return {
-        -- Group 1: Dark Mode (single toggle)
+        -- Column 1: Dark Mode and inventory item use
         {
             EEex_Options_DisplayEntry.new({
                 ["optionID"]    = "BuffBot_DarkMode",
@@ -704,16 +737,24 @@ function BfBot.Theme._RegisterOptionsTab()
                 ["description"] = "BuffBot_DarkMode_Desc",
                 ["widget"]      = EEex_Options_ToggleWidget.new(),
             }),
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_ItemUseMode",
+                ["label"]       = "BuffBot_ItemUseMode",
+                ["description"] = "BuffBot_ItemUseMode_Desc",
+                -- The base widget has no layout: this entry is a heading.
+                ["widget"]      = setmetatable({}, EEex_Options_Widget),
+                ["subOptions"]  = itemUseEntries,
+            }),
         },
-        -- Group 2: Color Scheme (3 toggles sharing BuffBot_Accent option)
+        -- Column 2: Color Scheme (3 toggles sharing BuffBot_Accent option)
         accentEntries,
-        -- Group 3: Text Size (3 toggles sharing BuffBot_TextSize option)
+        -- Column 3: Text Size (3 toggles sharing BuffBot_TextSize option)
         sizeEntries,
     } end)
 
     -- _ReadOptions(false) already fired before _OnMenusLoaded, so our newly
     -- registered options were not in the auto-read pass. Manually push the
-    -- live theme state into each option's _workingValue so widgets render
+    -- live preferences into each option's _workingValue so widgets render
     -- the correct selected state on first open.
     local function _seed(id)
         local opt = EEex_Options_Get and EEex_Options_Get(id)
@@ -725,8 +766,9 @@ function BfBot.Theme._RegisterOptionsTab()
     _seed("BuffBot_DarkMode")
     _seed("BuffBot_Accent")
     _seed("BuffBot_TextSize")
+    _seed("BuffBot_ItemUseMode")
 
-    -- Patch _setWorkingValue on the two radio-group options to keep all
+    -- Patch _setWorkingValue on the radio-group options to keep all
     -- sibling widgets' visual state in sync per-click. EEex's toggleAction
     -- only updates the clicked widget's `toggleState`; without this, the
     -- previous selection visually stays selected until the user closes and
@@ -744,6 +786,7 @@ function BfBot.Theme._RegisterOptionsTab()
     end
     _patchRadio("BuffBot_Accent", accentEntries)
     _patchRadio("BuffBot_TextSize", sizeEntries)
+    _patchRadio("BuffBot_ItemUseMode", itemUseEntries)
 
     BfBot.Theme._registered = true
 end

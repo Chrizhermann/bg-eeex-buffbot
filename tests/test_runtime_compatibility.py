@@ -3004,6 +3004,7 @@ def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
         local spells = {
             ITEM = {
                 kind = "itm", count = 2, name = "Buff Item",
+                itemResref = "ITEM", itemSlot = 21, abilityIdx = 0,
                 leafResrefs = { "ITEMLEAF" },
                 class = { splstates = {} },
             },
@@ -3017,6 +3018,7 @@ def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
             m_baseStats = { m_generalState = 0 },
         }
         local actions, queuedOnFresh, active, checkedLeaf = {}, true, false, false
+        EEex_GetUDAux = function() return {} end
         EEex_Action_QueueResponseStringOnAIBase = function(action, sprite)
             if sprite ~= freshSprite then queuedOnFresh = false end
             actions[#actions + 1] = action
@@ -3059,7 +3061,7 @@ def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
     assert facts["buildAndFreshDiffer"]
     assert facts["queuedOnFresh"]
     assert facts["actionCount"] == 2
-    assert facts["firstAction"] == 'UseItem("ITEM",Myself)'
+    assert facts["firstAction"] == 'UseItemSlotAbility(Myself,21,0)'
     assert facts["secondAction"] == (
         'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
     )
