@@ -297,7 +297,7 @@ def test_summon_queue_defensively_rejects_item_catalog_rows() -> None:
     assert facts["cheat"] == 1
 
 
-def test_disallowed_backpack_copy_does_not_hide_equipped_copy() -> None:
+def test_backpack_copy_does_not_hide_preferred_equipped_copy() -> None:
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(
         """
@@ -333,7 +333,11 @@ def test_disallowed_backpack_copy_does_not_hide_equipped_copy() -> None:
         end
         EEex_UDToPtr = function(_) return 100 end
         EEex_ReadU16 = function(_) return 1 end
-        EEex_ReadU8 = function(_) return 1 end
+        EEex_ReadU8 = function(address)
+            if address == 100 or address == 102 then return 3 end
+            assert(address == 100 + 0xC)
+            return 1
+        end
         Infinity_FetchString = function(_) return "Equipped Test Item" end
         BfBot.Scan._GetItemAbility = function(_, index)
             assert(index == 0)
@@ -346,7 +350,8 @@ def test_disallowed_backpack_copy_does_not_hide_equipped_copy() -> None:
         BfBot.Class.GetDurationCategory = function() return "short" end
 
         local catalog = BfBot.Scan._BuildItemCatalog(sprite)
-        return catalog.DUPITM ~= nil
+        local entry = catalog.DUPITM
+        return entry ~= nil and entry.count == 2 and entry.itemSlot == 35
         """
     )
 
@@ -387,7 +392,11 @@ def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
         end
         EEex_UDToPtr = function(_) return 100 end
         EEex_ReadU16 = function(_) return 1 end
-        EEex_ReadU8 = function(_) return 1 end
+        EEex_ReadU8 = function(address)
+            if address == 100 or address == 102 then return 3 end
+            assert(address == 100 + 0xC)
+            return 1
+        end
         Infinity_FetchString = function(_) return "Deferred Item" end
         BfBot.Scan._GetItemAbility = function() return ability end
         BfBot.Class.Classify = function()
@@ -435,7 +444,11 @@ def test_excluded_buff_item_remains_in_catalog_for_picker_recovery() -> None:
         EEex_Resource_Demand = function() return header end
         EEex_UDToPtr = function(_) return 100 end
         EEex_ReadU16 = function(_) return 1 end
-        EEex_ReadU8 = function(_) return 1 end
+        EEex_ReadU8 = function(address)
+            if address == 100 or address == 102 then return 3 end
+            assert(address == 100 + 0xC)
+            return 1
+        end
         Infinity_FetchString = function(_) return "Excluded Buff Item" end
         BfBot.Scan._GetItemAbility = function() return ability end
         BfBot.Class.Classify = function()
@@ -490,9 +503,14 @@ def test_item_catalog_sums_multiple_eligible_stacks() -> None:
         EEex_ReadU16 = function(address)
             if address == 1000 + BfBot.Scan._ITEM_COUNT_OFF then return 2 end
             if address == 2000 + BfBot.Scan._ITEM_COUNT_OFF then return 3 end
+            if address == 500 + 0x22 then return 1 end
             error("unexpected count address")
         end
-        EEex_ReadU8 = function(_) return 1 end
+        EEex_ReadU8 = function(address)
+            if address == 500 or address == 502 then return 3 end
+            assert(address == 500 + 0xC)
+            return 1
+        end
         Infinity_FetchString = function(_) return "Stacked Potion" end
         BfBot.Scan._GetItemAbility = function() return ability end
         BfBot.Class.Classify = function()
@@ -542,9 +560,14 @@ def _identification_runtime() -> LuaRuntime:
         end
         EEex_UDToPtr = function(value) return value.ptr or 500 end
         EEex_ReadU16 = function(address)
+            if address == 500 + 0x22 then return 1 end
             return (address - BfBot.Scan._ITEM_COUNT_OFF) / 1000
         end
-        EEex_ReadU8 = function(_) return 5 end
+        EEex_ReadU8 = function(address)
+            if address == 500 or address == 502 then return 3 end
+            assert(address == 500 + 0xC)
+            return 5
+        end
         Infinity_FetchString = function(_) return "Identified Potion" end
         local function emptyIterator() return function() return nil end end
         EEex_Sprite_GetKnownMageSpellsWithAbilityIterator = emptyIterator
@@ -569,7 +592,7 @@ def _identification_runtime() -> LuaRuntime:
     return lua
 
 
-@pytest.mark.parametrize("slot", [0, 15, 18, 21, 34, 35, 38])
+@pytest.mark.parametrize("slot", [0, 10, 15, 18, 21, 34, 35, 38])
 @pytest.mark.parametrize("flags, visible", [(0, False), (14, False), (1, True), (15, True)])
 def test_item_identification_filters_every_inventory_region(
     slot: int, flags: int, visible: bool,
@@ -590,9 +613,10 @@ def test_item_identification_filters_every_inventory_region(
         }
         """
     )
-    assert facts["visible"] == visible
-    assert facts["count"] == int(visible)
-    assert facts["metadataReads"] == int(visible)
+    expected_visible = visible and slot not in (10, 34)
+    assert facts["visible"] == expected_visible
+    assert facts["count"] == int(expected_visible)
+    assert facts["metadataReads"] == int(expected_visible)
     assert facts["flags"] == flags
     assert facts["warnings"] == 0
 

@@ -358,3 +358,11 @@
 @711 = ~Mittel~
 // options.text_size_large
 @712 = ~Groß~
+// options.item_use_mode
+@713 = ~Gegenstände aus dem Inventar~
+// options.item_use_mode_description
+@714 = ~Wähle, wie BuffBot Gegenstände im Inventar dieses Charakters verwendet. Im Ausrüstungsmodus wird tragbare Ausrüstung kurz angelegt und benutzt; danach wird die vorherige Ausrüstung wiederhergestellt. Brustrüstungen und nicht verwendbare Gegenstände werden nicht automatisch getauscht.~
+// options.item_use_inventory
+@715 = ~Direkt aus dem Inventar benutzen~
+// options.item_use_swap
+@716 = ~Anlegen, benutzen und zurücktauschen~

@@ -227,7 +227,7 @@ CATALOG_SCHEMA = {
     600: "default.preset.long",
     601: "default.preset.short",
     602: "default.preset.indexed",
-    # EEex Options strings: exactly thirteen (700-712)
+    # EEex Options strings (700-716)
     700: "options.tab",
     701: "options.dark_mode",
     702: "options.dark_mode_description",
@@ -241,6 +241,10 @@ CATALOG_SCHEMA = {
     710: "options.text_size_small",
     711: "options.text_size_medium",
     712: "options.text_size_large",
+    713: "options.item_use_mode",
+    714: "options.item_use_mode_description",
+    715: "options.item_use_inventory",
+    716: "options.item_use_swap",
 }
 
 
@@ -963,13 +967,22 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.9.0 (2026-09-27)")
-    assert "no gameplay or save-format changes" in current_normalized
-    assert "existing presets remain compatible" in current_normalized
-    assert "5e spellcasting compatibility remains explicitly experimental" in current_normalized
-    assert "full automated suite passes **535 tests**" in current_normalized
-    assert "no new in-game testing was performed" in current_normalized
-    assert "playtest evidence and compatibility limits are unchanged" in current_normalized
+    assert current_release.startswith("v1.10.0 (2026-10-06)")
+    assert "each f8 use item buff power" in current_normalized
+    assert "existing spell and item presets remain supported" in current_normalized
+    assert "full automated suite passes **652 tests**" in current_normalized
+    assert "no deployment or live-game validation has been performed" in current_normalized
+    assert "maintainer explicitly deferred playtesting until after release" in current_normalized
+
+    stable_release = source.split("\n## v1.9.0 (2026-09-27)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert "no gameplay or save-format changes" in stable_release
+    assert "existing presets remain compatible" in stable_release
+    assert "5e spellcasting compatibility remains explicitly experimental" in stable_release
+    assert "full automated suite passes **535 tests**" in stable_release
+    assert "no new in-game testing was performed" in stable_release
+    assert "playtest evidence and compatibility limits are unchanged" in stable_release
 
     five_e_release = source.split("\n## v1.9.0-alpha (2026-09-21)", 1)[1].split(
         "\n## ", 1
@@ -1248,10 +1261,10 @@ def test_known_player_display_sinks_use_localization_not_raw_reason_codes():
     assert 'return false, "already running"' not in execution
 
 
-def test_all_thirteen_eeex_options_strings_come_from_runtime_localization():
+def test_all_eeex_options_strings_come_from_runtime_localization():
     source = THEME_PATH.read_text(encoding="utf-8")
     expected = {
-        CATALOG_SCHEMA[catalog_id] for catalog_id in range(700, 713)
+        CATALOG_SCHEMA[catalog_id] for catalog_id in range(700, 717)
     }
     assignments = re.findall(
         r"uiStrings\.[A-Za-z0-9_]+\s*=\s*"
@@ -1259,7 +1272,7 @@ def test_all_thirteen_eeex_options_strings_come_from_runtime_localization():
         source,
     )
     actual = set(assignments)
-    assert len(assignments) == 13
+    assert len(assignments) == len(expected)
     assert actual == expected
 
 

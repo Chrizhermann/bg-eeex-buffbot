@@ -358,3 +358,11 @@
 @711 = ~Moyen~
 // options.text_size_large
 @712 = ~Grand~
+// options.item_use_mode
+@713 = ~Utilisation des objets de l’inventaire~
+// options.item_use_mode_description
+@714 = ~Choisissez comment BuffBot utilise les objets portés par ce personnage. Le mode équipement équipe temporairement un objet utilisable, l’utilise, puis remet l’équipement précédent. Les armures de torse et les objets inutilisables ne sont pas échangés automatiquement.~
+// options.item_use_inventory
+@715 = ~Utiliser depuis l’inventaire~
+// options.item_use_swap
+@716 = ~Équiper, utiliser et remettre~

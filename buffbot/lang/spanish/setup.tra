@@ -358,3 +358,11 @@
 @711 = ~Mediano~
 // options.text_size_large
 @712 = ~Grande~
+// options.item_use_mode
+@713 = ~Uso de objetos del inventario~
+// options.item_use_mode_description
+@714 = ~Elige cómo usa BuffBot los objetos que lleva este personaje. El modo de equipamiento equipa temporalmente un objeto utilizable, lo usa y después restaura el equipo anterior. Las armaduras de torso y los objetos no utilizables no se intercambian automáticamente.~
+// options.item_use_inventory
+@715 = ~Usar desde el inventario~
+// options.item_use_swap
+@716 = ~Equipar, usar y restaurar~
