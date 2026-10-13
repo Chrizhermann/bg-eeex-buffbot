@@ -527,7 +527,7 @@ git commit -m "docs: explain file-backed runtime localization"
 - Modify after successful live proof: `CLAUDE.md` (current tracked project guidance)
 - Potentially update after successful live proof: BG-modding EEex UI/filesystem reference through `bg-modding-learn`
 - Live target: `C:/Games/Baldur's Gate II Enhanced Edition modded - Copy - Copy`
-- Baseline: `C:/Users/chris/.codex/live-validation/buffbot-l10n-20260822-061415`
+- Baseline: `~/.codex/live-validation/buffbot-l10n-20260822-061415`
 
 **Step 1: Run final automated verification**
 
