@@ -428,7 +428,7 @@ git commit -m "build: package and document localization catalogs"
 **Files:**
 - Modify: `tests/test_eeex_compatibility_installer.py`
 - Modify: `CHANGELOG.md`
-- Modify if warranted by verified reusable findings: `C:/Users/chris/.agents/skills/bg-modding/references/*`
+- Modify if warranted by verified reusable findings: `~/.agents/skills/bg-modding/references/*`
 
 **Step 1: Write the failing language-switch lifecycle test**
 
@@ -481,7 +481,7 @@ English BuffBot install state, and verify:
 
 ```text
 C:\Games\Baldur's Gate II Enhanced Edition modded - Copy - Copy\lang\zh_CN\dialog.tlk
-C:\Users\chris\OneDrive\Documents\Baldur's Gate II - Enhanced Edition\Baldur.lua
+%USERPROFILE%\OneDrive\Documents\Baldur's Gate II - Enhanced Edition\Baldur.lua
 ```
 
 The existing configuration contains `Fonts/zh_CN=SIMSUN`; no Steam reinstall
