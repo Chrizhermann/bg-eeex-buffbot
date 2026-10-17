@@ -1,0 +1,79 @@
+<p><strong>BuffBot</strong> automates pre-battle buffing in BG2:EE and EET. It scans each party member's spellbook, builds a configurable buff list, and casts everything in parallel with one click. Think <a href="https://github.com/factubsio/BubbleBuffs">Bubble Buffs</a> from Pathfinder: WotR, adapted for the Infinity Engine.</p>
+
+<p>This is an <strong>alpha release</strong> — fully functional but with rough edges. I'm looking for testers and feedback.</p>
+
+<p><strong>Video showcase:</strong> <a href="https://www.youtube.com/watch?v=9fjnUKG1tfQ">https://www.youtube.com/watch?v=9fjnUKG1tfQ</a></p>
+
+<h2>What It Does</h2>
+
+<ul>
+<li><strong>Scans spellbooks dynamically</strong> — no hardcoded spell lists. Memorized spells, innates, HLAs, kit abilities — if a character has it and it's a buff, BuffBot finds it</li>
+<li><strong>In-game config panel</strong> (F11) — per-character tabs, up to 8 presets, spell list with enable/disable, duration display, target assignment, and priority ordering</li>
+<li><strong>Smart targeting</strong> — ordered priority list with fallback chain. Assign specific characters as targets with preferred order, or party-wide / self. Name-based storage survives party rearrangement</li>
+<li><strong>Quick Cast mode</strong> — toggle per-preset for instant casting via Improved Alacrity. "Long only" mode fast-casts long buffs, then casts short buffs normally</li>
+<li><strong>Subwindow selection spells</strong> — spells like Protection from Elemental Energy that open a selection popup are handled seamlessly. Pre-configure which variant to cast, BuffBot bypasses the popup entirely</li>
+<li><strong>F12 innate abilities</strong> — one per preset per character, trigger buffing directly from the special abilities menu</li>
+<li><strong>Skip active buffs</strong> — detects what's already running and skips it. Two-tier detection: SPLSTATE fast path with effect list fallback</li>
+<li><strong>Combat safety</strong> — detects nearby enemies and interrupts casting to avoid wasting buffs mid-fight</li>
+<li><strong>Manual override</strong> — classifier got it wrong? "Add Spell" to include, "Remove" to exclude</li>
+<li><strong>Export/Import</strong> — save a character's config to a file, load it onto another character or share it</li>
+<li><strong>Mod-friendly</strong> — tested with SCS and Spell Revisions. Reads spell data at runtime, so mod-added spells appear automatically</li>
+<li><strong>200+ automated tests</strong> — built-in test suite runnable in the EEex console</li>
+</ul>
+
+<h2>Requirements</h2>
+
+<ul>
+<li>BG2:EE or EET</li>
+<li><a href="https://github.com/Bubb13/EEex">EEex</a> v0.11.0-alpha or later</li>
+</ul>
+
+<h2>Download &amp; Install</h2>
+
+<ol>
+<li>Download from <a href="https://github.com/Chrizhermann/bg-eeex-buffbot/releases/latest">GitHub Releases</a></li>
+<li>Extract into your game directory</li>
+<li>Run <code>setup-buffbot.exe</code> → select "BuffBot: In-Game Buff Automation"</li>
+</ol>
+
+<p>Standard WeiDU install. Uninstall by re-running setup.</p>
+
+<h2>Quick Start</h2>
+
+<ol>
+<li>Press <strong>F11</strong> to open the panel (or click the actionbar button)</li>
+<li>Select a character tab</li>
+<li>Select a preset ("Long Buffs" or "Short Buffs")</li>
+<li>Enable/disable spells, set targets, reorder with Up/Down</li>
+<li>Click <strong>Cast</strong></li>
+</ol>
+
+<p>That's it. BuffBot casts everything in order across all party members simultaneously.</p>
+
+<h2>Known Limitations</h2>
+
+<p>Alpha means alpha:</p>
+<ul>
+<li><strong>Spell Revisions edge cases</strong> — SR restructures some spells (Barkskin, Dispelling Screen) via sub-spells. The classifier may mark them as ambiguous. Use "Add Spell" to include them manually</li>
+<li><strong>Windows only for file picker</strong> — export/import file listing uses <code>dir /b</code>. Core file I/O is cross-platform, but the import picker won't enumerate files on macOS/Linux</li>
+<li><strong>No item/potion/scroll support yet</strong> — currently spells and innates only. Item buff sources are planned</li>
+</ul>
+
+<h2>A Note on AI</h2>
+
+<p>I built BuffBot with significant help from <a href="https://claude.ai/code">Claude Code</a> (Anthropic's AI coding tool). The architecture, code, 200+ automated tests, and docs were developed collaboratively between me and the AI.</p>
+
+<p>I know some people have strong feelings about AI in modding. I want to be upfront about it rather than pretend otherwise. The code is fully open source — read it, review it, judge it on its merits. If you find bugs, they're bugs regardless of who or what wrote them.</p>
+
+<h2>Feedback &amp; Bug Reports</h2>
+
+<p>This is an alpha — I want to hear what breaks. Please report issues at:<br>
+<strong><a href="https://github.com/Chrizhermann/bg-eeex-buffbot/issues">GitHub Issues</a></strong></p>
+
+<p>Include your game version, EEex version, mod list, and steps to reproduce. If you can, run <code>BfBot.Test.RunAll()</code> in the EEex console and include the output.</p>
+
+<p>I also stream BG runs and mod development on Twitch: <strong><a href="https://www.twitch.tv/chrizfader">twitch.tv/chrizfader</a></strong></p>
+
+<hr>
+
+<p><em>Inspired by <a href="https://github.com/factubsio/BubbleBuffs">Bubble Buffs</a> from Pathfinder: Wrath of the Righteous.</em></p>
