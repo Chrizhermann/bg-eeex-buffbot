@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Fixed
-- The party leader shows the "combat detected - casting stopped" and "casting timed out" notices over their head again. BuffBot called `EEex_Sprite_DisplayStringHead`, which no EEex release defines, and a `pcall` hid the error, so both notices were always lost; stopping itself worked. The notices now use the engine's overhead text message with the translated text. If that cannot be shown, the notice goes to the message log with a one-time error naming the cause. (#76)
+- The party leader now shows the "Combat detected - casting stopped" and "casting timed out" notices over their head. BuffBot called `EEex_Sprite_DisplayStringHead`, which no EEex release defines, and a `pcall` hid the error, so both notices were always lost; stopping itself worked. The notices now use the engine's overhead text message with the translated text. If that message cannot be queued, the notice goes to the message log and a one-time error names the cause. (#76)
 - The `BfBot.Probe` area probe tries `EEex_Area_GetVisible` and `EngineGlobals.g_pBaldurChitin` instead of three globals that never existed.
 
 ### Testing

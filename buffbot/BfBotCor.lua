@@ -142,9 +142,9 @@ local function _queueOverheadText(sprite, text)
 end
 
 --- Show BuffBot feedback as floating text over a sprite.
---- Falls back to the message log, and reports why once, when there is no
---- sprite or the engine message cannot be queued, so the notice is never
---- silently lost (bg-eeex-buffbot#76).
+--- Falls back to the message log when there is no sprite or the engine
+--- message cannot be queued; a queueing failure is also reported once, so
+--- the notice is never silently lost (bg-eeex-buffbot#76).
 -- @param sprite userdata|nil: CGameSprite to show the text over
 -- @param text string: already-localized feedback text
 -- @return boolean: true when the overhead message was queued
