@@ -1246,7 +1246,15 @@ def test_known_player_display_sinks_use_localization_not_raw_reason_codes():
     ui = UI_PATH.read_text(encoding="utf-8")
 
     assert 'Infinity_DisplayString("BuffBot:' not in main
-    assert 'EEex_Sprite_DisplayStringHead(leader,\n                    "BuffBot:' not in execution
+    assert '_NotifyLeader("' not in execution
+    assert (
+        'BfBot.Exec._NotifyLeader(BfBot.L10N.Get("feedback.combat_stopped"))'
+        in execution
+    )
+    assert (
+        'BfBot.Exec._NotifyLeader(BfBot.L10N.Get("feedback.cast_timeout"))'
+        in execution
+    )
     assert 'BfBot._Display("BuffBot:' not in innate
     # ToggleDebug is an intentionally untranslated developer diagnostic.
     ui_without_debug = re.sub(

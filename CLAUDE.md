@@ -54,6 +54,8 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 - **Scan cache invalidation** on panel open + sprite listeners (`QuickListsChecked`, `QuickListCountsReset`, `QuickListNotifyRemoved`). Tab switches reuse the cache.
 - **Classifier false-positive fixes already in place**: self-ref opcode discount (318/324 → 0), substance check (must have ≥ 1 real buff opcode besides 17/171), toggle penalty (op=318 self-ref → −8). SR Barkskin stays AMB because classification scoring doesn't recurse sub-spells — expected, handled via manual override UI.
 - **Party index vs portrait index**: `EEex_Sprite_GetInPortrait(slot)` returns the sprite for portrait slot 0-5; BCS `PlayerN` / `_ResolveTargets` needs the join-order index from `EEex_Sprite_GetCharacterIndex(sprite)`. These are NOT the same.
+- **Only EEex globals the pinned EEex defines**: `tests/test_eeex_globals.py` fails when shipped Lua or menu code uses an `EEex_*` global missing from `tests/fixtures/eeex-globals-v1.3.1.txt` (EEex v1.3.1). That list is generated from the EEex source by `tools/eeex_globals.py`; regenerate it when the pin moves, never edit it by hand. A deliberate, guarded probe of a name outside the pin goes into the test's `ALLOWED_UNDEFINED` with its reason. `EEex_Sprite_DisplayStringHead` never existed, and a `pcall` hid that for releases (#76).
+- **Overhead feedback**: show localized text over a character with `BfBot._DisplayOverhead(sprite, text)` (engine `CMessageDisplayText` with `m_overHead`). `EEex_Sprite_DisplayTextRef` and the `DisplayStringHead` action only take TLK strrefs. The helper falls back to the message log and reports the cause once; never discard a feedback failure in a bare `pcall`.
 
 ## Tech Stack
 
@@ -73,7 +75,7 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 
 - **Deploy**: `bash tools/deploy.sh` (reads `tools/deploy.conf` for game dir).
 - **Reload in running game**: `Infinity_DoFile` serves a memory cache and does NOT reread disk (verified 2026-04-19, re-confirmed 2026-07-11). Force-reload a changed module from disk via the `io.open`+`loadstring` pattern in `eeex-filesystem.md` (`forceLoad("override/BfBotX.lua")`, e.g. through the remote console); restart the game instead when many modules changed or init/listener re-registration is a concern.
-- **Tests**: `BfBot.Test.RunAll()` in the in-game console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
+- **Tests**: `python -m pytest tests -q` (requirements in `tests/requirements.txt`) for the offline suite. `BfBot.Test.RunAll()` in the in-game console on the world screen. Individual phases exist for each module (e.g. `Persist`, `Exec`, `QuickCast`, `DurationRecursion`).
 - **Remote console** (headless testing): `bash /c/src/private/eeex-remote-console/tools/eeex-remote.sh "<game>/override" "<lua>"`. Game must be on the world screen.
 - **Branch vs main**: small code change → main; bigger work → feature branch. Design in GitHub issues, not `docs/plans/`.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The party leader shows the "combat detected - casting stopped" and "casting timed out" notices over their head again. BuffBot called `EEex_Sprite_DisplayStringHead`, which no EEex release defines, and a `pcall` hid the error, so both notices were always lost; stopping itself worked. The notices now use the engine's overhead text message with the translated text. If that cannot be shown, the notice goes to the message log with a one-time error naming the cause. (#76)
+- The `BfBot.Probe` area probe tries `EEex_Area_GetVisible` and `EngineGlobals.g_pBaldurChitin` instead of three globals that never existed.
+
+### Testing
+- A new check fails when BuffBot's Lua or menu code uses an `EEex_*` global that EEex v1.3.1 does not define. `tools/eeex_globals.py` generates the list of defined names from the EEex v1.3.1 source. Every EEex global BuffBot now uses also exists in EEex v1.2.0 and v0.11.0-alpha.
+- The full automated suite passes **673 tests**.
+
 ## v1.10.0 (2026-10-06)
 
 ### Added
