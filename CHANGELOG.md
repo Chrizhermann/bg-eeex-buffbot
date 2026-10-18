@@ -9,6 +9,7 @@
 ### Testing
 - A new check fails when BuffBot's Lua or menu code uses an `EEex_*` global that EEex v1.3.1 does not define. `tools/eeex_globals.py` generates the list of defined names from the EEex v1.3.1 source. Every EEex global BuffBot now uses also exists in EEex v1.2.0 and v0.11.0-alpha.
 - The full automated suite passes **673 tests**.
+- **Lab check, EET 2.7.3.0 with EEex v1.3.1:** with the fixed core loaded at runtime, `BfBot._DisplayOverhead` made the engine attach a floating text object over the party leader with the exact combat-stop notice, in English and in German with UTF-8 characters. `EEex_Sprite_DisplayStringHead` is nil there. Not checked in game: a real combat stop during a buff run, the drawn text on screen, EEex v1.2.0, BG:EE and BG2:EE outside EET, and the in-game `BfBot.Test` suite.
 
 ## v1.10.0 (2026-10-06)
 
