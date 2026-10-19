@@ -4,6 +4,28 @@
 
 Recipient-first fork, based on upstream v1.10.1.
 
+### Recipient planning beta
+- Add party-wide recipient presets with combined source rows, ordered requests,
+  caster selection, expected durations, variant selection, and explicit import
+  from legacy caster presets. Keep legacy settings and F12 behavior intact.
+- Prefer longer-duration sources, then effective caster level. Reassign earlier
+  automatic choices when necessary to preserve a restricted later assignment.
+- Reserve native spontaneous level slots and physical item charge counters
+  across the entire plan. Re-scan before casting and reject incomplete plans.
+  Recheck actor identity and the reserved item slot during execution.
+- Preserve Project Image safeguards per caster. New plans use normal casting
+  speed; 5E-converted sources and summon auto-joining remain in the legacy editor.
+- Render the recipient panel on the existing parchment MOS using `mosaic`, with
+  readable text. Show only unreserved source durations in the catalog, select
+  the matching catalog context when selecting a planned entry, and warn about
+  improved invisible recipients without blocking spell-specific exceptions.
+- Validation: 715 automated tests pass, including 28 planner regressions. Five
+  Windows symlink privilege tests remain excluded. The isolated EET copy loads
+  a copied save and builds a 147-entry catalog. Basic visual review, source
+  preference, self-only eligibility, actual spell effects, prepared-slot
+  consumption, and two-preset save/load passed. Item activation and broader
+  compatibility checks remain pending. The personal installation is unchanged.
+
 ### Item discovery
 - Recognize activated item buffs delivered through immediate opcode-146 child
   spells, following two links with bounded, case-insensitive graph traversal.
@@ -19,7 +41,8 @@ Recipient-first fork, based on upstream v1.10.1.
 - Validation: 687 automated tests pass, including 19 new item-graph regressions,
   synthetic WeiDU 249 lifecycle checks, and release packaging. Five existing
   symlink tests are excluded because this Windows account lacks symlink
-  privileges. No game deployment or live gameplay testing was performed.
+  privileges. This was the initial offline checkpoint; see the beta validation
+  above for subsequent work in an isolated game copy.
 
 ## v1.10.1 (2026-10-20)
 

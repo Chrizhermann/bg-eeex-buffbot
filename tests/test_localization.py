@@ -57,6 +57,66 @@ EXPECTED_CATALOG_DIRECTORIES = {
 # schema (or these same catalog comments), not introduce an uncontrolled fourth
 # hand-maintained copy of the ID/key contract.
 CATALOG_SCHEMA = {
+    1000: "party.text01",
+    1001: "party.text02",
+    1002: "party.text03",
+    1003: "party.text04",
+    1004: "party.text05",
+    1005: "party.text06",
+    1006: "party.text07",
+    1007: "party.text08",
+    1008: "party.text09",
+    1009: "party.text10",
+    1010: "party.text11",
+    1011: "party.text12",
+    1012: "party.text13",
+    1013: "party.text14",
+    1014: "party.text15",
+    1015: "party.text16",
+    1016: "party.text17",
+    1017: "party.text18",
+    1018: "party.text19",
+    1019: "party.text20",
+    1020: "party.text21",
+    1021: "party.text22",
+    1022: "party.text23",
+    1023: "party.text24",
+    1024: "party.text25",
+    1025: "party.text26",
+    1026: "party.text27",
+    1027: "party.text28",
+    1028: "party.text29",
+    1029: "party.text30",
+    1030: "party.text31",
+    1031: "party.text32",
+    1032: "party.text33",
+    1033: "party.text34",
+    1034: "party.text35",
+    1035: "party.text36",
+    1036: "party.text37",
+    1037: "party.text38",
+    1038: "party.text39",
+    1039: "party.text40",
+    1040: "party.text41",
+    1041: "party.text42",
+    1042: "party.text43",
+    1043: "party.text44",
+    1044: "party.text45",
+    1045: "party.text46",
+    1046: "party.text47",
+    1047: "party.text48",
+    1048: "party.text49",
+    1049: "party.text50",
+    1050: "party.text51",
+    1051: "party.text52",
+    1052: "party.text53",
+    1053: "party.text54",
+    1054: "party.text55",
+    1055: "party.text56",
+    1056: "party.text57",
+    1057: "party.text58",
+    1058: "party.text59",
+    1059: "party.text60",
     # Installer strings (100-199)
     100: "installer.component.luajit",
     101: "installer.require.game",
@@ -1164,7 +1224,8 @@ def test_menu_has_no_static_alphabetic_player_labels_or_legacy_markers():
 
 
 def test_menu_localization_does_not_change_actions_layout_or_list_structure():
-    source = MENU_PATH.read_text(encoding="utf-8")
+    # Preserve the original caster editor; the new party panel has its own tests.
+    source = MENU_PATH.read_text(encoding="utf-8").split("-- Recipient-first party planner", 1)[0].rstrip() + "\n"
     normalized = "\n".join(
         line
         for line in source.splitlines()

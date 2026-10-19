@@ -1,0 +1,446 @@
+{
+  "date": "2026-10-19",
+  "environment": "isolated single-player EET copy, engine 2.6.6.0",
+  "personal_install_modified": false,
+  "visual_review": {
+    "resolution": [
+      2560,
+      1392
+    ],
+    "readable_panel": true,
+    "catalog_entries": 147,
+    "darkfire_improved_haste_visible": true,
+    "fix": "Render the parchment MOS using mosaic instead of an icon or a dark rectangle."
+  },
+  "source_assignment": {
+    "canCast": true,
+    "catalog": {
+      "casters": "Haer'Dalis, Jan, Simmeon",
+      "duration": "2.2m",
+      "key": "spl:SPIN137",
+      "name": "Improved Invisibility",
+      "uses": "1/3"
+    },
+    "requests": [
+      {
+        "active": false,
+        "caster": "Haer'Dalis",
+        "duration": 138,
+        "target": "Keldorn"
+      },
+      {
+        "active": false,
+        "caster": "Jan",
+        "duration": 138,
+        "target": "Simmeon"
+      }
+    ]
+  },
+  "manual_source_and_self_only": {
+    "auto": {
+      "caster": "Jan",
+      "duration": 138
+    },
+    "manual": {
+      "caster": "Simmeon",
+      "duration": 132
+    },
+    "requests": [
+      {
+        "assignment": "Haer'Dalis / 2.3m",
+        "name": "Improved Invisibility",
+        "request": {
+          "group": "spl:SPIN137",
+          "on": 1,
+          "target": "dv:KELDORN"
+        },
+        "target": "Keldorn",
+        "unavailable": false
+      },
+      {
+        "assignment": "Jan / 2.3m",
+        "name": "Improved Invisibility",
+        "request": {
+          "group": "spl:SPIN137",
+          "on": 1,
+          "target": "protagonist"
+        },
+        "target": "Simmeon",
+        "unavailable": false
+      }
+    ],
+    "selfOnly": [
+      {
+        "name": "Party",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Keldorn",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Simmeon",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Sir Anomen",
+        "reason": "Sir Anomen / 2.3m",
+        "unavailable": false
+      },
+      {
+        "name": "Jaheira",
+        "reason": "Jaheira / 1.8m",
+        "unavailable": false
+      },
+      {
+        "name": "Haer'Dalis",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Jan",
+        "reason": "Self only",
+        "unavailable": true
+      }
+    ]
+  },
+  "innate_execution": {
+    "casts": 2,
+    "counts": [
+      {
+        "after": 1,
+        "before": 1,
+        "caster": "Haer'Dalis"
+      },
+      {
+        "after": 1,
+        "before": 1,
+        "caster": "Jan"
+      }
+    ],
+    "effects": [
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPIN137"
+          }
+        ],
+        "target": "Keldorn"
+      },
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPIN137"
+          }
+        ],
+        "target": "Simmeon"
+      }
+    ],
+    "log": [
+      {
+        "msg": "Haer'Dalis -> Improved Invisibility -> Keldorn",
+        "type": "CAST"
+      },
+      {
+        "msg": "Jan -> Improved Invisibility -> Simmeon",
+        "type": "CAST"
+      },
+      {
+        "msg": "Jan finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Haer'Dalis finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Total: 2 | Cast: 2 | Skipped: 0",
+        "type": "DONE"
+      }
+    ],
+    "skips": 0,
+    "state": "done",
+    "timedOut": false
+  },
+  "innate_observation": {
+    "actors": [
+      {
+        "buttons": [
+          1
+        ],
+        "memorized": [
+          1
+        ],
+        "name": "Haer'Dalis"
+      },
+      {
+        "buttons": [
+          1
+        ],
+        "memorized": [
+          1
+        ],
+        "name": "Jan"
+      }
+    ],
+    "flags": 0,
+    "spellType": 4
+  },
+  "invisible_recipient_attempts": {
+    "assignments": [
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Keldorn"
+      },
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Simmeon"
+      }
+    ],
+    "casts": 2,
+    "counts": [
+      {
+        "after": 4,
+        "before": 4,
+        "caster": "Sir Anomen"
+      }
+    ],
+    "effects": [
+      {
+        "effects": [
+          {
+            "active": false,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Keldorn"
+      },
+      {
+        "effects": [
+          {
+            "active": false,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Simmeon"
+      }
+    ],
+    "group": "spl:SPPR306",
+    "log": [
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Keldorn",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Simmeon",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Total: 2 | Cast: 2 | Skipped: 0",
+        "type": "DONE"
+      }
+    ],
+    "skips": 0,
+    "state": "done",
+    "timedOut": false
+  },
+  "visible_prepared_execution": {
+    "assignments": [
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Jaheira"
+      },
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Jan"
+      }
+    ],
+    "casts": 2,
+    "counts": [
+      {
+        "after": 1,
+        "before": 3,
+        "caster": "Sir Anomen"
+      }
+    ],
+    "effects": [
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Jaheira"
+      },
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Jan"
+      }
+    ],
+    "group": "spl:SPPR306",
+    "log": [
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Jaheira",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Jan",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Total: 2 | Cast: 2 | Skipped: 0",
+        "type": "DONE"
+      }
+    ],
+    "skips": 0,
+    "state": "done",
+    "timedOut": false
+  },
+  "invisibility_warning": {
+    "details": "Source: Jan / effective caster level 18\nTarget has Improved Invisibility; the engine may reject this cast.",
+    "presets": {
+      "active": 2,
+      "presets": [
+        {
+          "name": "Long Buffs",
+          "requests": [
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAHEIRA"
+            },
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAN"
+            }
+          ]
+        },
+        {
+          "name": "Short Buffs",
+          "requests": [
+            {
+              "group": "spl:SPWI613",
+              "on": 1,
+              "source": "dv:JAN",
+              "target": "dv:KELDORN"
+            }
+          ]
+        }
+      ],
+      "v": 1
+    },
+    "requests": [
+      {
+        "assignment": "Jan / 3.1m / improved invisible",
+        "name": "Improved Haste",
+        "request": {
+          "group": "spl:SPWI613",
+          "on": 1,
+          "source": "dv:JAN",
+          "target": "dv:KELDORN"
+        },
+        "target": "Keldorn",
+        "unavailable": false
+      }
+    ]
+  },
+  "save_load": {
+    "details": "Source: Jan / effective caster level 18\nTarget has Improved Invisibility; the engine may reject this cast.",
+    "presets": {
+      "active": 2,
+      "presets": [
+        {
+          "name": "Long Buffs",
+          "requests": [
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAHEIRA"
+            },
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAN"
+            }
+          ]
+        },
+        {
+          "name": "Short Buffs",
+          "requests": [
+            {
+              "group": "spl:SPWI613",
+              "on": 1,
+              "source": "dv:JAN",
+              "target": "dv:KELDORN"
+            }
+          ]
+        }
+      ],
+      "v": 1
+    },
+    "requests": [
+      {
+        "assignment": "Jan / 3.1m / improved invisible",
+        "name": "Improved Haste",
+        "request": {
+          "group": "spl:SPWI613",
+          "on": 1,
+          "source": "dv:JAN",
+          "target": "dv:KELDORN"
+        },
+        "target": "Keldorn",
+        "unavailable": false
+      }
+    ],
+    "saveLoadPassed": true
+  },
+  "limits": [
+    "The SPIN137 innate stayed available after its successful casts; this is recorded, not treated as proof of resource consumption.",
+    "CAST log entries record issued actions; invisible recipients can make the engine reject an action without spending a slot.",
+    "Expected durations come from metadata; remaining effect lifetimes were not measured.",
+    "Item activation, multiplayer, rest automation, cross-character equipment sharing and balanced Quick Cast remain unverified."
+  ],
+  "selection_context_and_toggle": {
+    "contextPassed": true,
+    "details": "Source: Jan / effective caster level 18\nTarget has Improved Invisibility; the engine may reject this cast.",
+    "group": "spl:SPWI613",
+    "togglePassed": true
+  },
+  "active_buff_skip": {
+    "after": {
+      "Jaheira": 2,
+      "Sir Anomen": 1
+    },
+    "before": {
+      "Jaheira": 2,
+      "Sir Anomen": 1
+    },
+    "casts": 0,
+    "skips": 2,
+    "state": "done"
+  }
+}

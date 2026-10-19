@@ -171,7 +171,8 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
     local durCat = "instant"
     local durationLeafResrefs = nil
     if header and ability then
-        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(header, ability)
+        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(
+            header, ability, nil, nil, nil, casterLevel)
         durCat = BfBot.Class.GetDurationCategory(duration)
     end
 
@@ -208,6 +209,7 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
         count = 0,          -- filled in by count overlay
         level = header.spellLevel or 0,
         spellType = spellType,
+        casterLevel = casterLevel,
         duration = duration,
         durCat = durCat,
         isAoE = isAoE,
@@ -583,7 +585,13 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         -- activated powers in the transient catalog for manual inclusion;
         -- preset seeding/auto-merge still require class.isBuff.
 
-        local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
+        local duration, _, leafs = BfBot.Class.GetDuration(header, ability,
+            nil, nil, nil, function(child)
+                local ok, level = pcall(function()
+                    return sprite:getCasterLevelForSpell(child, true)
+                end)
+                return ok and type(level) == "number" and level > 0 and level or 1
+            end)
         -- ITM naming: identifiedName FIRST (genericName is the
         -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
         local name = _tryStrref(header.identifiedName)
@@ -602,6 +610,8 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             itemCandidate = 1,
             itemResref = resref,
             abilityIdx = index,
+            atWill = itemType ~= BfBot.Scan._CAT_POTION
+                and EEex_ReadU16(ptr + 0x22) == 0 and 1 or 0,
             itemType = itemType,
             sources = count > 0 and { { slot = slot, count = count } } or {},
             itemEffects = _itemEffectSignatures(header, ability),

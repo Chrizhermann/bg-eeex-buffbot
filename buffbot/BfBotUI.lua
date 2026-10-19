@@ -1150,6 +1150,12 @@ end
 -- ============================================================
 
 function BfBot.UI.Toggle()
+    if BfBot.PartyUI then
+        if Infinity_IsMenuOnStack("BUFFBOT_PARTY") then BfBot.PartyUI.Close()
+        elseif Infinity_IsMenuOnStack("BUFFBOT_MAIN") then BfBot.UI.Close()
+        else BfBot.PartyUI.Open() end
+        return
+    end
     if Infinity_IsMenuOnStack("BUFFBOT_MAIN") then
         Infinity_PopMenu("BUFFBOT_MAIN")
     else

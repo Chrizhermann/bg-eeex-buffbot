@@ -6,14 +6,20 @@
   },
   "branch": "codex/recipient-first-buffbot",
   "validation": {
-    "automated_passed": 687,
+    "automated_passed": 715,
     "automated_deselected": 5,
     "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
     "new_item_graph_regressions": 19,
-    "includes": ["LuaJIT runtime regressions", "synthetic WeiDU 249 install/uninstall checks", "release packaging checks"],
+    "includes": [
+      "LuaJIT runtime regressions",
+      "synthetic WeiDU 249 install/uninstall checks",
+      "release packaging checks"
+    ],
     "item_resource_evidence": "recipient-first-item-audit.json",
-    "live_gameplay": "not run",
-    "personal_install_modified": false
+    "live_gameplay": "Basic recipient GUI visual review, automatic and pinned source assignment, self-only restrictions, normal prepared-spell effects and consumption, active-buff skipping, and two-preset save/load verified in an isolated EET copy.",
+    "personal_install_modified": false,
+    "new_planner_regressions": 28,
+    "live_evidence": "recipient-first-live-acceptance.json"
   },
   "policies": {
     "initial_platform": "single-player EET",
@@ -37,7 +43,11 @@
         "Retain supported identified powers as manual Add candidates without automatically seeding unrecognized powers into presets.",
         "Preserve root targeting, power identity, charges, override isolation, and existing active-buff marker behavior."
       ],
-      "offline_resource_check": ["BOOT12 ability 0", "BOW20 ability 1", "BOW21 ability 1"],
+      "offline_resource_check": [
+        "BOOT12 ability 0",
+        "BOW20 ability 1",
+        "BOW21 ability 1"
+      ],
       "acceptance_pending": [
         "Open the panel in an isolated copy and confirm the correct named powers, charge counts, and targets.",
         "Activate Gargoyle Boots and Darkfire, verify charge consumption and active-buff skipping.",
@@ -47,15 +57,28 @@
       "remaining_detection_scope": [
         "External EFF delivery and deeper or conditional graphs need additional analysis.",
         "Scrolls, wands, containers, and unsupported target modes remain outside automatic item discovery."
+      ],
+      "acceptance_passed": [
+        "Darkfire Bow +5 Improved Haste appears in the live catalog with one use."
       ]
     },
     {
       "id": "source_properties_and_reservations",
-      "status": "next",
+      "status": "implemented_basic_live_verified",
       "deliverables": [
         "Preserve every concrete source behind a combined buff row, including effective caster level, duration, strength, variants, and eligibility.",
         "Allocate requests across compatible sources without double-spending spontaneous spell slots or item charge pools.",
         "Display each recipient's assigned caster and expected duration; support explicit source preference."
+      ],
+      "acceptance_passed": [
+        "Automatic assignments and explicit source overrides show source-specific durations.",
+        "Two normal Protection From Fire casts applied to two recipients and consumed exactly two prepared uses.",
+        "Already-active Protection From Fire requests skip without spending more uses."
+      ],
+      "acceptance_pending": [
+        "Live shared sorcerer/shaman slots and physical item charge pools.",
+        "Investigate the tested SPIN137 innate retaining availability after successful casting.",
+        "Additional variants, kit effects and special source equivalence cases."
       ]
     },
     {
@@ -70,11 +93,21 @@
     },
     {
       "id": "recipient_presets_and_interface",
-      "status": "pending",
+      "status": "implemented_basic_live_verified",
       "deliverables": [
         "Replace the primary per-caster workflow with party-wide recipient presets and a combined source catalog.",
         "Show reserved availability and planned durations per recipient, with disabled-target reasons.",
         "Migrate existing presets without losing caster-specific intent or silently enabling new item powers."
+      ],
+      "acceptance_passed": [
+        "Readable parchment panel and combined 147-entry catalog at the tested resolution.",
+        "Self-only target restrictions and improved-invisibility advisory reasons.",
+        "Selecting a planned entry selects its matching catalog context.",
+        "Two presets, recipients and a pinned caster survive a private quick-save and process restart."
+      ],
+      "acceptance_pending": [
+        "Live legacy preset import, alternate resolutions and full interaction matrix.",
+        "Broader conditional target eligibility beyond the current advisory checks."
       ]
     },
     {

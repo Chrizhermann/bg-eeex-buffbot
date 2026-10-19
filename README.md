@@ -4,7 +4,42 @@
 
 Cast all your pre-battle buffs with one click. BuffBot scans each character's spellbook, lets you configure which buffs to cast, in what order, on which targets — then executes the entire sequence automatically across all party members in parallel.
 
-> **Development fork based on v1.10.1.** Item discovery changes are verified offline; in-game acceptance is pending. The recipient-first interface and other planned features are not implemented yet. Source checkouts include the implementation checklist at `docs/recipient-first-checklist.json`.
+> **Development fork based on v1.10.1.** The recipient-first beta has passed basic visual, casting, and save/load checks in an isolated single-player EET copy. Broader item and compatibility acceptance is still pending. Progress and evidence are recorded in `docs/recipient-first-checklist.json` and `docs/recipient-first-live-acceptance.json`.
+
+### Recipient-first beta
+
+F11 and the BuffBot button open party-wide plans. Select a buff on the left,
+then choose recipients below it. The ordered plan shows each assigned caster and
+expected duration. Auto prefers longer duration, then effective caster level;
+use **Source** on a planned entry to choose a caster explicitly. The allocator
+can move an earlier automatic assignment to another eligible caster when that
+preserves a source required by a later recipient.
+
+Native sorcerer/shaman level slots and physical item charge counters are
+reserved across the whole plan. Available uses are shown as unreserved/total.
+The catalog's duration range reflects sources with unreserved uses; each planned
+recipient keeps its assigned duration. Selecting a planned entry also selects
+its buff in the catalog and recipient picker.
+Only identical spell resources or identical item power identities are combined;
+same-name variants remain separate. Self-only and party-wide restrictions still
+apply. Expected duration is an estimate from resource metadata, not a guarantee
+of identical strength, kit behavior, or every conditional effect.
+
+Improved invisible recipients carry a warning because the engine can reject
+targeted casts on them. Put invisibility after other targeted buffs when needed.
+The execution log counts issued actions; an issued action does not prove an
+effect landed. The live check verified effects and prepared-slot consumption
+separately. The tested SPIN137 innate remained available after use, so its counts
+were not used as evidence of spell-slot consumption.
+
+**Caster editor** opens the original interface. **Import caster preset** copies
+the matching legacy preset into an empty party plan, retaining caster choices
+and leaving the originals intact. Party plans save separately in EEex saves.
+F12 innates still use legacy per-character presets. Party-plan casting currently
+uses normal speed, excludes 5E-converted sources, and does not auto-join summons.
+Completed-rest casting, cross-character item sharing, and balanced accelerated
+casting remain separate milestones. New planner text uses English fallbacks in
+the other language catalogs pending translation.
 
 > **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**
 

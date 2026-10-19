@@ -366,3 +366,125 @@
 @715 = ~Usar do inventário~
 // options.item_use_swap
 @716 = ~Equipar, usar e restaurar~
+
+// Recipient planner beta: English fallback pending translation.
+// party.text01
+@1000 = ~Preferred caster unavailable~
+// party.text02
+@1001 = ~Recipient unavailable~
+// party.text03
+@1002 = ~Recipient is dead~
+// party.text04
+@1003 = ~Ambiguous recipient identity~
+// party.text05
+@1004 = ~Self only~
+// party.text06
+@1005 = ~Party-wide cast~
+// party.text07
+@1006 = ~Choose a recipient~
+// party.text08
+@1007 = ~Choose a supported variant~
+// party.text09
+@1008 = ~Variant unavailable from this caster~
+// party.text10
+@1009 = ~No eligible source~
+// party.text11
+@1010 = ~Buff unavailable~
+// party.text12
+@1011 = ~Disabled~
+// party.text13
+@1012 = ~No unreserved uses~
+// party.text14
+@1013 = ~5E sources require the caster editor~
+// party.text15
+@1014 = ~Caster class unavailable~
+// party.text16
+@1015 = ~Ambiguous character identity~
+// party.text17
+@1016 = ~Caster is dead~
+// party.text18
+@1017 = ~Caster controlled by another player~
+// party.text19
+@1018 = ~Variant metadata unavailable~
+// party.text20
+@1019 = ~Long Buffs~
+// party.text21
+@1020 = ~Short Buffs~
+// party.text22
+@1021 = ~Preset ~
+// party.text23
+@1022 = ~Plan exceeds 256 requests~
+// party.text24
+@1023 = ~Legacy source unavailable: ~
+// party.text25
+@1024 = ~Legacy recipient unavailable: ~
+// party.text26
+@1025 = ~Project Image locks a planned caster~
+// party.text27
+@1026 = ~Permanent~
+// party.text28
+@1027 = ~Instant/unknown~
+// party.text29
+@1028 = ~At will~
+// party.text30
+@1029 = ~Party~
+// party.text31
+@1030 = ~Auto~
+// party.text32
+@1031 = ~Source: ~
+// party.text33
+@1032 = ~ / effective caster level ~
+// party.text34
+@1033 = ~Select a planned buff to change its source or order.~
+// party.text35
+@1034 = ~Maximum 256 planned casts~
+// party.text36
+@1035 = ~Variant: ~
+// party.text37
+@1036 = ~Select recipients below~
+// party.text38
+@1037 = ~Maximum eight presets~
+// party.text39
+@1038 = ~Import into an empty preset~
+// party.text40
+@1039 = ~Party planning is a single-player beta; use the caster editor~
+// party.text41
+@1040 = ~Resolve unavailable casts before casting~
+// party.text42
+@1041 = ~ planned / ~
+// party.text43
+@1042 = ~ unavailable~
+// party.text44
+@1043 = ~Caster editor~
+// party.text45
+@1044 = ~Close~
+// party.text46
+@1045 = ~Rename~
+// party.text47
+@1046 = ~New~
+// party.text48
+@1047 = ~Import caster preset~
+// party.text49
+@1048 = ~Refresh~
+// party.text50
+@1049 = ~Source: next~
+// party.text51
+@1050 = ~Up~
+// party.text52
+@1051 = ~Down~
+// party.text53
+@1052 = ~Remove~
+// party.text54
+@1053 = ~Cast plan~
+// party.text55
+@1054 = ~Stop~
+// party.text56
+@1055 = ~BuffBot - Recipient plans (beta)~
+// party.text57
+@1056 = ~Available buffs / duration / unreserved uses~
+// party.text58
+@1057 = ~Planned buffs / recipient / caster and duration~
+// party.text59
+@1058 = ~ / improved invisible~
+// party.text60
+@1059 = ~Target has Improved Invisibility; the engine may reject this cast.~

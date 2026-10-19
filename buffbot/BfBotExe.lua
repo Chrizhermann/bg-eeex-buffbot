@@ -550,6 +550,9 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                     casterName = casterName,
                     resref = resref,
                     kind = kind,
+                    plannedActor = entry.plannedActor,
+                    plannedTarget = entry.plannedTarget,
+                    plannedItemSlot = entry.plannedItemSlot,
                     itemResref = spellData.itemResref,
                     abilityIdx = spellData.abilityIdx,
                     itemEffects = spellData.itemEffects,
@@ -601,6 +604,21 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
     end
 
     local label = entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
+
+    if entry.plannedActor and BfBot.Plan then
+        local valid = BfBot.Plan.ActorKey(casterSprite) == entry.plannedActor
+        if entry.plannedTarget ~= "party" and entry.targetSlot ~= nil then
+            local target = EEex_Sprite_GetInPortrait(entry.targetSlot)
+            valid = valid and target
+                and BfBot.Plan.ActorKey(target) == entry.plannedTarget
+            if valid then entry.targetSprite = target end
+        end
+        if not valid then
+            BfBot.Exec._LogEntry("SKIP", label .. " (party changed; rebuild the plan)")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            return false
+        end
+    end
 
     -- Caster alive
     if not BfBot.Exec._IsAlive(casterSprite) then
@@ -923,6 +941,17 @@ function BfBot.Exec._RecoverItemSwaps()
 end
 
 function BfBot.Exec._QueueItem(key, caster, entry, row, sprite, advanceAction)
+    if entry.plannedItemSlot ~= nil then
+        local available = false
+        for _, source in ipairs(row and row.sources or {}) do
+            if source.slot == entry.plannedItemSlot and source.count > 0 then available = true end
+        end
+        if not available then return false end
+        local copy = {}
+        for k, v in pairs(row) do copy[k] = v end
+        copy.itemSlot = entry.plannedItemSlot
+        row = copy
+    end
     if not row or row.kind ~= "itm" or row.itemSlot == nil then return false end
     if BfBot.Persist.GetItemSwap(sprite) then return false end
     local slot = row.itemSlot

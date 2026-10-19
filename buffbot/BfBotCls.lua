@@ -666,7 +666,7 @@ end
 --- hierarchical spells (e.g. Prayer, Chaos of Battle, SR Barkskin)
 --- report the timed durations that live in their children.
 --- Depth-limited (max 2) and cycle-guarded to stay bounded.
-function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
+function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs, casterLevel)
     _depth = _depth or 0
     _visited = _visited or {}
     _leafs = _leafs or {}  -- collected op=146 sub-spell leaf resrefs
@@ -691,10 +691,19 @@ function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
                 table.insert(_leafs, subRes)
                 local rOk, subHdr = pcall(EEex_Resource_Demand, subRes, "SPL")
                 if rOk and subHdr then
-                    local subAbility = subHdr:getAbility(0)
+                    local childLevel = fb[BfBot._fields.fb_param1]
+                    if not childLevel or childLevel <= 0 then
+                        childLevel = type(casterLevel) == "function"
+                            and casterLevel(subRes) or casterLevel
+                    end
+                    local subAbility
+                    if childLevel and subHdr.getAbilityForLevel then
+                        subAbility = subHdr:getAbilityForLevel(childLevel)
+                    end
+                    subAbility = subAbility or subHdr:getAbility(0)
                     if subAbility then
                         local subDur, subType = BfBot.Class.GetDuration(
-                            subHdr, subAbility, _depth + 1, _visited, _leafs)
+                            subHdr, subAbility, _depth + 1, _visited, _leafs, childLevel)
                         if subDur and subDur > 0 then
                             if subDur > maxDuration then maxDuration = subDur end
                         elseif subType == "permanent" then

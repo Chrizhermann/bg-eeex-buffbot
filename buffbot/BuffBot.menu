@@ -1876,3 +1876,405 @@ menu
 		area 580 355 140 28
 	}
 }
+
+-- Recipient-first party planner (single-player beta).
+menu
+{
+	name "BUFFBOT_PARTY"
+	ignoreesc
+	onopen "BfBot.PartyUI.OnOpen()"
+	text
+	{
+		action "BfBot.PartyUI.Close()"
+		area 0 0 99999 99999
+		rectangle 1
+		rectangle opacity 140
+		on escape
+	}
+	label
+	{
+		enabled "true"
+		text align left center
+		name "bpBg"
+		area 0 0 1000 600
+		mosaic "BFBOTBG"
+	}
+	label
+	{
+		enabled "true"
+		text align left center
+		name "bpTitle"
+		text lua "BfBot.Plan.Text('BuffBot - Recipient plans (beta)')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		area 0 0 100 28
+	}
+	label
+	{
+		enabled "true"
+		text align left center
+		name "bpCatalogHead"
+		text lua "BfBot.Plan.Text('Available buffs / duration / unreserved uses')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		area 0 0 100 28
+	}
+	label
+	{
+		enabled "true"
+		text align left center
+		name "bpPlanHead"
+		text lua "BfBot.Plan.Text('Planned buffs / recipient / caster and duration')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		area 0 0 100 28
+	}
+	label
+	{
+		enabled "true"
+		text align left center
+		name "bpStatus"
+		text lua "bbPartyStatus"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		area 0 0 100 28
+	}
+	label
+	{
+		enabled "true"
+		text align left center
+		name "bpDetails"
+		text lua "bbPartyDetails"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpLegacy"
+		action "BfBot.PartyUI.Legacy()"
+		text lua "BfBot.Plan.Text('Caster editor')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpClose"
+		action "BfBot.PartyUI.Close()"
+		text lua "BfBot.Plan.Text('Close')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpPrev"
+		action "BfBot.PartyUI.Preset(-1)"
+		text "<"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpNext"
+		action "BfBot.PartyUI.Preset(1)"
+		text ">"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRename"
+		action "BfBot.PartyUI.Rename()"
+		text lua "BfBot.Plan.Text('Rename')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpNew"
+		action "BfBot.PartyUI.NewPreset()"
+		text lua "BfBot.Plan.Text('New')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpImport"
+		action "BfBot.PartyUI.ImportLegacy()"
+		text lua "BfBot.Plan.Text('Import caster preset')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRefresh"
+		action "BfBot.PartyUI.Refresh()"
+		text lua "BfBot.Plan.Text('Refresh')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	edit
+	{
+		name "bpName"
+		var "bbPartyName"
+		action "return 1"
+		text style "bb_edit"
+		text color lua "{38,32,26}"
+		maxlines 1
+		area 0 0 200 24
+	}
+	button
+	{
+		name "bpVariant"
+		action "BfBot.PartyUI.CycleVariant()"
+		text lua "BfBot.PartyUI.VariantLabel()"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpSource"
+		action "BfBot.PartyUI.CycleSource()"
+		text lua "BfBot.Plan.Text('Source: next')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+		enabled "BfBot.PartyUI.request ~= nil"
+	}
+	button
+	{
+		name "bpUp"
+		action "BfBot.PartyUI.Move(-1)"
+		text lua "BfBot.Plan.Text('Up')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+		enabled "BfBot.PartyUI.request ~= nil"
+	}
+	button
+	{
+		name "bpDown"
+		action "BfBot.PartyUI.Move(1)"
+		text lua "BfBot.Plan.Text('Down')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+		enabled "BfBot.PartyUI.request ~= nil"
+	}
+	button
+	{
+		name "bpRemove"
+		action "BfBot.PartyUI.Remove()"
+		text lua "BfBot.Plan.Text('Remove')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+		enabled "BfBot.PartyUI.request ~= nil"
+	}
+	button
+	{
+		name "bpCast"
+		action "BfBot.PartyUI.Cast()"
+		text lua "BfBot.Plan.Text('Cast plan')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+		enabled "BfBot.PartyUI.CanCast()"
+	}
+	button
+	{
+		name "bpStop"
+		action "BfBot.Exec.Stop()"
+		text lua "BfBot.Plan.Text('Stop')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	list
+	{
+		column
+		{
+			width 42
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyBuffs[rowNumber] and bbPartyBuffs[rowNumber].name or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+			}
+		}
+		column
+		{
+			width 26
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyBuffs[rowNumber] and bbPartyBuffs[rowNumber].duration or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+			}
+		}
+		column
+		{
+			width 12
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyBuffs[rowNumber] and bbPartyBuffs[rowNumber].uses or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+			}
+		}
+		column
+		{
+			width 20
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyBuffs[rowNumber] and bbPartyBuffs[rowNumber].casters or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+			}
+		}
+		name "bpCatalog"
+		enabled "true"
+		table "bbPartyBuffs"
+		var "bbPartyBuffSelection"
+		action "BfBot.PartyUI.SelectBuff()"
+		rowheight 28
+		scrollbar "GUISCRC"
+		area 0 0 400 200
+	}
+	list
+	{
+		column
+		{
+			width 10
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyTargets[rowNumber] and bbPartyTargets[rowNumber].checked or ''"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyTargets[rowNumber] and bbPartyTargets[rowNumber].unavailable and {120,120,120} or {38,32,26}"
+			}
+		}
+		column
+		{
+			width 28
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyTargets[rowNumber] and bbPartyTargets[rowNumber].name or ''"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyTargets[rowNumber] and bbPartyTargets[rowNumber].unavailable and {120,120,120} or {38,32,26}"
+			}
+		}
+		column
+		{
+			width 62
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyTargets[rowNumber] and bbPartyTargets[rowNumber].assignment or ''"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyTargets[rowNumber] and bbPartyTargets[rowNumber].unavailable and {120,120,120} or {38,32,26}"
+			}
+		}
+		name "bpTargets"
+		enabled "true"
+		table "bbPartyTargets"
+		var "bbPartyTargetSelection"
+		action "BfBot.PartyUI.ToggleTarget()"
+		rowheight 28
+		scrollbar "GUISCRC"
+		area 0 0 400 200
+	}
+	list
+	{
+		column
+		{
+			width 34
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].name or ''"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].unavailable and {120,120,120} or {38,32,26}"
+			}
+		}
+		column
+		{
+			width 22
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].target or ''"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].unavailable and {120,120,120} or {38,32,26}"
+			}
+		}
+		column
+		{
+			width 44
+			label
+			{
+		enabled "true"
+		text align left center
+				area 0 0 -1 28
+				text lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].assignment or ''"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].unavailable and {120,120,120} or {38,32,26}"
+			}
+		}
+		name "bpPlan"
+		enabled "true"
+		table "bbPartyRequests"
+		var "bbPartyRequestSelection"
+		action "BfBot.PartyUI.SelectRequest()"
+		rowheight 28
+		scrollbar "GUISCRC"
+		area 0 0 400 200
+	}
+}
