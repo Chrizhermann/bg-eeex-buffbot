@@ -1,0 +1,35 @@
+{
+  "method": "Offline semantic adapter: production Lua classifier against decoded installed ITM/SPL effects. No game process, activation, or inventory mutation.",
+  "inputs": {
+    "BOOT12.ITM": "ecdb4d593bfd5ed9d9f60d21b09eca98119d6bb083c96407a2a772f1f0d94cf2",
+    "BOW20.ITM": "163888388782997da77dcaaaca7f3193806be7bf75a3351b04fad4346b53399c",
+    "BOW21.ITM": "b727a876f295d271684ef81ff835dadd53f54147e57387422a7dcf49710258ff",
+    "DW#GARGO.SPL": "6d798babf36ac855f5e20cfada993a7c56ceb7a838e6b2d2aa6fd55dafb57092",
+    "SPWI613.SPL": "b7e534227cb53eb26888ce63e19f385bdd6223edfce45c0feaa752d7a95ecbba",
+    "SPWI613A.SPL": "38824aad86c5ad4a93a313e7b96e5561d08a255183a93430c8abd7f0383eb138"
+  },
+  "recognized": [
+    {
+      "item": "BOOT12",
+      "ability_index": 0,
+      "is_buff": true,
+      "is_self_only": true
+    },
+    {
+      "item": "BOW20",
+      "ability_index": 1,
+      "is_buff": true,
+      "is_self_only": true
+    },
+    {
+      "item": "BOW21",
+      "ability_index": 1,
+      "is_buff": true,
+      "is_self_only": true
+    }
+  ],
+  "limitations": [
+    "The adapter does not validate EEex native bindings, item activation, ammunition behavior, or effects in a running game.",
+    "First-ability child inspection does not establish actual caster-specific duration or strength."
+  ]
+}

@@ -329,25 +329,27 @@ def test_separate_power_classifications_overrides_and_cache_invalidation() -> No
         BfBot.Class.SetOverride("itm:MIXED:1", nil)
         local restored = BfBot.Scan._BuildItemCatalog(sprite)
         return {
-            initialFirstAbsent = initial.MIXED == nil,
+            initialFirstBuff = initial.MIXED.class.isBuff,
+            initialFirstCandidate = initial.MIXED.itemCandidate,
             initialSecondBuff = initial["itm:MIXED:1"].class.isBuff,
-            initialThirdAbsent = initial["itm:MIXED:2"] == nil,
+            initialThirdBuff = initial["itm:MIXED:2"].class.isBuff,
             excludedRetained = changed["itm:MIXED:1"] ~= nil,
             excludedBuff = changed["itm:MIXED:1"].class.isBuff,
             excludedOverride = changed["itm:MIXED:1"].class.overridden,
             thirdBuff = changed["itm:MIXED:2"].class.isBuff,
-            firstStillAbsent = changed.MIXED == nil,
+            firstStillNonBuff = not changed.MIXED.class.isBuff,
             secondRestored = restored["itm:MIXED:1"].class.isBuff,
             thirdStillIncluded = restored["itm:MIXED:2"].class.overridden,
             warnings = #warnings,
         }
         """
     )
-    assert facts["initialFirstAbsent"] and facts["initialThirdAbsent"]
+    assert not facts["initialFirstBuff"] and not facts["initialThirdBuff"]
+    assert facts["initialFirstCandidate"] == 1
     assert facts["initialSecondBuff"]
     assert facts["excludedRetained"] and facts["excludedOverride"]
     assert not facts["excludedBuff"]
-    assert facts["thirdBuff"] and facts["firstStillAbsent"]
+    assert facts["thirdBuff"] and facts["firstStillNonBuff"]
     assert facts["secondRestored"] and facts["thirdStillIncluded"]
     assert facts["warnings"] == 0
 

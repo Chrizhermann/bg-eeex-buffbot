@@ -274,7 +274,7 @@ end
 local function _subSpellRef(fb)
     local v = fb[BfBot._fields.fb_res]
     if v == nil then return nil end
-    if type(v) == "userdata" then
+    if type(v) == "userdata" or type(v) == "table" then
         local ok, s = pcall(function() return v:get() end)
         if ok and type(s) == "string" and s ~= "" then return s end
         return nil
@@ -421,10 +421,8 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
         -- Check for self-referencing protection/immunity opcodes
         local isSelfRef = false
         if (opcode == 318 or opcode == 324) and resrefUpper then
-            local ok, resVal = pcall(function()
-                return fb[BfBot._fields.fb_res]:get()
-            end)
-            if ok and resVal and resVal:upper() == resrefUpper then
+            local resVal = _subSpellRef(fb)
+            if resVal and resVal:upper() == resrefUpper then
                 isSelfRef = true
                 -- opcode 318 self-ref = toggle mechanism (like stances)
                 if opcode == 318 then
@@ -459,10 +457,8 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
         -- Detect self-replace: opcode 321 (Remove Effects by Resource)
         -- targeting the spell's own resref
         if opcode == 321 and resrefUpper then
-            local ok, resVal = pcall(function()
-                return fb[BfBot._fields.fb_res]:get()
-            end)
-            if ok and resVal and resVal:upper() == resrefUpper then
+            local resVal = _subSpellRef(fb)
+            if resVal and resVal:upper() == resrefUpper then
                 selfReplace = true
             end
         end
@@ -484,6 +480,91 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
         fbAoE = fbAoE,
         hasSubstantive = hasSubstantive,
     }
+end
+
+--- Score an activated item's immediate spell-delivery graph. Keep targeting
+-- on the item ability: a child does not change who may activate the power.
+-- Breadth-first traversal visits each SPL once at its shortest depth, so
+-- duplicate/case-varied links cannot inflate a buff's score. Two links match
+-- the existing duration/active-effect analysis. Anything beyond that, missing
+-- resources, or recursive delivery stays available for manual inclusion.
+function BfBot.Class._ScoreItemOpcodes(header, ability, resref)
+    local queue = { { header = header, ability = ability, resref = resref,
+        depth = 0, path = {} } }
+    local seen, edges = {}, {}
+    local score = 0
+    local extras = { splstates = {}, selfReplace = false, isToggle = false,
+        fbAoE = false, hasSubstantive = false, analysisIncomplete = false }
+    local index = 1
+    while index <= #queue do
+        local node = queue[index]
+        index = index + 1
+        local ownScore, own = BfBot.Class.ScoreOpcodes(
+            node.header, node.ability, node.resref)
+        score = score + ownScore
+        -- Child states provide classification evidence, but must not become
+        -- item-wide fast-negative markers: they may apply to other targets
+        -- or belong to only one branch. Keep legacy root markers unchanged;
+        -- the existing leaf/source checks handle wrapper active-buff skips.
+        if node.depth == 0 then extras.splstates = own.splstates end
+        extras.selfReplace = extras.selfReplace or own.selfReplace
+        extras.isToggle = extras.isToggle or own.isToggle
+        extras.hasSubstantive = extras.hasSubstantive or own.hasSubstantive
+        if node.depth == 0 then extras.fbAoE = own.fbAoE end
+
+        BfBot.Class._IterateFeatureBlocks(node.header, node.ability, function(fb)
+            if fb[BfBot._fields.fb_opcode] ~= 146 then return end
+            local child = _subSpellRef(fb)
+            local key = child and child:upper()
+            if node.depth > 0 and key then
+                local parent = node.resref:upper()
+                edges[parent] = edges[parent] or {}
+                edges[parent][key] = true
+            end
+            local timing = bit.band(fb[BfBot._fields.fb_timing] or 0, 0xFF)
+            if not key or node.path[key]
+                or (timing ~= 0 and timing ~= 1 and timing ~= 9) then
+                extras.analysisIncomplete = true
+                return
+            end
+            if seen[key] then return end
+            if node.depth >= 2 or #queue >= 32 then
+                extras.analysisIncomplete = true
+                return
+            end
+            seen[key] = true
+            local ok, childHeader, childAbility = pcall(function()
+                local h = EEex_Resource_Demand(child, "SPL")
+                return h, h and h:getAbility(0)
+            end)
+            if not ok or not childHeader or not childAbility then
+                extras.analysisIncomplete = true
+                return
+            end
+            local path = {}
+            for ancestor in pairs(node.path) do path[ancestor] = true end
+            path[key] = true
+            queue[#queue + 1] = { header = childHeader, ability = childAbility,
+                resref = child, depth = node.depth + 1, path = path }
+        end)
+    end
+    -- Shortest-path de-duplication can hide a cycle whose nodes were reached
+    -- independently from the root (A -> B and B -> A). Check the graph too.
+    local visiting, finished = {}, {}
+    local function cyclic(key)
+        if visiting[key] then return true end
+        if finished[key] then return false end
+        visiting[key] = true
+        for child in pairs(edges[key] or {}) do
+            if cyclic(child) then return true end
+        end
+        visiting[key], finished[key] = nil, true
+        return false
+    end
+    for key in pairs(edges) do
+        if cyclic(key) then extras.analysisIncomplete = true; break end
+    end
+    return score, extras
 end
 
 -- ============================================================
@@ -816,11 +897,14 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
 
     -- Step 3: Opcode score + extract metadata
     local opcodeExtras
-    result.opcodeScore, opcodeExtras = BfBot.Class.ScoreOpcodes(header, ability, resref)
+    local scoreOpcodes = sourceKind == "itm"
+        and BfBot.Class._ScoreItemOpcodes or BfBot.Class.ScoreOpcodes
+    result.opcodeScore, opcodeExtras = scoreOpcodes(header, ability, resref)
     result.splstates = opcodeExtras.splstates
     result.selfReplace = opcodeExtras.selfReplace
     result.isToggle = opcodeExtras.isToggle
     result.hasSubstantive = opcodeExtras.hasSubstantive
+    result.analysisIncomplete = opcodeExtras.analysisIncomplete or false
 
     -- Toggle penalty: opcode 318 self-ref = stance/toggle, not prebuff
     -- (opcode 321 self-ref = normal buff refresh, no penalty)
@@ -878,6 +962,13 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
     else
         result.hasVariants = false
         result.variants = nil
+    end
+
+    -- Variant discovery must not turn an incomplete automatic item analysis
+    -- back into a buff. Explicit include overrides return earlier.
+    if result.analysisIncomplete then
+        result.isBuff = false
+        result.isAmbiguous = true
     end
 
     -- Cache and return

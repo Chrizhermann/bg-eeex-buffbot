@@ -1,0 +1,99 @@
+{
+  "upstream": {
+    "repository": "https://github.com/Chrizhermann/bg-eeex-buffbot",
+    "tag": "v1.10.1",
+    "commit": "c1f2eb6cea3b555024853d8e99fc55dc5bd372d7"
+  },
+  "branch": "codex/recipient-first-buffbot",
+  "validation": {
+    "automated_passed": 687,
+    "automated_deselected": 5,
+    "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
+    "new_item_graph_regressions": 19,
+    "includes": ["LuaJIT runtime regressions", "synthetic WeiDU 249 install/uninstall checks", "release packaging checks"],
+    "item_resource_evidence": "recipient-first-item-audit.json",
+    "live_gameplay": "not run",
+    "personal_install_modified": false
+  },
+  "policies": {
+    "initial_platform": "single-player EET",
+    "personal_installation": "reference only; use an isolated copy for gameplay tests",
+    "rest_trigger": "completed rests only, once per party rest, after returning to a safe world state",
+    "quick_cast_presentation": "preserve visible engine casting animations and spell effects where verified",
+    "duration_compensation": "only effects produced by this run; existing effects age only by actual elapsed game time",
+    "source_selection": "prefer stronger eligible sources, using actual spell properties rather than raw character level; allow explicit source overrides",
+    "recipient_priority": "assign the preferred source to the first selected recipient, then reserve remaining sources for subsequent recipients",
+    "availability": "reserve underlying spell slots and physical item charge pools across the entire preset",
+    "self_only": "automatic assignments must preserve actual self-only restrictions",
+    "party_buffs": "one cast for an ordinary party-wide buff, retaining engine range and coverage rules"
+  },
+  "milestones": [
+    {
+      "id": "item_discovery",
+      "status": "implemented_offline_verified_live_pending",
+      "changes": [
+        "Classify immediate opcode-146 child-spell evidence for activated item powers through two links, bounded to 32 resources.",
+        "De-duplicate resource evidence case-insensitively and reject unresolved, delayed, or cyclic graphs from automatic buff recognition.",
+        "Retain supported identified powers as manual Add candidates without automatically seeding unrecognized powers into presets.",
+        "Preserve root targeting, power identity, charges, override isolation, and existing active-buff marker behavior."
+      ],
+      "offline_resource_check": ["BOOT12 ability 0", "BOW20 ability 1", "BOW21 ability 1"],
+      "acceptance_pending": [
+        "Open the panel in an isolated copy and confirm the correct named powers, charge counts, and targets.",
+        "Activate Gargoyle Boots and Darkfire, verify charge consumption and active-buff skipping.",
+        "Test Darkfire activation with and without ammunition; discovery alone does not prove activation.",
+        "Exercise manual Add and confirm discovered item rows remain disabled until selected."
+      ],
+      "remaining_detection_scope": [
+        "External EFF delivery and deeper or conditional graphs need additional analysis.",
+        "Scrolls, wands, containers, and unsupported target modes remain outside automatic item discovery."
+      ]
+    },
+    {
+      "id": "source_properties_and_reservations",
+      "status": "next",
+      "deliverables": [
+        "Preserve every concrete source behind a combined buff row, including effective caster level, duration, strength, variants, and eligibility.",
+        "Allocate requests across compatible sources without double-spending spontaneous spell slots or item charge pools.",
+        "Display each recipient's assigned caster and expected duration; support explicit source preference."
+      ]
+    },
+    {
+      "id": "balanced_quick_cast_feasibility",
+      "status": "pending",
+      "deliverables": [
+        "Measure normal and accelerated engine cast completion, animations, aura recovery, and casting-speed modifiers.",
+        "Prove run-specific effect attribution and duration adjustment for direct buffs and child-spell buffs.",
+        "Account for actual elapsed time, delayed delivery, expiration behavior, and unsupported effects before choosing a beta scope.",
+        "Align independent caster sequences to a common finish while preserving dependencies and user order."
+      ]
+    },
+    {
+      "id": "recipient_presets_and_interface",
+      "status": "pending",
+      "deliverables": [
+        "Replace the primary per-caster workflow with party-wide recipient presets and a combined source catalog.",
+        "Show reserved availability and planned durations per recipient, with disabled-target reasons.",
+        "Migrate existing presets without losing caster-specific intent or silently enabling new item powers."
+      ]
+    },
+    {
+      "id": "completed_rest_preset",
+      "status": "pending",
+      "deliverables": [
+        "Verify a completed-rest signal distinct from interrupted rests and individual spell-count reset notifications.",
+        "Run the selected rest preset once after the party returns to a safe, controllable state.",
+        "Handle save/load, combat, cutscenes, and repeat notifications without duplicate runs."
+      ]
+    },
+    {
+      "id": "purposeful_item_sharing",
+      "status": "pending",
+      "deliverables": [
+        "Prove recipient eligibility against the engine's actual equipment rules, including conditional usability.",
+        "Reserve the physical item, transfer, equip, activate, restore, and return it with interruption recovery.",
+        "Respect shared charges, curses, inventory capacity, and changes made manually during a run."
+      ]
+    }
+  ]
+}

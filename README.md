@@ -4,7 +4,7 @@
 
 Cast all your pre-battle buffs with one click. BuffBot scans each character's spellbook, lets you configure which buffs to cast, in what order, on which targets — then executes the entire sequence automatically across all party members in parallel.
 
-> **Stable release** — [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
+> **Development fork based on v1.10.1.** Item discovery changes are verified offline; in-game acceptance is pending. The recipient-first interface and other planned features are not implemented yet. Source checkouts include the implementation checklist at `docs/recipient-first-checklist.json`.
 
 > **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**
 
@@ -20,7 +20,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for fast casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally. 5E casters still pause while that mod refreshes their spell slots
 - **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
 - **Skip active buffs** — detects already-active buffs via spell state + effect list checks, including wrapper potion leaf spells. No wasted spell slots, stacks, or charges
-- **Manual override** — the Add picker can include spells the classifier missed and recover removed spells or items, grouped into separate sections
+- **Manual override** — the Add picker can include spells or supported activated item powers the classifier missed and recover removed spells or items, grouped into separate sections
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
 - **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
 - **Subwindow selection spells** — pre-configure which variant to cast for spells like Protection from Elemental Energy, and BuffBot bypasses the popup. Converted 5E casters must cast these spells manually
@@ -120,6 +120,14 @@ Repeats are target-major. With targets A and B at R2, BuffBot attempts A, A, B, 
 ### Items and Potions
 
 BuffBot scans identified items in a party character's equipment, quick slots, and backpack. Each supported buff power from **F8 Use Item** gets its own row, including secondary powers on weapons. Powers keep their configuration when the item moves between slots. Exhausted powers remain visible with zero uses; the engine handles normal charges, consumption, and recharge rules.
+
+Buff detection follows immediate opcode-146 child spells through two links,
+including item powers that contain only a spell wrapper and visual effects.
+The item's targeting rules and charge counters remain authoritative. Missing,
+cyclic, delayed, or deeper delivery chains are left for manual inclusion through
+**Add**. Supported powers that are not recognized as buffs also appear in Add;
+they are not automatically added to presets. Scrolls, wands, and container
+contents remain outside this discovery path.
 
 In **EEex options → BuffBot → Inventory item use**, choose:
 

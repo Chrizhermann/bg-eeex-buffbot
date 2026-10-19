@@ -579,9 +579,9 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         local cOk, classResult = pcall(
             BfBot.Class.Classify, resref, header, ability, "itm", key)
         if not (cOk and classResult) then goto nextAbility end
-        -- Keep a user-excluded buff in the transient catalog so the Add
-        -- picker can recover it. Ordinary non-buffs remain out of scope.
-        if not classResult.isBuff and not classResult.overridden then goto nextAbility end
+        -- Discovery is independent of the buff verdict. Keep supported
+        -- activated powers in the transient catalog for manual inclusion;
+        -- preset seeding/auto-merge still require class.isBuff.
 
         local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
         -- ITM naming: identifiedName FIRST (genericName is the
@@ -599,6 +599,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         items[key] = {
             resref = key,
             kind = "itm",
+            itemCandidate = 1,
             itemResref = resref,
             abilityIdx = index,
             itemType = itemType,

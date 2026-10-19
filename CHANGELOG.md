@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+Recipient-first fork, based on upstream v1.10.1.
+
+### Item discovery
+- Recognize activated item buffs delivered through immediate opcode-146 child
+  spells, following two links with bounded, case-insensitive graph traversal.
+  Duplicate links do not multiply positive evidence. Missing, cyclic, delayed,
+  and deeper chains remain manual candidates.
+- Keep supported identified item powers in the transient catalog independently
+  of the buff verdict. Add can include an unrecognized power; preset seeding and
+  automatic row merging still require a buff verdict. Preserve item ability
+  identities, charge counters, targeting, and cross-character override isolation.
+- Offline resource inspection recognizes Gargoyle Boots and both Darkfire Bow
+  upgrades in the personal EET installation. In-game discovery and activation,
+  including the bow's ammunition behavior, remain unverified.
+- Validation: 687 automated tests pass, including 19 new item-graph regressions,
+  synthetic WeiDU 249 lifecycle checks, and release packaging. Five existing
+  symlink tests are excluded because this Windows account lacks symlink
+  privileges. No game deployment or live gameplay testing was performed.
+
 ## v1.10.1 (2026-10-20)
 
 ### Fixed

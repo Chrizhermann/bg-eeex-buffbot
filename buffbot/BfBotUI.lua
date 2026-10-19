@@ -2554,10 +2554,8 @@ function BfBot.UI._SpellPickerLess(a, b)
 end
 
 --- Build the picker list: castable spells/items the user can add to the preset.
---- Includes non-buff spells (manual inclusion) and previously-excluded buffs
---- (recovery from accidental Remove). Items ride the same excluded-buff path:
---- they auto-merge into presets as buffs, so they only surface here after the
---- user removed them (ovr == -1). The list is sectioned by kind — a [Spells]
+--- Includes non-buff spells/item powers (manual inclusion) and excluded buffs
+--- (recovery from accidental Remove). The list is sectioned by kind — a [Spells]
 --- header row, spell rows, an [Items] header row, item rows; a section with
 --- no rows is omitted. Excluded entries sort to the top of their section.
 function BfBot.UI._BuildPickerList()
@@ -2578,12 +2576,13 @@ function BfBot.UI._BuildPickerList()
         -- Skip entries with no classification
         if not scan.class then goto nextSpell end
         local ovr = config.ovr and config.ovr[resref]
-        -- Items use the picker only as a per-character recovery path. A
-        -- classifier override is process-global, so another character's
-        -- exclusion must not surface this item here without a matching local
-        -- persisted override. Spells retain the general non-buff add path.
+        -- A classifier override is process-global. Another character's
+        -- exclusion must not surface this item here without a local override.
+        -- A naturally unrecognized activated power may be included manually.
         if scan.kind == "itm" then
-            if ovr ~= -1 then goto nextSpell end
+            local manualCandidate = scan.itemCandidate == 1
+                and not scan.class.isBuff and not scan.class.overridden
+            if ovr ~= -1 and not manualCandidate then goto nextSpell end
         elseif scan.class.isBuff and ovr ~= -1 then
             goto nextSpell
         end
