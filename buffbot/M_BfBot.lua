@@ -29,6 +29,8 @@ Infinity_DoFile("BfBotInn")  -- Innate abilities (depends on Persist, Exec)
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
 Infinity_DoFile("BfBotPln")  -- Recipient plans and resource reservations
 BfBot.Plan.Init()           -- Separate, versioned party-plan save handler
+Infinity_DoFile("BfBotRst")  -- Completed-rest recipient preset
+BfBot.Rest.Init()
 Infinity_DoFile("BfBotPUI")  -- Recipient-first panel callbacks
 BfBot.Innate._EnsureSPLFiles()  -- Write innate SPL files to override (if missing)
 BfBot.Innate.Init()          -- Register sprite-loaded listener for innate grants

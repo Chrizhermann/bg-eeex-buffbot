@@ -422,7 +422,7 @@
     "The SPIN137 innate stayed available after its successful casts; this is recorded, not treated as proof of resource consumption.",
     "CAST log entries record issued actions; invisible recipients can make the engine reject an action without spending a slot.",
     "Expected durations come from metadata; remaining effect lifetimes were not measured.",
-    "Multiplayer, rest automation, cross-character equipment sharing and balanced Quick Cast remain unverified. Item checks cover the specific cases below."
+    "Multiplayer, cross-character equipment sharing and balanced Quick Cast remain unverified. Item and standard completed-rest checks cover the specific cases below."
   ],
   "selection_context_and_toggle": {
     "contextPassed": true,
@@ -801,6 +801,117 @@
           }
         ]
       }
+    }
+  },
+  "completed_rest": {
+    "method": "Private EET game, native world-screen Rest button. Diagnostic-only in-memory AREA flag enabled indoor rest, then was restored. No personal installation changes.",
+    "standard_rest": {
+      "active": 2,
+      "after": {
+        "dv:ANOMEN": 2,
+        "dv:JAHEIRA": 2
+      },
+      "afterSample": {
+        "clock": 316866,
+        "complete": true,
+        "oldestStamp": 75932917,
+        "owner": 149358822,
+        "stamp": 75932917,
+        "time": 75933111
+      },
+      "before": {
+        "dv:ANOMEN": 4,
+        "dv:JAHEIRA": 2
+      },
+      "beforeCast": {
+        "dv:ANOMEN": 4,
+        "dv:JAHEIRA": 2
+      },
+      "beforeSample": {
+        "clock": 295626,
+        "complete": true,
+        "oldestStamp": 75896373,
+        "owner": 149358822,
+        "stamp": 75896373,
+        "time": 75896918
+      },
+      "casts": 2,
+      "effects": [
+        {
+          "active": true,
+          "name": "Jaheira"
+        },
+        {
+          "active": true,
+          "name": "Jan"
+        }
+      ],
+      "label": "After rest: Long Buffs",
+      "pending": false,
+      "rest": {
+        "on": 1,
+        "preset": 1
+      },
+      "restStatus": "Casting rest plan",
+      "scripted": false,
+      "skips": 0,
+      "startCount": 1,
+      "state": "done"
+    },
+    "failed_rest_attempt": {
+      "after": {
+        "clock": 379307,
+        "complete": true,
+        "oldestStamp": 75932917,
+        "owner": 149358822,
+        "stamp": 75932917,
+        "time": 75933229
+      },
+      "before": {
+        "clock": 363295,
+        "complete": true,
+        "oldestStamp": 75932917,
+        "owner": 149358822,
+        "stamp": 75932917,
+        "time": 75933111
+      },
+      "pending": false,
+      "spawned": {},
+      "startCount": 0,
+      "state": "done"
+    },
+    "failed_attempt_limit": "An enabled 100-percent interruption table prevented completion. No creature was observed spawning, so this is evidence for a failed-rest negative, not a full wilderness ambush test.",
+    "single_character_rest_reference": {
+      "before_rest_stamp": 75787759,
+      "after_rest_stamp": 75787922,
+      "reset_characters": [
+        "Keldorn"
+      ],
+      "game_time_before": 75787921,
+      "game_time_after": 75787950
+    },
+    "native_timing": {
+      "observed_eight_hour_clock_advances": [
+        35998,
+        35999
+      ],
+      "party_timestamp_spread_ticks": 1,
+      "adjacent_clock_rewind_tolerance_ticks": 2,
+      "transient_party_rested_trigger_required": false
+    },
+    "scope": "Standard eight-hour single-player rests. Shortened/custom rests, full wilderness ambushes, store-room flow, and story cutscene interactions need broader native acceptance.",
+    "save_load": {
+      "active": 2,
+      "casts": 0,
+      "label": "After rest: Long Buffs",
+      "paused": true,
+      "pending": false,
+      "rest": {
+        "on": 1,
+        "preset": 1
+      },
+      "saveLoadPassed": true,
+      "state": "idle"
     }
   }
 }

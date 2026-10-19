@@ -4,6 +4,27 @@
 
 Recipient-first fork, based on upstream v1.10.1.
 
+### Completed-rest preset beta
+- Select a recipient preset with **After rest**; leave the option off by default
+  and save it separately from the currently edited preset. Retain the original
+  caster configuration schema and existing party-plan version.
+- Recognize a standard eight-hour party rest through the engine clock advance
+  and fresh rest timestamps on every living party member. Account for native
+  endpoint and timestamp differences of a few ticks. Do not depend on the
+  transient PartyRested trigger or individual spell-count reset notifications.
+- Run once after returning to a controllable world with idle party members.
+  Defer during menus, dialogue and cutscenes; cancel on combat, conflicting
+  execution, setting changes or timeout. Re-scan and require a complete plan.
+  Preserve the user's pause state and discard transient work when loading.
+- Special shortened rests and custom rest replacements remain outside the
+  verified beta scope. The owned UI additions have English fallbacks in all
+  shipped language catalogs.
+- Validation: 748 automated tests pass, including 30 rest regressions; five
+  Windows symlink privilege tests remain excluded. Native rest casts, effects,
+  prepared-use consumption, selector layout, and save/load without replay pass
+  in the isolated EET copy. A failed-rest attempt starts no casts; wilderness
+  ambushes with creature spawning and store-room flow still need live checks.
+
 ### Recipient planning beta
 - Add party-wide recipient presets with combined source rows, ordered requests,
   caster selection, expected durations, variant selection, and explicit import
@@ -19,7 +40,7 @@ Recipient-first fork, based on upstream v1.10.1.
   readable text. Show only unreserved source durations in the catalog, select
   the matching catalog context when selecting a planned entry, and warn about
   improved invisible recipients without blocking spell-specific exceptions.
-- Validation: 718 automated tests pass, including 28 planner regressions. Five
+- Initial recipient checkpoint: 718 automated tests pass, including 28 planner regressions. Five
   Windows symlink privilege tests remain excluded. The isolated EET copy loads
   a copied save and builds a 147-entry catalog. Basic visual review, source
   preference, self-only eligibility, actual spell effects, prepared-slot

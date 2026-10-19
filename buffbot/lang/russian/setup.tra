@@ -488,3 +488,16 @@
 @1058 = ~ / improved invisible~
 // party.text60
 @1059 = ~Target has Improved Invisibility; the engine may reject this cast.~
+
+// party.text61
+@1060 = ~After rest: off~
+// party.text62
+@1061 = ~After rest: ~
+// party.text63
+@1062 = ~Rest plan skipped: combat~
+// party.text64
+@1063 = ~Rest plan is empty~
+// party.text65
+@1064 = ~Rest plan skipped: resolve unavailable casts~
+// party.text66
+@1065 = ~Casting rest plan~

@@ -65,6 +65,12 @@ local _textKeys = {
     ["Planned buffs / recipient / caster and duration"] = "party.text58",
     [" / improved invisible"] = "party.text59",
     ["Target has Improved Invisibility; the engine may reject this cast."] = "party.text60",
+    ["After rest: off"] = "party.text61",
+    ["After rest: "] = "party.text62",
+    ["Rest plan skipped: combat"] = "party.text63",
+    ["Rest plan is empty"] = "party.text64",
+    ["Rest plan skipped: resolve unavailable casts"] = "party.text65",
+    ["Casting rest plan"] = "party.text66",
 }
 function P.Text(english)
     if BfBot.L10N and _textKeys[english] then return BfBot.L10N.Get(_textKeys[english]) end
@@ -325,6 +331,10 @@ function P.Validate(value)
     end
     if integer(value.active, 1, 8) and state.presets[value.active] then state.active = value.active
     else for i = 1, 8 do if state.presets[i] then state.active = i; break end end end
+    local rest = type(value.rest) == "table" and value.rest or {}
+    local validRest = integer(rest.preset, 1, 8) and state.presets[rest.preset]
+    state.rest = { on = rest.on == 1 and validRest and 1 or 0,
+        preset = validRest and rest.preset or state.active }
     return state
 end
 function P.GetState()

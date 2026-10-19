@@ -6,7 +6,7 @@
   },
   "branch": "codex/recipient-first-buffbot",
   "validation": {
-    "automated_passed": 718,
+    "automated_passed": 748,
     "automated_deselected": 5,
     "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
     "new_item_graph_regressions": 19,
@@ -16,10 +16,11 @@
       "release packaging checks"
     ],
     "item_resource_evidence": "recipient-first-item-audit.json",
-    "live_gameplay": "Basic recipient GUI visual review, automatic and pinned source assignment, self-only restrictions, normal prepared-spell effects and consumption, active-buff skipping, and two-preset save/load verified in an isolated EET copy. Gargoyle Boots inventory/swap activation, charge consumption, active skipping and restoration; Darkfire inventory activation without ammunition verified.",
+    "live_gameplay": "Basic recipient GUI visual review, automatic and pinned source assignment, self-only restrictions, normal prepared-spell effects and consumption, active-buff skipping, and two-preset save/load verified in an isolated EET copy. Gargoyle Boots inventory/swap activation, charge consumption, active skipping and restoration; Darkfire inventory activation without ammunition verified. Standard native completed rest started its selected recipient plan exactly once, with actual effects and prepared-use consumption verified.",
     "personal_install_modified": false,
     "new_planner_regressions": 28,
-    "live_evidence": "recipient-first-live-acceptance.json"
+    "live_evidence": "recipient-first-live-acceptance.json",
+    "new_rest_regressions": 30
   },
   "policies": {
     "initial_platform": "single-player EET",
@@ -117,11 +118,23 @@
     },
     {
       "id": "completed_rest_preset",
-      "status": "pending",
+      "status": "implemented_basic_live_verified",
       "deliverables": [
         "Verify a completed-rest signal distinct from interrupted rests and individual spell-count reset notifications.",
         "Run the selected rest preset once after the party returns to a safe, controllable state.",
         "Handle save/load, combat, cutscenes, and repeat notifications without duplicate runs."
+      ],
+      "acceptance_passed": [
+        "Off-by-default After rest button selects the current party preset and names it while editing a different preset.",
+        "A native completed rest starts Long Buffs exactly once while the active editor stays on Short Buffs.",
+        "Protection From Fire applies to Jaheira and Jan; Anomen consumes exactly two prepared uses (4 to 2).",
+        "A failed native rest attempt leaves the rest stamp unchanged and starts no automatic run.",
+        "Engine timing tolerances and individual-rest, interruption, stale-event, load-baseline, combat, modal, busy, missing-resource and duplicate-run guards have LuaJIT regressions.",
+        "Private quick-save and process restart preserve rest preset 1 while editing preset 2; loading starts no casts and leaves no pending run."
+      ],
+      "acceptance_pending": [
+        "Native wilderness ambush with creature spawning, inn/store-room flow, and rest-triggered story cutscenes.",
+        "Compatibility with shortened/custom rests, engine variants, and alternate UI resolutions."
       ]
     },
     {

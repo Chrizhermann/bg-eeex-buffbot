@@ -32,6 +32,7 @@ function U.Layout()
     area("bpNext", left - 88, 40, 30, 28)
     area("bpNew", left - 54, 40, 54, 28)
     area("bpImport", left + 12, 40, 170, 28)
+    area("bpRest", left + 188, 40, right - 300, 28)
     area("bpRefresh", w - 110, 40, 98, 28)
     area("bpCatalogHead", 12, 74, left - 12, 24)
     area("bpPlanHead", left + 12, 74, right, 24)
@@ -267,6 +268,22 @@ function U.ImportLegacy()
     if not requests then bbPartyStatus = reason; return end
     U.preset.requests = requests
     U.Refresh()
+end
+function U.RestLabel()
+    local state = P.GetState()
+    local rest = state and state.rest
+    local preset = rest and state.presets[rest.preset]
+    return rest and rest.on == 1 and preset
+        and (P.Text("After rest: ") .. preset.name) or P.Text("After rest: off")
+end
+function U.ToggleRest()
+    local state = P.GetState()
+    if not state then return end
+    local rest = state.rest
+    if not rest then rest = { on = 0, preset = state.active }; state.rest = rest end
+    if rest.on == 1 and rest.preset == state.active then rest.on = 0
+    else rest.on, rest.preset = 1, state.active end
+    if BfBot.Rest then BfBot.Rest.pending = nil end
 end
 function U.CanCast()
     return U.plan and U.plan.missing == 0 and #U.preset.requests > 0

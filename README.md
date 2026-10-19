@@ -38,13 +38,23 @@ works from inventory without ammunition. Conditional item usability still
 requires manual equipping in swap mode; cross-character sharing is pending.
 Child spell effects can arrive after the executor finishes issuing item actions.
 
+Select a preset and click **After rest** to use it automatically after a completed
+standard eight-hour party rest. The button names the selected rest preset even
+while you edit another list. Click it again while viewing that preset to turn it
+off. This setting starts off and is stored in the save with the party plans.
+The mod waits for the world to be controllable, uses normal casting speed, and
+keeps your active editing preset and pause state. Interrupted rests, individual
+spell restoration, and loading a save do not trigger it. Combat cancels a pending
+run; unavailable requests skip the entire rest plan. Special shortened rests and
+other mods' rest replacements need separate compatibility checks.
+
 **Caster editor** opens the original interface. **Import caster preset** copies
 the matching legacy preset into an empty party plan, retaining caster choices
 and leaving the originals intact. Party plans save separately in EEex saves.
 F12 innates still use legacy per-character presets. Party-plan casting currently
 uses normal speed, excludes 5E-converted sources, and does not auto-join summons.
-Completed-rest casting, cross-character item sharing, and balanced accelerated
-casting remain separate milestones. New planner text uses English fallbacks in
+Cross-character item sharing and balanced accelerated casting remain separate
+milestones. New planner text uses English fallbacks in
 the other language catalogs pending translation.
 
 > **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**

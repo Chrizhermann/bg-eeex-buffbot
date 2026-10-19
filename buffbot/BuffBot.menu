@@ -29,6 +29,11 @@ menu
 		enabled "BfBot.Exec._SafetyTick()"
 		area 0 0 0 0
 	}
+	label
+	{
+		enabled "BfBot.Rest.Tick()"
+		area 0 0 0 0
+	}
 }
 
 -- ==========================================================
@@ -1907,6 +1912,16 @@ menu
 		text lua "BfBot.Plan.Text('BuffBot - Recipient plans (beta)')"
 		text style "bb_normal_parchment"
 		text color lua "{38,32,26}"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRest"
+		action "BfBot.PartyUI.ToggleRest()"
+		text lua "BfBot.PartyUI.RestLabel()"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
 		area 0 0 100 28
 	}
 	label

@@ -117,6 +117,12 @@ CATALOG_SCHEMA = {
     1057: "party.text58",
     1058: "party.text59",
     1059: "party.text60",
+    1060: "party.text61",
+    1061: "party.text62",
+    1062: "party.text63",
+    1063: "party.text64",
+    1064: "party.text65",
+    1065: "party.text66",
     # Installer strings (100-199)
     100: "installer.component.luajit",
     101: "installer.require.game",
@@ -1231,9 +1237,9 @@ def test_menu_localization_does_not_change_actions_layout_or_list_structure():
         for line in source.splitlines()
         if not re.match(r"^\s*(?:text|tooltip)\b", line)
     ) + "\n"
-    # Includes the zero-area label that drains deferred 5E spell-list updates.
+    # Includes zero-area deferred 5E and completed-rest polling labels.
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
-        "ad7f0022e20224d820601f4772fea7b4cec9ce47be6536c78bf91cdf9a6e6a0d"
+        "0bdf424a0460eeb843489b6cbca1bf304daf2f9aad98108310cc7e680d0b41a7"
     )
 
 
