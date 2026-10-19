@@ -1695,6 +1695,26 @@ function BfBot.Test.CombatSafety()
     _check(srOk and stillRunning,
         "_SafetyTick left healthy running state alone (no crash, still running)")
 
+    -- ---- Test 7: combat-stop notice reaches the engine (#76) ----
+    -- Queues the real overhead message, so the notice also appears over the
+    -- leader. A fallback to the message log means the binding path broke.
+    P("")
+    P("  [7] Combat-stop notice over the party leader")
+
+    local savedError = BfBot._Error
+    local savedReported = BfBot._reportedErrors
+    local diagnostics = {}
+    BfBot._Error = function(message) diagnostics[#diagnostics + 1] = message end
+    BfBot._reportedErrors = {}
+    local noticeOk, queued = pcall(BfBot._DisplayOverhead, sprite,
+        BfBot.L10N.Get("feedback.combat_stopped"))
+    BfBot._Error = savedError
+    BfBot._reportedErrors = savedReported
+    _check(noticeOk and queued == true and #diagnostics == 0,
+        "Overhead notice queued without fallback (ok=" .. tostring(noticeOk)
+        .. " queued=" .. tostring(queued) .. " "
+        .. tostring(diagnostics[1] or "no diagnostics") .. ")")
+
     -- ---- Summary ----
     P("")
     return _summary("Combat Safety")
@@ -7577,11 +7597,12 @@ local function _probeAreaAccess()
     P("")
     P("=== Area access probes ===")
 
-    -- Try global functions
+    -- Global accessors that EEex v0.11 through v1.3.1 define (the earlier
+    -- EEex_GetCurrentArea / EEex_Area_GetCurrent / g_pBaldurChitin guesses
+    -- never existed; see bg-eeex-buffbot#76)
     local globalAttempts = {
-        {"EEex_GetCurrentArea", function() return EEex_GetCurrentArea() end},
-        {"EEex_Area_GetCurrent", function() return EEex_Area_GetCurrent() end},
-        {"g_pBaldurChitin", function() return g_pBaldurChitin end},
+        {"EEex_Area_GetVisible", function() return EEex_Area_GetVisible() end},
+        {"EngineGlobals.g_pBaldurChitin", function() return EngineGlobals.g_pBaldurChitin end},
     }
     for _, a in ipairs(globalAttempts) do
         pcall(function()

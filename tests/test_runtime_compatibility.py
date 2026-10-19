@@ -86,9 +86,19 @@ def exec_lua() -> LuaRuntime:
                 end
                 return tostring(sprite)
             end,
+            -- Record player notices instead of reaching the engine.
+            _DisplayOverhead = function(sprite, text)
+                BfBot_TestNotices[#BfBot_TestNotices + 1] =
+                    { sprite = sprite, text = text }
+                return true
+            end,
+            _ErrorOnce = function(message)
+                BfBot_TestErrors[#BfBot_TestErrors + 1] = message
+            end,
         }
+        BfBot_TestNotices = {}
+        BfBot_TestErrors = {}
         EEex_BAnd = function() return 0 end
-        EEex_Sprite_DisplayStringHead = function() end
         """
     )
     runtime.execute("io = nil")
@@ -3473,7 +3483,9 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
             watchdogReason = reason
             BfBot.Exec._state = "done"
         end
+        BfBot_TestNotices = {}
         BfBot.Exec._SafetyTick()
+        local notice = BfBot_TestNotices[1]
         return {
             queueCount = #byCaster.p0,
             stoppedCastCount = stoppedCastCount,
@@ -3485,6 +3497,11 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
             watchdogFired = type(watchdogReason) == "string"
                 and watchdogReason:find("Watchdog", 1, true) ~= nil,
             watchdogState = BfBot.Exec._state,
+            noticeCount = #BfBot_TestNotices,
+            noticeOverLeader = notice ~= nil and notice.sprite == sprites[1],
+            noticeText = notice and notice.text,
+            expectedText = BfBot.L10N.Get("feedback.cast_timeout"),
+            errorCount = #BfBot_TestErrors,
         }
         """
     )
@@ -3498,6 +3515,11 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
     assert facts["completed"]
     assert facts["watchdogFired"]
     assert facts["watchdogState"] == "done"
+    assert facts["noticeCount"] == 1
+    assert facts["noticeOverLeader"]
+    assert facts["noticeText"] == facts["expectedText"]
+    assert facts["noticeText"] == "BuffBot: casting timed out - stopped"
+    assert facts["errorCount"] == 0
 
 
 def test_safety_tick_retries_pending_innate_refresh_after_execution(

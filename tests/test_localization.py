@@ -967,12 +967,21 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.10.0 (2026-10-06)")
-    assert "each f8 use item buff power" in current_normalized
-    assert "existing spell and item presets remain supported" in current_normalized
-    assert "full automated suite passes **652 tests**" in current_normalized
-    assert "no deployment or live-game validation has been performed" in current_normalized
-    assert "maintainer explicitly deferred playtesting until after release" in current_normalized
+    assert current_release.startswith("v1.10.1 (2026-10-20)")
+    assert 'now shows the "combat detected - casting stopped"' in current_normalized
+    assert "eeex_sprite_displaystringhead`, which no eeex release defines" in current_normalized
+    assert "full automated suite passes **673 tests**" in current_normalized
+    assert "lab check, eet 2.7.3.0 with eeex v1.3.1" in current_normalized
+    assert "not checked in game: a real combat stop during a buff run" in current_normalized
+
+    item_release = source.split("\n## v1.10.0 (2026-10-06)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert "each f8 use item buff power" in item_release
+    assert "existing spell and item presets remain supported" in item_release
+    assert "full automated suite passes **652 tests**" in item_release
+    assert "no deployment or live-game validation has been performed" in item_release
+    assert "maintainer explicitly deferred playtesting until after release" in item_release
 
     stable_release = source.split("\n## v1.9.0 (2026-09-27)", 1)[1].split(
         "\n## ", 1
@@ -1246,7 +1255,15 @@ def test_known_player_display_sinks_use_localization_not_raw_reason_codes():
     ui = UI_PATH.read_text(encoding="utf-8")
 
     assert 'Infinity_DisplayString("BuffBot:' not in main
-    assert 'EEex_Sprite_DisplayStringHead(leader,\n                    "BuffBot:' not in execution
+    assert '_NotifyLeader("' not in execution
+    assert (
+        'BfBot.Exec._NotifyLeader(BfBot.L10N.Get("feedback.combat_stopped"))'
+        in execution
+    )
+    assert (
+        'BfBot.Exec._NotifyLeader(BfBot.L10N.Get("feedback.cast_timeout"))'
+        in execution
+    )
     assert 'BfBot._Display("BuffBot:' not in innate
     # ToggleDebug is an intentionally untranslated developer diagnostic.
     ui_without_debug = re.sub(
