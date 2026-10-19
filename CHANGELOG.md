@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.10.1 (2026-10-20)
 
 ### Fixed
 - The party leader now shows the "Combat detected - casting stopped" and "casting timed out" notices over their head. BuffBot called `EEex_Sprite_DisplayStringHead`, which no EEex release defines, and a `pcall` hid the error, so both notices were always lost; stopping itself worked. The notices now use the engine's overhead text message with the translated text. If that message cannot be queued, the notice goes to the message log and a one-time error names the cause. (#76)
