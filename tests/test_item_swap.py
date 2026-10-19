@@ -596,3 +596,31 @@ def test_active_power_requires_every_effect_signature_from_the_correct_item(
 def test_empty_effect_signature_never_claims_an_item_power_is_active() -> None:
     lua = _runtime()
     assert not lua.execute('return BfBot.Exec._HasActiveItemEffect(sprite,"NEW",{})')
+
+
+@pytest.mark.parametrize("source,requested,active", [
+    ("DW#GARGO", "dw#gargo", True),
+    ("dw#gargo", "DW#GARGO", True),
+    ("OTHER", "dw#gargo", False),
+])
+def test_active_effect_resource_matching_is_case_insensitive(
+    source: str, requested: str, active: bool,
+) -> None:
+    lua = _runtime()
+    lua.globals().effectSource = source
+    lua.globals().requestedSource = requested
+    facts = lua.execute(
+        """
+        sprite.m_timedEffectList = {{
+            m_sourceRes = { get = function() return effectSource end },
+            m_effectId = 328, m_effectAmount = 0, m_dWFlags = 138,
+        }}
+        return {
+            spell = BfBot.Exec._HasActiveEffect(sprite, requestedSource),
+            item = BfBot.Exec._HasActiveItemEffect(sprite, requestedSource,
+                {{opcode=328, amount=0, flags=138}}),
+            marker = BfBot.Exec._HasActiveStateMarker(sprite, requestedSource, {138}),
+        }
+        """
+    )
+    assert facts["spell"] == facts["item"] == facts["marker"] == active

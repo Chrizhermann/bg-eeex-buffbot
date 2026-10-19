@@ -19,12 +19,13 @@ Recipient-first fork, based on upstream v1.10.1.
   readable text. Show only unreserved source durations in the catalog, select
   the matching catalog context when selecting a planned entry, and warn about
   improved invisible recipients without blocking spell-specific exceptions.
-- Validation: 715 automated tests pass, including 28 planner regressions. Five
+- Validation: 718 automated tests pass, including 28 planner regressions. Five
   Windows symlink privilege tests remain excluded. The isolated EET copy loads
   a copied save and builds a 147-entry catalog. Basic visual review, source
   preference, self-only eligibility, actual spell effects, prepared-slot
-  consumption, and two-preset save/load passed. Item activation and broader
-  compatibility checks remain pending. The personal installation is unchanged.
+  consumption, and two-preset save/load passed. Item activation checks are
+  recorded below; broader compatibility remains pending. The personal
+  installation is unchanged.
 
 ### Item discovery
 - Recognize activated item buffs delivered through immediate opcode-146 child
@@ -36,8 +37,14 @@ Recipient-first fork, based on upstream v1.10.1.
   automatic row merging still require a buff verdict. Preserve item ability
   identities, charge counters, targeting, and cross-character override isolation.
 - Offline resource inspection recognizes Gargoyle Boots and both Darkfire Bow
-  upgrades in the personal EET installation. In-game discovery and activation,
-  including the bow's ammunition behavior, remain unverified.
+  upgrades in the personal EET installation. Live checks in the isolated copy
+  verify boots activation, native charge consumption, active-buff skipping and
+  equipment restoration, plus Darkfire inventory activation without ammunition.
+  Conditional item usability still requires manual equipping in swap mode.
+- Match active-effect resource names case-insensitively, including item power
+  signatures and spell-state markers. This prevents another boots charge being
+  spent because a mixed-case child resource differs from the engine's uppercase
+  source name. Add three regression cases covering all three lookup helpers.
 - Validation: 687 automated tests pass, including 19 new item-graph regressions,
   synthetic WeiDU 249 lifecycle checks, and release packaging. Five existing
   symlink tests are excluded because this Windows account lacks symlink

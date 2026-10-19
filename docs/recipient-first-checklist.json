@@ -6,7 +6,7 @@
   },
   "branch": "codex/recipient-first-buffbot",
   "validation": {
-    "automated_passed": 715,
+    "automated_passed": 718,
     "automated_deselected": 5,
     "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
     "new_item_graph_regressions": 19,
@@ -16,7 +16,7 @@
       "release packaging checks"
     ],
     "item_resource_evidence": "recipient-first-item-audit.json",
-    "live_gameplay": "Basic recipient GUI visual review, automatic and pinned source assignment, self-only restrictions, normal prepared-spell effects and consumption, active-buff skipping, and two-preset save/load verified in an isolated EET copy.",
+    "live_gameplay": "Basic recipient GUI visual review, automatic and pinned source assignment, self-only restrictions, normal prepared-spell effects and consumption, active-buff skipping, and two-preset save/load verified in an isolated EET copy. Gargoyle Boots inventory/swap activation, charge consumption, active skipping and restoration; Darkfire inventory activation without ammunition verified.",
     "personal_install_modified": false,
     "new_planner_regressions": 28,
     "live_evidence": "recipient-first-live-acceptance.json"
@@ -36,7 +36,7 @@
   "milestones": [
     {
       "id": "item_discovery",
-      "status": "implemented_offline_verified_live_pending",
+      "status": "implemented_basic_live_verified",
       "changes": [
         "Classify immediate opcode-146 child-spell evidence for activated item powers through two links, bounded to 32 resources.",
         "De-duplicate resource evidence case-insensitively and reject unresolved, delayed, or cyclic graphs from automatic buff recognition.",
@@ -49,17 +49,22 @@
         "BOW21 ability 1"
       ],
       "acceptance_pending": [
-        "Open the panel in an isolated copy and confirm the correct named powers, charge counts, and targets.",
-        "Activate Gargoyle Boots and Darkfire, verify charge consumption and active-buff skipping.",
-        "Test Darkfire activation with and without ammunition; discovery alone does not prove activation.",
-        "Exercise manual Add and confirm discovered item rows remain disabled until selected."
+        "Exercise legacy manual Add and confirm newly discovered item rows remain disabled until selected.",
+        "Broader item powers, interruption recovery and conditional usability combinations."
       ],
       "remaining_detection_scope": [
         "External EFF delivery and deeper or conditional graphs need additional analysis.",
-        "Scrolls, wands, containers, and unsupported target modes remain outside automatic item discovery."
+        "Scrolls, wands, containers, and unsupported target modes remain outside automatic item discovery.",
+        "Installed Darkfire conditional usability (opcode 319) blocks automatic swap planning; equip manually in swap mode until engine-equivalent eligibility is implemented."
       ],
       "acceptance_passed": [
-        "Darkfire Bow +5 Improved Haste appears in the live catalog with one use."
+        "Gargoyle Boots and both Darkfire powers are identified and detected with their actual item charge counters and self-only targets.",
+        "Gargoyle Boots apply Stoneskin from inventory; repeating while active skips without spending the remaining charge.",
+        "Gargoyle Boots swap mode consumes one charge and restores the original equipped boots, backpack layout and selected weapon, clearing the recovery journal.",
+        "Darkfire +4 and +5 apply Improved Haste from the backpack without equipped ammunition and consume their own ability-1 charge.",
+        "Mixed-case child spell resource names match the engine's uppercase effect source names after the skip-check correction.",
+        "Darkfire +5 inventory activation also succeeds with equipped ammunition, without consuming the arrow.",
+        "An active Improved Haste causes the Darkfire request to skip and preserves its remaining charge."
       ]
     },
     {

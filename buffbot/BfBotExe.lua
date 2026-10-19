@@ -177,11 +177,12 @@ end
 --- Check if a sprite has an active timed effect from a given spell resref.
 function BfBot.Exec._HasActiveEffect(sprite, resref)
     if not sprite or not resref then return false end
+    resref = resref:upper()
     local found = false
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
             local effectRes = effect.m_sourceRes:get()
-            if effectRes and effectRes == resref then
+            if effectRes and effectRes:upper() == resref then
                 found = true
                 return true -- stop iteration
             end
@@ -192,10 +193,11 @@ end
 
 function BfBot.Exec._HasActiveItemEffect(sprite, resref, signatures)
     if not signatures or #signatures == 0 then return false end
+    resref = resref:upper()
     local matched, remaining = {}, #signatures
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
-            if effect.m_sourceRes:get() ~= resref then return end
+            if effect.m_sourceRes:get():upper() ~= resref then return end
             for i, sig in ipairs(signatures) do
                 if not matched[i] and effect.m_effectId == sig.opcode
                     and effect.m_effectAmount == sig.amount
@@ -230,6 +232,7 @@ function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
     if not sprite or not resref or not stateIDs or #stateIDs == 0 then
         return false
     end
+    resref = resref:upper()
 
     local wanted = {}
     for _, stateID in ipairs(stateIDs) do wanted[stateID] = true end
@@ -240,7 +243,7 @@ function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
             local effectRes = effect.m_sourceRes:get()
             local opcode = effect.m_effectId
             local stateID = effect.m_dWFlags
-            if effectRes == resref
+            if effectRes:upper() == resref
                 and (opcode == 282 or opcode == 328)
                 and wanted[stateID] then
                 found = true

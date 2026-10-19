@@ -422,7 +422,7 @@
     "The SPIN137 innate stayed available after its successful casts; this is recorded, not treated as proof of resource consumption.",
     "CAST log entries record issued actions; invisible recipients can make the engine reject an action without spending a slot.",
     "Expected durations come from metadata; remaining effect lifetimes were not measured.",
-    "Item activation, multiplayer, rest automation, cross-character equipment sharing and balanced Quick Cast remain unverified."
+    "Multiplayer, rest automation, cross-character equipment sharing and balanced Quick Cast remain unverified. Item checks cover the specific cases below."
   ],
   "selection_context_and_toggle": {
     "contextPassed": true,
@@ -442,5 +442,365 @@
     "casts": 0,
     "skips": 2,
     "state": "done"
+  },
+  "item_activation": {
+    "method": "Remote Lua harness in the isolated game. Native item actions; raw native charge counters and timed effects checked independently of the executor log. No personal game changes or test saves written.",
+    "fixtures": "Original BOOT12 and Haer'Dalis BOW21 used first. Additional BOW20/BOW21 and AROW01 fixtures created with native CreateItem actions. New BOW20 marked identified. Between cases, opcode 321 removed only the named test buff effects. Charge counters were never directly refilled.",
+    "boots_inventory_initial": {
+      "item": "BOOT12",
+      "slot": 22,
+      "charges_before": 2,
+      "charges_after": 1,
+      "effect_confirmed": [
+        {
+          "amount": 2,
+          "flags": 0,
+          "op": 218,
+          "res": "DW#GARGO"
+        }
+      ],
+      "gear_exchange": false
+    },
+    "boots_active_skip": {
+      "item": "BOOT12",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 0,
+      "skipped": 1,
+      "before": {
+        "slot": 22,
+        "charges": [
+          1,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 22,
+        "charges": [
+          1,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      }
+    },
+    "boots_swap": {
+      "item": "BOOT12",
+      "mode": "swap",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 22,
+        "charges": [
+          1,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 22,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "all_inventory_positions_restored": true
+    },
+    "darkfire_plus5_no_ammunition": {
+      "item": "BOW21",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 18,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": false,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 18,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      }
+    },
+    "darkfire_plus4_no_ammunition": {
+      "item": "BOW20",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 24,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": false,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 24,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      }
+    },
+    "darkfire_plus5_with_ammunition": {
+      "item": "BOW21",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 18,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": false,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      },
+      "after": {
+        "slot": 18,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      }
+    },
+    "conditional_swap_guard": [
+      {
+        "reason": "conditional item usability; equip manually"
+      }
+    ],
+    "timing_observation": "Darkfire delivers a child spell after the item-use action. Final effect assertions allowed ten seconds after the executor stopped issuing actions. The first one-second check was too early and is not classified as a failed activation.",
+    "scope_limits": [
+      "Darkfire conditional opcode-319 equipment eligibility remains unsupported by automatic swap planning. Inventory mode retains upstream behavior; this does not prove the recipient may wear the item.",
+      "No cross-character sharing, interrupted swap recovery, actual duration measurement, or broad item-compatibility claim."
+    ],
+    "darkfire_active_skip": {
+      "item": "BOW20",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 0,
+      "skipped": 1,
+      "before": {
+        "slot": 24,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      },
+      "after": {
+        "slot": 24,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      }
+    }
   }
 }

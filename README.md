@@ -32,6 +32,12 @@ effect landed. The live check verified effects and prepared-slot consumption
 separately. The tested SPIN137 innate remained available after use, so its counts
 were not used as evidence of spell-slot consumption.
 
+The isolated EET checks verified Gargoyle Boots charge consumption, active-buff
+skipping, and restoration after an equipment swap. Darkfire's Improved Haste
+works from inventory without ammunition. Conditional item usability still
+requires manual equipping in swap mode; cross-character sharing is pending.
+Child spell effects can arrive after the executor finishes issuing item actions.
+
 **Caster editor** opens the original interface. **Import caster preset** copies
 the matching legacy preset into an empty party plan, retaining caster choices
 and leaving the originals intact. Party plans save separately in EEex saves.
