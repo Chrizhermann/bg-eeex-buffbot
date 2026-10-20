@@ -3,6 +3,13 @@
 BfBot = BfBot or {}
 
 local _registry = {
+    ["party.text93"] = { id = 1092, fallback = [=[Actions]=] },
+    ["party.text89"] = { id = 1088, fallback = [=[Icon]=] },
+    ["party.text90"] = { id = 1089, fallback = [=[Name]=] },
+    ["party.text91"] = { id = 1090, fallback = [=[Uses]=] },
+    ["party.text92"] = { id = 1091, fallback = [=[Duration]=] },
+    ["party.text94"] = { id = 1093, fallback = [=[Free / total uses]=] },
+
     ["party.text88"] = { id = 1087, fallback = [=[Search]=] },
     ["party.text67"] = { id = 1066, fallback = [=[Item]=] },
     ["party.text68"] = { id = 1067, fallback = [=[Spell]=] },

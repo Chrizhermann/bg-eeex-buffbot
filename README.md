@@ -15,9 +15,13 @@ Click a recipient cell to toggle a buff; **Party** schedules one party-wide cast
 The dashboard packs eligible recipients into a portrait strip, omitting invalid
 targets and empty placeholders. A planned recipient whose source becomes
 unavailable stays visible with a warning so the assignment can be removed.
-**Everyone** appears only when the remaining shared resources can cover every
-party member. It adds missing assignments without removing existing choices;
-**Clear** removes that row's assignments. Character tabs filter the same list,
+The table labels **Icon**, **Name**, **Uses**, **Duration**, **Recipients**, and
+**Actions**. Uses means free / total; duration summarizes the visible recipients'
+assigned or previewed sources, including the selected spell variant. Each portrait
+also shows its own duration. Party buffs use one stacked-portrait **Party** toggle
+in the recipient area and schedule one cast. To apply a targeted buff to several
+characters, select their portraits individually. **Clear** removes the row's
+assignments. Character tabs filter the same list,
 and party-wide spells remain available in those focused views.
 
 **Summary** groups spell icons and names by recipient. **Order** shows each

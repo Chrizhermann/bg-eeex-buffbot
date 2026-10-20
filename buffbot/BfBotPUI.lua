@@ -36,8 +36,12 @@ function U.Layout()
     area("bpSearch", w - 204, 50, 190, 26)
     area("bpSearchBg", w - 208, 48, 196, 30)
     area("bpSearchHint", w - 204, 50, 190, 26)
-    area("bpShowAll", 12, 84, 148, 24)
-    area("bpColumnNames", math.floor(w * .46), 84, math.floor(w * .48) - 24, 24)
+    area("bpShowAll", 264, h - 100, 158, 28)
+    local headX = 12
+    for _, col in ipairs({{"Icon",5},{"Name",22},{"Uses",8},{"Duration",11},{"Recipients",48},{"Actions",6}}) do
+        area("bpHead" .. col[1], headX + 2, 84, math.floor((w - 24) * col[2] / 100) - 4, 24)
+        headX = headX + (w - 24) * col[2] / 100
+    end
     area("bpDashboard", 12, 112, w - 24, h - 218)
     area("bpCoverage", 12, 112, w - 24, h - 218)
     for i = 1, 6 do
@@ -340,26 +344,6 @@ function U.Preview(group, target, variant)
     end
     return decision
 end
-function U.EveryoneTrial(group, variant)
-    local trial, added = copyRequests(U.preset.requests), 0
-    if #U.snapshot.order == 0 then return nil end
-    for _, actor in ipairs(U.snapshot.order) do
-        if not planned(group, actor.key) then
-            trial[#trial + 1] = { group = group, target = actor.key, var = variant, on = 1 }
-            added = added + 1
-        end
-    end
-    if #trial > P.MAX_REQUESTS then return nil end
-    local result = P.Assign(U.snapshot, trial)
-    -- Preserve the allocation of every previously satisfiable request, even
-    -- when an unrelated, already-unavailable item remains in the preset.
-    for i, decision in ipairs(result.decisions) do
-        if not decision.source and (i > #U.preset.requests
-            or U.plan.decisions[i].source) then return nil end
-        if decision.request.group == group and not decision.source then return nil end
-    end
-    return trial, added
-end
 function U.Portrait(slot)
     for _, actor in ipairs(U.snapshot and U.snapshot.order or {}) do
         if actor.slot == slot and actor.sprite then
@@ -425,10 +409,6 @@ function U.BuildDashboard()
                 available = d and d.source ~= nil }
         end
         for _, r in ipairs(U.preset.requests) do if r.group == row.key then row.planned = row.planned + 1 end end
-        if not row.party then
-            local trial, added = U.EveryoneTrial(row.key, row.variant)
-            row.everyone, row.everyoneAdded = trial ~= nil, added
-        end
         -- Exhausted but planned entries remain removable. Unknown/empty
         -- sources do not clutter the browser with anonymous zero-use rows.
         if (livingSource or requested[row.key]) and not U.state.hidden[row.key] then
@@ -549,6 +529,41 @@ function U.CellText(rowIndex, slot)
     return (cell.checked and (cell.available and "[x] " or "[!] ") or cell.available and "[ ] " or "[-] ")
         .. cell.name
 end
+-- Duration comes from the actual assigned/previewed source, including variants.
+-- The row summarizes only the recipients currently visible in this view.
+function U.RowDuration(index)
+    local row = bbPartyRows[index]
+    if not row then return "" end
+    local low, high
+    local function include(cell)
+        local d = cell and cell.decision
+        if not d or not d.source then return end
+        local n = d.duration or 0
+        if n == -1 then n = math.huge end
+        low, high = math.min(low or n,n), math.max(high or n,n)
+    end
+    if row.party then include(row.partyCell)
+    else for slot=1,6 do include(U.DashboardCell(index,slot)) end end
+    if not low then return P.Text("Buff unavailable") end
+    local function formatted(n) return U.Duration(n == math.huge and -1 or n) end
+    return low == high and formatted(low) or formatted(low) .. " - " .. formatted(high)
+end
+function U.CellDuration(index,slot)
+    local cell = U.DashboardCell(index,slot)
+    local d = cell and cell.decision
+    return d and d.source and U.Duration(d.duration) or ""
+end
+function U.PartyPortrait(index,slot)
+    local row = bbPartyRows[index]
+    local actor = U.snapshot and U.snapshot.order[slot]
+    return row and row.party and actor and U.Portrait(actor.slot) or ""
+end
+function U.PartyText(index)
+    local row = bbPartyRows[index]
+    if not row or not row.party then return "" end
+    local cell = row.partyCell
+    return (cell.checked and (cell.available and "[x] " or "[!] ") or "[ ] ") .. P.Text("Party")
+end
 function U.CellColor(rowIndex, slot)
     local cell = U.Cell(rowIndex, slot)
     if cell and cell.checked and not cell.available then return {155,40,25} end
@@ -561,12 +576,6 @@ end
 function U.CellPortrait(rowIndex, slot)
     local row, cell = bbPartyRows[rowIndex], U.DashboardCell(rowIndex, slot)
     return row and not row.party and cell and (cell.available or cell.checked) and U.Portrait(cell.slot) or ""
-end
-function U.QuickText(index)
-    local row = bbPartyRows[index]
-    if not row then return "" end
-    if row.party then return (row.partyCell.checked and "[x] " or "[ ] ") .. P.Text("Party") end
-    return row.everyone and ((row.everyoneAdded == 0 and "[x] " or "+ ") .. P.Text("Everyone")) or ""
 end
 function U.ToggleCell(row, target)
     local decision, index = U.Preview(row.key, target, row.variant)
@@ -590,15 +599,13 @@ function U.DashboardClick(column)
     local row = bbPartyRows[bbPartyRowSelection]
     if not row then return end
     if column <= 2 then U.OpenChoices("sources", row.key)
-    elseif column == 4 then
-        if row.party then U.ToggleCell(row, "party")
-        elseif row.everyone then
-            local requests, added = U.EveryoneTrial(row.key, row.variant)
-            if requests and added > 0 then U.preset.requests = requests; U.Refresh(false) end
-        end
     elseif column >= 5 and column <= 10 then
-        local cell = U.DashboardCell(bbPartyRowSelection, column - 4)
-        if cell and not row.party then U.ToggleCell(row, cell.target) end
+        if row.party then
+            if column == 5 then U.ToggleCell(row,"party") end
+        else
+            local cell = U.DashboardCell(bbPartyRowSelection, column - 4)
+            if cell then U.ToggleCell(row, cell.target) end
+        end
     elseif column == 11 then
         for i = #U.preset.requests, 1, -1 do
             if U.preset.requests[i].group == row.key then table.remove(U.preset.requests, i) end
@@ -627,7 +634,7 @@ function U.CoverageClick(column)
 end
 function U.CoverageColor(index, slot)
     local row = bbPartyRows[index]
-    return row and row.party and U.QuickColor(index) or U.CellColor(index, slot)
+    return row and row.party and U.PartyColor(index) or U.CellColor(index, slot)
 end
 function U.CoverageName(slot)
     if U.recipient ~= "all" then
@@ -635,15 +642,11 @@ function U.CoverageName(slot)
     end
     return U.RecipientName(slot)
 end
-function U.ColumnNames()
-    if U.recipient ~= "all" then return U.snapshot.actors[U.recipient] and U.snapshot.actors[U.recipient].name or "" end
-    return P.Text("Recipients")
-end
 function U.RowName(index)
     local row = bbPartyRows[index]
     return row and (row.name .. (row.qualifier ~= "" and ("\n" .. row.qualifier) or "")) or ""
 end
-function U.QuickColor(index)
+function U.PartyColor(index)
     local row = bbPartyRows[index]
     return row and row.party and row.partyCell.checked and not row.partyCell.available
         and {155,40,25} or {38,32,26}

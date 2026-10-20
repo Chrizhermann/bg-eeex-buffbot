@@ -548,3 +548,16 @@
 
 // party.text88
 @1087 = ~Search~
+
+// party.text89
+@1088 = ~Icon~
+// party.text90
+@1089 = ~Name~
+// party.text91
+@1090 = ~Uses~
+// party.text92
+@1091 = ~Duration~
+// party.text93
+@1092 = ~Actions~
+// party.text94
+@1093 = ~Free / total uses~

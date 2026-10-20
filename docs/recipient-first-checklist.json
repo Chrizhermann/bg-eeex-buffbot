@@ -21,9 +21,10 @@
     "new_planner_regressions": 28,
     "live_evidence": "recipient-first-live-acceptance.json",
     "new_rest_regressions": 30,
-    "new_dashboard_regressions": 20,
+    "new_dashboard_regressions": 23,
     "dashboard_evidence": "recipient-dashboard-acceptance.json",
-    "dashboard_polish_focused_passed": 60
+    "dashboard_polish_focused_passed": 60,
+    "dashboard_headers_focused_passed": 117
   },
   "policies": {
     "initial_platform": "single-player EET",
@@ -113,12 +114,13 @@
         "Self-only target restrictions and improved-invisibility advisory reasons.",
         "Selecting a planned entry selects its matching catalog context.",
         "Two presets, recipients and a pinned caster survive a private quick-save and process restart.",
-        "Approved master dashboard: direct recipient toggles, feasible Everyone bulk-add, and one-cast Party actions.",
+        "Approved master dashboard: direct recipient toggles and one-cast Party actions.",
         "Compact top row with view tabs, right-aligned preset picker, and +; no decorative title or duplicate spell/recipient editor.",
         "Spell icons and eligible recipient portraits; separate grouped Summary, compact Coverage matrix, and Order views.",
         "Hide/restore preserves requests; explicit manual inclusion, preset/rest pickers, and blocked-recipient reasons verified in the copied game.",
         "The loaded party exposes 95 usable/planned dashboard rows from its 147-entry catalog; measured cached refresh was 7 ms.",
-        "Dashboard packs only eligible or already-planned recipients into portrait strips; Coverage retains fixed columns. Dropdown and rename frames visually verified, with 210 visible recipient cells checked in the isolated copy."
+        "Dashboard packs only eligible or already-planned recipients into portrait strips; Coverage retains fixed columns. Dropdown and rename frames visually verified, with 210 visible recipient cells checked in the isolated copy.",
+        "Labeled Icon, Name, Uses, Duration, Recipients and Actions columns. Source/variant-aware duration ranges and per-recipient durations; stacked-portrait Party toggle shares the recipient area. Individual portrait selection replaces Everyone. Native Party and Clear clicks verified."
       ],
       "acceptance_pending": [
         "Live legacy preset import, alternate resolutions and full interaction matrix.",

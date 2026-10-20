@@ -36,56 +36,39 @@ def dashboard(lua):
     return lua
 
 
-def test_everyone_preserves_existing_source_locks_and_adds_only_missing(dashboard):
+def test_individual_toggles_preserve_source_locks_and_reserve_shared_uses(dashboard):
     assert dashboard.execute('''
         local s=snapshot()
         source(s,'BUFF','A',120,'a',1);source(s,'BUFF','B',60,'b',1)
         setup(s,{request('BUFF','A','A')})
-        assert(findrow('BUFF').everyone)
-        U.DashboardClick(4)
+        findrow('BUFF');U.DashboardClick(4)
+        assert(#U.preset.requests==1) -- Duration column is informational.
+        U.DashboardClick(6)
         assert(#U.preset.requests==2 and U.preset.requests[1].source=='A')
         assert(U.plan.missing==0 and U.plan.used.a==1 and U.plan.used.b==1)
-        findrow('BUFF');U.DashboardClick(4)
-        return #U.preset.requests==2 and scans==1
+        findrow('BUFF');U.DashboardClick(6)
+        return #U.preset.requests==1 and scans==1
     ''')
 
 
-def test_everyone_checks_shared_pools_across_other_spell_rows(dashboard):
+def test_individual_toggles_respect_pools_reserved_by_other_spells(dashboard):
     assert dashboard.execute('''
         local s=snapshot()
         source(s,'BUFF','A',60,'level',2);source(s,'OTHER','A',60,'level',2)
         setup(s,{request('OTHER','A')})
-        local row=findrow('BUFF');assert(not row.everyone)
-        U.DashboardClick(4)
-        return #U.preset.requests==1 and U.plan.used.level==1
+        findrow('BUFF');U.DashboardClick(5)
+        findrow('BUFF');U.DashboardClick(6)
+        return #U.preset.requests==2 and U.plan.used.level==2
     ''')
 
 
-def test_everyone_not_available_for_self_only_dead_or_pinned_infeasible_targets(dashboard):
+def test_hidden_self_only_target_stays_explained_in_coverage(dashboard):
     assert dashboard.execute('''
-        local s=snapshot()
-        source(s,'SELF','A',60,'a',6,{selfOnly=true})
-        setup(s);assert(not findrow('SELF').everyone)
-        U.DashboardClick(6)
+        local s=snapshot();source(s,'SELF','A',60,'a',6,{selfOnly=true})
+        setup(s);findrow('SELF');U.DashboardClick(6)
         assert(#U.preset.requests==0 and U.DashboardCell(bbPartyRowSelection,2)==nil)
         U.CoverageClick(4)
-        assert(bbPartyFeedback=='Self only')
-        s.actors.B.alive=false
-        source(s,'TARGET','A',60,'t',6)
-        U.Refresh(false)
-        return not findrow('TARGET').everyone
-    ''')
-
-
-def test_bulk_add_can_coexist_with_an_unrelated_already_unavailable_request(dashboard):
-    assert dashboard.execute('''
-        local s=snapshot()
-        source(s,'BUFF','A',60,'a',2)
-        setup(s,{request('GONE','A')})
-        assert(findrow('BUFF').everyone)
-        U.DashboardClick(4)
-        return #U.preset.requests==3 and U.plan.missing==1
-            and U.plan.decisions[1].request.group=='GONE'
+        return bbPartyFeedback=='Self only'
     ''')
 
 
@@ -107,8 +90,8 @@ def test_party_buffs_are_visible_in_individual_filters_but_still_cast_once(dashb
         source(s,'SELF','B',60,'b',1,{selfOnly=true})
         setup(s);U.SetRecipient(1)
         assert(findrow('BLESS') and not findrow('SELF'))
-        findrow('BLESS');U.DashboardClick(5);assert(#U.preset.requests==0)
-        findrow('BLESS');U.DashboardClick(4)
+        findrow('BLESS');U.DashboardClick(6);assert(#U.preset.requests==0)
+        findrow('BLESS');U.DashboardClick(5)
         findrow('BLESS')
         return #U.preset.requests==1 and U.preset.requests[1].target=='party'
             and U.plan.used.a==1
@@ -188,7 +171,7 @@ def test_compact_coverage_matrix_uses_the_same_plan_and_single_party_cast(dashbo
         setup(s);findrow('BUFF');U.CoverageClick(4)
         assert(U.preset.requests[1].target=='B')
         local row=findrow('BUFF');assert(U.CoverageText(bbPartyRowSelection,2)=='[x]')
-        findrow('BLESS');U.DashboardClick(4)
+        findrow('BLESS');U.DashboardClick(5)
         findrow('BLESS')
         assert(U.CoverageText(bbPartyRowSelection,1)=='[x] Party')
         U.CoverageClick(3)
@@ -229,16 +212,12 @@ def test_manual_include_enters_real_snapshot_without_bypassing_source_rules(dash
     ''')
 
 
-def test_everyone_respects_request_limit_without_partial_add(dashboard):
+def test_individual_toggle_respects_request_limit(dashboard):
     assert dashboard.execute('''
-        local s=snapshot();source(s,'BUFF','A',60,'a',256)
-        local req={};for i=1,255 do req[i]=request('BUFF','A') end
-        setup(s,req)
-        assert(findrow('BUFF').everyone)
-        U.DashboardClick(4)
-        assert(#U.preset.requests==256)
-        source(s,'OTHER','A',60,'b',2);U.Refresh(false)
-        return not findrow('OTHER').everyone and #U.preset.requests==256
+        local s=snapshot();source(s,'BUFF','A',60,'a',300)
+        local req={};for i=1,256 do req[i]=request('BUFF','A') end
+        setup(s,req);findrow('BUFF');U.DashboardClick(6)
+        return #U.preset.requests==256 and U.DashboardCell(bbPartyRowSelection,2)==nil
     ''')
 
 
@@ -298,4 +277,60 @@ def test_popups_have_separate_frame_shadow_and_content_geometry(dashboard):
         U.PopupLayout(true)
         return areas.bpRenameTop[2]<areas.bpRenameBg[2]
             and areas.bpRenameRight[1]==areas.bpRenameBg[1]+areas.bpRenameBg[3]
+    ''')
+
+
+def test_durations_follow_assigned_sources_and_recipient_filter(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'BUFF','A',120,'a',1);source(s,'BUFF','B',60,'b',1)
+        setup(s,{request('BUFF','A'),request('BUFF','B')});findrow('BUFF')
+        assert(U.RowDuration(bbPartyRowSelection)=='1.0m - 2.0m')
+        assert(U.CellDuration(bbPartyRowSelection,1)=='2.0m')
+        assert(U.CellDuration(bbPartyRowSelection,2)=='1.0m')
+        U.SetRecipient(2);findrow('BUFF')
+        return U.RowDuration(bbPartyRowSelection)=='1.0m'
+            and U.CellDuration(bbPartyRowSelection,1)=='1.0m'
+    ''')
+
+
+def test_party_portrait_toggle_casts_once_and_duration_uses_selected_variant(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'BUFF','A',60,'a',2,{aoe=true,variants={{resref='ALT'}},variantDurations={ALT=180}})
+        setup(s);findrow('BUFF')
+        U.Portrait=function(slot) return slot==0 and 'PA' or 'PB' end
+        assert(U.PartyPortrait(bbPartyRowSelection,1)=='PA')
+        assert(U.PartyPortrait(bbPartyRowSelection,2)=='PB')
+        assert(U.PartyPortrait(bbPartyRowSelection,3)=='')
+        assert(U.PartyText(bbPartyRowSelection)=='[ ] Party')
+        assert(U.RowDuration(bbPartyRowSelection)=='3.0m')
+        U.DashboardClick(5);findrow('BUFF')
+        assert(#U.preset.requests==1 and U.plan.used.a==1)
+        assert(U.PartyText(bbPartyRowSelection)=='[x] Party')
+        U.DashboardClick(5)
+        return #U.preset.requests==0
+    ''')
+
+
+def test_duration_distinguishes_unavailable_unknown_and_permanent(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'PERM','A',-1,'a',1);source(s,'UNKNOWN','A',0,'b',1)
+        setup(s,{request('GONE','B')})
+        findrow('PERM');assert(U.RowDuration(bbPartyRowSelection)=='Permanent')
+        findrow('UNKNOWN');assert(U.RowDuration(bbPartyRowSelection)=='Instant/unknown')
+        findrow('GONE')
+        return U.RowDuration(bbPartyRowSelection)=='Buff unavailable'
+            and U.CellDuration(bbPartyRowSelection,1)==''
+    ''')
+
+
+def test_clear_removes_only_this_rows_assignments(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'a',2)
+        source(s,'OTHER','A',60,'b',1)
+        setup(s,{request('BUFF','A'),request('BUFF','B'),request('OTHER','B')})
+        findrow('BUFF');U.DashboardClick(11)
+        return #U.preset.requests==1 and U.preset.requests[1].group=='OTHER'
     ''')

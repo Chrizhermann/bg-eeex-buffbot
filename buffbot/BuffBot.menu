@@ -1900,6 +1900,12 @@ menu
 
 
 
+
+
+
+
+
+
 -- Recipient-first party planner (single-player beta).
 -- Dashboard content and allocations are prepared in BfBotPUI.lua.
 menu
@@ -2150,9 +2156,60 @@ menu
 	}
 	label
 	{
-		name "bpColumnNames"
+		name "bpHeadIcon"
 		enabled "BfBot.PartyUI.view == 'dashboard'"
-		text lua "BfBot.PartyUI.ColumnNames()"
+		text lua "BfBot.Plan.Text('Icon')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadName"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Name')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadUses"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Uses')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		tooltip lua "BfBot.Plan.Text('Free / total uses')"
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadDuration"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Duration')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadRecipients"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Recipients')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadActions"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Actions')"
 		text style "bb_normal_parchment"
 		text color lua "{38,32,26}"
 		text align left center
@@ -2232,7 +2289,7 @@ menu
 		}
 		column
 		{
-			width 24
+			width 22
 			label
 			{
 				area 2 0 -1 52
@@ -2244,7 +2301,7 @@ menu
 		}
 		column
 		{
-			width 7
+			width 8
 			label
 			{
 				area 2 0 -1 52
@@ -2256,19 +2313,70 @@ menu
 		}
 		column
 		{
-			width 10
+			width 11
 			label
 			{
 				area 2 0 -1 52
-				text lua "BfBot.PartyUI.QuickText(rowNumber)"
+				text lua "BfBot.PartyUI.RowDuration(rowNumber)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.QuickColor(rowNumber)"
+				text color lua "{38,32,26}"
 				text align left center
 			}
 		}
 		column
 		{
 			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].party"
+				rectangle 1
+				rectangle opacity lua "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].partyCell.checked and 28 or 5"
+			}
+			label
+			{
+				area 4 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,1)"
+				scaleToClip
+			}
+			label
+			{
+				area 9 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,2)"
+				scaleToClip
+			}
+			label
+			{
+				area 14 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,3)"
+				scaleToClip
+			}
+			label
+			{
+				area 19 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,4)"
+				scaleToClip
+			}
+			label
+			{
+				area 24 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,5)"
+				scaleToClip
+			}
+			label
+			{
+				area 29 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,6)"
+				scaleToClip
+			}
+			label
+			{
+				area 51 0 -1 52
+				text lua "BfBot.PartyUI.PartyText(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.PartyColor(rowNumber)"
+				text align left center
+			}
 			label
 			{
 				area 2 3 -1 46
@@ -2286,10 +2394,18 @@ menu
 			}
 			label
 			{
-				area 28 0 -1 52
+				area 28 0 -1 30
 				text lua "BfBot.PartyUI.CellText(rowNumber,1)"
 				text style "bb_normal_parchment"
 				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,1)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,1)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
 				text align left center
 			}
 		}
@@ -2313,10 +2429,18 @@ menu
 			}
 			label
 			{
-				area 28 0 -1 52
+				area 28 0 -1 30
 				text lua "BfBot.PartyUI.CellText(rowNumber,2)"
 				text style "bb_normal_parchment"
 				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,2)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,2)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
 				text align left center
 			}
 		}
@@ -2340,10 +2464,18 @@ menu
 			}
 			label
 			{
-				area 28 0 -1 52
+				area 28 0 -1 30
 				text lua "BfBot.PartyUI.CellText(rowNumber,3)"
 				text style "bb_normal_parchment"
 				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,3)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,3)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
 				text align left center
 			}
 		}
@@ -2367,10 +2499,18 @@ menu
 			}
 			label
 			{
-				area 28 0 -1 52
+				area 28 0 -1 30
 				text lua "BfBot.PartyUI.CellText(rowNumber,4)"
 				text style "bb_normal_parchment"
 				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,4)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,4)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
 				text align left center
 			}
 		}
@@ -2394,10 +2534,18 @@ menu
 			}
 			label
 			{
-				area 28 0 -1 52
+				area 28 0 -1 30
 				text lua "BfBot.PartyUI.CellText(rowNumber,5)"
 				text style "bb_normal_parchment"
 				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,5)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,5)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
 				text align left center
 			}
 		}
@@ -2421,10 +2569,18 @@ menu
 			}
 			label
 			{
-				area 28 0 -1 52
+				area 28 0 -1 30
 				text lua "BfBot.PartyUI.CellText(rowNumber,6)"
 				text style "bb_normal_parchment"
 				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,6)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,6)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
 				text align left center
 			}
 		}
