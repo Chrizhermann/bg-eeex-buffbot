@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-19",
+  "upstream_tag": "v1.10.1",
+  "upstream_commit": "c1f2eb6cea3b555024853d8e99fc55dc5bd372d7",
+  "automated": {
+    "full_suite_passed": 783,
+    "deselected": 5,
+    "deselection_reason": "Existing Windows symbolic-link privilege tests.",
+    "dashboard_tests": 35,
+    "variant_and_scroll_regressions_added": 7
+  },
+  "native": {
+    "abjuration": "Spell Immunity \u2014 Abjuration",
+    "assignments": [
+      "Spell Immunity \u2014 Abjuration",
+      "Spell Immunity \u2014 Divination"
+    ],
+    "clear_resets_scroll": true,
+    "divination": "Spell Immunity \u2014 Divination",
+    "popup_hint": "Shared uses: Spell Immunity\nVariants spend the same parent spell uses.",
+    "popup_title": "Sources: Spell Immunity \u2014 Abjuration",
+    "scroll_after": 0,
+    "scroll_before": 2000,
+    "shared_parent_reservation": true,
+    "variant_rows": 8
+  },
+  "live_casting": {
+    "actors": [
+      {
+        "active": true,
+        "after": 1,
+        "before": 2,
+        "name": "Simmeon",
+        "variant": "SpWi590"
+      },
+      {
+        "active": true,
+        "after": 1,
+        "before": 2,
+        "name": "Jan",
+        "variant": "SpWi592"
+      }
+    ],
+    "state": "done"
+  },
+  "legacy_menu_preserved_except_added_rest_tick": true,
+  "personal_install_modified": false,
+  "scope": "Single-player isolated EET copy. Other opcode-214 variant resources use the same discovered-data path; not every game/mod combination has live acceptance. See recipient-upstream-compatibility.md for legacy-only features.",
+  "native_catalog_counts": {
+    "catalog_rows": 147,
+    "dashboard_rows": 107,
+    "filtered_rows": 8,
+    "scroll_top": 0
+  },
+  "discovered_variant_families": [
+    {
+      "parent": "Rapid Shot",
+      "variants": 2
+    },
+    {
+      "parent": "Expertise",
+      "variants": 3
+    },
+    {
+      "parent": "Shapechange",
+      "variants": 6
+    },
+    {
+      "parent": "Polymorph Self",
+      "variants": 6
+    },
+    {
+      "parent": "Spell Immunity",
+      "variants": 8
+    },
+    {
+      "parent": "Power Attack",
+      "variants": 3
+    }
+  ]
+}

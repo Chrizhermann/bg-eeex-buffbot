@@ -1910,6 +1910,8 @@ menu
 
 
 
+
+
 -- Recipient-first party planner (single-player beta).
 -- Dashboard content and allocations are prepared in BfBotPUI.lua.
 menu
@@ -3015,6 +3017,26 @@ menu
 	{
 		name "bpChoicesBg"
 		mosaic "BFBOTBG"
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesTitle"
+		enabled "bbPartyChoiceTitle ~= ''"
+		text lua "bbPartyChoiceTitle"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesHint"
+		enabled "bbPartyChoiceHint ~= ''"
+		text lua "bbPartyChoiceHint"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
 		area 0 0 100 28
 	}
 	list

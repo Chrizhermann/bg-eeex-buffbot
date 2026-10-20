@@ -32,6 +32,11 @@ def dashboard(lua):
                 if r.key==key then bbPartyRowSelection=i;return r end
             end
         end
+        function findvariant(key,variant)
+            for i,r in ipairs(bbPartyRows) do
+                if r.key==key and r.variant==variant then bbPartyRowSelection=i;return r end
+            end
+        end
     ''')
     return lua
 
@@ -401,3 +406,114 @@ def test_search_placeholder_cannot_cover_input_and_headers_dispatch_sort():
     assert dashboard.index('name "bpSearchHint"') < dashboard.index('name "bpSearch"')
     assert 'action "BfBot.PartyUI.SortBy(\'name\')"' in dashboard
     assert 'action "BfBot.PartyUI.SortBy(\'duration\')"' in dashboard
+
+
+def test_variants_are_independent_recipient_rows_with_shared_parent_uses(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        local variants={{resref='ABJ',name='Immunity: Abjuration',icon='ABJICON'},
+            {resref='DIV',name='Immunity: Divination',icon='DIVICON'}}
+        source(s,'IMMUNITY','A',0,'a',2,{selfOnly=true,variants=variants,variantDurations={ABJ=120,DIV=60}})
+        source(s,'IMMUNITY','B',0,'b',2,{selfOnly=true,variants=variants,variantDurations={ABJ=240,DIV=180}})
+        s.groups.IMMUNITY.name='Spell Immunity'
+        setup(s)
+        assert(#bbPartyRows==2)
+        local abj=findvariant('IMMUNITY','ABJ')
+        assert(abj.name=='Spell Immunity — Abjuration' and abj.icon=='ABJICON')
+        U.DashboardClick(5)
+        findvariant('IMMUNITY','DIV');U.DashboardClick(6)
+        assert(#U.preset.requests==2 and U.preset.requests[1].var=='ABJ' and U.preset.requests[2].var=='DIV')
+        assert(U.plan.used.a==1 and U.plan.used.b==1)
+        assert(findvariant('IMMUNITY','ABJ').cells[1].checked)
+        assert(not findvariant('IMMUNITY','ABJ').cells[2].checked)
+        assert(findvariant('IMMUNITY','DIV').cells[2].checked)
+        assert(not findvariant('IMMUNITY','DIV').cells[1].checked)
+        assert(bbPartyRequests[1].name=='Spell Immunity — Abjuration')
+        assert(bbPartyRequests[2].name=='Spell Immunity — Divination')
+        local saved=P.Validate(U.state)
+        local queue=P.BuildQueue(s,saved.presets[1].requests)
+        return #queue==2 and queue[1].spell=='IMMUNITY' and queue[1].var=='ABJ'
+            and queue[2].spell=='IMMUNITY' and queue[2].var=='DIV'
+            and queue[1].target=='self' and queue[2].target=='self'
+    ''')
+
+
+def test_different_schools_on_one_recipient_do_not_toggle_or_clear_each_other(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'CHOICE','A',0,'a',3,{selfOnly=true,variants={{resref='FIRE'},{resref='COLD'}}})
+        setup(s,{request('CHOICE','A',nil,'FIRE'),request('CHOICE','A',nil,'FIRE'),request('CHOICE','A',nil,'COLD')})
+        findvariant('CHOICE','FIRE');U.DashboardClick(5)
+        assert(#U.preset.requests==1 and U.preset.requests[1].var=='COLD')
+        findvariant('CHOICE','FIRE');U.DashboardClick(5)
+        findvariant('CHOICE','COLD');U.DashboardClick(11)
+        return #U.preset.requests==1 and U.preset.requests[1].var=='FIRE'
+    ''')
+
+
+def test_variant_reservations_block_other_schools_without_losing_existing_choices(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'CHOICE','A',0,'a',1,{selfOnly=true,variants={{resref='FIRE'},{resref='COLD'}}})
+        setup(s);findvariant('CHOICE','FIRE');U.DashboardClick(5)
+        local cold=findvariant('CHOICE','COLD')
+        assert(cold.uses=='0/1' and not cold.cells[1].available and not cold.cells[1].checked)
+        U.DashboardClick(5)
+        return #U.preset.requests==1 and U.plan.used.a==1 and U.preset.requests[1].var=='FIRE'
+    ''')
+
+
+def test_unavailable_or_unconfigured_saved_variants_remain_distinct_and_removable(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'CHOICE','A',0,'a',1,{variants={{resref='FIRE'}}})
+        setup(s,{request('CHOICE','A',nil,'REMOVED'),request('CHOICE','B')})
+        assert(#bbPartyRows==3 and U.plan.missing==2)
+        assert(findvariant('CHOICE','REMOVED').cells[1].checked)
+        assert(findvariant('CHOICE',nil).cells[2].checked)
+        findvariant('CHOICE','REMOVED');U.DashboardClick(11)
+        findvariant('CHOICE',nil);U.DashboardClick(11)
+        return #U.preset.requests==0 and #bbPartyRows==1
+    ''')
+
+
+def test_missing_parent_keeps_separate_saved_variant_rows(dashboard):
+    assert dashboard.execute('''
+        setup(snapshot(),{request('GONE','A',nil,'FIRE'),request('GONE','B',nil,'COLD')})
+        assert(#bbPartyRows==2)
+        findvariant('GONE','FIRE');U.DashboardClick(11)
+        return #U.preset.requests==1 and U.preset.requests[1].var=='COLD'
+    ''')
+
+
+def test_variant_source_popup_describes_parent_pool_and_child_duration(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'CHOICE','A',0,'a',2,{variants={{resref='FIRE',name='Fire'}},variantDurations={FIRE=180}})
+        setup(s);U.OpenChoices('sources','CHOICE','FIRE')
+        assert(bbPartyChoiceTitle=='Sources: CHOICE — Fire')
+        assert(bbPartyChoiceHint:find('same parent spell uses',1,true))
+        assert(bbPartyChoices[1].name=='Caster: A / 3.0m / Uses: 2/2')
+        for _,row in ipairs(bbPartyChoices) do assert(row.kind~='variant') end
+        assert(bbPartyChoices[#bbPartyChoices].name=='Hide spell and all variants')
+        bbPartyChoiceSelection=#bbPartyChoices;U.Choose()
+        return #bbPartyRows==0 and U.state.hidden.CHOICE==1
+    ''')
+
+
+def test_search_resets_both_list_scroll_positions_but_cached_refresh_does_not(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'a',1)
+        setup(s);local resets={}
+        EEex_Menu_GetItem=function(name)
+            return {scrollbar=setmetatable({},{__newindex=function(_,key,value)
+                assert(key=='top' and value==0);resets[#resets+1]=name
+            end})}
+        end
+        bbPartyQuery='buff';U.Tick()
+        assert(#resets==2 and resets[1]=='bpDashboard' and resets[2]=='bpCoverage')
+        U.Tick();U.Refresh(false);assert(#resets==2)
+        U.ClearSearch();assert(#resets==4)
+        U.SortBy('duration');assert(#resets==6)
+        U.SetRecipient(1)
+        return #resets==8 and #U.preset.requests==0
+    ''')

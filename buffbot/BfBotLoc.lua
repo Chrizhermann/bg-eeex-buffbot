@@ -3,6 +3,14 @@
 BfBot = BfBot or {}
 
 local _registry = {
+    ["party.text96"] = { id = 1095, fallback = [=[Shared uses: ]=] },
+    ["party.text97"] = { id = 1096, fallback = [=[Sources: ]=] },
+    ["party.text98"] = { id = 1097, fallback = [=[Variants spend the same parent spell uses.]=] },
+    ["party.text99"] = { id = 1098, fallback = [=[Available casters and durations. Select recipients in the main list.]=] },
+    ["party.text100"] = { id = 1099, fallback = [=[Caster: ]=] },
+    ["party.text101"] = { id = 1100, fallback = [=[Uses: ]=] },
+    ["party.text102"] = { id = 1101, fallback = [=[Hide spell and all variants]=] },
+
     ["party.text95"] = { id = 1094, fallback = [=[Sort by longest duration]=] },
     ["party.text93"] = { id = 1092, fallback = [=[Actions]=] },
     ["party.text89"] = { id = 1088, fallback = [=[Icon]=] },

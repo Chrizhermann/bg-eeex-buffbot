@@ -3,10 +3,10 @@
   "environment": "isolated single-player EET copy, engine 2.6.6.0",
   "personal_install_modified": false,
   "automated": {
-    "full_suite_passed": 764,
+    "full_suite_passed": 783,
     "deselected": 5,
     "deselection_reason": "Existing Windows symbolic-link privilege tests.",
-    "new_dashboard_tests": 28,
+    "new_dashboard_tests": 35,
     "final_targeted_passed": 140
   },
   "native": {
@@ -170,5 +170,18 @@
     "visual_review": "Compact framed search field above Actions; Name and Duration headers expose direction arrows. Placeholder precedes edit control so it cannot block focus.",
     "sort_policy": "Duration uses range maximum, then minimum; unknown/unavailable durations remain last. Name comparison ignores case; equal names use stable resource identity. Browser sorting preserves cast order.",
     "personal_install_modified": false
+  },
+  "variant_scroll_verification": {
+    "evidence": "recipient-variants-acceptance.json",
+    "upstream_audit": "recipient-upstream-compatibility.md",
+    "generic_selection_variants_expanded": true,
+    "per_recipient_variant_identity": true,
+    "shared_parent_resources": true,
+    "descriptive_source_popups": true,
+    "native_search_scroll_reset": {
+      "before": 2000,
+      "after": 0
+    },
+    "live_cast_effects_and_parent_consumption_verified": true
   }
 }

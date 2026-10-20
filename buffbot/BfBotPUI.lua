@@ -87,6 +87,24 @@ local function sourceDescription(d)
     return d.source.casterName .. " / " .. U.Duration(d.duration)
         .. (U.TargetWarning(d) and P.Text(" / improved invisible") or "")
 end
+function U.VariantInfo(group, variant)
+    for _,source in ipairs(group and group.sources or {}) do
+        for _,v in ipairs(source.variants or {}) do
+            if v.resref == variant then return v end
+        end
+    end
+end
+function U.BuffName(group, variant)
+    if not group then return variant or "" end
+    if not variant then return group.name end
+    local v = U.VariantInfo(group, variant)
+    local name = v and (v.name or v.label) or variant
+    if name == group.name or name == variant then name = v and v.label or variant end
+    local prefix, suffix = name:match("^(.-):%s*(.+)$")
+    if prefix and group.name:sub(-#prefix):lower()==prefix:lower() then name=suffix end
+    if name:lower():find(group.name:lower(),1,true) then return name end
+    return group.name .. " — " .. name
+end
 function U.Refresh(fresh)
     if fresh ~= false then BfBot.Scan.InvalidateAll() end
     U.state = P.GetState()
@@ -151,7 +169,7 @@ function U.Refresh(fresh)
         local r = d.request
         local g = U.snapshot.groups[r.group]
         local actor = U.snapshot.actors[r.target]
-        bbPartyRequests[i] = { request = r, name = g and g.name or r.group,
+        bbPartyRequests[i] = { request = r, name = g and U.BuffName(g,r.var) or r.group .. (r.var and (" — " .. r.var) or ""),
             target = r.target == "party" and P.Text("Party") or (actor and actor.name or r.target),
             assignment = sourceDescription(d), unavailable = d.source == nil }
         if r == U.request then bbPartyRequestSelection = i end
@@ -329,13 +347,13 @@ local function copyRequests(requests)
     for i, r in ipairs(requests) do result[i] = r end
     return result
 end
-local function planned(group, target)
+local function planned(group, target, variant)
     for i, r in ipairs(U.preset.requests) do
-        if r.group == group and r.target == target then return i end
+        if r.group == group and r.target == target and r.var == variant then return i end
     end
 end
 function U.Preview(group, target, variant)
-    local index = planned(group, target)
+    local index = planned(group, target, variant)
     if index then return U.plan.decisions[index], index end
     local trial = copyRequests(U.preset.requests)
     trial[#trial + 1] = { group = group, target = target, var = variant, on = 1 }
@@ -364,79 +382,88 @@ function U.BuildDashboard()
     U.dashboard = {}
     local counts = {}
     for _, g in pairs(U.snapshot.groups) do counts[g.name] = (counts[g.name] or 0) + 1 end
-    local requested = {}
-    for _, r in ipairs(U.preset.requests) do requested[r.group] = true end
-    for _, catalog in ipairs(bbPartyBuffs) do
-        local group = U.snapshot.groups[catalog.key]
-        local row = { key = catalog.key, name = group.name, icon = group.icon or "",
-            uses = catalog.uses, free = 0, total = 0, planned = 0, cells = {},
-            variant = U._variant[catalog.key], party = false }
+    local function buildRow(key, group, variant, metadata, isVariantGroup)
+        local row = { key=key, id=key .. ":" .. (variant or ""), variant=variant,
+            name=group and U.BuffName(group,variant) or key .. (variant and (" — " .. variant) or ""),
+            icon=metadata and metadata.icon ~= "" and metadata.icon or group and group.icon or "",
+            free=0,total=0,planned=0,cells={},party=false,qualifier="",variantGroup=isVariantGroup }
         local pools, livingSource = {}, false
-        local variants, seen = {}, {}
-        for _, source in ipairs(group.sources) do
-            local cap = U.snapshot.pools[source.pool] or 0
-            if not source.reason and cap > 0 then livingSource = true end
-            if not source.reason and not pools[source.pool] then
-                row.total = row.total + cap
-                row.free = row.free + math.max(0, cap - (U.plan.used[source.pool] or 0))
-                pools[source.pool] = true
-            end
-            row.party = row.party or source.aoe == true
-            for _, variant in ipairs(source.variants or {}) do
-                if not seen[variant.resref] then
-                    variants[#variants + 1] = variant; seen[variant.resref] = true
+        for _,source in ipairs(group and group.sources or {}) do
+            local compatible = variant and U.VariantInfo({sources={source}},variant)
+                or not variant and not (source.variants and #source.variants>0)
+            if compatible then
+                local cap=U.snapshot.pools[source.pool] or 0
+                if not source.reason and cap>0 then livingSource=true end
+                if not source.reason and not pools[source.pool] then
+                    row.total=row.total+cap
+                    row.free=row.free+math.max(0,cap-(U.plan.used[source.pool] or 0))
+                    pools[source.pool]=true
                 end
+                row.party=row.party or source.aoe==true
+                row.atWill=row.atWill or source.row.atWill==1
             end
         end
-        table.sort(variants, function(a, b) return a.resref < b.resref end)
-        if #variants > 0 and not seen[row.variant] then row.variant = variants[1].resref end
-        U._variant[row.key], row.variants = row.variant, variants
-        local item = group.kind == "itm" or group.sources[1] and group.sources[1].row.kind == "itm"
-        row.qualifier = item and P.Text("Item") or ""
-        if counts[group.name] > 1 then
-            row.qualifier = (item and P.Text("Item") or P.Text("Spell"))
-                .. " / " .. (group.sources[1] and group.sources[1].row.resref or row.key)
+        row.uses=row.atWill and P.Text("At will") or row.free .. "/" .. row.total
+        if group then
+            local item=group.kind=="itm" or group.sources[1] and group.sources[1].row.kind=="itm"
+            row.qualifier=item and P.Text("Item") or ""
+            if counts[group.name]>1 then
+                row.qualifier=(item and P.Text("Item") or P.Text("Spell"))
+                    .. " / " .. (group.sources[1] and group.sources[1].row.resref or key)
+            end
+            if isVariantGroup then row.qualifier=P.Text("Shared uses: ") .. group.name end
+            if isVariantGroup and not variant then row.qualifier=P.Text("Choose a supported variant") end
+            if variant and not metadata then row.qualifier=P.Text("Buff unavailable") end
+        else row.qualifier=P.Text("Buff unavailable") end
+        local party,index=U.Preview(key,"party",variant)
+        row.partyCell={decision=party,index=index,checked=index~=nil,
+            available=party and party.source~=nil,target="party",name=P.Text("Party")}
+        for i,actor in ipairs(U.snapshot.order) do
+            local d,existing=U.Preview(key,actor.key,variant)
+            row.cells[i]={target=actor.key,name=actor.name,slot=actor.slot,decision=d,
+                index=existing,checked=existing~=nil,available=d and d.source~=nil}
         end
-        for _, variant in ipairs(variants) do
-            if variant.resref == row.variant then
-                row.qualifier = variant.name or variant.label or variant.resref
+        for _,r in ipairs(U.preset.requests) do
+            if r.group==key and r.var==variant then
+                row.planned=row.planned+1
+                if r.target=="party" then row.party=true end
             end
         end
-        local party, index = U.Preview(row.key, "party", row.variant)
-        row.partyCell = { decision = party, index = index, checked = index ~= nil,
-            available = party and party.source ~= nil, target = "party", name = P.Text("Party") }
-        for i, actor in ipairs(U.snapshot.order) do
-            local d, existing = U.Preview(row.key, actor.key, row.variant)
-            row.cells[i] = { target = actor.key, name = actor.name, slot = actor.slot,
-                decision = d, index = existing, checked = existing ~= nil,
-                available = d and d.source ~= nil }
-        end
-        for _, r in ipairs(U.preset.requests) do if r.group == row.key then row.planned = row.planned + 1 end end
-        -- Exhausted but planned entries remain removable. Unknown/empty
-        -- sources do not clutter the browser with anonymous zero-use rows.
-        if (livingSource or requested[row.key]) and not U.state.hidden[row.key] then
-            U.dashboard[#U.dashboard + 1] = row
+        if (livingSource or row.planned>0) and not U.state.hidden[key] then
+            U.dashboard[#U.dashboard+1]=row
         end
     end
-    -- A missing resource is still a visible request, never silently erased.
-    for key in pairs(requested) do
-        if not U.snapshot.groups[key] and not U.state.hidden[key] then
-            local row = { key = key, name = key, icon = "", uses = "0/0", cells = {},
-                total = 0, free = 0, planned = 0, qualifier = P.Text("Buff unavailable") }
-            for i, actor in ipairs(U.snapshot.order) do
-                local d, index = U.Preview(key, actor.key)
-                row.cells[i] = { target = actor.key, name = actor.name, slot = actor.slot,
-                    checked = index ~= nil, index = index, decision = d, available = false }
+    for _,catalog in ipairs(bbPartyBuffs) do
+        local group=U.snapshot.groups[catalog.key]
+        local variants,seen={},{}
+        for _,source in ipairs(group.sources) do
+            for _,v in ipairs(source.variants or {}) do
+                if not seen[v.resref] then variants[#variants+1]=v;seen[v.resref]=true end
             end
-            local d, index = U.Preview(key, "party")
-            row.party, row.partyCell = index ~= nil, { target = "party", name = P.Text("Party"),
-                checked = index ~= nil, index = index, decision = d, available = false }
-            U.dashboard[#U.dashboard + 1] = row
+        end
+        if #variants==0 then buildRow(catalog.key,group,nil,nil,false)
+        else
+            for _,v in ipairs(variants) do buildRow(catalog.key,group,v.resref,v,true) end
+        end
+        -- Keep invalid/imported requests removable without silently choosing a school.
+        for _,r in ipairs(U.preset.requests) do
+            if r.group==catalog.key and ((r.var and not seen[r.var]) or (#variants>0 and not r.var and not seen[''])) then
+                buildRow(catalog.key,group,r.var,nil,#variants>0)
+                seen[r.var or '']=true
+            end
         end
     end
-    table.sort(U.dashboard, function(a,b)
-        if a.name ~= b.name then return a.name < b.name end
-        return a.key < b.key
+    -- Missing parent resources preserve each requested school independently.
+    local missing={}
+    for _,r in ipairs(U.preset.requests) do
+        local id=r.group .. ":" .. (r.var or "")
+        if not U.snapshot.groups[r.group] and not missing[id] then
+            buildRow(r.group,nil,r.var,nil,false);missing[id]=true
+        end
+    end
+    table.sort(U.dashboard,function(a,b)
+        if a.name~=b.name then return a.name<b.name end
+        return a.id<b.id
     end)
     U.FilterDashboard()
     bbPartySummary = {}
@@ -445,11 +472,10 @@ function U.BuildDashboard()
     for _, target in ipairs(targets) do
         bbPartySummary[#bbPartySummary + 1] = { heading = true, name = target.name, icon = "" }
         local added = false
-        for _, row in ipairs(bbPartyRequests) do
+        for i, row in ipairs(bbPartyRequests) do
             if row.request.target == target.key then
-                local group = U.snapshot.groups[row.request.group]
                 bbPartySummary[#bbPartySummary + 1] = { name = row.name,
-                    icon = group and group.icon or "", assignment = row.assignment,
+                    icon = U.RequestIcon(i), assignment = row.assignment,
                     unavailable = row.unavailable, request = row.request }
                 added = true
             end
@@ -465,6 +491,7 @@ function U.BuildDashboard()
     end
 end
 function U.FilterDashboard()
+    local queryChanged = bbPartyQuery ~= U.lastQuery
     bbPartyRows = {}
     local query = (bbPartyQuery or ""):lower()
     for _, row in ipairs(U.dashboard or {}) do
@@ -497,16 +524,25 @@ function U.FilterDashboard()
             if U.sortField == "name" and U.sortDescending then return an > bn end
             return an < bn
         end
-        return a.key < b.key
+        return a.id < b.id
     end)
     bbPartyRowSelection = 0
     U.lastQuery = bbPartyQuery
+    if queryChanged then U.ResetBrowserScroll() end
+end
+function U.ResetBrowserScroll()
+    if not EEex_Menu_GetItem then return end
+    for _,name in ipairs({"bpDashboard","bpCoverage"}) do
+        local item=EEex_Menu_GetItem(name)
+        if item and item.scrollbar then item.scrollbar.top=0 end
+    end
 end
 function U.SortBy(field)
     if field ~= "name" and field ~= "duration" then return end
     if U.sortField == field then U.sortDescending = not U.sortDescending
     else U.sortField, U.sortDescending = field, false end
     U.FilterDashboard()
+    U.ResetBrowserScroll()
 end
 function U.SortHeading(field)
     return P.Text(field == "name" and "Name" or "Duration")
@@ -522,6 +558,7 @@ function U.SetRecipient(slot)
     local actor = slot and U.snapshot.order[slot]
     U.recipient = actor and actor.key or "all"
     U.FilterDashboard()
+    U.ResetBrowserScroll()
 end
 function U.RecipientName(slot)
     return slot == 0 and P.Text("All buffs") or U.snapshot and U.snapshot.order[slot]
@@ -634,7 +671,7 @@ function U.ToggleCell(row, target)
         -- for this recipient together instead of leaving a hidden duplicate.
         for i = #U.preset.requests, 1, -1 do
             local r = U.preset.requests[i]
-            if r.group == row.key and r.target == target then table.remove(U.preset.requests, i) end
+            if r.group == row.key and r.target == target and r.var == row.variant then table.remove(U.preset.requests, i) end
         end
         bbPartyFeedback = ""
     elseif not decision or not decision.source then
@@ -648,7 +685,7 @@ end
 function U.DashboardClick(column)
     local row = bbPartyRows[bbPartyRowSelection]
     if not row then return end
-    if column <= 2 then U.OpenChoices("sources", row.key)
+    if column <= 2 then U.OpenChoices("sources", row.key, row.variant)
     elseif column >= 5 and column <= 10 then
         if row.party then
             if column == 5 then U.ToggleCell(row,"party") end
@@ -658,7 +695,7 @@ function U.DashboardClick(column)
         end
     elseif column == 11 then
         for i = #U.preset.requests, 1, -1 do
-            if U.preset.requests[i].group == row.key then table.remove(U.preset.requests, i) end
+            if U.preset.requests[i].group == row.key and U.preset.requests[i].var == row.variant then table.remove(U.preset.requests, i) end
         end
         U.Refresh(false)
     end
@@ -675,7 +712,7 @@ end
 function U.CoverageClick(column)
     local row = bbPartyRows[bbPartyRowSelection]
     if not row then return end
-    if column <= 2 then U.OpenChoices("sources", row.key)
+    if column <= 2 then U.OpenChoices("sources", row.key, row.variant)
     elseif row.party then bbPartyFeedback = P.Text("Party-wide cast")
     else
         local cell = U.Cell(bbPartyRowSelection, column - 2)
@@ -708,7 +745,8 @@ end
 function U.RequestIcon(index)
     local row = bbPartyRequests[index]
     local group = row and U.snapshot.groups[row.request.group]
-    return group and group.icon or ""
+    local v = row and U.VariantInfo(group,row.request.var)
+    return v and v.icon ~= "" and v.icon or group and group.icon or ""
 end
 function U.SummaryClick()
     local row = bbPartySummary[bbPartySummarySelection]
@@ -716,8 +754,9 @@ function U.SummaryClick()
     U.request, U.view = row.request, "order"
     U.Refresh(false)
 end
-function U.OpenChoices(mode, key)
+function U.OpenChoices(mode, key, variant)
     U.choiceMode, U.choiceGroup = mode, key
+    bbPartyChoiceTitle, bbPartyChoiceHint = "", ""
     bbPartyChoices, bbPartyChoiceSelection = {}, 0
     local function add(name, kind, value, icon)
         bbPartyChoices[#bbPartyChoices + 1] = {name=name,kind=kind,value=value,icon=icon or ""}
@@ -735,25 +774,36 @@ function U.OpenChoices(mode, key)
         add(P.Text("Caster editor"), "legacy")
     elseif mode == "sources" then
         local group = U.snapshot.groups[key]
+        bbPartyChoiceTitle = P.Text("Sources: ") .. (group and U.BuffName(group,variant) or key)
+        local hasVariants = false
+        for _,s in ipairs(group and group.sources or {}) do
+            if s.variants and #s.variants>0 then hasVariants=true end
+        end
+        bbPartyChoiceHint = hasVariants and (P.Text("Shared uses: ") .. group.name
+            .. "\n" .. P.Text("Variants spend the same parent spell uses."))
+            or P.Text("Available casters and durations. Select recipients in the main list.")
         local seen = {}
         for _, source in ipairs(group and group.sources or {}) do
-            local label = source.casterName .. " / " .. U.Duration(source.duration)
-            if not seen[label] then add(label, "info"); seen[label] = true end
-        end
-        for _, row in ipairs(U.dashboard) do
-            if row.key == key then
-                for _, variant in ipairs(row.variants or {}) do
-                    add(P.Text("Variant: ") .. (variant.name or variant.label or variant.resref), "variant", variant.resref)
-                end
+            if (variant and U.VariantInfo({sources={source}},variant))
+                or (not variant and not hasVariants) then
+                local cap=U.snapshot.pools[source.pool] or 0
+                local duration=variant and source.variantDurations and source.variantDurations[variant] or source.duration
+                local label=P.Text("Caster: ") .. source.casterName .. " / " .. U.Duration(duration)
+                    .. " / " .. P.Text("Uses: ") .. math.max(0,cap-(U.plan.used[source.pool] or 0)) .. "/" .. cap
+                    .. (source.reason and (" / " .. source.reason) or "")
+                if not seen[label] then add(label,"info");seen[label]=true end
             end
         end
-        add(P.Text("Hide"), "hide", key)
+        if #bbPartyChoices==0 then add(P.Text("No eligible source"),"info") end
+        add(P.Text(hasVariants and "Hide spell and all variants" or "Hide"), "hide", key)
     elseif mode == "hidden" then
+        bbPartyChoiceTitle=P.Text("Hidden")
         for hidden in pairs(U.state.hidden) do
             local group = U.snapshot.groups[hidden]
             add(group and group.name or hidden, "restore", hidden, group and group.icon)
         end
     elseif mode == "add" then
+        bbPartyChoiceTitle=P.Text("Add spell / item")
         local seen = {}
         for _, actor in ipairs(U.snapshot.order) do
             for _, row in pairs(actor.rows or {}) do
@@ -782,7 +832,6 @@ function U.Choose()
     elseif row.kind == "hide" then U.state.hidden[row.value] = 1
     elseif row.kind == "restore" then U.state.hidden[row.value] = nil
     elseif row.kind == "include" then U.state.hidden[row.value] = nil; U.state.include[row.value] = 1
-    elseif row.kind == "variant" then U._variant[U.choiceGroup] = row.value
     elseif row.kind == "rename" then U.OpenRename(); return
     elseif row.kind == "import" then U.ImportLegacy(); return
     elseif row.kind == "legacy" then U.Legacy(); return end
@@ -802,7 +851,9 @@ function U.SaveName()
 end
 function U.PopupLayout(rename)
     local sw,sh = Infinity_GetScreenSize()
-    local w,h = math.min(520,sw-40), rename and 142 or math.min(430,sh-40,#bbPartyChoices*34+64)
+    local header = not rename and bbPartyChoiceTitle and bbPartyChoiceTitle~=""
+        and (bbPartyChoiceHint~="" and 88 or 40) or 0
+    local w,h = math.min(520,sw-40), rename and 142 or math.min(430,sh-40,#bbPartyChoices*34+64+header)
     local x,y = math.floor((sw-w)/2),math.floor((sh-h)/2)
     if not rename and (U.choiceMode == "presets" or U.choiceMode == "rest" or U.choiceMode == "settings") then
         local anchor = U.choiceMode == "presets" and "bpPreset"
@@ -824,7 +875,9 @@ function U.PopupLayout(rename)
         area("bpChoicesShadow",5,5,w+2,h+2)
         area("bpChoicesTop",-3,-3,w+6,3);area("bpChoicesBottom",-3,h,w+6,3)
         area("bpChoicesLeft",-3,0,3,h);area("bpChoicesRight",w,0,3,h)
-        area("bpChoicesBg",0,0,w,h);area("bpChoices",12,12,w-24,h-64)
+        area("bpChoicesBg",0,0,w,h)
+        area("bpChoicesTitle",12,10,w-24,30);area("bpChoicesHint",12,42,w-24,44)
+        area("bpChoices",12,12+header,w-24,h-64-header)
         area("bpChoicesClose",w-94,h-42,78,28)
     end
 end

@@ -564,3 +564,18 @@
 
 // party.text95
 @1094 = ~Sort by longest duration~
+
+// party.text96
+@1095 = ~Shared uses: ~
+// party.text97
+@1096 = ~Sources: ~
+// party.text98
+@1097 = ~Variants spend the same parent spell uses.~
+// party.text99
+@1098 = ~Available casters and durations. Select recipients in the main list.~
+// party.text100
+@1099 = ~Caster: ~
+// party.text101
+@1100 = ~Uses: ~
+// party.text102
+@1101 = ~Hide spell and all variants~

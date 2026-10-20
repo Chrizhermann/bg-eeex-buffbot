@@ -24,7 +24,8 @@ characters, select their portraits individually. **Clear** removes the row's
 assignments. Character tabs filter the same list,
 and party-wide spells remain available in those focused views.
 The small **Search** field at the top filters spell names as you type; **X** clears
-it. Click **Name** or **Duration** to sort, then click again to reverse direction.
+it. Changing or clearing search returns the list to the top. Click **Name** or
+**Duration** to sort, then click again to reverse direction.
 The active header shows an arrow. Duration ranges sort by their longest value;
 unknown/unavailable durations stay last. Browser sorting does not alter cast order.
 
@@ -38,7 +39,14 @@ Native sorcerer/shaman level slots and physical item charge counters are
 reserved across the whole plan. Available uses are shown as unreserved/total.
 Empty or unknown sources are filtered from the dashboard; planned entries remain
 visible when a source disappears or an item runs out. Click a spell name for its
-sources, durations, variants, and **Hide**. Hidden spells remain in the plan and
+sources, durations, and **Hide**. Selection spells such as Spell Immunity show
+each discovered variant as its own named row and icon. Different recipients can
+choose different schools, and multiple schools can be planned for one recipient
+when enough parent uses remain. All variant rows reserve the same underlying
+parent spell/level pool. **Clear** affects only that variant's assignments;
+**Hide spell and all variants** hides the parent family without deleting requests.
+The source popup names the selected variant and explains its shared uses.
+Hidden spells remain in the plan and
 summary; **Hidden** restores them. **Add spell / item** includes known abilities
 the classifier missed. These browser choices save with the party plans. Blocked
 recipient cells remain in the fixed-column **Coverage** comparison; clicking
@@ -48,6 +56,11 @@ Only identical spell resources or identical item power identities are combined;
 same-name variants remain separate. Self-only and party-wide restrictions still
 apply. Expected duration is an estimate from resource metadata, not a guarantee
 of identical strength, kit behavior, or every conditional effect.
+
+The [upstream compatibility audit](docs/recipient-upstream-compatibility.md)
+distinguishes retained upstream features from features still available only in
+**Options → Caster editor**. The recipient dashboard does not yet replace every
+legacy workflow.
 
 Improved invisible recipients carry a warning because the engine can reject
 targeted casts on them. Put invisibility after other targeted buffs when needed.

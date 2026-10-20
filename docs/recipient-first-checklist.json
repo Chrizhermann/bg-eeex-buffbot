@@ -6,7 +6,7 @@
   },
   "branch": "codex/recipient-first-buffbot",
   "validation": {
-    "automated_passed": 764,
+    "automated_passed": 783,
     "automated_deselected": 5,
     "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
     "new_item_graph_regressions": 19,
@@ -21,11 +21,13 @@
     "new_planner_regressions": 28,
     "live_evidence": "recipient-first-live-acceptance.json",
     "new_rest_regressions": 30,
-    "new_dashboard_regressions": 28,
+    "new_dashboard_regressions": 35,
     "dashboard_evidence": "recipient-dashboard-acceptance.json",
     "dashboard_polish_focused_passed": 60,
     "dashboard_headers_focused_passed": 117,
-    "dashboard_search_sort_focused_passed": 122
+    "dashboard_search_sort_focused_passed": 122,
+    "variants_evidence": "recipient-variants-acceptance.json",
+    "upstream_compatibility_audit": "recipient-upstream-compatibility.md"
   },
   "policies": {
     "initial_platform": "single-player EET",
@@ -122,11 +124,14 @@
         "The loaded party exposes 95 usable/planned dashboard rows from its 147-entry catalog; measured cached refresh was 7 ms.",
         "Dashboard packs only eligible or already-planned recipients into portrait strips; Coverage retains fixed columns. Dropdown and rename frames visually verified, with 210 visible recipient cells checked in the isolated copy.",
         "Labeled Icon, Name, Uses, Duration, Recipients and Actions columns. Source/variant-aware duration ranges and per-recipient durations; stacked-portrait Party toggle shares the recipient area. Individual portrait selection replaces Everyone. Native Party and Clear clicks verified.",
-        "Compact framed name-only search with live filtering and clear button, and ascending/descending Name and Duration header sorting. Sorting uses numeric source-aware durations and preserves cast order. Native keyboard filtering and clear/sort callbacks verified."
+        "Compact framed name-only search with live filtering and clear button, and ascending/descending Name and Duration header sorting. Sorting uses numeric source-aware durations and preserves cast order. Native keyboard filtering and clear/sort callbacks verified.",
+        "All eight installed Spell Immunity variants have independent rows/icons and recipient assignments, sharing parent uses. Native Abjuration on Simmeon and Divination on Jan each landed and consumed one parent use (2 to 1). Source popups explain variant identity and shared uses.",
+        "Changing/clearing search resets actual native dashboard and Coverage scrollbars. Native dashboard scroll verified from 2000 to 0."
       ],
       "acceptance_pending": [
         "Live legacy preset import, alternate resolutions and full interaction matrix.",
-        "Broader conditional target eligibility beyond the current advisory checks."
+        "Broader conditional target eligibility beyond the current advisory checks.",
+        "Full dashboard feature parity beyond preserved caster editor: Quick Cast controls, summons/clones, F12 party-plan routing, external plan export/import, repeat editor, preset deletion and legacy theme/layout controls. See upstream audit."
       ]
     },
     {
