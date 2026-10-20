@@ -6,7 +6,7 @@
     "full_suite_passed": 764,
     "deselected": 5,
     "deselection_reason": "Existing Windows symbolic-link privilege tests.",
-    "new_dashboard_tests": 16,
+    "new_dashboard_tests": 20,
     "final_targeted_passed": 140
   },
   "native": {
@@ -34,10 +34,13 @@
     "duplicate_recipient_editor_removed": true,
     "spell_icons": true,
     "eligible_recipient_portraits": true,
-    "ineligible_cells_marked": true,
+    "ineligible_cells_marked": false,
     "search_field_visible": true,
     "summary_grouped_by_recipient": true,
-    "coverage_is_a_separate_compact_matrix": true
+    "coverage_is_a_separate_compact_matrix": true,
+    "ineligible_cells_hidden_on_dashboard": true,
+    "coverage_preserves_fixed_recipient_columns": true,
+    "dropdown_and_modal_frames": true
   },
   "native_input_verified": [
     "Party checkbox",
@@ -50,5 +53,36 @@
     "Alternate resolutions/fonts and full keyboard interaction matrix.",
     "Same-name resources remain distinct until mechanical equivalence is established.",
     "Cross-character item sharing and balanced quick casting remain separate milestones."
-  ]
+  ],
+  "polish_verification": {
+    "focused_tests_passed": 60,
+    "full_suite_counts": "The 764-pass full-suite result above predates this polish; this change was checked with 60 focused tests.",
+    "native_packed_recipient_cells_checked": 210,
+    "native_dashboard_rows": 95,
+    "native_examples": [
+      {
+        "buff": "Armor of Faith",
+        "recipients": [
+          "Sir Anomen",
+          "Jaheira"
+        ]
+      },
+      {
+        "buff": "Aura of Flaming Death",
+        "recipients": [
+          "Sir Anomen"
+        ]
+      },
+      {
+        "buff": "Avoid Death",
+        "recipients": [
+          "Jan"
+        ]
+      }
+    ],
+    "dropdown_and_rename_frame_geometry_verified": true,
+    "dropdown_and_rename_visually_reviewed": true,
+    "unavailable_planned_recipients_remain_visible": true,
+    "personal_install_modified": false
+  }
 }

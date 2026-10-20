@@ -12,6 +12,9 @@ F11 and the BuffBot button open the **Buffs** dashboard. The top row contains
 **Buffs**, **Summary**, **Coverage**, and **Order**, with a preset dropdown and
 **+** on the right. There is no title banner or separate recipient editor.
 Click a recipient cell to toggle a buff; **Party** schedules one party-wide cast.
+The dashboard packs eligible recipients into a portrait strip, omitting invalid
+targets and empty placeholders. A planned recipient whose source becomes
+unavailable stays visible with a warning so the assignment can be removed.
 **Everyone** appears only when the remaining shared resources can cover every
 party member. It adds missing assignments without removing existing choices;
 **Clear** removes that row's assignments. Character tabs filter the same list,
@@ -30,7 +33,9 @@ visible when a source disappears or an item runs out. Click a spell name for its
 sources, durations, variants, and **Hide**. Hidden spells remain in the plan and
 summary; **Hidden** restores them. **Add spell / item** includes known abilities
 the classifier missed. These browser choices save with the party plans. Blocked
-recipient cells are grey; clicking one explains the restriction below the list.
+recipient cells remain in the fixed-column **Coverage** comparison; clicking
+one explains the restriction below the list. Dropdowns and modals have a distinct
+outline and an offset shadow to distinguish them from the planner background.
 Only identical spell resources or identical item power identities are combined;
 same-name variants remain separate. Self-only and party-wide restrictions still
 apply. Expected duration is an estimate from resource metadata, not a guarantee

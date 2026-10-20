@@ -67,7 +67,9 @@ def test_everyone_not_available_for_self_only_dead_or_pinned_infeasible_targets(
         source(s,'SELF','A',60,'a',6,{selfOnly=true})
         setup(s);assert(not findrow('SELF').everyone)
         U.DashboardClick(6)
-        assert(#U.preset.requests==0 and bbPartyFeedback=='Self only')
+        assert(#U.preset.requests==0 and U.DashboardCell(bbPartyRowSelection,2)==nil)
+        U.CoverageClick(4)
+        assert(bbPartyFeedback=='Self only')
         s.actors.B.alive=false
         source(s,'TARGET','A',60,'t',6)
         U.Refresh(false)
@@ -131,7 +133,7 @@ def test_exhausted_planned_item_and_missing_resource_stay_removable(dashboard):
         setup(s,{request('GEAR','A'),request('GONE','B')})
         assert(findrow('GEAR').cells[1].checked and U.plan.missing==2)
         U.DashboardClick(5);assert(U.plan.missing==1)
-        findrow('GONE');U.DashboardClick(6)
+        findrow('GONE');U.DashboardClick(5)
         return #U.preset.requests==0 and U.plan.missing==0
     ''')
 
@@ -237,4 +239,63 @@ def test_everyone_respects_request_limit_without_partial_add(dashboard):
         assert(#U.preset.requests==256)
         source(s,'OTHER','A',60,'b',2);U.Refresh(false)
         return not findrow('OTHER').everyone and #U.preset.requests==256
+    ''')
+
+
+def test_dashboard_packs_recipients_and_clicks_the_visible_identity(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'SELF','B',60,'b',1,{selfOnly=true})
+        setup(s);findrow('SELF')
+        assert(U.DashboardCell(bbPartyRowSelection,1).target=='B')
+        assert(U.DashboardCell(bbPartyRowSelection,2)==nil)
+        assert(U.CellText(bbPartyRowSelection,1)=='[ ] B')
+        assert(U.CellText(bbPartyRowSelection,2)=='')
+        -- Coverage still maps its first column to A, second column to B.
+        assert(U.CoverageText(bbPartyRowSelection,1)=='-')
+        assert(U.CoverageText(bbPartyRowSelection,2)=='[ ]')
+        U.DashboardClick(5)
+        return #U.preset.requests==1 and U.preset.requests[1].target=='B'
+    ''')
+
+
+def test_packed_dashboard_retains_unavailable_planned_recipient_and_portrait(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'ITEM','B',60,'b',0,{selfOnly=true})
+        setup(s,{request('ITEM','B')});findrow('ITEM')
+        U.Portrait=function(slot) return slot==1 and 'B_PORTRAIT' or 'A_PORTRAIT' end
+        assert(U.DashboardCell(bbPartyRowSelection,1).target=='B')
+        assert(U.CellText(bbPartyRowSelection,1)=='[!] B')
+        assert(U.CellPortrait(bbPartyRowSelection,1)=='B_PORTRAIT')
+        U.DashboardClick(5)
+        return #U.preset.requests==0
+    ''')
+
+
+def test_packed_strip_respects_recipient_filter_and_no_invisible_click_targets(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'a',2)
+        setup(s);U.SetRecipient(2);findrow('BUFF')
+        assert(U.DashboardCell(bbPartyRowSelection,1).target=='B')
+        assert(U.DashboardCell(bbPartyRowSelection,2)==nil)
+        U.DashboardClick(6);assert(#U.preset.requests==0)
+        U.DashboardClick(5)
+        return U.preset.requests[1].target=='B'
+    ''')
+
+
+def test_popups_have_separate_frame_shadow_and_content_geometry(dashboard):
+    assert dashboard.execute('''
+        Infinity_GetScreenSize=function() return 1280,720 end
+        EEex_Menu_GetItemArea=function() return 1000,50,174,30 end
+        local areas={}
+        Infinity_SetArea=function(name,x,y,w,h) areas[name]={x,y,w,h} end
+        U.choiceMode='presets';bbPartyChoices={{name='Test'}}
+        U.PopupLayout(false)
+        local bg,top,left,shadow=areas.bpChoicesBg,areas.bpChoicesTop,areas.bpChoicesLeft,areas.bpChoicesShadow
+        assert(top[2]<bg[2] and top[3]>bg[3] and left[1]<bg[1])
+        assert(shadow[1]>bg[1] and shadow[2]>bg[2])
+        assert(bg[1]==1000 and bg[2]==82)
+        U.PopupLayout(true)
+        return areas.bpRenameTop[2]<areas.bpRenameBg[2]
+            and areas.bpRenameRight[1]==areas.bpRenameBg[1]+areas.bpRenameBg[3]
     ''')

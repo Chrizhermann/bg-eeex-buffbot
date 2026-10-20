@@ -529,8 +529,22 @@ function U.Cell(rowIndex, slot)
     end
     return row.cells[slot]
 end
+-- The dashboard packs applicable recipients into a compact strip. Coverage
+-- retains its fixed party columns, so the two views must not share click indices.
+function U.DashboardCell(rowIndex, slot)
+    local row = bbPartyRows[rowIndex]
+    if not row or row.party then return nil end
+    local visible = 0
+    for _, cell in ipairs(row.cells) do
+        if (U.recipient == "all" or U.recipient == cell.target)
+            and (cell.available or cell.checked) then
+            visible = visible + 1
+            if visible == slot then return cell end
+        end
+    end
+end
 function U.CellText(rowIndex, slot)
-    local row, cell = bbPartyRows[rowIndex], U.Cell(rowIndex, slot)
+    local row, cell = bbPartyRows[rowIndex], U.DashboardCell(rowIndex, slot)
     if not row or not cell or row.party then return "" end
     return (cell.checked and (cell.available and "[x] " or "[!] ") or cell.available and "[ ] " or "[-] ")
         .. cell.name
@@ -540,8 +554,12 @@ function U.CellColor(rowIndex, slot)
     if cell and cell.checked and not cell.available then return {155,40,25} end
     return cell and not cell.available and {125,120,112} or {38,32,26}
 end
+function U.DashboardColor(rowIndex, slot)
+    local cell = U.DashboardCell(rowIndex, slot)
+    return cell and cell.checked and not cell.available and {155,40,25} or {38,32,26}
+end
 function U.CellPortrait(rowIndex, slot)
-    local row, cell = bbPartyRows[rowIndex], U.Cell(rowIndex, slot)
+    local row, cell = bbPartyRows[rowIndex], U.DashboardCell(rowIndex, slot)
     return row and not row.party and cell and (cell.available or cell.checked) and U.Portrait(cell.slot) or ""
 end
 function U.QuickText(index)
@@ -579,7 +597,7 @@ function U.DashboardClick(column)
             if requests and added > 0 then U.preset.requests = requests; U.Refresh(false) end
         end
     elseif column >= 5 and column <= 10 then
-        local cell = U.Cell(bbPartyRowSelection, column - 4)
+        local cell = U.DashboardCell(bbPartyRowSelection, column - 4)
         if cell and not row.party then U.ToggleCell(row, cell.target) end
     elseif column == 11 then
         for i = #U.preset.requests, 1, -1 do
@@ -744,9 +762,15 @@ function U.PopupLayout(rename)
     end
     local function area(name,dx,dy,aw,ah) Infinity_SetArea(name,x+dx,y+dy,aw,ah) end
     if rename then
+        area("bpRenameShadow",5,5,w+2,h+2)
+        area("bpRenameTop",-3,-3,w+6,3);area("bpRenameBottom",-3,h,w+6,3)
+        area("bpRenameLeft",-3,0,3,h);area("bpRenameRight",w,0,3,h)
         area("bpRenameBg",0,0,w,h);area("bpName",16,20,w-32,30)
         area("bpSaveName",w-180,h-50,78,30);area("bpCancelName",w-94,h-50,78,30)
     else
+        area("bpChoicesShadow",5,5,w+2,h+2)
+        area("bpChoicesTop",-3,-3,w+6,3);area("bpChoicesBottom",-3,h,w+6,3)
+        area("bpChoicesLeft",-3,0,3,h);area("bpChoicesRight",w,0,3,h)
         area("bpChoicesBg",0,0,w,h);area("bpChoices",12,12,w-24,h-64)
         area("bpChoicesClose",w-94,h-42,78,28)
     end

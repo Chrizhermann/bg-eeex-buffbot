@@ -1898,6 +1898,8 @@ menu
 
 
 
+
+
 -- Recipient-first party planner (single-player beta).
 -- Dashboard content and allocations are prepared in BfBotPUI.lua.
 menu
@@ -2270,16 +2272,16 @@ menu
 			label
 			{
 				area 2 3 -1 46
-				enabled "bbPartyRows[rowNumber] and not bbPartyRows[rowNumber].party and BfBot.PartyUI.Cell(rowNumber,1) ~= nil"
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,1) ~= nil"
 				rectangle 1
-				rectangle opacity lua "BfBot.PartyUI.Cell(rowNumber,1) and BfBot.PartyUI.Cell(rowNumber,1).checked and 28 or 5"
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,1) and BfBot.PartyUI.DashboardCell(rowNumber,1).checked and 28 or 5"
 			}
 			label
 			{
 				area 4 9 22 32
 				enabled "BfBot.PartyUI.CellPortrait(rowNumber,1) ~= ''"
 				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,1)"
-				greyscale lua "BfBot.PartyUI.Cell(rowNumber,1) and not BfBot.PartyUI.Cell(rowNumber,1).available"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,1) and not BfBot.PartyUI.DashboardCell(rowNumber,1).available"
 				scaleToClip
 			}
 			label
@@ -2287,7 +2289,7 @@ menu
 				area 28 0 -1 52
 				text lua "BfBot.PartyUI.CellText(rowNumber,1)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.CellColor(rowNumber,1)"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,1)"
 				text align left center
 			}
 		}
@@ -2297,16 +2299,16 @@ menu
 			label
 			{
 				area 2 3 -1 46
-				enabled "bbPartyRows[rowNumber] and not bbPartyRows[rowNumber].party and BfBot.PartyUI.Cell(rowNumber,2) ~= nil"
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,2) ~= nil"
 				rectangle 1
-				rectangle opacity lua "BfBot.PartyUI.Cell(rowNumber,2) and BfBot.PartyUI.Cell(rowNumber,2).checked and 28 or 5"
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,2) and BfBot.PartyUI.DashboardCell(rowNumber,2).checked and 28 or 5"
 			}
 			label
 			{
 				area 4 9 22 32
 				enabled "BfBot.PartyUI.CellPortrait(rowNumber,2) ~= ''"
 				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,2)"
-				greyscale lua "BfBot.PartyUI.Cell(rowNumber,2) and not BfBot.PartyUI.Cell(rowNumber,2).available"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,2) and not BfBot.PartyUI.DashboardCell(rowNumber,2).available"
 				scaleToClip
 			}
 			label
@@ -2314,7 +2316,7 @@ menu
 				area 28 0 -1 52
 				text lua "BfBot.PartyUI.CellText(rowNumber,2)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.CellColor(rowNumber,2)"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,2)"
 				text align left center
 			}
 		}
@@ -2324,16 +2326,16 @@ menu
 			label
 			{
 				area 2 3 -1 46
-				enabled "bbPartyRows[rowNumber] and not bbPartyRows[rowNumber].party and BfBot.PartyUI.Cell(rowNumber,3) ~= nil"
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,3) ~= nil"
 				rectangle 1
-				rectangle opacity lua "BfBot.PartyUI.Cell(rowNumber,3) and BfBot.PartyUI.Cell(rowNumber,3).checked and 28 or 5"
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,3) and BfBot.PartyUI.DashboardCell(rowNumber,3).checked and 28 or 5"
 			}
 			label
 			{
 				area 4 9 22 32
 				enabled "BfBot.PartyUI.CellPortrait(rowNumber,3) ~= ''"
 				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,3)"
-				greyscale lua "BfBot.PartyUI.Cell(rowNumber,3) and not BfBot.PartyUI.Cell(rowNumber,3).available"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,3) and not BfBot.PartyUI.DashboardCell(rowNumber,3).available"
 				scaleToClip
 			}
 			label
@@ -2341,7 +2343,7 @@ menu
 				area 28 0 -1 52
 				text lua "BfBot.PartyUI.CellText(rowNumber,3)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.CellColor(rowNumber,3)"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,3)"
 				text align left center
 			}
 		}
@@ -2351,16 +2353,16 @@ menu
 			label
 			{
 				area 2 3 -1 46
-				enabled "bbPartyRows[rowNumber] and not bbPartyRows[rowNumber].party and BfBot.PartyUI.Cell(rowNumber,4) ~= nil"
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,4) ~= nil"
 				rectangle 1
-				rectangle opacity lua "BfBot.PartyUI.Cell(rowNumber,4) and BfBot.PartyUI.Cell(rowNumber,4).checked and 28 or 5"
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,4) and BfBot.PartyUI.DashboardCell(rowNumber,4).checked and 28 or 5"
 			}
 			label
 			{
 				area 4 9 22 32
 				enabled "BfBot.PartyUI.CellPortrait(rowNumber,4) ~= ''"
 				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,4)"
-				greyscale lua "BfBot.PartyUI.Cell(rowNumber,4) and not BfBot.PartyUI.Cell(rowNumber,4).available"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,4) and not BfBot.PartyUI.DashboardCell(rowNumber,4).available"
 				scaleToClip
 			}
 			label
@@ -2368,7 +2370,7 @@ menu
 				area 28 0 -1 52
 				text lua "BfBot.PartyUI.CellText(rowNumber,4)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.CellColor(rowNumber,4)"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,4)"
 				text align left center
 			}
 		}
@@ -2378,16 +2380,16 @@ menu
 			label
 			{
 				area 2 3 -1 46
-				enabled "bbPartyRows[rowNumber] and not bbPartyRows[rowNumber].party and BfBot.PartyUI.Cell(rowNumber,5) ~= nil"
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,5) ~= nil"
 				rectangle 1
-				rectangle opacity lua "BfBot.PartyUI.Cell(rowNumber,5) and BfBot.PartyUI.Cell(rowNumber,5).checked and 28 or 5"
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,5) and BfBot.PartyUI.DashboardCell(rowNumber,5).checked and 28 or 5"
 			}
 			label
 			{
 				area 4 9 22 32
 				enabled "BfBot.PartyUI.CellPortrait(rowNumber,5) ~= ''"
 				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,5)"
-				greyscale lua "BfBot.PartyUI.Cell(rowNumber,5) and not BfBot.PartyUI.Cell(rowNumber,5).available"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,5) and not BfBot.PartyUI.DashboardCell(rowNumber,5).available"
 				scaleToClip
 			}
 			label
@@ -2395,7 +2397,7 @@ menu
 				area 28 0 -1 52
 				text lua "BfBot.PartyUI.CellText(rowNumber,5)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.CellColor(rowNumber,5)"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,5)"
 				text align left center
 			}
 		}
@@ -2405,16 +2407,16 @@ menu
 			label
 			{
 				area 2 3 -1 46
-				enabled "bbPartyRows[rowNumber] and not bbPartyRows[rowNumber].party and BfBot.PartyUI.Cell(rowNumber,6) ~= nil"
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,6) ~= nil"
 				rectangle 1
-				rectangle opacity lua "BfBot.PartyUI.Cell(rowNumber,6) and BfBot.PartyUI.Cell(rowNumber,6).checked and 28 or 5"
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,6) and BfBot.PartyUI.DashboardCell(rowNumber,6).checked and 28 or 5"
 			}
 			label
 			{
 				area 4 9 22 32
 				enabled "BfBot.PartyUI.CellPortrait(rowNumber,6) ~= ''"
 				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,6)"
-				greyscale lua "BfBot.PartyUI.Cell(rowNumber,6) and not BfBot.PartyUI.Cell(rowNumber,6).available"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,6) and not BfBot.PartyUI.DashboardCell(rowNumber,6).available"
 				scaleToClip
 			}
 			label
@@ -2422,7 +2424,7 @@ menu
 				area 28 0 -1 52
 				text lua "BfBot.PartyUI.CellText(rowNumber,6)"
 				text style "bb_normal_parchment"
-				text color lua "BfBot.PartyUI.CellColor(rowNumber,6)"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,6)"
 				text align left center
 			}
 		}
@@ -2794,6 +2796,41 @@ menu
 	}
 	label
 	{
+		name "bpChoicesShadow"
+		rectangle 5
+		rectangle opacity 160
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesTop"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesBottom"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesLeft"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesRight"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
 		name "bpChoicesBg"
 		mosaic "BFBOTBG"
 		area 0 0 100 28
@@ -2856,6 +2893,41 @@ menu
 		rectangle opacity 130
 		on escape
 		area 0 0 99999 99999
+	}
+	label
+	{
+		name "bpRenameShadow"
+		rectangle 5
+		rectangle opacity 160
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameTop"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameBottom"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameLeft"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameRight"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
 	}
 	label
 	{
