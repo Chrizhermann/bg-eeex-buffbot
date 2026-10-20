@@ -24,7 +24,7 @@ function U.Layout()
     end
     area("bpBg", 0, 0, w, h)
     local tabW = math.min(110, math.floor((w - 320) / 4))
-    for i, name in ipairs({"bpDashboardTab", "bpSummaryTab", "bpCoverageTab", "bpOrderTab"}) do
+    for i, name in ipairs({"bpDashboardTab", "bpSummaryTab", "bpOrderTab"}) do
         area(name, 12 + (i - 1) * (tabW + 4), 10, tabW, 30)
     end
     area("bpPreset", w - 286, 10, 174, 30)
@@ -38,24 +38,23 @@ function U.Layout()
     area("bpSearchFrame", w - 209, 47, 198, 32)
     area("bpSearchHint", w - 202, 50, 156, 26)
     area("bpSearchClear", w - 38, 51, 24, 24)
-    area("bpShowAll", 264, h - 100, 158, 28)
     local headX = 12
     for _, col in ipairs({{"Icon",5},{"Name",22},{"Uses",8},{"Duration",11},{"Recipients",48},{"Actions",6}}) do
         area("bpHead" .. col[1], headX + 2, 84, math.floor((w - 24) * col[2] / 100) - 4, 24)
         headX = headX + (w - 24) * col[2] / 100
     end
     area("bpDashboard", 12, 112, w - 24, h - 218)
-    area("bpCoverage", 12, 112, w - 24, h - 218)
-    for i = 1, 6 do
-        area("bpCoverageHead" .. i, 12 + math.floor((w - 24) * (.4 + (i - 1) * .1)), 84,
-            math.floor((w - 24) * .1), 24)
+    local function headers(prefix,columns)
+        local dx=12
+        for _,col in ipairs(columns) do
+            area(prefix..col[1],dx+2,50,math.floor((w-24)*col[2]/100)-4,26)
+            dx=dx+(w-24)*col[2]/100
+        end
     end
-    area("bpSummary", 12, 50, w - 24, h - 156)
-    area("bpPlan", 12, 50, w - 24, h - 194)
-    area("bpSource", 12, h - 138, 130, 28)
-    area("bpUp", 148, h - 138, 54, 28)
-    area("bpDown", 208, h - 138, 54, 28)
-    area("bpRemove", 268, h - 138, 80, 28)
+    headers("bpOrderHead",{{"Order",6},{"Icon",4},{"Name",29},{"Recipient",16},{"Caster",22},{"Duration",11},{"Move",8},{"Remove",4}})
+    headers("bpSummaryHead",{{"Icon",5},{"Name",38},{"Caster",32},{"Duration",17},{"Remove",8}})
+    area("bpSummary",12,84,w-24,h-190)
+    area("bpPlan",12,84,w-24,h-190)
     area("bpAdd", 12, h - 100, 142, 28)
     area("bpHidden", 160, h - 100, 96, 28)
     area("bpRest", 12, h - 64, math.min(260, w - 280), 30)
@@ -339,7 +338,7 @@ end
 bbPartyRows, bbPartySummary, bbPartyChoices = {}, {}, {}
 bbPartyRowSelection, bbPartySummarySelection, bbPartyChoiceSelection = 0, 0, 0
 bbPartyQuery, bbPartyFeedback = "", ""
-U.view, U.recipient, U.showIneligible = "dashboard", "all", false
+U.view, U.recipient = "dashboard", "all"
 U.sortField, U.sortDescending = "name", false
 
 local function copyRequests(requests)
@@ -470,23 +469,23 @@ function U.BuildDashboard()
     local targets = {{key="party",name=P.Text("Party")}}
     for _, actor in ipairs(U.snapshot.order) do targets[#targets + 1] = actor end
     for _, target in ipairs(targets) do
-        bbPartySummary[#bbPartySummary + 1] = { heading = true, name = target.name, icon = "" }
+        bbPartySummary[#bbPartySummary + 1] = { heading=true,name=target.name,icon="",portrait=target.slot~=nil and U.Portrait(target.slot) or "",party=target.key=="party" }
         local added = false
         for i, row in ipairs(bbPartyRequests) do
             if row.request.target == target.key then
                 bbPartySummary[#bbPartySummary + 1] = { name = row.name,
                     icon = U.RequestIcon(i), assignment = row.assignment,
-                    unavailable = row.unavailable, request = row.request }
+                    unavailable = row.unavailable, request = row.request,planIndex=i }
                 added = true
             end
         end
         if not added then bbPartySummary[#bbPartySummary + 1] = {name=P.Text("None"),icon=""} end
     end
     -- Orphaned/departed recipients remain reviewable/removable in cast order.
-    for _, row in ipairs(bbPartyRequests) do
+    for i, row in ipairs(bbPartyRequests) do
         if row.request.target ~= "party" and not U.snapshot.actors[row.request.target] then
             bbPartySummary[#bbPartySummary + 1] = { name = row.name .. " / " .. row.target,
-                icon = "", assignment = row.assignment, unavailable = true, request = row.request }
+                icon = "", assignment = row.assignment, unavailable = true, request = row.request,planIndex=i }
         end
     end
 end
@@ -496,7 +495,7 @@ function U.FilterDashboard()
     local query = (bbPartyQuery or ""):lower()
     for _, row in ipairs(U.dashboard or {}) do
         local matches = query == "" or row.name:lower():find(query, 1, true)
-        local allowed = U.recipient == "all" or row.party or U.showIneligible
+        local allowed = U.recipient == "all" or row.party
         for _, cell in ipairs(row.cells) do
             if cell.target == U.recipient and (cell.checked or cell.available) then allowed = true end
         end
@@ -532,7 +531,7 @@ function U.FilterDashboard()
 end
 function U.ResetBrowserScroll()
     if not EEex_Menu_GetItem then return end
-    for _,name in ipairs({"bpDashboard","bpCoverage"}) do
+    for _,name in ipairs({"bpDashboard"}) do
         local item=EEex_Menu_GetItem(name)
         if item and item.scrollbar then item.scrollbar.top=0 end
     end
@@ -568,7 +567,7 @@ function U.IsRecipient(slot)
     return slot == 0 and U.recipient == "all" or U.snapshot and U.snapshot.order[slot]
         and U.recipient == U.snapshot.order[slot].key or false
 end
-function U.IsDashboard() return U.view == "dashboard" or U.view == "coverage" end
+function U.IsDashboard() return U.view == "dashboard" end
 function U.Tick()
     if bbPartyQuery ~= U.lastQuery then U.FilterDashboard() end
     if Infinity_GetScreenSize then
@@ -577,17 +576,7 @@ function U.Tick()
     end
     return false
 end
-function U.Cell(rowIndex, slot)
-    local row = bbPartyRows[rowIndex]
-    if not row then return nil end
-    if U.recipient ~= "all" then
-        if slot ~= 1 then return nil end
-        for _, cell in ipairs(row.cells) do if cell.target == U.recipient then return cell end end
-    end
-    return row.cells[slot]
-end
--- The dashboard packs applicable recipients into a compact strip. Coverage
--- retains its fixed party columns, so the two views must not share click indices.
+-- The dashboard packs applicable recipients into a compact strip.
 function U.DashboardCell(rowIndex, slot)
     local row = bbPartyRows[rowIndex]
     if not row or row.party then return nil end
@@ -651,11 +640,6 @@ function U.PartyText(index)
     local cell = row.partyCell
     return (cell.checked and (cell.available and "[x] " or "[!] ") or "[ ] ") .. P.Text("Party")
 end
-function U.CellColor(rowIndex, slot)
-    local cell = U.Cell(rowIndex, slot)
-    if cell and cell.checked and not cell.available then return {155,40,25} end
-    return cell and not cell.available and {125,120,112} or {38,32,26}
-end
 function U.DashboardColor(rowIndex, slot)
     local cell = U.DashboardCell(rowIndex, slot)
     return cell and cell.checked and not cell.available and {155,40,25} or {38,32,26}
@@ -700,35 +684,6 @@ function U.DashboardClick(column)
         U.Refresh(false)
     end
 end
-function U.CoverageText(index, slot)
-    local row = bbPartyRows[index]
-    if not row then return "" end
-    if row.party then
-        return row.partyCell.checked and ((row.partyCell.available and "[x] " or "[!] ") .. P.Text("Party")) or "-"
-    end
-    local cell = U.Cell(index, slot)
-    return cell and (cell.checked and (cell.available and "[x]" or "[!]") or cell.available and "[ ]" or "-") or ""
-end
-function U.CoverageClick(column)
-    local row = bbPartyRows[bbPartyRowSelection]
-    if not row then return end
-    if column <= 2 then U.OpenChoices("sources", row.key, row.variant)
-    elseif row.party then bbPartyFeedback = P.Text("Party-wide cast")
-    else
-        local cell = U.Cell(bbPartyRowSelection, column - 2)
-        if cell then U.ToggleCell(row, cell.target) end
-    end
-end
-function U.CoverageColor(index, slot)
-    local row = bbPartyRows[index]
-    return row and row.party and U.PartyColor(index) or U.CellColor(index, slot)
-end
-function U.CoverageName(slot)
-    if U.recipient ~= "all" then
-        return slot == 1 and U.snapshot.actors[U.recipient].name or ""
-    end
-    return U.RecipientName(slot)
-end
 function U.RowName(index)
     local row = bbPartyRows[index]
     return row and (row.name .. (row.qualifier ~= "" and ("\n" .. row.qualifier) or "")) or ""
@@ -740,7 +695,24 @@ function U.PartyColor(index)
 end
 function U.SummaryName(index)
     local row = bbPartySummary[index]
-    return row and (row.heading and ("[ " .. row.name .. " ]") or row.name) or ""
+    return row and row.name or ""
+end
+function U.SummaryPortrait(index,slot)
+    local row=bbPartySummary[index]
+    if not row or not row.heading then return "" end
+    if row.party then
+        local actor=U.snapshot.order[slot]
+        return actor and U.Portrait(actor.slot) or ""
+    end
+    return slot==1 and row.portrait or ""
+end
+function U.SummaryCaster(index)
+    local row=bbPartySummary[index]
+    return row and row.request and U.OrderCaster(row.planIndex) or ""
+end
+function U.SummaryDuration(index)
+    local row=bbPartySummary[index]
+    return row and row.request and U.OrderDuration(row.planIndex) or ""
 end
 function U.RequestIcon(index)
     local row = bbPartyRequests[index]
@@ -748,11 +720,87 @@ function U.RequestIcon(index)
     local v = row and U.VariantInfo(group,row.request.var)
     return v and v.icon ~= "" and v.icon or group and group.icon or ""
 end
-function U.SummaryClick()
-    local row = bbPartySummary[bbPartySummarySelection]
+function U.OrderCaster(index)
+    local row=bbPartyRequests[index]
+    if not row then return "" end
+    local d=U.plan.decisions[index]
+    local actor=U.snapshot.actors[row.request.source]
+    local name=row.request.source and (actor and actor.name or row.request.source)
+        or (P.Text("Auto") .. (d.source and (" ("..d.source.casterName..")") or ""))
+    return name
+end
+function U.OrderDuration(index)
+    local d=U.plan.decisions[index]
+    return d and d.source and U.Duration(d.duration) or "—"
+end
+function U.OrderName(index)
+    local row=bbPartyRequests[index]
+    local d=U.plan.decisions[index]
+    return row and row.name .. (row.unavailable and ("\n"..(d.reason or P.Text("Buff unavailable"))) or "") or ""
+end
+function U.CanMove(index,delta) return bbPartyRequests[index]~=nil and bbPartyRequests[index+delta]~=nil end
+function U.OrderClick(column)
+    local index=bbPartyRequestSelection
+    local row=bbPartyRequests[index]
+    if not row then return end
+    U.request=row.request
+    if column==5 then U.OpenCaster(index,"bpPlan",.55)
+    elseif column==7 and U.CanMove(index,-1) then U.Move(-1)
+    elseif column==8 and U.CanMove(index,1) then U.Move(1)
+    elseif column==9 then U.Remove() end
+end
+function U.SummaryClick(column)
+    local row=bbPartySummary[bbPartySummarySelection]
     if not row or not row.request then return end
-    U.request, U.view = row.request, "order"
-    U.Refresh(false)
+    U.request=row.request
+    if column==3 then U.OpenCaster(row.planIndex,"bpSummary",.43,bbPartySummarySelection)
+    elseif column==5 then U.Remove() end
+end
+-- Test the entire plan: a caster preference must not steal a use reserved by
+-- another satisfiable request, and must support this exact recipient/variant.
+function U.TryCaster(request,actor)
+    local trial,index={},nil
+    for i,r in ipairs(U.preset.requests) do
+        trial[i]=r
+        if r==request then
+            index=i;local copy={};for k,v in pairs(r) do copy[k]=v end
+            copy.source=actor or nil;trial[i]=copy
+        end
+    end
+    if not index then return nil,P.Text("Buff unavailable") end
+    local plan=P.Assign(U.snapshot,trial)
+    local d=plan.decisions[index]
+    if not d.source then return nil,d.reason end
+    for i,old in ipairs(U.plan.decisions) do
+        if old.source and not plan.decisions[i].source then return nil,plan.decisions[i].reason end
+    end
+    return d
+end
+function U.OpenCaster(index,listName,column,rowIndex)
+    local row=bbPartyRequests[index]
+    if not row then return end
+    U.request=row.request
+    U.choiceName=row.name
+    U.choiceRequest,U.choicePreset=row.request,U.preset
+    U.OpenChoices("caster")
+    -- Reposition after list geometry is known; the popup is anchored to the
+    -- visible row rather than a render-time global or the bottom of the panel.
+    if EEex_Menu_GetItemArea then
+        local x,y,w=EEex_Menu_GetItemArea(listName)
+        local item=EEex_Menu_GetItem(listName)
+        local top=item and item.scrollbar and item.scrollbar.top or 0
+        U.choiceAnchor={x=x+w*column,y=y+((rowIndex or index)-1)*42-top+42,w=w*.22}
+        U.PopupLayout(false)
+    end
+end
+function U.SetCaster(actor)
+    local request,preset=U.choiceRequest,U.choicePreset
+    U.Refresh()
+    if U.preset~=preset then return end
+    local d,reason=U.TryCaster(request,actor)
+    if not d then bbPartyFeedback=reason or P.Text("No eligible source");return end
+    request.source=actor or nil
+    U.request=request;bbPartyFeedback="";U.Refresh(false)
 end
 function U.OpenChoices(mode, key, variant)
     U.choiceMode, U.choiceGroup = mode, key
@@ -761,7 +809,24 @@ function U.OpenChoices(mode, key, variant)
     local function add(name, kind, value, icon)
         bbPartyChoices[#bbPartyChoices + 1] = {name=name,kind=kind,value=value,icon=icon or ""}
     end
-    if mode == "presets" or mode == "rest" then
+    if mode == "caster" then
+        U.choiceAnchor=nil
+        local request=U.choiceRequest
+        bbPartyChoiceTitle=P.Text("Caster: ") .. (U.choiceName or U.BuffName(U.snapshot.groups[request.group],request.var))
+        local actor=U.snapshot.actors[request.target]
+        bbPartyChoiceHint=P.Text("Recipient: ") .. (request.target=="party" and P.Text("Party") or actor and actor.name or request.target)
+        local function casterOption(key,name)
+            local decision,why=U.TryCaster(request,key)
+            local label=(request.source==key or not request.source and not key) and "[x] " or ""
+            label=label..name.." / "..(decision and U.Duration(decision.duration) or why or P.Text("No eligible source"))
+            add(label,decision and "caster" or "info",key)
+        end
+        casterOption(false,P.Text("Auto"))
+        local seen={}
+        for _,source in ipairs((U.snapshot.groups[request.group] or {}).sources or {}) do
+            if not seen[source.actor] then casterOption(source.actor,source.casterName);seen[source.actor]=true end
+        end
+    elseif mode == "presets" or mode == "rest" then
         if mode == "rest" then add(P.Text("Off"), "rest", 0) end
         for i=1,8 do
             local preset = U.state.presets[i]
@@ -825,7 +890,8 @@ function U.Choose()
     local row = bbPartyChoices[bbPartyChoiceSelection]
     if not row or row.kind == "info" then return end
     Infinity_PopMenu("BUFFBOT_PARTY_CHOICES")
-    if row.kind == "preset" then U.state.active = row.value; U.request = nil
+    if row.kind == "caster" then U.SetCaster(row.value);return
+    elseif row.kind == "preset" then U.state.active = row.value; U.request = nil
     elseif row.kind == "rest" then
         U.state.rest = {on=row.value == 0 and 0 or 1,preset=row.value == 0 and U.state.active or row.value}
         if BfBot.Rest then BfBot.Rest.pending = nil end
@@ -863,6 +929,12 @@ function U.PopupLayout(rename)
         x = math.min(ax,sw-w-8)
         y = ay + ah + 2
         if y+h > sh-8 then y = ay-h-2 end
+    end
+    if not rename and U.choiceMode=="caster" and U.choiceAnchor then
+        local anchor=U.choiceAnchor
+        w=math.min(420,sw-40);x=math.max(8,math.min(anchor.x,sw-w-8))
+        y=anchor.y
+        if y+h>sh-8 then y=math.max(8,anchor.y-42-h) end
     end
     local function area(name,dx,dy,aw,ah) Infinity_SetArea(name,x+dx,y+dy,aw,ah) end
     if rename then

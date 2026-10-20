@@ -57,6 +57,11 @@ EXPECTED_CATALOG_DIRECTORIES = {
 # schema (or these same catalog comments), not introduce an uncontrolled fourth
 # hand-maintained copy of the ID/key contract.
 CATALOG_SCHEMA = {
+    1102: "party.text103",
+    1103: "party.text104",
+    1104: "party.text105",
+    1105: "party.text106",
+
     1095: "party.text96",
     1096: "party.text97",
     1097: "party.text98",

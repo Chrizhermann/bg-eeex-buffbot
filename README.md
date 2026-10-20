@@ -9,7 +9,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 ### Recipient-first beta
 
 F11 and the BuffBot button open the **Buffs** dashboard. The top row contains
-**Buffs**, **Summary**, **Coverage**, and **Order**, with a preset dropdown and
+**Buffs**, **Summary**, and **Order**, with a preset dropdown and
 **+** on the right. There is no title banner or separate recipient editor.
 Click a recipient cell to toggle a buff; **Party** schedules one party-wide cast.
 The dashboard packs eligible recipients into a portrait strip, omitting invalid
@@ -29,9 +29,13 @@ it. Changing or clearing search returns the list to the top. Click **Name** or
 The active header shows an arrow. Duration ranges sort by their longest value;
 unknown/unavailable durations stay last. Browser sorting does not alter cast order.
 
-**Summary** groups spell icons and names by recipient. **Order** shows each
-assigned caster and expected duration. Auto prefers longer duration, then effective caster level;
-use **Source** on a planned entry to choose a caster explicitly. The allocator
+**Summary** groups spell icons and names under recipient portraits, with caster
+and duration columns. **Order** shows numbered casts, spell icons, recipients,
+casters and durations. Inline up/down arrow buttons move a cast; **X** removes it.
+Both views have a caster dropdown on each planned buff. It shows the assigned
+caster, offers **Auto** or an explicit preference, and greys out unavailable
+choices with their reasons. Auto prefers longer duration, then effective caster level.
+The allocator
 can move an earlier automatic assignment to another eligible caster when that
 preserves a source required by a later recipient.
 
@@ -48,9 +52,8 @@ parent spell/level pool. **Clear** affects only that variant's assignments;
 The source popup names the selected variant and explains its shared uses.
 Hidden spells remain in the plan and
 summary; **Hidden** restores them. **Add spell / item** includes known abilities
-the classifier missed. These browser choices save with the party plans. Blocked
-recipient cells remain in the fixed-column **Coverage** comparison; clicking
-one explains the restriction below the list. Dropdowns and modals have a distinct
+the classifier missed. These browser choices save with the party plans.
+Dropdowns and modals have a distinct
 outline and an offset shadow to distinguish them from the planner background.
 Only identical spell resources or identical item power identities are combined;
 same-name variants remain separate. Self-only and party-wide restrictions still

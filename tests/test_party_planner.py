@@ -471,7 +471,7 @@ def test_ui_refreshes_availability_again_before_casting(lua):
 def test_all_new_menu_callbacks_compile_and_use_label_columns(lua):
     menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
     party = menu.split('-- Recipient-first party planner (single-player beta).', 1)[1]
-    assert party.count('\n\tlist\n') == 5  # dashboard, coverage, summary, order, popup
+    assert party.count('\n\tlist\n') == 4  # dashboard, summary, order, popup
     assert 'table "bbPartyRows"' in party
     assert 'table "bbPartyTargets"' not in party
     assert 'name "bpDetails"' not in party

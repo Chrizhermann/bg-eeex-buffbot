@@ -3,6 +3,11 @@
 BfBot = BfBot or {}
 
 local _registry = {
+    ["party.text103"] = { id = 1102, fallback = [=[Recipient]=] },
+    ["party.text104"] = { id = 1103, fallback = [=[Caster]=] },
+    ["party.text105"] = { id = 1104, fallback = [=[Move]=] },
+    ["party.text106"] = { id = 1105, fallback = [=[Recipient: ]=] },
+
     ["party.text96"] = { id = 1095, fallback = [=[Shared uses: ]=] },
     ["party.text97"] = { id = 1096, fallback = [=[Sources: ]=] },
     ["party.text98"] = { id = 1097, fallback = [=[Variants spend the same parent spell uses.]=] },

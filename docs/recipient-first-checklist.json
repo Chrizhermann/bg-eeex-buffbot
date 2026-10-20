@@ -6,7 +6,7 @@
   },
   "branch": "codex/recipient-first-buffbot",
   "validation": {
-    "automated_passed": 783,
+    "automated_passed": 790,
     "automated_deselected": 5,
     "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
     "new_item_graph_regressions": 19,
@@ -21,13 +21,15 @@
     "new_planner_regressions": 28,
     "live_evidence": "recipient-first-live-acceptance.json",
     "new_rest_regressions": 30,
-    "new_dashboard_regressions": 35,
+    "new_dashboard_regressions": 42,
     "dashboard_evidence": "recipient-dashboard-acceptance.json",
     "dashboard_polish_focused_passed": 60,
     "dashboard_headers_focused_passed": 117,
     "dashboard_search_sort_focused_passed": 122,
     "variants_evidence": "recipient-variants-acceptance.json",
-    "upstream_compatibility_audit": "recipient-upstream-compatibility.md"
+    "upstream_compatibility_audit": "recipient-upstream-compatibility.md",
+    "inline_views_focused_passed": 136,
+    "inline_views_evidence": "recipient-inline-views-acceptance.json"
   },
   "policies": {
     "initial_platform": "single-player EET",
@@ -119,14 +121,15 @@
         "Two presets, recipients and a pinned caster survive a private quick-save and process restart.",
         "Approved master dashboard: direct recipient toggles and one-cast Party actions.",
         "Compact top row with view tabs, right-aligned preset picker, and +; no decorative title or duplicate spell/recipient editor.",
-        "Spell icons and eligible recipient portraits; separate grouped Summary, compact Coverage matrix, and Order views.",
+        "Spell icons and eligible recipient portraits; separate grouped Summary, portrait-led Summary and inline Order views.",
         "Hide/restore preserves requests; explicit manual inclusion, preset/rest pickers, and blocked-recipient reasons verified in the copied game.",
         "The loaded party exposes 95 usable/planned dashboard rows from its 147-entry catalog; measured cached refresh was 7 ms.",
-        "Dashboard packs only eligible or already-planned recipients into portrait strips; Coverage retains fixed columns. Dropdown and rename frames visually verified, with 210 visible recipient cells checked in the isolated copy.",
+        "Dashboard packs only eligible or already-planned recipients into portrait strips; Coverage was subsequently removed. Dropdown and rename frames visually verified, with 210 visible recipient cells checked in the isolated copy.",
         "Labeled Icon, Name, Uses, Duration, Recipients and Actions columns. Source/variant-aware duration ranges and per-recipient durations; stacked-portrait Party toggle shares the recipient area. Individual portrait selection replaces Everyone. Native Party and Clear clicks verified.",
         "Compact framed name-only search with live filtering and clear button, and ascending/descending Name and Duration header sorting. Sorting uses numeric source-aware durations and preserves cast order. Native keyboard filtering and clear/sort callbacks verified.",
         "All eight installed Spell Immunity variants have independent rows/icons and recipient assignments, sharing parent uses. Native Abjuration on Simmeon and Divination on Jan each landed and consumed one parent use (2 to 1). Source popups explain variant identity and shared uses.",
-        "Changing/clearing search resets actual native dashboard and Coverage scrollbars. Native dashboard scroll verified from 2000 to 0."
+        "Changing/clearing search resets actual native dashboard scrollbar. Native dashboard scroll verified from 2000 to 0.",
+        "Coverage removed. Order has labeled columns, inline up/down controls, a row-anchored caster dropdown, durations and removal. Summary groups spell icons under recipient portraits, with inline caster selection and removal. Native movement, caster pin/Auto and Summary mapping verified."
       ],
       "acceptance_pending": [
         "Live legacy preset import, alternate resolutions and full interaction matrix.",

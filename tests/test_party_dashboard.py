@@ -67,12 +67,12 @@ def test_individual_toggles_respect_pools_reserved_by_other_spells(dashboard):
     ''')
 
 
-def test_hidden_self_only_target_stays_explained_in_coverage(dashboard):
+def test_hidden_self_only_target_has_a_restriction_reason(dashboard):
     assert dashboard.execute('''
         local s=snapshot();source(s,'SELF','A',60,'a',6,{selfOnly=true})
         setup(s);findrow('SELF');U.DashboardClick(6)
         assert(#U.preset.requests==0 and U.DashboardCell(bbPartyRowSelection,2)==nil)
-        U.CoverageClick(4)
+        U.ToggleCell(findrow('SELF'),'B')
         return bbPartyFeedback=='Self only'
     ''')
 
@@ -169,18 +169,18 @@ def test_clearing_checkbox_removes_imported_repeats_together(dashboard):
     ''')
 
 
-def test_compact_coverage_matrix_uses_the_same_plan_and_single_party_cast(dashboard):
+def test_summary_groups_the_same_plan_and_single_party_cast(dashboard):
     assert dashboard.execute('''
         local s=snapshot();source(s,'BUFF','A',60,'a',2)
         source(s,'BLESS','A',60,'b',1,{aoe=true})
-        setup(s);findrow('BUFF');U.CoverageClick(4)
-        assert(U.preset.requests[1].target=='B')
-        local row=findrow('BUFF');assert(U.CoverageText(bbPartyRowSelection,2)=='[x]')
+        setup(s);findrow('BUFF');U.DashboardClick(6)
         findrow('BLESS');U.DashboardClick(5)
-        findrow('BLESS')
-        assert(U.CoverageText(bbPartyRowSelection,1)=='[x] Party')
-        U.CoverageClick(3)
-        return #U.preset.requests==2 and bbPartyFeedback=='Party-wide cast'
+        local headings,spells=0,0
+        for _,row in ipairs(bbPartySummary) do
+            if row.heading then headings=headings+1 end
+            if row.request then spells=spells+1;assert(row.planIndex~=nil) end
+        end
+        return headings==3 and spells==2 and U.plan.used.b==1
     ''')
 
 
@@ -234,9 +234,9 @@ def test_dashboard_packs_recipients_and_clicks_the_visible_identity(dashboard):
         assert(U.DashboardCell(bbPartyRowSelection,2)==nil)
         assert(U.CellText(bbPartyRowSelection,1)=='[ ] B')
         assert(U.CellText(bbPartyRowSelection,2)=='')
-        -- Coverage still maps its first column to A, second column to B.
-        assert(U.CoverageText(bbPartyRowSelection,1)=='-')
-        assert(U.CoverageText(bbPartyRowSelection,2)=='[ ]')
+        -- Packed display slots retain the actual recipient identity.
+        assert(findrow('SELF').cells[1].target=='A')
+        assert(findrow('SELF').cells[2].target=='B')
         U.DashboardClick(5)
         return #U.preset.requests==1 and U.preset.requests[1].target=='B'
     ''')
@@ -500,7 +500,7 @@ def test_variant_source_popup_describes_parent_pool_and_child_duration(dashboard
     ''')
 
 
-def test_search_resets_both_list_scroll_positions_but_cached_refresh_does_not(dashboard):
+def test_search_resets_dashboard_scroll_but_cached_refresh_does_not(dashboard):
     assert dashboard.execute('''
         local s=snapshot();source(s,'BUFF','A',60,'a',1)
         setup(s);local resets={}
@@ -510,10 +510,118 @@ def test_search_resets_both_list_scroll_positions_but_cached_refresh_does_not(da
             end})}
         end
         bbPartyQuery='buff';U.Tick()
-        assert(#resets==2 and resets[1]=='bpDashboard' and resets[2]=='bpCoverage')
-        U.Tick();U.Refresh(false);assert(#resets==2)
-        U.ClearSearch();assert(#resets==4)
-        U.SortBy('duration');assert(#resets==6)
+        assert(#resets==1 and resets[1]=='bpDashboard')
+        U.Tick();U.Refresh(false);assert(#resets==1)
+        U.ClearSearch();assert(#resets==2)
+        U.SortBy('duration');assert(#resets==3)
         U.SetRecipient(1)
-        return #resets==8 and #U.preset.requests==0
+        return #resets==4 and #U.preset.requests==0
     ''')
+
+
+def test_order_inline_actions_follow_selected_request_after_reordering(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'FIRST','A',60,'a',1);source(s,'LAST','B',120,'b',1)
+        setup(s,{request('FIRST','A'),request('LAST','B')})
+        bbPartyRequestSelection=1;rowNumber=99
+        assert(not U.CanMove(1,-1) and U.CanMove(1,1))
+        U.OrderClick(8)
+        assert(U.preset.requests[2].group=='FIRST' and bbPartyRequestSelection==2)
+        assert(not U.CanMove(2,1))
+        U.OrderClick(7)
+        assert(U.preset.requests[1].group=='FIRST' and bbPartyRequestSelection==1)
+        U.OrderClick(9)
+        return #U.preset.requests==1 and U.preset.requests[1].group=='LAST'
+    ''')
+
+
+def test_caster_dropdown_keeps_auto_and_respects_other_requests_reservations(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'BUFF','A',120,'a',1);source(s,'BUFF','B',60,'b',1)
+        source(s,'OTHER','B',60,'b',1)
+        setup(s,{request('BUFF','A'),request('OTHER','B','B')})
+        bbPartyRequestSelection=1;U.OrderClick(5)
+        assert(U.OrderCaster(1)=='Auto (A)' and U.OrderDuration(1)=='2.0m')
+        assert(bbPartyChoices[1].kind=='caster' and bbPartyChoices[1].value==false)
+        assert(bbPartyChoices[2].value=='A' and bbPartyChoices[2].kind=='caster')
+        assert(bbPartyChoices[3].value=='B' and bbPartyChoices[3].kind=='info')
+        bbPartyChoiceSelection=2;U.Choose()
+        assert(U.preset.requests[1].source=='A' and U.preset.requests[2].source=='B')
+        bbPartyRequestSelection=1;U.OrderClick(5);bbPartyChoiceSelection=1;U.Choose()
+        return U.preset.requests[1].source==nil and U.plan.missing==0
+    ''')
+
+
+def test_caster_dropdown_enforces_self_only_and_variant_eligibility(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'SELF','A',60,'a',1,{selfOnly=true})
+        source(s,'SELF','B',120,'b',1,{selfOnly=true})
+        setup(s,{request('SELF','B')})
+        U.OpenCaster(1)
+        assert(bbPartyChoices[2].value=='A' and bbPartyChoices[2].kind=='info')
+        assert(bbPartyChoices[3].value=='B' and bbPartyChoices[3].kind=='caster')
+        source(s,'CHOICE','A',60,'c',1,{variants={{resref='FIRE'}}})
+        source(s,'CHOICE','B',60,'d',1,{variants={{resref='COLD'}}})
+        U.preset.requests={request('CHOICE','B',nil,'COLD')};U.Refresh(false);U.OpenCaster(1)
+        return bbPartyChoices[2].kind=='info' and bbPartyChoices[3].kind=='caster'
+    ''')
+
+
+def test_caster_choice_rechecks_live_availability_and_ignores_stale_preset(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'a',1);source(s,'BUFF','B',120,'b',1)
+        setup(s,{request('BUFF','A')});U.OpenCaster(1)
+        s.pools.b=0;U.SetCaster('B')
+        assert(U.preset.requests[1].source==nil and U.plan.missing==0)
+        s.pools.b=1;U.OpenCaster(1)
+        local old=U.preset;U.state.presets[2]={name='Second',requests={request('BUFF','B')}}
+        U.state.active=2;U.SetCaster('B')
+        return old.requests[1].source==nil and U.preset.requests[1].source==nil
+    ''')
+
+
+def test_summary_portraits_and_inline_controls_map_back_to_exact_requests(dashboard):
+    assert dashboard.execute('''
+        U.Portrait=function(slot) return slot==0 and 'PA' or 'PB' end
+        local s=snapshot();source(s,'BUFF','A',60,'a',2);s.groups.BUFF.icon='SPELLICON'
+        setup(s,{request('BUFF','A'),request('BUFF','B')})
+        local heading,spell
+        for i,row in ipairs(bbPartySummary) do
+            if row.heading and row.name=='B' then heading=i end
+            if row.request and row.request.target=='B' then spell=i end
+        end
+        assert(U.SummaryPortrait(heading,1)=='PB' and U.SummaryPortrait(heading,2)=='')
+        assert(bbPartySummary[spell].icon=='SPELLICON' and U.SummaryDuration(spell)=='1.0m')
+        bbPartySummarySelection=heading;U.SummaryClick(5);assert(#U.preset.requests==2)
+        bbPartySummarySelection=spell;rowNumber=99;U.SummaryClick(3)
+        assert(U.choiceRequest.target=='B' and bbPartyChoiceHint=='Recipient: B')
+        bbPartySummarySelection=spell;U.SummaryClick(5)
+        return #U.preset.requests==1 and U.preset.requests[1].target=='A'
+    ''')
+
+
+def test_caster_popup_anchors_to_scrolled_row_and_stays_on_screen(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'a',1)
+        setup(s,{request('BUFF','A')})
+        Infinity_GetScreenSize=function() return 1280,720 end
+        EEex_Menu_GetItemArea=function() return 50,100,1100,500 end
+        EEex_Menu_GetItem=function() return {scrollbar={top=84}} end
+        local areas={}
+        Infinity_SetArea=function(name,x,y,w,h) areas[name]={x,y,w,h} end
+        U.OpenCaster(1,'bpPlan',.55,12)
+        local bg=areas.bpChoicesBg
+        return bg[1]>=8 and bg[1]+bg[3]<=1272 and bg[2]>=8 and bg[2]+bg[4]<=712
+    ''')
+
+
+def test_plan_views_have_headers_inline_controls_and_no_coverage_or_bottom_toolbar():
+    menu=(ROOT / 'buffbot/BuffBot.menu').read_text(encoding='utf-8')
+    party=menu.split('-- Recipient-first party planner',1)[1]
+    for obsolete in ('bpCoverage','bpSource','bpUp','bpDown','bpRemove','bpShowAll'):
+        assert f'name "{obsolete}"' not in party
+    for name in ('bpOrderHeadCaster','bpOrderHeadRecipient','bpSummaryHeadCaster','bpSummaryHeadDuration'):
+        assert f'name "{name}"' in party
+    assert 'OrderClick(cellNumber)' in party and 'SummaryClick(cellNumber)' in party

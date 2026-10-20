@@ -3,10 +3,10 @@
   "environment": "isolated single-player EET copy, engine 2.6.6.0",
   "personal_install_modified": false,
   "automated": {
-    "full_suite_passed": 783,
+    "full_suite_passed": 790,
     "deselected": 5,
     "deselection_reason": "Existing Windows symbolic-link privilege tests.",
-    "new_dashboard_tests": 35,
+    "new_dashboard_tests": 42,
     "final_targeted_passed": 140
   },
   "native": {
@@ -36,10 +36,11 @@
     "ineligible_cells_marked": false,
     "search_field_visible": true,
     "summary_grouped_by_recipient": true,
-    "coverage_is_a_separate_compact_matrix": true,
+    "coverage_is_a_separate_compact_matrix": false,
     "ineligible_cells_hidden_on_dashboard": true,
-    "coverage_preserves_fixed_recipient_columns": true,
-    "dropdown_and_modal_frames": true
+    "coverage_preserves_fixed_recipient_columns": false,
+    "dropdown_and_modal_frames": true,
+    "coverage_removed": true
   },
   "native_input_verified": [
     "Party checkbox",
@@ -183,5 +184,6 @@
       "after": 0
     },
     "live_cast_effects_and_parent_consumption_verified": true
-  }
+  },
+  "inline_views_evidence": "recipient-inline-views-acceptance.json"
 }

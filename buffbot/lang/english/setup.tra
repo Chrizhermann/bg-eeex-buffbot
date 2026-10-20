@@ -579,3 +579,12 @@
 @1100 = ~Uses: ~
 // party.text102
 @1101 = ~Hide spell and all variants~
+
+// party.text103
+@1102 = ~Recipient~
+// party.text104
+@1103 = ~Caster~
+// party.text105
+@1104 = ~Move~
+// party.text106
+@1105 = ~Recipient: ~

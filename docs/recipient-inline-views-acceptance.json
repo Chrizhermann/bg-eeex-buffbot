@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-19",
+  "views": [
+    "Buffs",
+    "Summary",
+    "Order"
+  ],
+  "removed": [
+    "Coverage",
+    "bottom source/move/remove toolbar"
+  ],
+  "order": {
+    "headers": [
+      "Order",
+      "Icon",
+      "Name",
+      "Recipient",
+      "Caster",
+      "Duration",
+      "Move",
+      "Remove"
+    ],
+    "inline_movement": true,
+    "inline_removal": true,
+    "row_anchored_caster_picker": true
+  },
+  "summary": {
+    "recipient_portraits": true,
+    "stacked_party_portraits": true,
+    "spell_icons": true,
+    "caster_duration_headers": true,
+    "inline_caster_and_removal": true,
+    "empty_recipient_sections_retained": true
+  },
+  "automated": {
+    "full_suite_passed": 790,
+    "deselected": 5,
+    "deselection_reason": "Existing Windows symbolic-link privilege tests.",
+    "final_focused_passed": 136,
+    "dashboard_tests": 42
+  },
+  "native": {
+    "example_requests": 6,
+    "portrait_sections": 6,
+    "inline_move": true,
+    "caster_pick_and_auto": true,
+    "summary_caster_dropdown": true,
+    "no_bottom_toolbar": true,
+    "coverage_tab_absent": true
+  },
+  "visual_review": {
+    "order_and_summary_initial_layouts_reviewed": true,
+    "final_palette": "Small controls use parchment frames with dark ASCII chevrons/X, matching the caster field. Final palette and explicit duration widths passed menu compilation and focused checks; the final palette was not separately captured after the last restart."
+  },
+  "personal_install_modified": false
+}

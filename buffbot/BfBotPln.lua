@@ -5,6 +5,11 @@ local P = BfBot.Plan
 P.MAX_REQUESTS = 256
 
 local _textKeys = {
+    ["Recipient"] = "party.text103",
+    ["Caster"] = "party.text104",
+    ["Move"] = "party.text105",
+    ["Recipient: "] = "party.text106",
+
     ["Shared uses: "] = "party.text96",
     ["Sources: "] = "party.text97",
     ["Variants spend the same parent spell uses."] = "party.text98",
