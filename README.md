@@ -8,18 +8,29 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 
 ### Recipient-first beta
 
-F11 and the BuffBot button open party-wide plans. Select a buff on the left,
-then choose recipients below it. The ordered plan shows each assigned caster and
-expected duration. Auto prefers longer duration, then effective caster level;
+F11 and the BuffBot button open the **Buffs** dashboard. The top row contains
+**Buffs**, **Summary**, **Coverage**, and **Order**, with a preset dropdown and
+**+** on the right. There is no title banner or separate recipient editor.
+Click a recipient cell to toggle a buff; **Party** schedules one party-wide cast.
+**Everyone** appears only when the remaining shared resources can cover every
+party member. It adds missing assignments without removing existing choices;
+**Clear** removes that row's assignments. Character tabs filter the same list,
+and party-wide spells remain available in those focused views.
+
+**Summary** groups spell icons and names by recipient. **Order** shows each
+assigned caster and expected duration. Auto prefers longer duration, then effective caster level;
 use **Source** on a planned entry to choose a caster explicitly. The allocator
 can move an earlier automatic assignment to another eligible caster when that
 preserves a source required by a later recipient.
 
 Native sorcerer/shaman level slots and physical item charge counters are
 reserved across the whole plan. Available uses are shown as unreserved/total.
-The catalog's duration range reflects sources with unreserved uses; each planned
-recipient keeps its assigned duration. Selecting a planned entry also selects
-its buff in the catalog and recipient picker.
+Empty or unknown sources are filtered from the dashboard; planned entries remain
+visible when a source disappears or an item runs out. Click a spell name for its
+sources, durations, variants, and **Hide**. Hidden spells remain in the plan and
+summary; **Hidden** restores them. **Add spell / item** includes known abilities
+the classifier missed. These browser choices save with the party plans. Blocked
+recipient cells are grey; clicking one explains the restriction below the list.
 Only identical spell resources or identical item power identities are combined;
 same-name variants remain separate. Self-only and party-wide restrictions still
 apply. Expected duration is an estimate from resource metadata, not a guarantee
@@ -38,16 +49,16 @@ works from inventory without ammunition. Conditional item usability still
 requires manual equipping in swap mode; cross-character sharing is pending.
 Child spell effects can arrive after the executor finishes issuing item actions.
 
-Select a preset and click **After rest** to use it automatically after a completed
-standard eight-hour party rest. The button names the selected rest preset even
-while you edit another list. Click it again while viewing that preset to turn it
-off. This setting starts off and is stored in the save with the party plans.
+Choose a preset or **Off** from **After rest** to control automatic casting after
+a completed standard eight-hour party rest. This selection is independent of
+the preset being edited. It starts off and is stored in the save with the party plans.
 The mod waits for the world to be controllable, uses normal casting speed, and
 keeps your active editing preset and pause state. Interrupted rests, individual
 spell restoration, and loading a save do not trigger it. Combat cancels a pending
 run; unavailable requests skip the entire rest plan. Special shortened rests and
 other mods' rest replacements need separate compatibility checks.
 
+The **...** menu contains rename, refresh, legacy import, and **Caster editor**.
 **Caster editor** opens the original interface. **Import caster preset** copies
 the matching legacy preset into an empty party plan, retaining caster choices
 and leaving the originals intact. Party plans save separately in EEex saves.

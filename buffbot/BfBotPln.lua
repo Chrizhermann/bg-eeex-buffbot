@@ -5,6 +5,28 @@ local P = BfBot.Plan
 P.MAX_REQUESTS = 256
 
 local _textKeys = {
+    ["Search"] = "party.text88",
+    ["Item"] = "party.text67",
+    ["Spell"] = "party.text68",
+    ["None"] = "party.text69",
+    ["All buffs"] = "party.text70",
+    ["Recipients"] = "party.text71",
+    ["Everyone"] = "party.text72",
+    ["Off"] = "party.text73",
+    ["Hide"] = "party.text74",
+    ["Buffs"] = "party.text75",
+    ["Summary"] = "party.text76",
+    ["Coverage"] = "party.text77",
+    ["Order"] = "party.text78",
+    ["Show ineligible"] = "party.text79",
+    ["Clear"] = "party.text80",
+    ["Add spell / item"] = "party.text81",
+    ["Hidden"] = "party.text82",
+    ["Cast"] = "party.text83",
+    ["Save"] = "party.text84",
+    ["Cancel"] = "party.text85",
+    ["New preset"] = "party.text86",
+    ["Options"] = "party.text87",
     ["Preferred caster unavailable"] = "party.text01",
     ["Recipient unavailable"] = "party.text02",
     ["Recipient is dead"] = "party.text03",
@@ -218,6 +240,8 @@ local function putPool(snapshot, key, count)
     snapshot.pools[key] = math.min(snapshot.pools[key] or count, count)
 end
 function P.Snapshot()
+    local owner = BfBot.Persist._GetProtagonist and BfBot.Persist._GetProtagonist()
+    local preferences = owner and EEex_GetUDAux(owner).BBParty
     local snap = { actors = {}, order = {}, groups = {}, pools = {} }
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
@@ -251,7 +275,9 @@ function P.Snapshot()
                 pool, poolReason = P.SpellPool(actor, row)
                 if pool then putPool(snap, pool, row.count) end
             end
-            if row.class and row.class.isBuff then
+            local manual = preferences and preferences.include
+                and preferences.include[P.GroupKey(row)] == 1
+            if row.class and (row.class.isBuff or manual) then
                 local key = P.GroupKey(row)
                 local group = snap.groups[key]
                 if not group then
@@ -326,8 +352,8 @@ function P.Validate(value)
         end
     end
     if not next(state.presets) then
-        state.presets[1] = { name = P.Text("Long Buffs"), requests = {} }
-        state.presets[2] = { name = P.Text("Short Buffs"), requests = {} }
+        state.presets[1] = { name = P.Text("Preset ") .. 1, requests = {} }
+        state.presets[2] = { name = P.Text("Preset ") .. 2, requests = {} }
     end
     if integer(value.active, 1, 8) and state.presets[value.active] then state.active = value.active
     else for i = 1, 8 do if state.presets[i] then state.active = i; break end end end
@@ -335,6 +361,15 @@ function P.Validate(value)
     local validRest = integer(rest.preset, 1, 8) and state.presets[rest.preset]
     state.rest = { on = rest.on == 1 and validRest and 1 or 0,
         preset = validRest and rest.preset or state.active }
+    for _, field in ipairs({ "hidden", "include" }) do
+        state[field] = {}
+        local count = 0
+        for key, flag in pairs(type(value[field]) == "table" and value[field] or {}) do
+            if text(key, 100) and flag == 1 and count < 1024 then
+                state[field][key] = 1; count = count + 1
+            end
+        end
+    end
     return state
 end
 function P.GetState()

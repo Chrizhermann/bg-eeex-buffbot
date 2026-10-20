@@ -501,3 +501,50 @@
 @1064 = ~Rest plan skipped: resolve unavailable casts~
 // party.text66
 @1065 = ~Casting rest plan~
+
+// Recipient dashboard (English fallback pending translation)
+// party.text67
+@1066 = ~Item~
+// party.text68
+@1067 = ~Spell~
+// party.text69
+@1068 = ~None~
+// party.text70
+@1069 = ~All buffs~
+// party.text71
+@1070 = ~Recipients~
+// party.text72
+@1071 = ~Everyone~
+// party.text73
+@1072 = ~Off~
+// party.text74
+@1073 = ~Hide~
+// party.text75
+@1074 = ~Buffs~
+// party.text76
+@1075 = ~Summary~
+// party.text77
+@1076 = ~Coverage~
+// party.text78
+@1077 = ~Order~
+// party.text79
+@1078 = ~Show ineligible~
+// party.text80
+@1079 = ~Clear~
+// party.text81
+@1080 = ~Add spell / item~
+// party.text82
+@1081 = ~Hidden~
+// party.text83
+@1082 = ~Cast~
+// party.text84
+@1083 = ~Save~
+// party.text85
+@1084 = ~Cancel~
+// party.text86
+@1085 = ~New preset~
+// party.text87
+@1086 = ~Options~
+
+// party.text88
+@1087 = ~Search~

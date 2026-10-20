@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-19",
+  "environment": "isolated single-player EET copy, engine 2.6.6.0",
+  "personal_install_modified": false,
+  "automated": {
+    "full_suite_passed": 764,
+    "deselected": 5,
+    "deselection_reason": "Existing Windows symbolic-link privilege tests.",
+    "new_dashboard_tests": 16,
+    "final_targeted_passed": 140
+  },
+  "native": {
+    "catalog": 147,
+    "checks": {
+      "blocked_reason": "Self only",
+      "everyone": "Protection From Evil",
+      "hide_restore": true,
+      "manual_include": "spl:SPWI812",
+      "party": "Bless",
+      "pickers": true,
+      "summary_order": true
+    },
+    "portrait": "NKELDORM",
+    "refresh_ms": 7,
+    "rows": 95
+  },
+  "visual_review": {
+    "resolution": [
+      2560,
+      1392
+    ],
+    "tabs_and_preset_share_top_row": true,
+    "title_banner_removed": true,
+    "duplicate_recipient_editor_removed": true,
+    "spell_icons": true,
+    "eligible_recipient_portraits": true,
+    "ineligible_cells_marked": true,
+    "search_field_visible": true,
+    "summary_grouped_by_recipient": true,
+    "coverage_is_a_separate_compact_matrix": true
+  },
+  "native_input_verified": [
+    "Party checkbox",
+    "Summary tab",
+    "Coverage tab",
+    "Preset dropdown"
+  ],
+  "save_contract": "Existing BuffBotParty v1 handler; validated numeric hidden/include maps. Existing requests and source locks are retained.",
+  "pending": [
+    "Alternate resolutions/fonts and full keyboard interaction matrix.",
+    "Same-name resources remain distinct until mechanical equivalence is established.",
+    "Cross-character item sharing and balanced quick casting remain separate milestones."
+  ]
+}

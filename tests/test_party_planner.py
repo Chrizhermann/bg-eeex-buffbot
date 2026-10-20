@@ -468,14 +468,17 @@ def test_ui_refreshes_availability_again_before_casting(lua):
     assert facts == (True, 0, 1)
 
 
-def test_all_new_menu_callbacks_compile_and_use_label_columns():
+def test_all_new_menu_callbacks_compile_and_use_label_columns(lua):
     menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
     party = menu.split('-- Recipient-first party planner (single-player beta).', 1)[1]
-    assert party.count('\n\tlist\n') == 3
-    assert 'table "bbPartyTargets"' in party
+    assert party.count('\n\tlist\n') == 5  # dashboard, coverage, summary, order, popup
+    assert 'table "bbPartyRows"' in party
+    assert 'table "bbPartyTargets"' not in party
+    assert 'name "bpDetails"' not in party
     assert 'text color {230' not in party
     import re
-    runtime = LuaRuntime()
+    runtime = lua
+    runtime.execute((ROOT / "buffbot/BfBotPUI.lua").read_text(encoding="utf-8"))
     for kind, expression in re.findall(r'\b(action|enabled|onopen|text lua|text color lua)\s+"([^"]*)"', party):
         code = 'return ' + expression if kind in {'enabled', 'text lua', 'text color lua'} else expression
         runtime.execute('assert(loadstring(...))', code)
@@ -483,4 +486,7 @@ def test_all_new_menu_callbacks_compile_and_use_label_columns():
             runtime.execute('bbPartyTargets={}; bbPartyRequests={}; rowNumber=1')
             color = runtime.execute(code)
             assert all(0 <= color[channel] <= 255 for channel in (1, 2, 3))
-    assert len(re.findall(r'name "bp(?:Catalog|Targets|Plan)"\s*enabled "true"', party)) == 3
+    assert 'BfBot.PartyUI.DashboardClick(cellNumber)' in party
+    # Native lists support label columns; child buttons do not receive clicks.
+    for column in re.findall(r'\bcolumn\s*\{(.*?)\n\t\t\}', party, re.S):
+        assert not re.search(r'\bbutton\s*\{', column)
