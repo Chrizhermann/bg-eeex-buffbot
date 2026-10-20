@@ -1906,6 +1906,10 @@ menu
 
 
 
+
+
+
+
 -- Recipient-first party planner (single-player beta).
 -- Dashboard content and allocations are prepared in BfBotPUI.lua.
 menu
@@ -2116,10 +2120,28 @@ menu
 	}
 	label
 	{
+		name "bpSearchFrame"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
 		name "bpSearchBg"
 		enabled "BfBot.PartyUI.IsDashboard()"
 		rectangle 1
-		rectangle opacity 15
+		rectangle opacity 45
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSearchHint"
+		enabled "BfBot.PartyUI.IsDashboard() and bbPartyQuery == ''"
+		text lua "BfBot.Plan.Text('Search')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
 		area 0 0 100 28
 	}
 	edit
@@ -2133,14 +2155,15 @@ menu
 		maxlines 1
 		area 0 0 100 28
 	}
-	label
+	button
 	{
-		name "bpSearchHint"
-		enabled "BfBot.PartyUI.IsDashboard() and bbPartyQuery == ''"
-		text lua "BfBot.Plan.Text('Search')"
-		text style "bb_normal_parchment"
-		text color lua "{38,32,26}"
-		text align left center
+		name "bpSearchClear"
+		enabled "BfBot.PartyUI.IsDashboard() and bbPartyQuery ~= ''"
+		action "BfBot.PartyUI.ClearSearch()"
+		text lua "'X'"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
 		area 0 0 100 28
 	}
 	button
@@ -2164,11 +2187,12 @@ menu
 		text align left center
 		area 0 0 100 28
 	}
-	label
+	button
 	{
 		name "bpHeadName"
 		enabled "BfBot.PartyUI.view == 'dashboard'"
-		text lua "BfBot.Plan.Text('Name')"
+		action "BfBot.PartyUI.SortBy('name')"
+		text lua "BfBot.PartyUI.SortHeading('name')"
 		text style "bb_normal_parchment"
 		text color lua "{38,32,26}"
 		text align left center
@@ -2185,14 +2209,16 @@ menu
 		tooltip lua "BfBot.Plan.Text('Free / total uses')"
 		area 0 0 100 28
 	}
-	label
+	button
 	{
 		name "bpHeadDuration"
 		enabled "BfBot.PartyUI.view == 'dashboard'"
-		text lua "BfBot.Plan.Text('Duration')"
+		action "BfBot.PartyUI.SortBy('duration')"
+		text lua "BfBot.PartyUI.SortHeading('duration')"
 		text style "bb_normal_parchment"
 		text color lua "{38,32,26}"
 		text align left center
+		tooltip lua "BfBot.Plan.Text('Sort by longest duration')"
 		area 0 0 100 28
 	}
 	label

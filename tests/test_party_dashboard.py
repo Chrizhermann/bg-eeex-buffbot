@@ -334,3 +334,70 @@ def test_clear_removes_only_this_rows_assignments(dashboard):
         findrow('BUFF');U.DashboardClick(11)
         return #U.preset.requests==1 and U.preset.requests[1].group=='OTHER'
     ''')
+
+
+def test_name_search_is_literal_case_insensitive_and_does_not_match_qualifiers(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'SPELL[1]','A',60,'a',1)
+        source(s,'OTHER','A',60,'b',1)
+        setup(s);findrow('OTHER').qualifier='SPELL[1]'
+        bbPartyQuery='spell[1]';U.FilterDashboard()
+        assert(#bbPartyRows==1 and bbPartyRows[1].key=='SPELL[1]')
+        bbPartyQuery='not present';U.FilterDashboard();assert(#bbPartyRows==0)
+        U.ClearSearch()
+        return bbPartyQuery=='' and #bbPartyRows==2
+    ''')
+
+
+def test_name_sort_toggles_and_sorted_click_keeps_request_identity(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'alpha','A',60,'a',2)
+        source(s,'Zulu','B',60,'b',2)
+        setup(s,{request('alpha','A')})
+        assert(bbPartyRows[1].key=='alpha')
+        U.SortBy('name');assert(bbPartyRows[1].key=='Zulu')
+        assert(U.SortHeading('name')=='Name  v')
+        bbPartyRowSelection=1;U.DashboardClick(6)
+        assert(U.preset.requests[1].group=='alpha')
+        assert(U.preset.requests[2].group=='Zulu' and U.preset.requests[2].target=='B')
+        U.SortBy('name')
+        return bbPartyRows[1].key=='alpha' and U.SortHeading('name')=='Name  ^'
+    ''')
+
+
+def test_duration_sort_uses_seconds_range_maximum_and_keeps_unknowns_last(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'MINUTE','A',60,'a',1);source(s,'HOUR','A',3600,'b',1)
+        source(s,'RANGE','A',120,'c',1);source(s,'RANGE','B',600,'d',1)
+        source(s,'PERMANENT','A',-1,'e',1);source(s,'UNKNOWN','A',0,'f',1)
+        setup(s,{request('RANGE','A'),request('RANGE','B'),request('GONE','A')})
+        U.SortBy('duration')
+        assert(bbPartyRows[1].key=='MINUTE' and bbPartyRows[2].key=='RANGE')
+        assert(bbPartyRows[3].key=='HOUR' and bbPartyRows[4].key=='PERMANENT')
+        assert(bbPartyRows[5].key=='GONE' and bbPartyRows[6].key=='UNKNOWN')
+        U.SortBy('duration')
+        return bbPartyRows[1].key=='PERMANENT' and bbPartyRows[2].key=='HOUR'
+            and bbPartyRows[3].key=='RANGE' and bbPartyRows[4].key=='MINUTE'
+            and bbPartyRows[5].key=='GONE' and bbPartyRows[6].key=='UNKNOWN'
+    ''')
+
+
+def test_sort_and_filter_do_not_change_cast_order_and_refresh_keeps_sort(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'LONG','A',600,'a',1);source(s,'SHORT','B',60,'b',1)
+        setup(s,{request('LONG','A'),request('SHORT','B')})
+        U.SortBy('duration');assert(bbPartyRows[1].key=='SHORT')
+        bbPartyQuery='long';U.FilterDashboard();assert(#bbPartyRows==1)
+        U.Refresh(false);U.ClearSearch()
+        return bbPartyRows[1].key=='SHORT'
+            and U.preset.requests[1].group=='LONG' and U.preset.requests[2].group=='SHORT'
+    ''')
+
+
+def test_search_placeholder_cannot_cover_input_and_headers_dispatch_sort():
+    menu = (ROOT / 'buffbot/BuffBot.menu').read_text(encoding='utf-8')
+    dashboard = menu[menu.index('-- Recipient-first party planner'):]
+    assert dashboard.index('name "bpSearchHint"') < dashboard.index('name "bpSearch"')
+    assert 'action "BfBot.PartyUI.SortBy(\'name\')"' in dashboard
+    assert 'action "BfBot.PartyUI.SortBy(\'duration\')"' in dashboard

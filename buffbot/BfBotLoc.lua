@@ -3,6 +3,7 @@
 BfBot = BfBot or {}
 
 local _registry = {
+    ["party.text95"] = { id = 1094, fallback = [=[Sort by longest duration]=] },
     ["party.text93"] = { id = 1092, fallback = [=[Actions]=] },
     ["party.text89"] = { id = 1088, fallback = [=[Icon]=] },
     ["party.text90"] = { id = 1089, fallback = [=[Name]=] },

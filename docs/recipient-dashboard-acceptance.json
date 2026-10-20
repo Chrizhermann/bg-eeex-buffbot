@@ -6,7 +6,7 @@
     "full_suite_passed": 764,
     "deselected": 5,
     "deselection_reason": "Existing Windows symbolic-link privilege tests.",
-    "new_dashboard_tests": 23,
+    "new_dashboard_tests": 28,
     "final_targeted_passed": 140
   },
   "native": {
@@ -131,6 +131,44 @@
       }
     },
     "visual_review": "Headers align with columns, durations appear in the row and below recipient names, Party uses stacked portraits in the recipient column, and Clear remains in Actions.",
+    "personal_install_modified": false
+  },
+  "search_sort_verification": {
+    "focused_tests_passed": 122,
+    "dashboard_tests": 28,
+    "native_keyboard_filter": {
+      "query": "h",
+      "rows": 34,
+      "typed_filter": true
+    },
+    "native_ui_callbacks": {
+      "clear_callback": {
+        "query": "",
+        "rows": 95
+      },
+      "duration_ascending": {
+        "descending": false,
+        "field": "duration",
+        "first": "Critical Strike"
+      },
+      "duration_descending": {
+        "descending": true,
+        "field": "duration",
+        "first": "Expertise"
+      },
+      "name_ascending": {
+        "descending": false,
+        "field": "name",
+        "first": "Armor of Faith"
+      },
+      "name_descending": {
+        "descending": true,
+        "field": "name",
+        "first": "Wondrous Recall"
+      }
+    },
+    "visual_review": "Compact framed search field above Actions; Name and Duration headers expose direction arrows. Placeholder precedes edit control so it cannot block focus.",
+    "sort_policy": "Duration uses range maximum, then minimum; unknown/unavailable durations remain last. Name comparison ignores case; equal names use stable resource identity. Browser sorting preserves cast order.",
     "personal_install_modified": false
   }
 }

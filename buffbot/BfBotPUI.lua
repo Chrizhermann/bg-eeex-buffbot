@@ -33,9 +33,11 @@ function U.Layout()
     area("bpClose", w - 40, 10, 28, 30)
     local recipientW = math.min(130, math.floor((w - 236) / 7))
     for i = 0, 6 do area("bpRecipient" .. i, 12 + i * (recipientW + 3), 48, recipientW, 30) end
-    area("bpSearch", w - 204, 50, 190, 26)
+    area("bpSearch", w - 202, 50, 156, 26)
     area("bpSearchBg", w - 208, 48, 196, 30)
-    area("bpSearchHint", w - 204, 50, 190, 26)
+    area("bpSearchFrame", w - 209, 47, 198, 32)
+    area("bpSearchHint", w - 202, 50, 156, 26)
+    area("bpSearchClear", w - 38, 51, 24, 24)
     area("bpShowAll", 264, h - 100, 158, 28)
     local headX = 12
     for _, col in ipairs({{"Icon",5},{"Name",22},{"Uses",8},{"Duration",11},{"Recipients",48},{"Actions",6}}) do
@@ -320,6 +322,7 @@ bbPartyRows, bbPartySummary, bbPartyChoices = {}, {}, {}
 bbPartyRowSelection, bbPartySummarySelection, bbPartyChoiceSelection = 0, 0, 0
 bbPartyQuery, bbPartyFeedback = "", ""
 U.view, U.recipient, U.showIneligible = "dashboard", "all", false
+U.sortField, U.sortDescending = "name", false
 
 local function copyRequests(requests)
     local result = {}
@@ -465,15 +468,52 @@ function U.FilterDashboard()
     bbPartyRows = {}
     local query = (bbPartyQuery or ""):lower()
     for _, row in ipairs(U.dashboard or {}) do
-        local matches = query == "" or (row.name .. " " .. row.qualifier):lower():find(query, 1, true)
+        local matches = query == "" or row.name:lower():find(query, 1, true)
         local allowed = U.recipient == "all" or row.party or U.showIneligible
         for _, cell in ipairs(row.cells) do
             if cell.target == U.recipient and (cell.checked or cell.available) then allowed = true end
         end
-        if matches and allowed then bbPartyRows[#bbPartyRows + 1] = row end
+        if matches and allowed then
+            row.sortLow, row.sortHigh = U.DurationRange(row)
+            bbPartyRows[#bbPartyRows + 1] = row
+        end
     end
+    table.sort(bbPartyRows, function(a,b)
+        if U.sortField == "duration" then
+            -- Unknown/unavailable durations stay last in either direction.
+            local ak, bk = (a.sortHigh or 0) > 0, (b.sortHigh or 0) > 0
+            if ak ~= bk then return ak end
+            if ak and a.sortHigh ~= b.sortHigh then
+                if U.sortDescending then return a.sortHigh > b.sortHigh end
+                return a.sortHigh < b.sortHigh
+            end
+            if ak and a.sortLow ~= b.sortLow then
+                if U.sortDescending then return a.sortLow > b.sortLow end
+                return a.sortLow < b.sortLow
+            end
+        end
+        local an, bn = a.name:lower(), b.name:lower()
+        if an ~= bn then
+            if U.sortField == "name" and U.sortDescending then return an > bn end
+            return an < bn
+        end
+        return a.key < b.key
+    end)
     bbPartyRowSelection = 0
     U.lastQuery = bbPartyQuery
+end
+function U.SortBy(field)
+    if field ~= "name" and field ~= "duration" then return end
+    if U.sortField == field then U.sortDescending = not U.sortDescending
+    else U.sortField, U.sortDescending = field, false end
+    U.FilterDashboard()
+end
+function U.SortHeading(field)
+    return P.Text(field == "name" and "Name" or "Duration")
+        .. (U.sortField == field and (U.sortDescending and "  v" or "  ^") or "")
+end
+function U.ClearSearch()
+    bbPartyQuery = ""; U.FilterDashboard()
 end
 function U.SetView(view)
     U.view = view; bbPartyFeedback = ""; U.Refresh(false)
@@ -531,9 +571,8 @@ function U.CellText(rowIndex, slot)
 end
 -- Duration comes from the actual assigned/previewed source, including variants.
 -- The row summarizes only the recipients currently visible in this view.
-function U.RowDuration(index)
-    local row = bbPartyRows[index]
-    if not row then return "" end
+function U.DurationRange(row)
+    if not row then return end
     local low, high
     local function include(cell)
         local d = cell and cell.decision
@@ -543,7 +582,18 @@ function U.RowDuration(index)
         low, high = math.min(low or n,n), math.max(high or n,n)
     end
     if row.party then include(row.partyCell)
-    else for slot=1,6 do include(U.DashboardCell(index,slot)) end end
+    else
+        for _,cell in ipairs(row.cells) do
+            if (U.recipient == "all" or U.recipient == cell.target)
+                and (cell.available or cell.checked) then include(cell) end
+        end
+    end
+    return low, high
+end
+function U.RowDuration(index)
+    local row = bbPartyRows[index]
+    if not row then return "" end
+    local low, high = U.DurationRange(row)
     if not low then return P.Text("Buff unavailable") end
     local function formatted(n) return U.Duration(n == math.huge and -1 or n) end
     return low == high and formatted(low) or formatted(low) .. " - " .. formatted(high)

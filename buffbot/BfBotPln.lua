@@ -5,6 +5,7 @@ local P = BfBot.Plan
 P.MAX_REQUESTS = 256
 
 local _textKeys = {
+    ["Sort by longest duration"] = "party.text95",
     ["Actions"] = "party.text93",
     ["Icon"] = "party.text89",
     ["Name"] = "party.text90",

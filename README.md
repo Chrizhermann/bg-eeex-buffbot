@@ -23,6 +23,10 @@ in the recipient area and schedule one cast. To apply a targeted buff to several
 characters, select their portraits individually. **Clear** removes the row's
 assignments. Character tabs filter the same list,
 and party-wide spells remain available in those focused views.
+The small **Search** field at the top filters spell names as you type; **X** clears
+it. Click **Name** or **Duration** to sort, then click again to reverse direction.
+The active header shows an arrow. Duration ranges sort by their longest value;
+unknown/unavailable durations stay last. Browser sorting does not alter cast order.
 
 **Summary** groups spell icons and names by recipient. **Order** shows each
 assigned caster and expected duration. Auto prefers longer duration, then effective caster level;

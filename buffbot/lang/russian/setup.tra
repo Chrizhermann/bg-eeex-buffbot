@@ -561,3 +561,6 @@
 @1092 = ~Actions~
 // party.text94
 @1093 = ~Free / total uses~
+
+// party.text95
+@1094 = ~Sort by longest duration~
