@@ -28,21 +28,21 @@
 @113 = ~russian~
 
 // innate.preset_1
-@200 = ~BuffBot 1~
+@200 = ~BuffBot: <BFBOT1>~
 // innate.preset_2
-@201 = ~BuffBot 2~
+@201 = ~BuffBot: <BFBOT2>~
 // innate.preset_3
-@202 = ~BuffBot 3~
+@202 = ~BuffBot: <BFBOT3>~
 // innate.preset_4
-@203 = ~BuffBot 4~
+@203 = ~BuffBot: <BFBOT4>~
 // innate.preset_5
-@204 = ~BuffBot 5~
+@204 = ~BuffBot: <BFBOT5>~
 // innate.preset_6
-@205 = ~BuffBot 6~
+@205 = ~BuffBot: <BFBOT6>~
 // innate.preset_7
-@206 = ~BuffBot 7~
+@206 = ~BuffBot: <BFBOT7>~
 // innate.preset_8
-@207 = ~BuffBot 8~
+@207 = ~BuffBot: <BFBOT8>~
 
 // common.buffbot
 @300 = ~BuffBot~

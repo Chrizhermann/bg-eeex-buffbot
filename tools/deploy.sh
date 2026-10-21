@@ -23,7 +23,7 @@ PATCH_TLK_SCRIPT="$SCRIPT_DIR/patch_tlk.py"
 ENGLISH_TLK="$GAME_DIR/lang/en_US/dialog.tlk"
 
 # Verify source files exist
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotPln.lua BfBotRst.lua BfBotPUI.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotPln.lua BfBotIO.lua BfBotShr.lua BfBotFst.lua BfBotRst.lua BfBotPUI.lua BfBotVD.lua BfBotVis.lua BfBotRx.menu BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     if [ ! -f "$SRC_DIR/$f" ]; then
         echo "ERROR: $SRC_DIR/$f not found"
         exit 1
@@ -87,26 +87,18 @@ else
 fi
 
 # Copy source files
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotPln.lua BfBotRst.lua BfBotPUI.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotPln.lua BfBotIO.lua BfBotShr.lua BfBotFst.lua BfBotRst.lua BfBotPUI.lua BfBotVD.lua BfBotVis.lua BfBotRx.menu BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 
-# Copy asset files (MOS backgrounds, etc.)
-for f in "$SRC_DIR"/*.MOS; do
-    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
-done
-
-# Copy PVRZ textures (9-slice borders, etc.)
-for f in "$SRC_DIR"/*.PVRZ; do
-    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
-done
-
-
-# Copy BAM files (spell icons, actionbar icon, etc.)
-# Copy BAM files (spell icons, etc.)
-for f in "$SRC_DIR"/*.BAM; do
-    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
-done
+# Copy only BuffBot-owned assets. Batch the copy: starting two Windows/MSYS
+# processes per texture makes a 300-page skin pack needlessly slow to deploy.
+shopt -s nullglob
+asset_files=("$SRC_DIR"/visual/*.BAM "$SRC_DIR"/visual/*.PVRZ "$SRC_DIR"/*.MOS "$SRC_DIR"/*.PVRZ "$SRC_DIR"/*.BAM)
+if [ "${#asset_files[@]}" -gt 0 ]; then
+    cp "${asset_files[@]}" "$OVERRIDE_DIR/"
+fi
+shopt -u nullglob
 
 # Create presets directory for config export/import
 mkdir -p "$OVERRIDE_DIR/bfbot_presets"

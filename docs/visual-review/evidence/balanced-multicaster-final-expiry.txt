@@ -1,0 +1,9 @@
+now=75971652
+p3 release=64 aura=true
+p2 release=24 aura=true
+p2 release=24 aura=true
+2 expiry=75989608 remaining=17956
+3 expiry=75985132 remaining=13480
+5 expiry=75989632 remaining=17980
+stoneskin recipient=0 source=DW#GARGO
+stoneskin recipient=2 source=DW#GARGO

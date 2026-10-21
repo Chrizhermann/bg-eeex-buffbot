@@ -1,0 +1,6 @@
+dv:KELDORN owner=nil pool=dv:KELDORN:item:22:BOOT12:0 reason=nil
+protagonist owner=dv:KELDORN pool=dv:KELDORN:item:22:BOOT12:0 reason=nil
+dv:ANOMEN owner=dv:KELDORN pool=dv:KELDORN:item:22:BOOT12:0 reason=nil
+dv:JAHEIRA owner=dv:KELDORN pool=dv:KELDORN:item:22:BOOT12:0 reason=nil
+dv:HAERDALIS owner=dv:KELDORN pool=dv:KELDORN:item:22:BOOT12:0 reason=nil
+dv:JAN owner=dv:KELDORN pool=dv:KELDORN:item:22:BOOT12:0 reason=nil

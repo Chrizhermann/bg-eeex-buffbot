@@ -160,6 +160,17 @@ def test_later_f8_power_survives_attack_headers_and_keeps_real_resource() -> Non
     assert facts["warnings"] == 0
 
 
+@pytest.mark.parametrize('category', [11, 35])
+def test_scroll_and_wand_buff_powers_are_available_for_deliberate_manual_add(category):
+    lua=_runtime()
+    lua.globals().category=category
+    assert lua.execute('''
+      defineItem('MANUAL',category,{{}});placeItem(21,'MANUAL',{2})
+      local row=BfBot.Scan._BuildItemCatalog(sprite).MANUAL
+      return row and row.itemType==category and row.count==2 and row.class.isBuff
+    ''')
+
+
 def test_each_power_has_its_own_remaining_charges_and_exhaustion() -> None:
     facts = _runtime().execute(
         """

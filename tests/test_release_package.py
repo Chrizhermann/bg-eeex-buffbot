@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import shlex
 import shutil
@@ -54,8 +55,16 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/BfBotMp.lua",
     "buffbot/BfBotPer.lua",
     "buffbot/BfBotPln.lua",
+    "buffbot/BfBotIO.lua",
+    "buffbot/BfBotShr.lua",
+    "buffbot/BfBotFst.lua",
     "buffbot/BfBotRst.lua",
     "buffbot/BfBotPUI.lua",
+    "buffbot/BfBotVD.lua",
+    "buffbot/BfBotVis.lua",
+    "buffbot/BfBotRx.menu",
+    "buffbot/BfBotVA.json",
+    "buffbot/BfBotVA.txt",
     "buffbot/BfBotScn.lua",
     "buffbot/BfBotThm.lua",
     "buffbot/BfBotTst.lua",
@@ -85,12 +94,18 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/lang/spanish/setup.tra",
     "buffbot/setup-buffbot.tp2",
 }
+VISUAL_RESOURCES=json.loads((ROOT/'buffbot/BfBotVA.json').read_text())['files']
+BUFFBOT_RELEASE_FILES.update('buffbot/visual/'+name for name in VISUAL_RESOURCES)
 ARCHIVE_FILES = {
     "setup-buffbot.exe",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
     "docs/5e-spellcasting.md",
+    "docs/plan-management-and-casting-beta.md",
+    "docs/buffbot-original-vs-redux.md",
+    "docs/compatibility-test-report.md",
+    "docs/fast-forward-performance-investigation.md",
     *BUFFBOT_RELEASE_FILES,
 }
 
@@ -213,7 +228,7 @@ def _copy_release_source(tmp_path: Path) -> Path:
     (repo / "tools").mkdir(parents=True)
     shutil.copy2(BUILD_SCRIPT, repo / "tools/build-release.sh")
     shutil.copytree(ROOT / "buffbot", repo / "buffbot")
-    for name in ("README.md", "CHANGELOG.md", "LICENSE", "docs/5e-spellcasting.md"):
+    for name in ("README.md", "CHANGELOG.md", "LICENSE", "docs/5e-spellcasting.md", "docs/plan-management-and-casting-beta.md", "docs/compatibility-test-report.md", "docs/fast-forward-performance-investigation.md"):
         destination = repo / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / name, destination)
@@ -230,7 +245,7 @@ def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 50
+    assert len(names) == len(ARCHIVE_FILES)
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)
@@ -797,7 +812,7 @@ def test_raw_deploy_falls_back_to_valid_python_when_python3_is_unusable(
     assert "English fallback" in result.stdout
     refs = _read_deploy_strrefs(override)
     strings = _read_tlk_strings(english_tlk)
-    assert [strings[ref] for ref in refs] == [f"BuffBot {i}" for i in range(1, 9)]
+    assert [strings[ref] for ref in refs] == [f"BuffBot: <BFBOT{i}>" for i in range(1, 9)]
 
 
 def test_raw_deploy_stops_on_payload_copy_failure_before_tlk_mutation(

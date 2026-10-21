@@ -26,7 +26,7 @@ function BfBot.Persist._ValidateItemSwap(value)
         or not integer(value.pack, 18, 33) or not integer(value.equip, 0, 38)
         or value.equip == 1 or value.equip == 10 or value.equip == 34
         or (value.equip >= 18 and value.equip <= 33) then return nil end
-    local clean = { item = value.item, previous = value.previous,
+    local clean = { item = value.item:upper(), previous = value.previous:upper(),
         pack = value.pack, equip = value.equip }
     if integer(value.weapon, 0, 38) and integer(value.weaponAbility, 0, 65535) then
         clean.weapon, clean.weaponAbility = value.weapon, value.weaponAbility
@@ -273,28 +273,8 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         end
     end
 
-    -- Store in UDAux. Only call Refresh if the write succeeded — otherwise
-    -- Refresh → GetConfig → _CreateDefaultConfig re-enters recursively
-    -- (GetConfig's `if not config` gate sees the still-empty UDAux), which
-    -- recurses until stack overflow.
-    local setOk = pcall(function()
-        EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
-    end)
-    if not setOk then
-        BfBot._Warn("[Persist] Failed to store default config in UDAux; skipping innate reconciliation")
-        return config
-    end
-
-    -- Reconcile innates with the new config. UDAux is now populated, so
-    -- Refresh's call to GetConfig returns the stored config (no reentry).
-    if BfBot.Innate and BfBot.Innate.Refresh then
-        for s = 0, 5 do
-            if EEex_Sprite_GetInPortrait(s) == sprite then
-                BfBot.Innate.Refresh(s)
-                break
-            end
-        end
-    end
+    local setOk=pcall(function() EEex_GetUDAux(sprite)[BfBot.Persist._KEY]=config end)
+    if not setOk then BfBot._Warn('[Persist] Failed to store default config in UDAux') end
 
     return config
 end

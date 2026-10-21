@@ -15,6 +15,7 @@ function U.Duration(n)
     return string.format("%ds", n)
 end
 function U.Layout()
+    if BfBot.Visual and BfBot.Visual.active then return BfBot.Visual.Layout() end
     local sw, sh = Infinity_GetScreenSize()
     local w, h = math.floor(sw * .94), math.floor(sh * .9)
     local x, y = math.floor((sw - w) / 2), math.floor((sh - h) / 2)
@@ -24,7 +25,7 @@ function U.Layout()
     end
     area("bpBg", 0, 0, w, h)
     local tabW = math.min(110, math.floor((w - 320) / 4))
-    for i, name in ipairs({"bpDashboardTab", "bpSummaryTab", "bpOrderTab"}) do
+    for i, name in ipairs({"bpDashboardTab", "bpOrderTab", "bpSummaryTab"}) do
         area(name, 12 + (i - 1) * (tabW + 4), 10, tabW, 30)
     end
     area("bpPreset", w - 286, 10, 174, 30)
@@ -54,7 +55,13 @@ function U.Layout()
     headers("bpOrderHead",{{"Order",6},{"Icon",4},{"Name",29},{"Recipient",16},{"Caster",22},{"Duration",11},{"Move",8},{"Remove",4}})
     headers("bpSummaryHead",{{"Icon",5},{"Name",38},{"Caster",32},{"Duration",17},{"Remove",8}})
     area("bpSummary",12,84,w-24,h-190)
-    area("bpPlan",12,84,w-24,h-190)
+    area("bpPlan",12,120,w-24,h-226)
+    for i,key in ipairs({'Smart','Long','Undo'}) do area('bpOrder'..key,12+(i-1)*148,48,140,28) end
+    local dx=12
+    for _,col in ipairs({{'Order',6},{'Icon',4},{'Name',29},{'Recipient',16},{'Caster',22},{'Duration',11},{'Move',8},{'Remove',4}}) do
+        area('bpOrderHead'..col[1],dx+2,86,math.floor((w-24)*col[2]/100)-4,26)
+        dx=dx+(w-24)*col[2]/100
+    end
     area("bpAdd", 12, h - 100, 142, 28)
     area("bpHidden", 160, h - 100, 96, 28)
     area("bpRest", 12, h - 64, math.min(260, w - 280), 30)
@@ -64,10 +71,15 @@ function U.Layout()
     area("bpFeedback", 12, h - 28, w - 24, 22)
 end
 function U.Open()
+    if BfBot.UI and BfBot.UI._CloseQuickMenu then BfBot.UI._CloseQuickMenu() end
     if not P.GetState() then return end
+    if BfBot.Visual and BfBot.Visual.Available() then return BfBot.Visual.Open() end
     Infinity_PushMenu("BUFFBOT_PARTY")
 end
-function U.Close() Infinity_PopMenu("BUFFBOT_PARTY") end
+function U.Close()
+    if BfBot.Visual and BfBot.Visual.active then return BfBot.Visual.Close() end
+    Infinity_PopMenu("BUFFBOT_PARTY")
+end
 function U.Legacy()
     U.Close()
     Infinity_PushMenu("BUFFBOT_MAIN")
@@ -105,7 +117,7 @@ function U.BuffName(group, variant)
     return group.name .. " — " .. name
 end
 function U.Refresh(fresh)
-    if fresh ~= false then BfBot.Scan.InvalidateAll() end
+    if fresh ~= false then BfBot.Scan.InvalidateAll();U.rowOrder=nil end
     U.state = P.GetState()
     if not U.state then return end
     U.snapshot = P.Snapshot()
@@ -210,10 +222,10 @@ function U.SelectRequest()
     else U.UpdateDetails() end
 end
 function U.UpdateDetails()
-    local actor = U.request and U.snapshot.actors[U.request.source]
+    local actor = U.request and P.CasterActor(U.snapshot,U.request.source)
     local selected = U.plan and U.plan.decisions[bbPartyRequestSelection]
     local level = selected and selected.source and selected.source.casterLevel
-    bbPartyDetails = U.request and (P.Text("Source: ") .. (actor and actor.name or U.request.source or P.Text("Auto"))
+    bbPartyDetails = U.request and (P.Text("Source: ") .. (actor and actor.name or P.CasterLabel(U.snapshot,U.request.source) or P.Text("Auto"))
         .. (level and (P.Text(" / effective caster level ") .. level) or "")
         .. (U.request.var and (" / " .. U.request.var) or "")) or P.Text("Select a planned buff to change its source or order.")
     if U.TargetWarning(selected) then
@@ -290,6 +302,40 @@ function U.NewPreset()
     end
     bbPartyStatus = P.Text("Maximum eight presets")
 end
+function U.CanDeletePreset()
+    local count=0
+    for i=1,8 do if U.state.presets[i] then count=count+1 end end
+    return count>1
+end
+function U.DeletePreset()
+    local state=P.GetState();local index=U.deleteIndex
+    if state~=U.deleteState or not index or state.presets[index]~=U.deletePreset then
+        bbPartyFeedback=P.Text('Preset changed; try again');return
+    end
+    local nextIndex
+    for i=1,8 do if i~=index and state.presets[i] then nextIndex=nextIndex or i end end
+    if not nextIndex then bbPartyFeedback=P.Text('Keep at least one preset');return end
+    state.presets[index]=nil;state.active=nextIndex
+    if state.rest.preset==index then
+        state.rest={on=0,preset=nextIndex}
+        if BfBot.Rest then BfBot.Rest.pending=nil end
+    end
+    U.request=nil;U.deletePreset=nil;U.deleteState=nil
+    if BfBot.Visual and BfBot.Visual.active then BfBot.Visual.ClosePopup() end
+    U.Refresh();bbPartyFeedback=P.Text('Preset deleted')
+end
+function U.ExportPlan()
+    local name,why=BfBot.PlanIO.Export(U.preset)
+    bbPartyFeedback=name and (P.Text('Exported: ')..BfBot.PlanIO.directory..'/'..name) or why
+end
+function U.ImportPlan(name)
+    local preset,why=BfBot.PlanIO.Read(name)
+    if preset then
+        local index;index,why=BfBot.PlanIO.Insert(U.state,preset)
+        if index then U.request=nil;U.Refresh();bbPartyFeedback=P.Text('Plan imported; review recipients and unavailable sources');return end
+    end
+    bbPartyFeedback=why or P.Text('Import failed')
+end
 function U.Rename()
     local name = bbPartyName:match("^%s*(.-)%s*$")
     if #name > 0 and #name <= 80 and not name:find("%c") then U.preset.name = name end
@@ -330,7 +376,7 @@ function U.Cast()
     if not U.CanCast() then return end
     local queue, _, reason = P.BuildQueue(U.snapshot, U.preset.requests)
     if not queue then bbPartyStatus = reason or P.Text("Resolve unavailable casts before casting"); return end
-    if BfBot.Exec.Start(queue, 0, nil) then U.Close() end
+    if BfBot.Exec.Start(queue, U.state.fast==1 and 4 or 0, nil) then U.Close() end
 end
 
 -- The list widget dispatches clicks through its selected-row variable. Never
@@ -363,6 +409,26 @@ function U.Preview(group, target, variant)
         return { reason = P.Text("Maximum 256 planned casts") }
     end
     return decision
+end
+-- Target legality is independent of reservations. Keep the actual next-cast
+-- decision separate from source capabilities and the row's full duration range.
+function U.Possibilities(group, target, variant)
+    local request={group=group,target=target,var=variant,on=1}
+    local result={eligible=false}
+    for _,source in ipairs((U.snapshot.groups[group] or {}).sources or {}) do
+        if P.SourceAllowed(U.snapshot,source,request) then
+            result.eligible=true
+            if (U.snapshot.pools[source.pool] or 0)>0 then
+                local n=P.SourceDuration(source,request)
+                if n==-1 then n=math.huge end
+                result.low=math.min(result.low or n,n)
+                result.high=math.max(result.high or n,n)
+                if not result.source or P.BetterSource(source,result.source,request) then result.source=source end
+            end
+        end
+    end
+    if result.source then result.duration=P.SourceDuration(result.source,request) end
+    return result
 end
 function U.Portrait(slot)
     for _, actor in ipairs(U.snapshot and U.snapshot.order or {}) do
@@ -416,11 +482,13 @@ function U.BuildDashboard()
         else row.qualifier=P.Text("Buff unavailable") end
         local party,index=U.Preview(key,"party",variant)
         row.partyCell={decision=party,index=index,checked=index~=nil,
-            available=party and party.source~=nil,target="party",name=P.Text("Party")}
+            available=party and party.source~=nil,target="party",name=P.Text("Party"),
+            possibilities=U.Possibilities(key,"party",variant)}
         for i,actor in ipairs(U.snapshot.order) do
             local d,existing=U.Preview(key,actor.key,variant)
             row.cells[i]={target=actor.key,name=actor.name,slot=actor.slot,decision=d,
-                index=existing,checked=existing~=nil,available=d and d.source~=nil}
+                index=existing,checked=existing~=nil,available=d and d.source~=nil,
+                possibilities=U.Possibilities(key,actor.key,variant)}
         end
         for _,r in ipairs(U.preset.requests) do
             if r.group==key and r.var==variant then
@@ -489,7 +557,7 @@ function U.BuildDashboard()
         end
     end
 end
-function U.FilterDashboard()
+function U.FilterDashboard(resort)
     local queryChanged = bbPartyQuery ~= U.lastQuery
     bbPartyRows = {}
     local query = (bbPartyQuery or ""):lower()
@@ -497,14 +565,14 @@ function U.FilterDashboard()
         local matches = query == "" or row.name:lower():find(query, 1, true)
         local allowed = U.recipient == "all" or row.party
         for _, cell in ipairs(row.cells) do
-            if cell.target == U.recipient and (cell.checked or cell.available) then allowed = true end
+            if cell.target == U.recipient and U.CellVisible(cell) then allowed = true end
         end
         if matches and allowed then
             row.sortLow, row.sortHigh = U.DurationRange(row)
             bbPartyRows[#bbPartyRows + 1] = row
         end
     end
-    table.sort(bbPartyRows, function(a,b)
+    local function less(a,b)
         if U.sortField == "duration" then
             -- Unknown/unavailable durations stay last in either direction.
             local ak, bk = (a.sortHigh or 0) > 0, (b.sortHigh or 0) > 0
@@ -524,23 +592,41 @@ function U.FilterDashboard()
             return an < bn
         end
         return a.id < b.id
-    end)
+    end
+    if resort or not U.rowOrder or U.orderPreset~=U.preset then
+        U.rowOrder={};U.orderPreset=U.preset
+        local ordered={}
+        for _,row in ipairs(U.dashboard or {}) do
+            row.sortLow,row.sortHigh=U.DurationRange(row);ordered[#ordered+1]=row
+        end
+        table.sort(ordered,less)
+        for i,row in ipairs(ordered) do U.rowOrder[row.id]=i end
+        U.lastRowRank=#ordered
+    end
+    -- New/restored entries append until the next explicit sort or refresh.
+    for _,row in ipairs(U.dashboard or {}) do
+        if not U.rowOrder[row.id] then
+            U.lastRowRank=U.lastRowRank+1;U.rowOrder[row.id]=U.lastRowRank
+        end
+    end
+    table.sort(bbPartyRows,function(a,b) return U.rowOrder[a.id]<U.rowOrder[b.id] end)
     bbPartyRowSelection = 0
+    if BfBot.Visual and BfBot.Visual.active and BfBot.Visual.AfterFilter then BfBot.Visual.AfterFilter() end
     U.lastQuery = bbPartyQuery
     if queryChanged then U.ResetBrowserScroll() end
 end
 function U.ResetBrowserScroll()
     if not EEex_Menu_GetItem then return end
-    for _,name in ipairs({"bpDashboard"}) do
-        local item=EEex_Menu_GetItem(name)
-        if item and item.scrollbar then item.scrollbar.top=0 end
-    end
+    local visual=BfBot.Visual
+    local name=visual and visual.active and ('rxDashboard'..(visual.wide and 'Wide' or '')) or 'bpDashboard'
+    local item=EEex_Menu_GetItem(name)
+    if item and item.scrollbar then item.scrollbar.top=0 end
 end
 function U.SortBy(field)
     if field ~= "name" and field ~= "duration" then return end
     if U.sortField == field then U.sortDescending = not U.sortDescending
     else U.sortField, U.sortDescending = field, false end
-    U.FilterDashboard()
+    U.FilterDashboard(true)
     U.ResetBrowserScroll()
 end
 function U.SortHeading(field)
@@ -556,7 +642,7 @@ end
 function U.SetRecipient(slot)
     local actor = slot and U.snapshot.order[slot]
     U.recipient = actor and actor.key or "all"
-    U.FilterDashboard()
+    U.FilterDashboard(true)
     U.ResetBrowserScroll()
 end
 function U.RecipientName(slot)
@@ -577,13 +663,16 @@ function U.Tick()
     return false
 end
 -- The dashboard packs applicable recipients into a compact strip.
+function U.CellVisible(cell)
+    return cell and (cell.checked or cell.available or cell.possibilities and cell.possibilities.eligible)
+end
 function U.DashboardCell(rowIndex, slot)
     local row = bbPartyRows[rowIndex]
-    if not row or row.party then return nil end
+    if not row or row.party or row.heading then return nil end
     local visible = 0
     for _, cell in ipairs(row.cells) do
         if (U.recipient == "all" or U.recipient == cell.target)
-            and (cell.available or cell.checked) then
+            and U.CellVisible(cell) then
             visible = visible + 1
             if visible == slot then return cell end
         end
@@ -595,23 +684,21 @@ function U.CellText(rowIndex, slot)
     return (cell.checked and (cell.available and "[x] " or "[!] ") or cell.available and "[ ] " or "[-] ")
         .. cell.name
 end
--- Duration comes from the actual assigned/previewed source, including variants.
--- The row summarizes only the recipients currently visible in this view.
+-- The row summarizes all compatible source durations, before reserving uses.
+-- Portraits and the plan continue to show actual assigned/next-cast durations.
 function U.DurationRange(row)
     if not row then return end
     local low, high
     local function include(cell)
-        local d = cell and cell.decision
-        if not d or not d.source then return end
-        local n = d.duration or 0
-        if n == -1 then n = math.huge end
-        low, high = math.min(low or n,n), math.max(high or n,n)
+        local p=cell and cell.possibilities
+        if not p or p.low==nil then return end
+        low,high=math.min(low or p.low,p.low),math.max(high or p.high,p.high)
     end
     if row.party then include(row.partyCell)
     else
         for _,cell in ipairs(row.cells) do
             if (U.recipient == "all" or U.recipient == cell.target)
-                and (cell.available or cell.checked) then include(cell) end
+                and U.CellVisible(cell) then include(cell) end
         end
     end
     return low, high
@@ -626,7 +713,7 @@ function U.RowDuration(index)
 end
 function U.CellDuration(index,slot)
     local cell = U.DashboardCell(index,slot)
-    local d = cell and cell.decision
+    local d = cell and (cell.decision and cell.decision.source and cell.decision or not cell.checked and cell.possibilities)
     return d and d.source and U.Duration(d.duration) or ""
 end
 function U.PartyPortrait(index,slot)
@@ -646,7 +733,7 @@ function U.DashboardColor(rowIndex, slot)
 end
 function U.CellPortrait(rowIndex, slot)
     local row, cell = bbPartyRows[rowIndex], U.DashboardCell(rowIndex, slot)
-    return row and not row.party and cell and (cell.available or cell.checked) and U.Portrait(cell.slot) or ""
+    return row and not row.party and U.CellVisible(cell) and U.Portrait(cell.slot) or ""
 end
 function U.ToggleCell(row, target)
     local decision, index = U.Preview(row.key, target, row.variant)
@@ -668,8 +755,8 @@ function U.ToggleCell(row, target)
 end
 function U.DashboardClick(column)
     local row = bbPartyRows[bbPartyRowSelection]
-    if not row then return end
-    if column <= 2 then U.OpenChoices("sources", row.key, row.variant)
+    if not row or row.heading then return end
+    if column <= (BfBot.Visual and BfBot.Visual.active and 4 or 2) then U.OpenChoices("sources", row.key, row.variant)
     elseif column >= 5 and column <= 10 then
         if row.party then
             if column == 5 then U.ToggleCell(row,"party") end
@@ -688,6 +775,7 @@ function U.RowName(index)
     local row = bbPartyRows[index]
     return row and (row.name .. (row.qualifier ~= "" and ("\n" .. row.qualifier) or "")) or ""
 end
+function U.RowTip(index) return U.RowName(index) end
 function U.PartyColor(index)
     local row = bbPartyRows[index]
     return row and row.party and row.partyCell.checked and not row.partyCell.available
@@ -695,7 +783,12 @@ function U.PartyColor(index)
 end
 function U.SummaryName(index)
     local row = bbPartySummary[index]
+    local request=row and row.planIndex and bbPartyRequests[row.planIndex]
     return row and row.name or ""
+end
+function U.SummaryTip(index)
+    local row=bbPartySummary[index];local r=row and row.planIndex and bbPartyRequests[row.planIndex]
+    return U.SummaryName(index)
 end
 function U.SummaryPortrait(index,slot)
     local row=bbPartySummary[index]
@@ -724,8 +817,8 @@ function U.OrderCaster(index)
     local row=bbPartyRequests[index]
     if not row then return "" end
     local d=U.plan.decisions[index]
-    local actor=U.snapshot.actors[row.request.source]
-    local name=row.request.source and (actor and actor.name or row.request.source)
+    local actor=P.CasterActor(U.snapshot,row.request.source)
+    local name=row.request.source and (actor and actor.name or P.CasterLabel(U.snapshot,row.request.source))
         or (P.Text("Auto") .. (d.source and (" ("..d.source.casterName..")") or ""))
     return name
 end
@@ -738,7 +831,34 @@ function U.OrderName(index)
     local d=U.plan.decisions[index]
     return row and row.name .. (row.unavailable and ("\n"..(d.reason or P.Text("Buff unavailable"))) or "") or ""
 end
+function U.OrderTip(index) return U.OrderName(index) end
 function U.CanMove(index,delta) return bbPartyRequests[index]~=nil and bbPartyRequests[index+delta]~=nil end
+function U.CanSortOrder()
+    return U.preset and #U.preset.requests>1 and BfBot.Exec.GetState()~='running'
+end
+function U.SortOrder(mode)
+    if not U.CanSortOrder() then return end
+    local before={};for i,r in ipairs(U.preset.requests) do before[i]=r end
+    local sorted,changed=P.SortRequests(U.snapshot,U.preset.requests,mode,
+        P.EstimateCast)
+    if not changed then bbPartyFeedback=P.Text('Order already protects durations');return end
+    local after={};for i,r in ipairs(sorted) do after[i]=r end
+    U.undoOrder={preset=U.preset,before=before,after=after}
+    U.preset.requests=sorted;U.Refresh(false)
+    bbPartyFeedback=P.Text(mode=='smart' and 'Smart order applied' or 'Long durations first')
+end
+function U.CanUndoOrder()
+    local undo=U.undoOrder
+    if not undo or U.preset~=undo.preset or BfBot.Exec.GetState()=='running'
+        or #U.preset.requests~=#undo.after then return false end
+    for i,r in ipairs(undo.after) do if U.preset.requests[i]~=r then return false end end
+    return true
+end
+function U.UndoOrder()
+    if not U.CanUndoOrder() then return end
+    U.preset.requests=U.undoOrder.before;U.undoOrder=nil;U.Refresh(false)
+    bbPartyFeedback=P.Text('Previous order restored')
+end
 function U.OrderClick(column)
     local index=bbPartyRequestSelection
     local row=bbPartyRequests[index]
@@ -777,6 +897,7 @@ function U.TryCaster(request,actor)
     return d
 end
 function U.OpenCaster(index,listName,column,rowIndex)
+    if BfBot.Visual and BfBot.Visual.active then return BfBot.Visual.OpenCaster(index,listName,column,rowIndex) end
     local row=bbPartyRequests[index]
     if not row then return end
     U.request=row.request
@@ -830,13 +951,47 @@ function U.OpenChoices(mode, key, variant)
         if mode == "rest" then add(P.Text("Off"), "rest", 0) end
         for i=1,8 do
             local preset = U.state.presets[i]
-            if preset then add(preset.name, mode == "rest" and "rest" or "preset", i) end
+            if preset then
+                local label=(mode=='presets' and (i..'. ') or '')..preset.name
+                add(label, mode == "rest" and "rest" or "preset", i)
+            end
         end
     elseif mode == "settings" then
+        local casting=U.state.fast==1 and ('Fast-forward '..(U.state.fastRate or 2)..'x')
+            or 'Normal'
+        add(P.Text('Theme...'),'openTheme')
+        add(P.Text('Casting: ')..P.Text(casting),'openCasting')
         add(P.Text("Rename"), "rename")
         add(P.Text("Refresh"), "refresh")
         add(P.Text("Import caster preset"), "import")
+        add(P.Text('Export plan'), 'exportPlan')
+        add(P.Text('Import plan...'), 'openPlanImport')
+        add(P.Text('Delete preset...'), 'openDelete')
         add(P.Text("Caster editor"), "legacy")
+    elseif mode=='casting' then
+        bbPartyChoiceTitle=P.Text('Casting mode')
+        bbPartyChoiceHint=P.Text('Fast-forward speeds up the world at up to 30 rendered FPS.')
+        for _,option in ipairs({{'Fast-forward 2x (Recommended)',2},{'Fast-forward 4x',4},{'Normal',0}}) do
+            local active=option[2]==0 and U.state.fast~=1 and U.state.quick==0
+                or (option[2]==2 or option[2]==4) and U.state.fast==1 and U.state.fastRate==option[2]
+            add((active and '[x] ' or '')..P.Text(option[1]),'castingMode',option[2])
+        end
+    elseif mode=='theme' then
+        bbPartyChoiceTitle=P.Text('BuffBot theme')
+        bbPartyChoiceHint=P.Text('Auto follows UI++; without UI++, Auto uses BG1.')
+        for _,option in ipairs({{'Auto',-1},{'Siege of Dragonspear',0},{'Icewind Dale',1},{'Baldur’s Gate',2},{'Baldur’s Gate II',3}}) do
+            local active=U.state.skin==option[2] or U.state.skin==nil and option[2]==-1
+            add((active and '[x] ' or '')..option[1],'theme',option[2])
+        end
+    elseif mode=='delete' then
+        U.deleteIndex,U.deletePreset,U.deleteState=U.state.active,U.preset,U.state
+        bbPartyChoiceTitle=P.Text('Delete preset?')
+        bbPartyChoiceHint=U.preset.name..' / '..#U.preset.requests..' '..P.Text('requests')
+        add(P.Text('Delete'), 'deletePreset');add(P.Text('Cancel'),'cancel')
+    elseif mode=='planImport' then
+        bbPartyChoiceTitle=P.Text('Import plan')
+        bbPartyChoiceHint=P.Text('Creates a new preset; existing presets are kept')
+        for _,name in ipairs(BfBot.PlanIO.List()) do add(name,'importPlan',name) end
     elseif mode == "sources" then
         local group = U.snapshot.groups[key]
         bbPartyChoiceTitle = P.Text("Sources: ") .. (group and U.BuffName(group,variant) or key)
@@ -870,7 +1025,7 @@ function U.OpenChoices(mode, key, variant)
     elseif mode == "add" then
         bbPartyChoiceTitle=P.Text("Add spell / item")
         local seen = {}
-        for _, actor in ipairs(U.snapshot.order) do
+        for _, actor in ipairs(U.snapshot.casters or U.snapshot.order) do
             for _, row in pairs(actor.rows or {}) do
                 local group = P.GroupKey(row)
                 if not seen[group] and row.class and (row.count or 0) > 0
@@ -884,12 +1039,17 @@ function U.OpenChoices(mode, key, variant)
     if mode == "hidden" or mode == "add" then
         table.sort(bbPartyChoices, function(a,b) return a.name < b.name end)
     end
+    U.choiceVariant=variant
+    if BfBot.Visual and BfBot.Visual.active and BfBot.Visual.ShowChoices then
+        return BfBot.Visual.ShowChoices()
+    end
     Infinity_PushMenu("BUFFBOT_PARTY_CHOICES")
 end
 function U.Choose()
     local row = bbPartyChoices[bbPartyChoiceSelection]
     if not row or row.kind == "info" then return end
-    Infinity_PopMenu("BUFFBOT_PARTY_CHOICES")
+    if BfBot.Visual and BfBot.Visual.popup then BfBot.Visual.ClosePopup()
+    else Infinity_PopMenu("BUFFBOT_PARTY_CHOICES") end
     if row.kind == "caster" then U.SetCaster(row.value);return
     elseif row.kind == "preset" then U.state.active = row.value; U.request = nil
     elseif row.kind == "rest" then
@@ -899,21 +1059,42 @@ function U.Choose()
     elseif row.kind == "restore" then U.state.hidden[row.value] = nil
     elseif row.kind == "include" then U.state.hidden[row.value] = nil; U.state.include[row.value] = 1
     elseif row.kind == "rename" then U.OpenRename(); return
+    elseif row.kind=='exportPlan' then U.ExportPlan();return
+    elseif row.kind=='openPlanImport' then U.OpenChoices('planImport');return
+    elseif row.kind=='openDelete' then U.OpenChoices('delete');return
+    elseif row.kind=='openTheme' then U.OpenChoices('theme');return
+    elseif row.kind=='theme' then
+        U.state.skin=row.value~=-1 and row.value or nil
+        if BfBot.Visual then BfBot.Visual.skinOverride=U.state.skin end
+        if BfBot.Visual and BfBot.Visual.active then BfBot.Visual.Layout() end
+    elseif row.kind=='openCasting' then U.OpenChoices('casting');return
+    elseif row.kind=='castingMode' then
+        U.state.fast=(row.value==2 or row.value==4) and 1 or 0
+        U.state.quick=0
+        if U.state.fast==1 then U.state.fastRate=row.value end
+    elseif row.kind=='importPlan' then U.ImportPlan(row.value);return
+    elseif row.kind=='deletePreset' then U.DeletePreset();return
+    elseif row.kind=='cancel' then return
     elseif row.kind == "import" then U.ImportLegacy(); return
     elseif row.kind == "legacy" then U.Legacy(); return end
     U.Refresh(row.kind == "refresh" or row.kind == "include")
 end
-function U.OpenRename()
+function U.OpenRename(isNew)
     bbPartyName = U.preset.name
+    if BfBot.Visual and BfBot.Visual.active and BfBot.Visual.Rename then
+        return BfBot.Visual.Rename(isNew)
+    end
     Infinity_PushMenu("BUFFBOT_PARTY_RENAME")
 end
 function U.CreatePreset()
     local old = U.state.active
     U.NewPreset()
-    if U.state.active ~= old then U.OpenRename() end
+    if U.state.active ~= old then U.OpenRename(true) end
 end
 function U.SaveName()
-    U.Rename(); Infinity_PopMenu("BUFFBOT_PARTY_RENAME")
+    U.Rename()
+    if BfBot.Visual and BfBot.Visual.popup then BfBot.Visual.ClosePopup()
+    else Infinity_PopMenu("BUFFBOT_PARTY_RENAME") end
 end
 function U.PopupLayout(rename)
     local sw,sh = Infinity_GetScreenSize()

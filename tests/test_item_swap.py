@@ -38,6 +38,7 @@ def _runtime() -> LuaRuntime:
                 effectsOffset = 0x100, identifiedName = 1,
             })
             headers[resref] = header
+            dwords[header.ptr+0x18] = 4 -- droppable
             for i = 0, 1 do
                 local ptr = header.ptr + header.abilityOffset + i * 56
                 pointers[ptr] = { ptr = ptr,
@@ -129,6 +130,13 @@ def _runtime() -> LuaRuntime:
         lua.execute((ROOT / "buffbot" / name).read_text(encoding="utf-8"))
     lua.execute(
         """
+        BfBot.Scan.NativeBackpackMovesAvailable=function()return true end
+        BfBot.Scan._NativeMoveToBackpack=function(who,source,dest)
+            assert(who==sprite and slots[source] and not slots[dest])
+            history[#history+1]='NATIVE_PACK_MOVE:'..source..':'..dest
+            slots[dest],slots[source]=slots[source],nil
+            return true
+        end
         -- Leave advance itself outside the one-item transaction, but record
         -- the actual gear state when the queued advance finally executes.
         BfBot.Exec._Advance = function(key)
@@ -147,7 +155,7 @@ def _runtime() -> LuaRuntime:
                 destination = tonumber(destination)
                 local source
                 for i = 0, 38 do
-                    if slots[i] and slots[i].pRes.resref:get() == item then
+                    if slots[i] and slots[i].pRes.resref:get():upper() == item:upper() then
                         assert(source == nil, "mock engine refuses ambiguous item")
                         source = i
                     end
@@ -175,15 +183,17 @@ def _runtime() -> LuaRuntime:
                 return action
             end
             local callback = action:match('^EEex_LuaAction%("(.*)"%)$')
+            local wait=action:match('^SmallWait%((%d+)%)$')
+            if wait then gameTick=(gameTick or 0)+tonumber(wait);return action end
             assert(callback, "unexpected engine action: " .. action)
             assert(loadstring(callback))()
             return action
         end
         function drain()
             local count=0
-            while #actions > 0 do
+            while #actions > 0 or next(BfBot.Exec._packRestores) do
                 count=count+1; assert(count < 30, "queued action loop")
-                step()
+                if #actions>0 then step() else BfBot.Exec.PumpItemAdvances() end
             end
         end
         function setupSwap(category)
@@ -258,6 +268,7 @@ def test_chest_piece_never_gets_an_automatic_equipment_destination(category: int
 
 
 @pytest.mark.parametrize("change,reason", [
+    ('dwords[headers.NEW.ptr+0x18]=0', "cursed or undroppable"),
     ('newItem.m_flags=9', "cursed or undroppable"),
     ('dwords[headers.NEW.ptr+0x18]=0x10', "cursed or undroppable"),
     ('oldItem.m_flags=9', "no safe equipment slot"),
@@ -319,9 +330,20 @@ def test_physical_swap_use_restore_precedes_next_entry_and_restores_weapon_selec
     assert facts["warnings"] == 0
     sequence = facts["actionSequence"]
     assert sequence.index('XEquipItem("NEW",Myself,35,1)') < sequence.index("UseItemSlotAbility")
-    assert sequence.index("UseItemSlotAbility") < sequence.index('XEquipItem("NEW",Myself,21,1)')
-    assert sequence.index('XEquipItem("NEW",Myself,21,1)') < sequence.index("SelectWeaponAbility(36,2)")
+    assert sequence.index("UseItemSlotAbility") < sequence.index('XEquipItem("OLD",Myself,35,1)')
+    assert sequence.index('XEquipItem("OLD",Myself,35,1)') < sequence.index("SelectWeaponAbility(36,2)")
     assert sequence.index("SelectWeaponAbility(36,2)") < sequence.index("_Advance")
+
+
+def test_unarmed_wearer_does_not_queue_a_redundant_fist_selection() -> None:
+    assert _runtime().execute('''
+      setupSwap(4);sprite.m_equipment.m_selectedWeapon=10
+      sprite.m_equipment.m_selectedWeaponAbility=0
+      assert(queueSwap());drain()
+      for _,action in ipairs(history)do assert(not action:find('SelectWeaponAbility',1,true))end
+      return #uses==1 and #advances==1 and not BfBot.Persist.GetItemSwap(sprite)
+        and sprite.m_equipment.m_selectedWeapon==10
+    ''')
 
 
 @pytest.mark.parametrize("steps_before_stop", [0, 1])
@@ -342,14 +364,18 @@ def test_stop_recovers_when_forward_swap_is_pending_or_has_executed(steps_before
     assert facts["used"] == facts["advanced"] == facts["warnings"] == 0
 
 
-@pytest.mark.parametrize("steps_before_cancel", [4, 5])
-def test_recovery_finishes_when_restore_exchange_or_its_completion_was_canceled(steps_before_cancel: int) -> None:
+@pytest.mark.parametrize("restore_exchanged", [False, True])
+def test_recovery_finishes_when_restore_exchange_or_its_completion_was_canceled(restore_exchanged: bool) -> None:
     lua = _runtime()
-    lua.globals().stepsBeforeCancel = steps_before_cancel
+    lua.globals().restoreExchanged = restore_exchanged
     facts = lua.execute(
         """
         setupSwap(); assert(queueSwap())
-        for _=1,stepsBeforeCancel do step() end
+        for _=1,20 do
+            if BfBot.Persist.GetItemSwap(sprite).phase=='restoring' then break end
+            step()
+        end
+        if restoreExchanged then step() end
         local phaseBefore=BfBot.Persist.GetItemSwap(sprite).phase
         actions={} -- native movement clears the pending action queue
         BfBot.Exec.Stop(); drain()
@@ -372,7 +398,10 @@ def test_duplicate_recovery_callbacks_exchange_equipment_back_only_once() -> Non
     facts = _runtime().execute(
         """
         setupSwap(); assert(queueSwap())
-        for _=1,4 do step() end
+        for _=1,20 do
+            if BfBot.Persist.GetItemSwap(sprite).phase=='restoring' then break end
+            step()
+        end
         local journal=BfBot.Persist.GetItemSwap(sprite)
         local firstAttempt=journal.restoreAttempt
         actions={}; BfBot.Exec.Stop()
@@ -624,3 +653,58 @@ def test_active_effect_resource_matching_is_case_insensitive(
         """
     )
     assert facts["spell"] == facts["item"] == facts["marker"] == active
+
+
+
+def test_empty_slot_return_uses_native_inventory_move_after_leaving_ai_callback():
+    assert _runtime().execute('''
+      setupSwap();slots[4]=nil
+      assert(queueSwap());while #uses==0 do step()end
+      step() -- return is requested by the AI callback
+      assert(slots[4]==newItem and slots[21]==nil and BfBot.Exec._packRestores[0])
+      BfBot.Exec._state='stopped' -- return remains necessary after Stop
+      BfBot.Exec.PumpItemAdvances();drain()
+      for _,action in ipairs(history)do
+        assert(not action:match('XEquipItem%([^,]+,Myself,21,1%)'))
+      end
+      return slots[21]==newItem and slots[4]==nil and #uses==1
+        and BfBot.Persist.GetItemSwap(sprite)==nil and #advances==0
+    ''')
+
+
+def test_interactive_item_is_skipped_before_cast_charge_or_equipment_changes():
+    assert _runtime().execute('''
+      setupSwap();local before=slots[21]
+      BfBot.Scan.GetCastableSpells=function()return {ITEM={count=3,requiresChoice=true}}end
+      entry.resref='ITEM'
+      return not BfBot.Exec._CheckEntry(entry,sprite) and BfBot.Exec._skipCount==1
+        and slots[21]==before and #actions==0 and #uses==0
+        and BfBot.Persist.GetItemSwap(sprite)==nil
+    ''')
+
+@pytest.mark.parametrize('known_launcher',[False,True])
+def test_shield_swap_checks_launcher_when_ammunition_is_selected(known_launcher):
+    lua=_runtime();lua.globals().known_launcher=known_launcher
+    assert lua.execute('''
+      setupSwap(12);defineItem('AMMO',5);defineItem('BOW',15)
+      local ammo=placeItem(12,'AMMO');local bow=placeItem(35,'BOW')
+      dwords[headers.BOW.ptr+0x18]=6
+      sprite.m_equipment.m_selectedWeapon=12
+      if known_launcher then
+        ammo.getAbility=function()return {}end
+        sprite.getLauncher=function()return bow,35 end
+      end
+      local plan=BfBot.Scan._PlanItemSwap(sprite,row)
+      return plan==nil
+    ''')
+
+
+def test_equipment_return_ignores_resource_name_case_changes():
+    lua=_runtime()
+    assert lua.execute('''
+      setupSwap(32);assert(queueSwap());step()
+      newItem.pRes.resref.get=function()return 'new'end
+      oldItem.pRes.resref.get=function()return 'old'end
+      drain()
+      return slots[21]==newItem and slots[4]==oldItem and aux.BBItemSwap==nil
+    ''')

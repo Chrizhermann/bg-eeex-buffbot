@@ -1,0 +1,121 @@
+{
+  "started": "2026-10-20T20:03:21.821677",
+  "isolation": "Fresh copied save and process for each item",
+  "cases": [
+    {
+      "matrixIndex": 163,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 364}",
+      "activated": true,
+      "after": 0,
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "casts": 1,
+      "counter": 0,
+      "destroyed": false,
+      "duration": 252,
+      "effects": [
+        {
+          "expiry": 75974106,
+          "opcode": 233,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        },
+        {
+          "expiry": 75974106,
+          "opcode": 200,
+          "res": "SPWI701",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970349,
+      "index": 0,
+      "itemType": 12,
+      "log": [
+        {
+          "msg": "Keldorn -> Shield of Fyrus Khal +2 (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "manuallySelectedFists": true,
+      "maxCharges": 1,
+      "name": "Shield of Fyrus Khal +2",
+      "party": 0,
+      "res": "OHNSHLD1",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 9,
+        "item": "OHNSHLD1",
+        "pack": 18,
+        "previous": "",
+        "weapon": 10,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 15966,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    }
+  ],
+  "finished": "2026-10-20T20:03:45.053013"
+}

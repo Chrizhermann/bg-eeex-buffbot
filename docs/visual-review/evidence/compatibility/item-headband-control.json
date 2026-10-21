@@ -1,0 +1,41 @@
+{
+  "started": "2026-10-20T20:04:34.635651",
+  "isolation": "Fresh copied save and process for each item",
+  "cases": [
+    {
+      "matrixIndex": 169,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 365}",
+      "timeout": true,
+      "lastStage": {
+        "clock": 34115,
+        "current": {
+          "atWill": false,
+          "before": 1,
+          "caster": 4,
+          "counter": 0,
+          "duration": 54,
+          "index": 0,
+          "itemType": 7,
+          "maxCharges": 1,
+          "name": "Headband of the Devout",
+          "party": 0,
+          "res": "OHRHELM1",
+          "selfOnly": 1,
+          "started": 75970229,
+          "swapPlan": {
+            "equip": 6,
+            "item": "OHRHELM1",
+            "pack": 33,
+            "previous": "HELM32",
+            "weapon": 35,
+            "weaponAbility": 0
+          },
+          "timeout": "casting"
+        },
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    }
+  ],
+  "finished": "2026-10-20T20:05:14.791678"
+}

@@ -488,13 +488,44 @@ end
 -- duplicate/case-varied links cannot inflate a buff's score. Two links match
 -- the existing duration/active-effect analysis. Anything beyond that, missing
 -- resources, or recursive delivery stays available for manual inclusion.
+-- An item child spell can have a harmless low-level header and a selection
+-- menu at a higher caster level. Classification is cached across casters, so
+-- inspect every child level for this unattended-casting restriction.
+function BfBot.Class._ItemOpensChoice(header, ability)
+    local pending={{header=header,ability=ability,depth=0}}
+    local seen,resourceCount={},0
+    local index=1
+    while index<=#pending do
+        local node=pending[index];index=index+1
+        local choice=false
+        BfBot.Class._IterateFeatureBlocks(node.header,node.ability,function(fb)
+            local opcode=fb[BfBot._fields.fb_opcode]
+            if opcode==214 then choice=true;return end
+            if opcode~=146 or node.depth>=2 then return end
+            local res=_subSpellRef(fb)
+            local key=res and res:upper()
+            if not key or seen[key] or resourceCount>=32 then return end
+            seen[key]=true;resourceCount=resourceCount+1
+            local ok,h=pcall(EEex_Resource_Demand,res,'SPL')
+            if not ok or not h then return end
+            for n=0,math.min(tonumber(h.abilityCount) or 1,256)-1 do
+                local loaded,a=pcall(function()return h:getAbility(n)end)
+                if loaded and a then pending[#pending+1]={header=h,ability=a,depth=node.depth+1}end
+            end
+        end)
+        if choice then return true end
+    end
+    return false
+end
+
 function BfBot.Class._ScoreItemOpcodes(header, ability, resref)
     local queue = { { header = header, ability = ability, resref = resref,
         depth = 0, path = {} } }
     local seen, edges = {}, {}
     local score = 0
     local extras = { splstates = {}, selfReplace = false, isToggle = false,
-        fbAoE = false, hasSubstantive = false, analysisIncomplete = false }
+        fbAoE = false, hasSubstantive = false, analysisIncomplete = false,
+        requiresSelection = BfBot.Class._ItemOpensChoice(header,ability) }
     local index = 1
     while index <= #queue do
         local node = queue[index]
@@ -513,6 +544,7 @@ function BfBot.Class._ScoreItemOpcodes(header, ability, resref)
         if node.depth == 0 then extras.fbAoE = own.fbAoE end
 
         BfBot.Class._IterateFeatureBlocks(node.header, node.ability, function(fb)
+            if fb[BfBot._fields.fb_opcode]==214 then extras.requiresSelection=true end
             if fb[BfBot._fields.fb_opcode] ~= 146 then return end
             local child = _subSpellRef(fb)
             local key = child and child:upper()
@@ -782,6 +814,31 @@ function BfBot.Class.IsSelfOnly(ability)
     return (targetType == 5 or targetType == 7)
 end
 
+-- A caster-centered spell can still deliver to nearby allies. Recognize that
+-- from its actual projectile, rather than a spell-name compatibility list.
+function BfBot.Class.IsRadialParty(ability)
+    if not BfBot.Class.IsSelfOnly(ability) then return false end
+    local missile=ability.missileType
+    if type(missile)~='number' or missile<=1 then return false end
+    local C=BfBot.Class
+    C._radialProjectiles=C._radialProjectiles or {}
+    if C._radialProjectiles[missile]~=nil then return C._radialProjectiles[missile] end
+    local ok,party=pcall(function()
+        C._projectileIDs=C._projectileIDs or EEex_Resource_LoadIDS('PROJECTL',true)
+        local name=C._projectileIDs:getLine(missile-1)
+        local resource=type(name)=='string' and name:match('(%S+)$')
+        local pro=resource and EEex_Resource_Demand(resource,'PRO')
+        if not pro or pro.m_wFileType~=3 then return false end
+        -- EEex's typed PRO header starts after the eight-byte file signature.
+        local ptr=EEex_UDToPtr(pro)
+        local flags=EEex_ReadU16(ptr+0x1F8)
+        local radius=EEex_ReadU16(ptr+0x1FC)
+        return radius>0 and bit.band(flags,0xC0)==0xC0
+    end)
+    C._radialProjectiles[missile]=ok and party==true
+    return C._radialProjectiles[missile]
+end
+
 --- Determine the smart default target for a spell.
 function BfBot.Class.GetDefaultTarget(ability, isAoE)
     local targetType = ability.actionType
@@ -875,6 +932,10 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
         result.hasSubstantive = true
         result.noSubstance = false
         result.friendlyFlag = false
+        if sourceKind=='itm' then
+            local _,extras=BfBot.Class._ScoreItemOpcodes(header,ability,resref)
+            result.requiresSelection=extras.requiresSelection or false
+        end
 
         -- Duration computed per-sprite in scan entry, not here (classification is resref-level)
         result.isAoE = BfBot.Class.IsAoE(ability, false)
@@ -914,6 +975,7 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
     result.isToggle = opcodeExtras.isToggle
     result.hasSubstantive = opcodeExtras.hasSubstantive
     result.analysisIncomplete = opcodeExtras.analysisIncomplete or false
+    result.requiresSelection = opcodeExtras.requiresSelection or false
 
     -- Toggle penalty: opcode 318 self-ref = stance/toggle, not prebuff
     -- (opcode 321 self-ref = normal buff refresh, no penalty)

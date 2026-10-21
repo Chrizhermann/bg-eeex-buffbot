@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-20",
+  "scope": "Redux visual interface",
+  "status": "experimental beta",
+  "automated": {
+    "passed": 938,
+    "deselected": 5,
+    "focused_passed": 118
+  },
+  "native": {
+    "skins": [
+      "sod",
+      "bg1",
+      "iwd",
+      "bg2"
+    ],
+    "all_pages_and_popups": [
+      "sod",
+      "bg1"
+    ],
+    "wide_pages": true,
+    "escape": "passed",
+    "guarded_opens": 100,
+    "actual_cast": "Jan Improved Haste on Keldorn"
+  },
+  "review": "../review.md",
+  "personal_install_modified": false,
+  "ui_plus_modified": false,
+  "remaining_limits": [
+    "Earlier synthetic native stress crashes are documented; no extended soak certification.",
+    "Pre-existing EEex C2DArray finalizer warning remains.",
+    "BG1EE/IWDEE and multiplayer runtime acceptance not established."
+  ],
+  "followup_fixes": [
+    "SoD corner X placement and left dragon removal",
+    "Blank clicks keep the main panel and popups open; Escape preserved",
+    "Four extra logical pixels per main-list row",
+    "Clean inherited inventory fragments from SoD background and footer",
+    "Separate footer controls with 12px gaps",
+    "Stable browser ranks during assignment with dynamic values",
+    "Upfront full compatible source-duration ranges",
+    "Retain eligible portraits when uses are reserved, with subtle warning",
+    "Repeat-click dropdown trigger dismissal",
+    "Remove opaque exterior canvas"
+  ],
+  "manual_followup_pending": "Stable-browser final interaction checks: visual-review/browser-followup.md"
+}

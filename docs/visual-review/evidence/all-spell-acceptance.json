@@ -1,0 +1,115 @@
+{
+  "policy": "All non-item spells quick-cast; item activation remains native",
+  "runs": [
+    {
+      "tag": "direct",
+      "casts": 5,
+      "skips": 0,
+      "execution_ticks": 12,
+      "modeled_ticks": 222,
+      "verified_component_writes": 150,
+      "live_final_scan_mismatches": 0,
+      "resources": [
+        {
+          "resource": "SPPR306",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPPR734",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPPR306",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPPR734",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPPR306",
+          "balance": "exact"
+        }
+      ]
+    },
+    {
+      "tag": "variant",
+      "casts": 2,
+      "skips": 0,
+      "execution_ticks": 3,
+      "modeled_ticks": 8,
+      "verified_component_writes": 14,
+      "live_final_scan_mismatches": 0,
+      "resources": [
+        {
+          "resource": "SPWI201",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPWI510",
+          "balance": "exact"
+        }
+      ]
+    },
+    {
+      "tag": "party",
+      "casts": 5,
+      "skips": 0,
+      "execution_ticks": 10,
+      "modeled_ticks": 152,
+      "verified_component_writes": 108,
+      "live_final_scan_mismatches": 0,
+      "resources": [
+        {
+          "resource": "SPPR306",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPWI613",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPWI613",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPPR408",
+          "balance": "exact"
+        },
+        {
+          "resource": "SPPR108",
+          "balance": "exact"
+        }
+      ],
+      "SPPR408_balanced_slots": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "SPPR108_balanced_slots": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  ],
+  "verified_component_writes": 272,
+  "casts": 12,
+  "native_ui": {
+    "skin": "bg1",
+    "pages": [
+      "Buffs",
+      "Summary",
+      "Order"
+    ],
+    "limited_rows": 25,
+    "hover_text": "Limited duration balance: Effects can trigger later. Effects are never extended.",
+    "fixture": "Private display-only Aura of Flaming Death plan; no UI-triggered casts"
+  }
+}

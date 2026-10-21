@@ -6,7 +6,7 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.10.1"
+BfBot.VERSION = "1.10.1-redux-beta.1"
 BfBot.MAX_PRESETS = 8
 BfBot.MAX_SPELL_REPEATS = 5
 
@@ -221,6 +221,19 @@ end
 --- Get character name safely. Used by Exec, Innate, and UI modules.
 function BfBot._GetName(sprite)
     if not sprite then return "?" end
+    -- TLK references can be resolved directly. Negative references are
+    -- player-created names, which Infinity_FetchString cannot resolve.
+    -- Those must use the sprite's native name accessor.
+    if sprite.getNameRef and Infinity_FetchString then
+        local ok, name = pcall(function()
+            local ref=sprite:getNameRef()
+            if ref and ref>=0 then return Infinity_FetchString(ref) end
+        end)
+        if ok and type(name)=="string" and name~="" then
+            name=BfBot._StripColorEscape(name)
+            if name~="" then return name end
+        end
+    end
     local ok, name = pcall(function() return sprite:getName() end)
     if ok and name and name ~= "" then
         name = BfBot._StripColorEscape(name)

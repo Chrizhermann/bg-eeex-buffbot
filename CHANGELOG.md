@@ -1,8 +1,127 @@
 # Changelog
 
-## Unreleased
+## v1.10.1-redux-beta.1 — 20 October 2026
 
 Recipient-first fork, based on upstream v1.10.1.
+
+### Fresh-install defaults
+- Start with empty Pre-Battle Buffs and Wake Up Buffs lists, with After Rest enabled for Wake Up Buffs. Empty rest lists silently do nothing; existing saved plans and rest choices remain.
+
+### Final interface and shortcut cleanup
+- Tabs now read Buffs → Order → Summary in both native presentations.
+- Explicitly inset right-click preset captions within their plates.
+
+### Standalone themes and direct HUD presets
+- Bundle private control BAMs from the design exports; all four redesigned themes work without UI++.
+- Add Settings → Theme: Auto/UI++, SoD, IWD, BG1 or BG2; stock fonts and BG1 fallback. Never change UI++ resources or settings.
+- Fix the HUD gear falling off-screen on UI++'s oversized actionbar; dock it beside the visible bottom controls.
+- Right-click the HUD gear for named preset execution without an innate/extra character action; preserve native spell/combat behavior.
+- Hide C0FIG02 Expertise activation/deactivation selectors from automatic discovery; manual Add and saved intent remain available.
+
+### Native casting simplification and list titles
+- Default recipient casting to 2x; offer 2x, 4x and Normal only. Migrate retired Balanced preferences while preserving explicit native choices.
+- Remove the Balanced Quick Cast module, engine effect hooks, expiry writes, observer polling, pacing and balance markers from runtime and packaging.
+- Keep the small read-only Smart Order estimator in the planner; retain the native run-level speed audit.
+- Replace numbered preset innate abilities with the named direct HUD picker; remove grants, recharge, title updates and recipient settings. Clean old save abilities through native opcode 172 without changing real innates or saved plans.
+- Smart Order puts targeted buffs before invisibility on their recipient, with self/party exceptions. A recipient-specific native dependency wait prevents faster invisible casts overtaking those buffs across casters.
+
+### Fast-forward concurrency and rendering follow-up
+- Fix loan-containing normal/fast-forward plans dispatching one entry at a time; independent sources now share native parallel batches around actual loans.
+- Keep Balanced timing-model fences out of normal casting; native actions enforce their own aura and casting rules.
+- Temporarily cap EEex rendering at 30 FPS during fast-forward, preserving lower limits and restoring prior settings on exit.
+- Native comparison: 9.076 s normal, 4.740 s at requested 2x and 2.576 s at requested 4x, with 133 game ticks each and no helper/expiry edits.
+- Investigate speed with rate/VSync/sleep/foreground/render-cap controls; the render budget, rather than a hard 2x engine cap, explained the tested plateau.
+
+### Native fast-forward casting beta
+- Add opt-in 2x/4x normal-casting simulation acceleration, with 2x recommended.
+- Preserve native aura, resource, projectile and effect timing without Quick Cast helpers or duration edits.
+- Restore the prior rate on completion/interruption/load; bound combat guards to a 50 ms wall-time cadence.
+- Apply the selected mode to manual, After Rest and shared innate launches; retain existing Normal/Balanced defaults.
+- Native three-cast comparison achieved about 1.8x speedup; requested 4x added no useful gain in the loaded test session.
+
+### Plan management and casting beta
+- Add Settings → Preset abilities to choose shortcut recipients by character identity, including selecting none.
+- Route single-player F12 BuffBot innates to shared recipient presets: one PC
+  launches the full plan. Reconcile preset grants, defer dispatch out of the
+  effect callback and reject stale, busy or duplicate triggers. Show stable
+  preset numbers in the picker. Keep the original multiplayer character route.
+- Include allied summons and clones as recipient-plan casting sources, with
+  separate live pools, stable saved clone preferences and Project Image locks.
+- Recognize caster-centered friendly area projectiles as one Party cast while
+  retaining ordinary summon self-only restrictions.
+- Correct shared-level variant spending for sorcerers/shamans; retain native
+  innate remove/regrant behavior. Add scroll/wand manual candidates.
+- Replace unsafe backpack equipment actions with inverse swaps or guarded stock
+  inventory moves. Check droppable flags, resolve launchers for shield checks,
+  and compare resource identities without case sensitivity.
+- Detect interactive item choices across child-spell levels; prevent unattended
+  equipment/use for powers requiring a manual picker.
+- Extend external-EFF timing inspection, conservatively flag conjured weapon
+  lifetimes, and block After Rest while Redux menus are open.
+- Add independent imported-class, installed-resource, native item and summon
+  acceptance evidence, including actual effect-expiry and save/load recovery checks.
+- Reduce duration-tracking work using indexed party snapshots, relevant-resource
+  metadata and direct expiry lookups. Batch audit writes and throttle late polls.
+- Lightly stagger spell starts across frames while keeping quick casting and
+  independent caster lanes; recheck preflight after waits and reject stale resumes.
+- Add audit performance counters and dispatch-delay records.
+- Separate acceleration from balance eligibility: quick-cast all non-item spells
+  using the original helper, while preserving item activation and slot debit.
+- Balance new finite components across the party, selected variants and child
+  resources; keep observing projectile impacts after execution completes.
+- Use no-extension conservative corrections for uncertain graphs and ambiguous
+  repeated delivery. Add a hover-explained `*` for incomplete duration support.
+- Add confirmed preset deletion, with a last-preset guard and After Rest cleanup.
+- Add data-only `.bbp` import/export; preserve recipient/source identities,
+  variants, enabled state and order without overwriting presets or exports.
+- Add calibrated Balanced Quick Cast with JIT caster alignment and
+  per-component ownership/expiry correction; items retain native activation.
+- Run independent mixed-casting lanes concurrently in each caster's saved order;
+  fence item loans and known dependencies, and account for later phases in expiry correction.
+- Remove global waits caused solely by ordinary helper, variant, projectile or
+  party/item delivery. Inspect helper graphs for actual casting-rule changes.
+- Add a persistent JSONL timing audit with per-cast mode/reason, reference vs
+  elapsed time, verified effect expiry writes and observed party coverage.
+- Recheck each source after helper removal so later spells use real casting stats.
+- Separate global duration sorting from execution fences: helper spells and
+  item loans no longer pin rows. Keep only proven modifier prerequisites.
+- Preserve aura readiness across dependency phases in the timing model.
+- Add explicit Smart order, Long first and reversible Undo controls to Order;
+  protect short-lived buffs using caster durations, casting costs and aura estimates.
+- Add engine-checked, serialized borrowing of unique daily charged backpack
+  items, physical charge reservations and a persistent return journal.
+- Verify two-person Gargoyle Boots use/return, native usability rejection,
+  casting-speed timing and finite-effect expiry in the isolated EET copy.
+
+### Redux visual interface beta
+- Keep browser row positions stable during plan edits. Re-sort only at explicit
+  sort, recipient/preset, refresh or reopen boundaries; values still update.
+- Show the full compatible caster-duration range before reserving uses. Keep
+  each portrait's assigned/next-cast duration and all planner constraints.
+- Keep eligible recipients visible when pools are fully reserved; add a subtle
+  exhausted-uses warning. Blocked clicks still cannot overspend shared pools.
+- Toggle dropdowns closed with a repeated trigger click and remove the opaque
+  canvas outside the decorative frame.
+- Fix blank-space clicks dismissing the main panel and dialogs; preserve Escape
+  and explicit close controls. Add four pixels of row spacing on all pages.
+- Move the SoD close control onto the outer corner, remove its left dragon,
+  clean inherited inventory plates from the background/footer, and separate
+  Add spell / item, Hidden and Cast bounds.
+- Implement the supplied compact/wide Buffs, Summary and Order designs, all
+  current menus/dialogs, empty/error states, native portraits/icons, qualifiers,
+  duration fields and inline caster/order controls. Preserve planner behavior.
+- Follow all four Infinity UI++ skins, with BG1 for nil/unknown skin values.
+  Keep the existing interface when UI++ controls, rails or fonts are unavailable.
+  No UI++ installation files are modified.
+- Generate modular frame resources, BFBARROW and BFBGLYPH, with explicit hashed
+  packaging. Use native integer list columns and per-cell action dispatch.
+- Keep compact geometry when a maximized window cannot fit the full wide
+  canvas; document the departure from the design's 1000px-height cutoff.
+- Record the native screenshots, walkthrough, open-item answers, engine
+  fallbacks and beta limitations in docs/visual-review/review.md.
+- Validation: 938 automated tests pass; five Windows symlink cases excluded.
+  Final focused visual/dashboard repeat: 118 pass. Native acceptance scope and
+  earlier diagnostic stress crashes are documented in the visual review.
 
 ### Completed-rest preset beta
 - Select a recipient preset with **After rest**; leave the option off by default

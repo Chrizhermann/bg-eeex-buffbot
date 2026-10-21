@@ -1,24 +1,66 @@
-# BuffBot
+# BuffBot Redux
 
 **In-game configurable buff automation for Baldur's Gate: Enhanced Edition.**
 
 Cast all your pre-battle buffs with one click. BuffBot scans each character's spellbook, lets you configure which buffs to cast, in what order, on which targets — then executes the entire sequence automatically across all party members in parallel.
 
-> **Development fork based on v1.10.1.** The recipient-first beta has passed basic visual, casting, and save/load checks in an isolated single-player EET copy. Broader item and compatibility acceptance is still pending. Progress and evidence are recorded in `docs/recipient-first-checklist.json` and `docs/recipient-first-live-acceptance.json`.
+> **Development fork based on v1.10.1.** The recipient-first beta has expanded native spell, item, summon and save/load acceptance in isolated single-player EET copies. See [the compatibility report](docs/compatibility-test-report.md) for tested scope and remaining limits, and `docs/recipient-first-checklist.json` for the checklist.
 
 ### Recipient-first beta
 
+BuffBot's redesigned panel works with **stock BG:EE/BG2:EE/EET and UI++**.
+Settings → Theme offers Auto, SoD, IWD, BG1 and BG2. Auto follows UI++ when
+present and defaults to BG1 otherwise; manual choices affect BuffBot only.
+Private control resources come from the supplied design exports. Standard game
+fonts are used when UI++ fonts are absent.
+
+A persistent gear button sits beside/above the actionbar, moving above an
+expanded message log. Left-click edits plans; right-click opens a named preset
+picker. Picking a plan dispatches it directly, without casting an innate or
+spending an extra character action. Native casting/combat rules still apply.
+Preset innate shortcuts have been retired; old saves lose only those BuffBot
+abilities on load. Real spell and kit innates remain available as buff sources.
+Expertise's activate/deactivate stance is excluded from automatic discovery;
+manual Add can restore it.
+
+
+The gear menu now supports preset deletion and `.bbp` plan export/import in
+`override/bfbot_plans`. Casting defaults to **2x** simulation speed, with
+**4x** and **Normal** available in Settings → Casting. Spells and items use
+native casting, aura and duration rules; there are no effect-expiry rewrites.
+Eligible party members can borrow a unique daily charged item, use it and
+return it automatically, sharing its real charges. See
+[the feature guide and current limits](docs/plan-management-and-casting-beta.md).
+
+Live allied spellcasters, including Simulacra, Project Images and Devas, also
+contribute available casts. They are sources only; recipients remain the six
+party members. Missing saved summons stay unavailable until a matching summon
+returns. Project Images lock their owners before source allocation.
+
+Right-click the HUD gear to launch a named whole-party preset directly. Preset
+innates are retired, including their grants, title updates and recharge hooks.
+
+The **Redux visual interface** ships private controls for all four themes.
+Auto follows UI++'s skin when present, or defaults to BG1. Optional matching
+fonts use native NORMAL/STONESML fallbacks. UI++ is not required. Compact and
+wide layouts use fixed geometry; wide requires its full 1920×1080 canvas.
+See [visual review and native screenshots](docs/visual-review/review.md) for
+validation, design deviations and experimental-beta limitations. The review gallery
+is provided in the source checkout and separate review bundle.
+
 F11 and the BuffBot button open the **Buffs** dashboard. The top row contains
-**Buffs**, **Summary**, and **Order**, with a preset dropdown and
+**Buffs**, **Order**, and **Summary**, with a preset dropdown and
 **+** on the right. There is no title banner or separate recipient editor.
 Click a recipient cell to toggle a buff; **Party** schedules one party-wide cast.
 The dashboard packs eligible recipients into a portrait strip, omitting invalid
 targets and empty placeholders. A planned recipient whose source becomes
 unavailable stays visible with a warning so the assignment can be removed.
-The table labels **Icon**, **Name**, **Uses**, **Duration**, **Recipients**, and
-**Actions**. Uses means free / total; duration summarizes the visible recipients'
-assigned or previewed sources, including the selected spell variant. Each portrait
-also shows its own duration. Party buffs use one stacked-portrait **Party** toggle
+The redesigned table labels **Name**, **Uses**, **Duration** and **Recipients**,
+with spell icons at the left and **Clear** at the right.
+Uses means free / total. The row's duration is the full compatible source range,
+including weaker sources before any uses are reserved. Each portrait shows its
+actual assigned or next-cast duration. Eligible portraits remain visible when
+uses run out; the uses field gets a subtle warning and blocked clicks spend nothing. Party buffs use one stacked-portrait **Party** toggle
 in the recipient area and schedule one cast. To apply a targeted buff to several
 characters, select their portraits individually. **Clear** removes the row's
 assignments. Character tabs filter the same list,
@@ -27,7 +69,10 @@ The small **Search** field at the top filters spell names as you type; **X** cle
 it. Changing or clearing search returns the list to the top. Click **Name** or
 **Duration** to sort, then click again to reverse direction.
 The active header shows an arrow. Duration ranges sort by their longest value;
-unknown/unavailable durations stay last. Browser sorting does not alter cast order.
+unknown/unavailable durations stay last. Browser sorting does not alter cast order. Values update in place while editing;
+rows keep their positions until you click a sort header, switch recipient/preset,
+refresh sources, or reopen the panel. Clicking an open dropdown's trigger again
+closes it.
 
 **Summary** groups spell icons and names under recipient portraits, with caster
 and duration columns. **Order** shows numbered casts, spell icons, recipients,
@@ -74,27 +119,35 @@ were not used as evidence of spell-slot consumption.
 
 The isolated EET checks verified Gargoyle Boots charge consumption, active-buff
 skipping, and restoration after an equipment swap. Darkfire's Improved Haste
-works from inventory without ammunition. Conditional item usability still
-requires manual equipping in swap mode; cross-character sharing is pending.
+works from inventory without ammunition. The verified BG2EE native inventory
+check now handles item usability; other engines retain the conservative fallback.
+Unique daily charged backpack items support cross-character borrowing and return.
 Child spell effects can arrive after the executor finishes issuing item actions.
 
 Choose a preset or **Off** from **After rest** to control automatic casting after
 a completed standard eight-hour party rest. This selection is independent of
 the preset being edited. It starts off and is stored in the save with the party plans.
-The mod waits for the world to be controllable, uses normal casting speed, and
+The mod waits for the world to be controllable, uses the selected casting speed, and
 keeps your active editing preset and pause state. Interrupted rests, individual
 spell restoration, and loading a save do not trigger it. Combat cancels a pending
 run; unavailable requests skip the entire rest plan. Special shortened rests and
 other mods' rest replacements need separate compatibility checks.
 
-The **...** menu contains rename, refresh, legacy import, and **Caster editor**.
+The gear menu contains preset management, casting speed, refresh, legacy
+import, and **Caster editor**.
 **Caster editor** opens the original interface. **Import caster preset** copies
 the matching legacy preset into an empty party plan, retaining caster choices
 and leaving the originals intact. Party plans save separately in EEex saves.
-F12 innates still use legacy per-character presets. Party-plan casting currently
-uses normal speed, excludes 5E-converted sources, and does not auto-join summons.
-Cross-character item sharing and balanced accelerated casting remain separate
-milestones. New planner text uses English fallbacks in
+Settings → **Preset abilities...** chooses which PCs receive all numbered shortcuts (one, several, or none). Multiplayer retains legacy character routing. Party-plan casting excludes
+5E-converted sources and does not auto-join summons. Independent casters overlap;
+physical item loans retain transfer/use/return boundaries. Native time advances
+at the selected speed, so existing buffs, delayed effects and fatigue follow the
+engine clock. A lightweight speed audit is written to
+`buffbot_fast_forward_audit.jsonl`. Order offers Smart order, Long first and Undo.
+Smart order puts incoming targeted buffs before invisibility on their recipient;
+self and party casts may follow. Only the invisibility cast waits for those
+prior targeted casts, leaving unrelated casters independent.
+New planner text uses English fallbacks in
 the other language catalogs pending translation.
 
 > **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**
@@ -117,6 +170,10 @@ the other language catalogs pending translation.
 - **Subwindow selection spells** — pre-configure which variant to cast for spells like Protection from Elemental Energy, and BuffBot bypasses the popup. Converted 5E casters must cast these spells manually
 - **Experimental 5E Spellcasting compatibility** — use normal spell names and presets while [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) handles preparation and shared spell slots. See the [current state and limitations](#5e-spellcasting-experimental)
 - **Mod-friendly** — tested with SCS, Spell Revisions, and kit mods. Reads spell data dynamically, so mod-added spells show up automatically
+
+### Casting speed
+
+In Settings → Casting, **Fast-forward 2x** is the default. Choose it to run normal spell/item actions with the whole simulation accelerated. **4x** is experimental; a temporary 30 FPS render ceiling now gives the simulation room to run faster, while preserving lower existing limits. This mode performs no duration edits; it restores the previous simulation rate when the plan finishes or is interrupted. Old Balanced settings migrate to 2x; explicit Normal and fast-forward preferences are retained. Balanced Quick Cast and its observer/expiry adjustment module have been removed. See [the feature guide](docs/plan-management-and-casting-beta.md#native-fast-forward-casting-alternative-beta-mode) for measurements and limits.
 
 ## Requirements
 
@@ -158,7 +215,7 @@ All catalogs and installer paths have automated coverage. Live validation in the
 
 ### WeiDU (recommended)
 
-1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases/latest) and extract it into your game directory
+1. Download the [latest release](https://github.com/zach-hopkins/bg-eeex-buffbot/releases) and extract it into your game directory
 2. Run `setup-buffbot.exe` (or use your preferred WeiDU launcher)
 3. Select **BuffBot: EEex LuaJIT Support** first if EEex did not already activate LuaJIT
 4. Select **BuffBot: In-Game Buff Automation** after LuaJIT is active
@@ -181,19 +238,21 @@ Raw/manual copying is a development-only path from a source checkout, not the no
 
 - **Actionbar button** — appears to the right of the action bar
 - **F11** — keyboard shortcut
-- **F12 innates** — per-preset abilities in each character's special abilities
+- **Right-click actionbar button** — choose a named whole-party preset without an extra innate action
 
 ### Basic Workflow
 
-1. Open the panel (F11 or actionbar button)
-2. Select a character tab at the top
-3. Select a preset tab (default: "Long Buffs" / "Short Buffs")
-4. Enable/disable spells and items with the checkbox column (items start disabled)
-5. Set targets for each entry (Self, Party, or a specific character)
-6. Set each entry's repeat count from R1 to R5
-7. Reorder entries with the Up/Down buttons
-8. Click **Cast** to start buffing — or use the F12 innate for that preset
-9. **Quick Cast** button cycles Off → Long → All for fast casting
+1. Open the panel with F11 or the gear.
+2. Select a preset: fresh plans have empty Pre-Battle Buffs and Wake Up Buffs lists.
+3. Find a buff and click the recipients who need it; sources are assigned automatically.
+4. Use Order to move casts, choose casters, or apply Smart order/Long first.
+5. Use Summary to check each recipient's coverage.
+6. Click Cast, or right-click the HUD gear to run a named plan.
+7. Settings → Casting offers Fast-forward 2x (Recommended), 4x and Normal.
+8. After Rest initially points to the empty Wake Up Buffs list; populate it to automate waking preparation.
+
+The remaining per-caster controls below describe the retained **Caster editor**.
+Preset innate shortcuts are retired in both interfaces.
 
 ### Presets
 
@@ -240,7 +299,7 @@ Clone presets are stored by owner identity and are reused when that owner's clon
 
 Items are party-only in this release. Summon and clone presets remain spell-only even if a copied creature carries or inherits equipment.
 
-Project Image locks its owner while active. BuffBot limits the Project Image cast itself to one attempt, skips locked owners, and drops owner entries placed after it so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported; use the Summons panel actions instead.
+Project Image locks its owner while active. BuffBot limits the Project Image cast itself to one attempt, skips locked owners, and drops owner entries placed after it so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Redux retires copied BuffBot shortcuts as well; summon spells remain available as casting sources.
 
 ### Export / Import
 
@@ -267,11 +326,9 @@ Feedback is welcome. The [5E tester guide](docs/5e-spellcasting.md) has a short 
 
 The following limitations remain:
 
-- **Placeholder innate icons** — F12 abilities use the Stoneskin icon. Custom icons are planned
 - **Panel visuals** — functional but unpolished. The layout works, the aesthetics don't win awards
 - **Spell Revisions sub-spells** — some SR spells (Barkskin, Dispelling Screen) deliver effects via sub-spells, so the classifier may show them as ambiguous. Use "Add Spell" to manually include them
 - **Windows only for export/import listing** — the file picker uses Windows `dir /b` for directory listing. The core export/import file I/O works on any platform, but the picker won't list files on macOS/Linux
-- **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 - **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
 - **Automatic equipment swaps** — chest armor, unusable or conditionally usable gear, and ambiguous duplicate equipment copies require manual equipping; see [Items and Potions](#items-and-potions)
 - **5E Spellcasting support is experimental** — basic BG2:EE casting has been user-tested; the [limitations and wider testing needs](#5e-spellcasting-experimental) above still apply
@@ -290,7 +347,7 @@ Log files are written to the game directory: `buffbot_test.log`, `buffbot_exec.l
 
 For 5E Spellcasting reports, also run `BfBot.FiveE.Diagnose()` in the console and include `buffbot_5e.log` and `WeiDU.log`. See the [5E tester guide](docs/5e-spellcasting.md#reporting-a-problem).
 
-**Reporting bugs:** please open an issue at [GitHub Issues](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) with:
+**Reporting bugs:** please open an issue at [GitHub Issues](https://github.com/zach-hopkins/bg-eeex-buffbot/issues) with:
 - Game version (BG:EE / BG2:EE / EET) and EEex version
 - Steps to reproduce
 - Mod list (especially SCS, Spell Revisions, kit mods)
@@ -304,7 +361,7 @@ The code is fully open source — judge it on its merits. If you have concerns a
 
 ## Contributing
 
-Found a bug? Have a feature idea? [Open an issue](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) on GitHub.
+Found a bug? Have a feature idea? [Open an issue](https://github.com/zach-hopkins/bg-eeex-buffbot/issues) on GitHub.
 
 ### Adding a Language
 
@@ -346,7 +403,7 @@ bg-eeex-buffbot/
 │   ├── BfBot5e.lua       # Optional 5E Spellcasting compatibility
 │   ├── BfBotExe.lua      # Execution engine (parallel per-caster)
 │   ├── BfBotPer.lua      # Persistence (marshal handlers, presets, export/import)
-│   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
+│   ├── BfBotInn.lua      # Retired-shortcut cleanup and legacy helper spells
 │   ├── BfBotUI.lua       # Config panel logic
 │   ├── BfBotTst.lua      # Test suite (600+ assertions)
 │   ├── BuffBot.menu      # UI definitions (.menu DSL)
@@ -372,3 +429,8 @@ bg-eeex-buffbot/
 ## License
 
 [MIT](LICENSE)
+
+
+Fresh party plans start with two empty lists: **Pre-Battle Buffs** (selected)
+and **Wake Up Buffs**. After Rest is enabled for Wake Up Buffs. An empty rest list
+does nothing silently; existing saved lists and rest preferences are preserved.

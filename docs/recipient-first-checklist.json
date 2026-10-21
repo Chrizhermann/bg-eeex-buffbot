@@ -6,7 +6,7 @@
   },
   "branch": "codex/recipient-first-buffbot",
   "validation": {
-    "automated_passed": 790,
+    "automated_passed": 1071,
     "automated_deselected": 5,
     "deselection_reason": "Five existing release/deploy tests need Windows symbolic-link privileges (WinError 1314).",
     "new_item_graph_regressions": 19,
@@ -29,14 +29,34 @@
     "variants_evidence": "recipient-variants-acceptance.json",
     "upstream_compatibility_audit": "recipient-upstream-compatibility.md",
     "inline_views_focused_passed": 136,
-    "inline_views_evidence": "recipient-inline-views-acceptance.json"
+    "inline_views_evidence": "recipient-inline-views-acceptance.json",
+    "catalog_policy_passed": 28,
+    "catalog_policy_focused_passed": 98,
+    "catalog_policy_evidence": "recipient-catalog-policy-acceptance.json",
+    "visual_redesign_evidence": "visual-review/review.md",
+    "visual_redesign_gallery": "visual-review/index.html",
+    "visual_redesign_focused_passed": 118,
+    "new_plan_management_regressions": 18,
+    "new_item_sharing_regressions": 28,
+    "runtime_feature_guide": "plan-management-and-casting-beta.md",
+    "independent_compatibility_report": "compatibility-test-report.md",
+    "independent_compatibility_evidence": "visual-review/evidence/compatibility-acceptance.json",
+    "retired_balanced_validation": {
+      "balanced_timing_model_passed": 32,
+      "balanced_timing_focused_passed": 90,
+      "balanced_quick_cast_evidence": "balanced-quick-cast-offline-acceptance.json",
+      "balanced_observer_passed": 40,
+      "balanced_research_focused_passed": 130,
+      "balanced_observer_evidence": "balanced-observer-offline-acceptance.json",
+      "new_balanced_runtime_regressions": 34
+    }
   },
   "policies": {
     "initial_platform": "single-player EET",
     "personal_installation": "reference only; use an isolated copy for gameplay tests",
     "rest_trigger": "completed rests only, once per party rest, after returning to a safe world state",
-    "quick_cast_presentation": "preserve visible engine casting animations and spell effects where verified",
-    "duration_compensation": "only effects produced by this run; existing effects age only by actual elapsed game time",
+    "quick_cast_presentation": "Native casting animations and effects; no recipient-plan alacrity/casting-time helpers.",
+    "duration_compensation": "None: native time advances during normal casting at 2x, 4x or Normal; existing effects and delayed consequences follow the same engine clock.",
     "source_selection": "prefer stronger eligible sources, using actual spell properties rather than raw character level; allow explicit source overrides",
     "recipient_priority": "assign the preferred source to the first selected recipient, then reserve remaining sources for subsequent recipients",
     "availability": "reserve underlying spell slots and physical item charge pools across the entire preset",
@@ -46,7 +66,7 @@
   "milestones": [
     {
       "id": "item_discovery",
-      "status": "implemented_basic_live_verified",
+      "status": "implemented_broad_native_matrix_verified_with_open_caster_case",
       "changes": [
         "Classify immediate opcode-146 child-spell evidence for activated item powers through two links, bounded to 32 resources.",
         "De-duplicate resource evidence case-insensitively and reject unresolved, delayed, or cyclic graphs from automatic buff recognition.",
@@ -59,13 +79,13 @@
         "BOW21 ability 1"
       ],
       "acceptance_pending": [
-        "Exercise legacy manual Add and confirm newly discovered item rows remain disabled until selected.",
-        "Broader item powers, interruption recovery and conditional usability combinations."
+        "Headband of the Devout: Haer'Dalis native child ForceSpell stalls after use; Jan activation/restoration passes. Failed control retained in compatibility report."
       ],
       "remaining_detection_scope": [
-        "External EFF delivery and deeper or conditional graphs need additional analysis.",
-        "Scrolls, wands, containers, and unsupported target modes remain outside automatic item discovery.",
-        "Installed Darkfire conditional usability (opcode 319) blocks automatic swap planning; equip manually in swap mode until engine-equivalent eligibility is implemented."
+        "Interactive item pickers require manual use; all child levels checked.",
+        "Deeper/conditional graphs remain conservative; manual Add available.",
+        "Scripted non-droppable copies, curses and unsafe hand/equipment combinations require manual equipment.",
+        "Unknown inventory-bridge engines fail closed."
       ],
       "acceptance_passed": [
         "Gargoyle Boots and both Darkfire powers are identified and detected with their actual item charge counters and self-only targets.",
@@ -74,12 +94,13 @@
         "Darkfire +4 and +5 apply Improved Haste from the backpack without equipped ammunition and consume their own ability-1 charge.",
         "Mixed-case child spell resource names match the engine's uppercase effect source names after the skip-check correction.",
         "Darkfire +5 inventory activation also succeeds with equipped ammunition, without consuming the arrow.",
-        "An active Improved Haste causes the Darkfire request to skip and preserves its remaining charge."
+        "An active Improved Haste causes the Darkfire request to skip and preserves its remaining charge.",
+        "All 4,281 decoded installed ITM resources scanned without classifier errors. A 171-power native matrix and exception follow-ups cover real activation, spending and return. Scroll/wand manual activation verified. Interactive and non-droppable powers refuse before movement/use. Canonical resource identity survives case changes; shield checks resolve ammunition to its launcher."
       ]
     },
     {
       "id": "source_properties_and_reservations",
-      "status": "implemented_basic_live_verified",
+      "status": "implemented_classes_summons_and_shared_pools_native_verified",
       "deliverables": [
         "Preserve every concrete source behind a combined buff row, including effective caster level, duration, strength, variants, and eligibility.",
         "Allocate requests across compatible sources without double-spending spontaneous spell slots or item charge pools.",
@@ -88,23 +109,60 @@
       "acceptance_passed": [
         "Automatic assignments and explicit source overrides show source-specific durations.",
         "Two normal Protection From Fire casts applied to two recipients and consumed exactly two prepared uses.",
-        "Already-active Protection From Fire requests skip without spending more uses."
+        "Already-active Protection From Fire requests skip without spending more uses.",
+        "Native shaman and sorcerer alternatives share level uses; two casts reduce all alternatives from three to one. Spell Immunity selected variant spends one shared level use.",
+        "SPIN137 intentionally removes and regrants itself in this install; native SpellRES behavior retained.",
+        "Simulacrum, Project Image and Deva contribute independent guarded sources; six party recipients stay unchanged. Missing saved clone remains unavailable, replacement clone resolves a new runtime ID, and Project Image locks its owner before allocation."
       ],
       "acceptance_pending": [
-        "Live shared sorcerer/shaman slots and physical item charge pools.",
-        "Investigate the tested SPIN137 innate retaining availability after successful casting.",
-        "Additional variants, kit effects and special source equivalence cases."
+        "Further third-party kit/source equivalence cases remain outside the installed EET acceptance scope."
       ]
     },
     {
       "id": "balanced_quick_cast_feasibility",
-      "status": "pending",
+      "status": "retired_replaced_by_native_time",
       "deliverables": [
         "Measure normal and accelerated engine cast completion, animations, aura recovery, and casting-speed modifiers.",
         "Prove run-specific effect attribution and duration adjustment for direct buffs and child-spell buffs.",
         "Account for actual elapsed time, delayed delivery, expiration behavior, and unsupported effects before choosing a beta scope.",
         "Align independent caster sequences to a common finish while preserving dependencies and user order."
-      ]
+      ],
+      "audit": "balanced-quick-cast-feasibility.md",
+      "prototype": "tools/research/balanced_timing.lua (offline only; not installed or loaded)",
+      "acceptance_passed": [
+        "Source audit confirms existing parallel queues and opcode-188/189 quick-cast helper; recipient Cast still starts normal mode.",
+        "32 offline LuaJIT model cases cover independent-caster just-in-time alignment, initial aura readiness, interleaved priorities, delivery delays, malformed input and bounded tick arithmetic.",
+        "Per-effect arithmetic accounts for actual elapsed game time, leaves existing/unattributed and permanent effects alone, refuses revival, and distinguishes exact extension from conservative no-extension policy.",
+        "90 focused planner/rest/timing tests pass. No native input, casts, effect writes, deployment or window manipulation used for this checkpoint.",
+        "40 offline observation regressions verify existing-effect baselines, strict source/resource/recipient matching, repeated-cast ambiguity, reused tokens, load/clock/party invalidation, raw action observations, read failures and bounded evidence retention. Combined research/planner/rest checks: 130 passed. Observer is not deployed or automatically hooked.",
+        "Native direct casts measured at 64 ticks with aura cleansing and 24 ticks with a four-segment casting-speed bonus.",
+        "Native expiry shortening removed a component after 31 ticks while another component retained its expiry.",
+        "Compensated native two-cast run adjusted eight new gameplay components; final expiries retained the 64-tick reference separation.",
+        "Two independent casters completed three accelerated casts; twelve components corrected with 20-minute and 15-minute native lifetimes. Faster lane received the verified JIT extension.",
+        "Mixed execution retains each caster's saved order, overlaps independent casters, accelerates supported entries and uses native normal casting for the rest; one effect-ownership session spans the run. Normal and legacy Quick Cast remain available.",
+        "Native mixed runs retained saved order: quick/direct, normal Bless, quick/direct; borrowed Gargoyle Boots returned to owner slot 22 before the following direct spell accelerated. Party/item effect expiries stayed unchanged; no helper or journal remained.",
+        "Independent native casters started on the same tick; all three spells accelerated and twelve components corrected. Known dependencies fence parallel phases; earlier buffs age across later phases. Explicit Smart order/Long first/Undo added; native smart sort and exact undo passed.",
+        "Global Long first no longer freezes helper-spell or borrowed-item rows. Smart order starts from that baseline; only proven casting prerequisites constrain affected casters. Native installed-metadata test sorted all sixteen screenshot-matching requests with zero missing assignments. Aura readiness/JIT tests cover dependency phases without artificial extra preparation time.",
+        "Remove waits caused solely by helper, variant, projectile or party/item delivery; inspect bounded helper graphs for casting modifiers. Native six-second mental buffs overlapped (three ticks apart), Improved Haste casters started together, and twelve adjusted expiry values matched an independent final scan. A persistent JSONL audit distinguishes actual/model time and verifies engine write read-back; 140 normal components stayed unchanged. Late projectile observations confirmed Protection From Evil on all six party members without duration writes.",
+        "All non-item spells use original quick-cast helper independently of duration eligibility. Native direct/ISoM, selected Spell Immunity and child/projectile/party runs completed twelve casts with zero skips and 272 verified expiry writes, independently checked against final native effects. Protection From Evil and Remove Fear balanced six recipients. BG1 native Buffs/Summary/Order show hover-explained limited-support markers; 25 visible rows retain conservative classifications. Audit and pointer-generation guards retained.",
+        "Optimize observer/adjustment scans with indexed snapshots and relevant-source fast paths; batch audit writes and throttle late polls. Forty-cast stress test reduced effect visits 92.8%, about 10.6x less Lua time (five-run median), with identical 320-component expiry checksums. Native five-cast probe verified 108 writes, six-recipient party coverage, three-tick dispatch spacing and a 5ms maximum observer snapshot. Short pacing retains quick casting, independent lanes, fresh preflight and stale-resume protection.",
+        "Imported druid/cleric/shaman native matrix: 48 cases, 96 casts, zero skips; 1,358 correction writes read back and matched independently scanned final expiries. Eight profiles conservative. Summoned radial Party cast lands on six recipients with 24 verified writes. All 6,282 decoded SPL resources / 13,751 headers classify without error."
+      ],
+      "acceptance_pending": [
+        "Conjured item lifetimes, very late effects and refreshed-in-place components remain conservative or unbalanced with markers/audit gaps. Exact vanilla equivalence and additional engines are not certified."
+      ],
+      "observation_tools": {
+        "status": "runtime_component_balance_native_verified_with_explicit_limits",
+        "protocol": "balanced-observer-protocol.md",
+        "capture": "tools/research/balanced_capture.lua",
+        "ledger": "tools/research/balanced_observer.lua",
+        "native_acceptance": true
+      },
+      "runtime_guide": "plan-management-and-casting-beta.md",
+      "timing_audit_evidence": "visual-review/evidence/timing-audit-acceptance.json",
+      "all_spell_evidence": "visual-review/evidence/all-spell-acceptance.json",
+      "performance_evidence": "visual-review/evidence/casting-performance-acceptance.json",
+      "current_note": "Historical prototype acceptance retained only for research. BfBotBal, effect observers, expiry rewriting, deferred correction and pacing have been removed."
     },
     {
       "id": "recipient_presets_and_interface",
@@ -129,12 +187,29 @@
         "Compact framed name-only search with live filtering and clear button, and ascending/descending Name and Duration header sorting. Sorting uses numeric source-aware durations and preserves cast order. Native keyboard filtering and clear/sort callbacks verified.",
         "All eight installed Spell Immunity variants have independent rows/icons and recipient assignments, sharing parent uses. Native Abjuration on Simmeon and Divination on Jan each landed and consumed one parent use (2 to 1). Source popups explain variant identity and shared uses.",
         "Changing/clearing search resets actual native dashboard scrollbar. Native dashboard scroll verified from 2000 to 0.",
-        "Coverage removed. Order has labeled columns, inline up/down controls, a row-anchored caster dropdown, durations and removal. Summary groups spell icons under recipient portraits, with inline caster selection and removal. Native movement, caster pin/Auto and Summary mapping verified."
+        "Coverage removed. Order has labeled columns, inline up/down controls, a row-anchored caster dropdown, durations and removal. Summary groups spell icons under recipient portraits, with inline caster selection and removal. Native movement, caster pin/Auto and Summary mapping verified.",
+        "Conservative automatic catalog policy filters non-self/non-friendly Magic Attack, Offensive Damage and Disabling spells despite positive discovery scores; manual Add and enabled requests from every preset preserve deliberate intent. Offline audit reviews 1,020 loose roots and filters 19 candidates; 28 policy cases and full 890-test suite pass. Repository only; native refresh pending.",
+        "Native legacy import and stricter catalog/manual Add recovery verified. Allied summons are now caster sources, not recipients. Delete/import/options native captures included; no UI++ files changed."
       ],
       "acceptance_pending": [
-        "Live legacy preset import, alternate resolutions and full interaction matrix.",
-        "Broader conditional target eligibility beyond the current advisory checks.",
-        "Full dashboard feature parity beyond preserved caster editor: Quick Cast controls, summons/clones, F12 party-plan routing, external plan export/import, repeat editor, preset deletion and legacy theme/layout controls. See upstream audit."
+        "Broader third-party conditional target eligibility outside the installed setup."
+      ],
+      "design_handoff": {
+        "status": "ready_for_design",
+        "date": "2026-10-19",
+        "package": "../../buffbot-design-handoff-2026-10-19.zip",
+        "dossier": "../../buffbot-design-handoff-2026-10-19/index.html",
+        "native_screenshots": 29,
+        "priority_defects": [
+          "Malformed scroll-framed up/down/remove controls",
+          "Compact recipient-strip crowding",
+          "Popup framing and state hierarchy"
+        ],
+        "scope": "Existing theme adaptation; all recipient pages and popup families; editable interaction/state/layout/asset requirements."
+      },
+      "catalog_policy": "recipient-catalog-policy.md",
+      "future_optional_features": [
+        "Dashboard repeat-count editor"
       ]
     },
     {
@@ -151,21 +226,260 @@
         "Protection From Fire applies to Jaheira and Jan; Anomen consumes exactly two prepared uses (4 to 2).",
         "A failed native rest attempt leaves the rest stamp unchanged and starts no automatic run.",
         "Engine timing tolerances and individual-rest, interruption, stale-event, load-baseline, combat, modal, busy, missing-resource and duplicate-run guards have LuaJIT regressions.",
-        "Private quick-save and process restart preserve rest preset 1 while editing preset 2; loading starts no casts and leaves no pending run."
+        "Private quick-save and process restart preserve rest preset 1 while editing preset 2; loading starts no casts and leaves no pending run.",
+        "All three Redux menu types block safe-world execution. Native completed rest expires summons and preserves unavailable saved source intent without accidental casting."
       ],
       "acceptance_pending": [
-        "Native wilderness ambush with creature spawning, inn/store-room flow, and rest-triggered story cutscenes.",
-        "Compatibility with shortened/custom rests, engine variants, and alternate UI resolutions."
+        "Full campaign wilderness-ambush, inn/store and rest-triggered story-cutscene scenarios.",
+        "Shortened/custom rests and untested engine variants."
       ]
     },
     {
       "id": "purposeful_item_sharing",
-      "status": "pending",
+      "status": "implemented_unique_daily_backpack_beta_native_verified",
       "deliverables": [
         "Prove recipient eligibility against the engine's actual equipment rules, including conditional usability.",
         "Reserve the physical item, transfer, equip, activate, restore, and return it with interruption recovery.",
         "Respect shared charges, curses, inventory capacity, and changes made manually during a run."
+      ],
+      "acceptance_passed": [
+        "Native inventory usability adapter checks executable/function signatures; native low-strength Darkfire rejection and restored eligibility verified.",
+        "Six eligible Gargoyle Boots sources reserve one physical pool.",
+        "Keldorn and Anomen each cast Stoneskin from one pair of boots, consuming exactly two charges. Both native effects were confirmed.",
+        "Boots returned to original owner slot 22, equipment restored and transfer journal cleared.",
+        "Queued-transfer cancellation, journal recovery, occupied slots, duplicates, missing characters and modified gear covered by regressions.",
+        "Native Stop and spawned-enemy interruption preserve both charges and restore owner slot 22.",
+        "Actual disk save during loan, private process termination and fresh-process load return the boots without spending or restarting.",
+        "Final stock-inventory backend repeats the two-recipient/two-charge boots run and clears both journals. Same-owner native movement separately preserves the identical CItem pointer."
+      ],
+      "acceptance_pending": [],
+      "remaining_limits": [
+        "Unique loose rechargeable multi-charge items only; no equipped-owner or duplicate-copy loans.",
+        "Summon backpack swaps/loans require manual equipment.",
+        "Native inventory calls pinned to checked BG2EE 2.6.6 signatures."
       ]
+    },
+    {
+      "id": "preset_management",
+      "status": "implemented_native_backend_verified",
+      "acceptance_passed": [
+        "Confirmed deletion with last-preset protection and After Rest cleanup.",
+        "Data-only .bbp export/list/read/import/delete round trip verified in the native game runtime.",
+        "Imports create new presets and preserve recipients, sources, variants, disabled state and order.",
+        "Options, deletion/cancel/last-preset and import native callbacks pass; BG1 wide screenshot evidence included."
+      ],
+      "acceptance_pending": []
     }
-  ]
+  ],
+  "visual_redesign": {
+    "status": "implemented and reviewed; experimental beta",
+    "optional_ui_plus": true,
+    "unknown_skin_fallback": "bg1",
+    "without_ui_plus": "existing recipient panel",
+    "wide_requires": [
+      1920,
+      1080
+    ],
+    "native_review": [
+      "SoD and BG1 all pages and popups",
+      "IWD and BG2 skins",
+      "1920x1080 wide pages",
+      "search reset and shared variant reservations",
+      "native cell dispatch and caster pin durations",
+      "maximized-window fit and live resize",
+      "100 guarded opens preserve native stack depth",
+      "Escape closes top popup only",
+      "Cast executes actual Improved Haste and closes panel",
+      "Preset options, deletion and import BG1 wide captures with native callback acceptance"
+    ],
+    "pending": [],
+    "regression": {
+      "passed": 1214,
+      "deselected": 5,
+      "focused_passed": 283
+    },
+    "remaining_limits": [
+      "The equipment-return native crash was fixed; 171-power run clean, extended soak not certified.",
+      "Pre-existing EEex C2DArray finalizer warning remains.",
+      "BG1EE/IWDEE and multiplayer runtime acceptance not established."
+    ],
+    "user_reported_fixes": [
+      "SoD corner X placement and left dragon removal",
+      "Blank clicks keep the main panel and popups open; Escape preserved",
+      "Four extra logical pixels per main-list row",
+      "Clean inherited inventory fragments from SoD background and footer",
+      "Separate footer controls with 12px gaps",
+      "Stable browser ranks during assignment with dynamic values",
+      "Upfront full compatible source-duration ranges",
+      "Retain eligible portraits when uses are reserved, with subtle warning",
+      "Repeat-click dropdown trigger dismissal",
+      "Remove opaque exterior canvas"
+    ],
+    "manual_followup_pending": "Stable-browser final interaction checks: visual-review/browser-followup.md",
+    "new_feature_visual_review_pending": "Preset ability recipient and Casting mode dialogs: callback/backend verified; screenshot review pending.",
+    "current_standalone_support": "Four private skins plus optional UI++ font/skin lookup. Native stock BG2EE and EET/UI++ captures in standalone/."
+  },
+  "party_preset_innates": {
+    "status": "retired_replaced_by_direct_hud_picker",
+    "removed": [
+      "preset ability generation and grants",
+      "recharge and title updates",
+      "innate trigger dispatch",
+      "Settings recipient selector"
+    ],
+    "migration": "Native opcode 172 removes exact BFBT[0-5][1-8] known/memorized entries on character load; real abilities and presets remain.",
+    "historical_evidence": [
+      "visual-review/evidence/party-innate-native-repeat.json",
+      "visual-review/evidence/party-innate-grants-native.json",
+      "visual-review/evidence/party-innate-selection-native.json",
+      "visual-review/evidence/native-list-titles.json"
+    ],
+    "current_evidence": "visual-review/evidence/retired-innate-native.json"
+  },
+  "native_fast_forward": {
+    "status": "implemented_native_beta_verified",
+    "default": "2x; migrate retired Balanced settings; preserve explicit Normal/2x/4x",
+    "modes": [
+      "Fast-forward 2x",
+      "Fast-forward 4x",
+      "Normal"
+    ],
+    "implementation": "normal native executor; temporary EEex simulation update rate; no clock jumps/helpers/effect expiry edits; no Tactical Time integration",
+    "native_cases": [
+      "normal/2x/4x two-caster comparison: 3 casts and zero skips each; rate restored",
+      "native component lifetimes match within a few ticks",
+      "two Boots charges, return to original slot, journal cleared, manually included Haste delivered to all six after projectiles",
+      "Stop and actual hostile-creature interruption restore rate; combat response 68 ms",
+      "Same 133 game ticks and three casts / zero skips at normal/2x/4x with render ceiling",
+      "Native speed and render-state restoration read back on completion, Stop and real combat",
+      "Independent batches 2 / 1 loan / 2 in normal and fast modes; five casts and zero skips; item returned"
+    ],
+    "measurements_seconds": {
+      "normal": 9.076,
+      "requested_2x": 4.74,
+      "requested_4x": 2.576
+    },
+    "limits": [
+      "requested multiplier is not guaranteed wall-time speed",
+      "whole world and existing effects advance",
+      "full fatigue expiry, long periodic effects and native load interruption not certified in this pass"
+    ],
+    "evidence": [
+      "visual-review/evidence/fast-forward-native.json",
+      "visual-review/evidence/fast-forward-native-before-guard-throttle.json",
+      "visual-review/evidence/fast-forward-mixed-native.json",
+      "visual-review/evidence/fast-forward-mixed-effects.json",
+      "visual-review/evidence/fast-forward-interrupt-native.json",
+      "visual-review/evidence/fast-haste-resource.json",
+      "visual-review/evidence/fast-rate-diagnostic.json",
+      "visual-review/evidence/fast-sleep-diagnostic.json",
+      "visual-review/evidence/fast-rate-foreground.json",
+      "visual-review/evidence/fast-render-cap-diagnostic.json",
+      "visual-review/evidence/fast-concurrency-native.json",
+      "visual-review/evidence/fast-render-cap-casting-native.json",
+      "visual-review/evidence/fast-render-interrupt-native.json",
+      "visual-review/evidence/fast-render-final-settings.json",
+      "visual-review/evidence/native-invisibility-order.json",
+      "visual-review/evidence/cleanup-native-speed.json",
+      "visual-review/evidence/stock-hud-direct-cast-final.json",
+      "visual-review/evidence/stock-final-settings.json"
+    ],
+    "automated": {
+      "passed": 1071,
+      "deselected": 5,
+      "reason": "Windows symlink privilege cases",
+      "focused_fast_and_api_checks": 27
+    },
+    "render_ceiling": "temporary 30 FPS; preserve lower enabled limit; restore prior numeric value and enabled state",
+    "measurements_seconds_before_render_ceiling": {
+      "normal": 8.89,
+      "requested_2x": 4.995,
+      "requested_4x": 4.954
+    },
+    "investigation": "fast-forward-performance-investigation.md",
+    "render_followup": {
+      "status": "native_verified",
+      "temporary_render_ceiling": 30,
+      "old_settings_restored": true,
+      "native_same_plan_seconds": {
+        "normal": 9.076,
+        "requested_2x": 4.74,
+        "requested_4x": 2.576
+      },
+      "same_game_ticks": 133,
+      "concurrency_batches": [
+        2,
+        1,
+        2
+      ],
+      "reason": "render budget held back faster simulation; no demonstrated hard 2x engine cap",
+      "regression_passed": 1214,
+      "additional_release_passed": 27,
+      "report": "fast-forward-performance-investigation.md"
+    }
+  },
+  "standalone_themes_and_hud": {
+    "status": "native_verified_stock_and_ui_plus",
+    "themes": [
+      "Auto",
+      "SoD",
+      "IWD",
+      "BG1",
+      "BG2"
+    ],
+    "fallback": "BG1",
+    "stock_fonts": [
+      "NORMAL",
+      "STONESML"
+    ],
+    "private_control_resources": true,
+    "ui_plus_files_modified": false,
+    "screenshots": "visual-review/standalone/",
+    "native_direct_hud_cast": {
+      "casts": 2,
+      "skips": 0,
+      "extra_innate_actions": 0,
+      "restored_rate": 30
+    },
+    "expertise_policy": "C0FIG02 and activation/deactivation children excluded from automatic discovery; manual Add and saved intent remain.",
+    "integration": "UI++ auto skin indicator, optional matching fonts, and toolbar geometry only; private controls and native fonts work without UI++.",
+    "tab_order": [
+      "Buffs",
+      "Order",
+      "Summary"
+    ]
+  },
+  "final_release": {
+    "version": "1.10.1-redux-beta.1",
+    "distinct_automated_tests_verified": 984,
+    "windows_symlink_cases_deselected": 5,
+    "last_full_run": {
+      "passed": 983,
+      "failed": 1,
+      "note": "Archive byte check saw documentation edited after its fixture was built; no runtime failure."
+    },
+    "targeted_rerun": {
+      "passed": 72,
+      "includes": "Previously failing byte-preserving package test; current changelog, completed rest, retired abilities and speed controls."
+    },
+    "current_failures": 0,
+    "native_evidence": "retired-innate-native.json",
+    "default_lists": [
+      "Pre-Battle Buffs",
+      "Wake Up Buffs"
+    ],
+    "after_rest": {
+      "on": true,
+      "preset": "Wake Up Buffs",
+      "empty_is_silent": true
+    },
+    "tab_order": [
+      "Buffs",
+      "Order",
+      "Summary"
+    ],
+    "recommended_option": "Fast-forward 2x (Recommended)",
+    "preset_innates": "retired; exact old abilities cleaned on character load",
+    "ui_plus": "optional skin indicator, optional fonts, toolbar docking geometry only"
+  }
 }

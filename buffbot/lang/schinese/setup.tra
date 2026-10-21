@@ -28,21 +28,21 @@
 @113 = ~schinese~
 
 // innate.preset_1
-@200 = ~BuffBot 预设 1~
+@200 = ~BuffBot 预设: <BFBOT1>~
 // innate.preset_2
-@201 = ~BuffBot 预设 2~
+@201 = ~BuffBot 预设: <BFBOT2>~
 // innate.preset_3
-@202 = ~BuffBot 预设 3~
+@202 = ~BuffBot 预设: <BFBOT3>~
 // innate.preset_4
-@203 = ~BuffBot 预设 4~
+@203 = ~BuffBot 预设: <BFBOT4>~
 // innate.preset_5
-@204 = ~BuffBot 预设 5~
+@204 = ~BuffBot 预设: <BFBOT5>~
 // innate.preset_6
-@205 = ~BuffBot 预设 6~
+@205 = ~BuffBot 预设: <BFBOT6>~
 // innate.preset_7
-@206 = ~BuffBot 预设 7~
+@206 = ~BuffBot 预设: <BFBOT7>~
 // innate.preset_8
-@207 = ~BuffBot 预设 8~
+@207 = ~BuffBot 预设: <BFBOT8>~
 
 // common.buffbot
 @300 = ~BuffBot~

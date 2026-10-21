@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def dashboard(lua):
     lua.execute((ROOT / 'buffbot/BfBotPUI.lua').read_text(encoding='utf-8'))
     lua.execute('''
+        EEex_Sprite_GetInPortrait=function() return nil end
         U=BfBot.PartyUI
         BfBot.Scan={InvalidateAll=function() scans=scans+1 end}
         BfBot.Exec={GetState=function() return 'idle' end}
@@ -222,7 +223,8 @@ def test_individual_toggle_respects_request_limit(dashboard):
         local s=snapshot();source(s,'BUFF','A',60,'a',300)
         local req={};for i=1,256 do req[i]=request('BUFF','A') end
         setup(s,req);findrow('BUFF');U.DashboardClick(6)
-        return #U.preset.requests==256 and U.DashboardCell(bbPartyRowSelection,2)==nil
+        return #U.preset.requests==256 and U.DashboardCell(bbPartyRowSelection,2).target=='B'
+            and bbPartyFeedback=='Maximum 256 planned casts'
     ''')
 
 
@@ -294,7 +296,7 @@ def test_durations_follow_assigned_sources_and_recipient_filter(dashboard):
         assert(U.CellDuration(bbPartyRowSelection,1)=='2.0m')
         assert(U.CellDuration(bbPartyRowSelection,2)=='1.0m')
         U.SetRecipient(2);findrow('BUFF')
-        return U.RowDuration(bbPartyRowSelection)=='1.0m'
+        return U.RowDuration(bbPartyRowSelection)=='1.0m - 2.0m'
             and U.CellDuration(bbPartyRowSelection,1)=='1.0m'
     ''')
 
@@ -625,3 +627,74 @@ def test_plan_views_have_headers_inline_controls_and_no_coverage_or_bottom_toolb
     for name in ('bpOrderHeadCaster','bpOrderHeadRecipient','bpSummaryHeadCaster','bpSummaryHeadDuration'):
         assert f'name "{name}"' in party
     assert 'OrderClick(cellNumber)' in party and 'SummaryClick(cellNumber)' in party
+
+
+def test_duration_range_includes_weaker_sources_before_the_first_reservation(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot()
+        source(s,'WARD','A',1200,'a',1);source(s,'WARD','B',900,'b',3)
+        setup(s);local row=findrow('WARD');local id=row.id
+        assert(row.uses=='4/4' and U.RowDuration(bbPartyRowSelection)=='15.0m - 20.0m')
+        U.DashboardClick(5);findrow('WARD')
+        assert(U.CellDuration(bbPartyRowSelection,1)=='20.0m')
+        assert(U.CellDuration(bbPartyRowSelection,2)=='15.0m')
+        return U.RowDuration(bbPartyRowSelection)=='15.0m - 20.0m' and bbPartyRows[bbPartyRowSelection].id==id
+    ''')
+
+
+def test_reserved_pool_keeps_eligible_portraits_and_rejects_overspending(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'a',1)
+        setup(s);findrow('BUFF');U.DashboardClick(5);findrow('BUFF')
+        assert(bbPartyRows[bbPartyRowSelection].uses=='0/1')
+        assert(U.DashboardCell(bbPartyRowSelection,2).target=='B')
+        assert(not U.DashboardCell(bbPartyRowSelection,2).available)
+        U.Portrait=function(slot) return 'PIC'..slot end
+        assert(U.CellPortrait(bbPartyRowSelection,2)=='PIC1')
+        assert(U.CellDuration(bbPartyRowSelection,2)=='1.0m')
+        U.DashboardClick(6)
+        assert(#U.preset.requests==1 and bbPartyFeedback=='No unreserved uses')
+        U.DashboardClick(5);findrow('BUFF');U.DashboardClick(6)
+        return #U.preset.requests==1 and U.preset.requests[1].target=='B' and U.plan.used.a==1
+    ''')
+
+
+def test_capacity_exhaustion_does_not_remove_a_row_from_recipient_filter(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'BUFF','A',60,'level',1)
+        source(s,'OTHER','A',60,'level',1)
+        setup(s,{request('OTHER','A')});U.SetRecipient(2)
+        local row=findrow('BUFF');return row~=nil and row.free==0 and U.DashboardCell(bbPartyRowSelection,1).target=='B'
+    ''')
+
+
+def test_static_sort_updates_values_and_only_resorts_at_explicit_boundaries(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();local short=source(s,'SHORT','A',60,'a',2)
+        source(s,'LONG','B',120,'b',2)
+        setup(s);U.SortBy('duration');assert(bbPartyRows[1].key=='SHORT')
+        short.duration=600;U.Refresh(false)
+        assert(bbPartyRows[1].key=='SHORT' and U.RowDuration(1)=='10.0m')
+        findrow('SHORT');U.DashboardClick(5)
+        assert(bbPartyRows[1].key=='SHORT')
+        bbPartyQuery='long';U.FilterDashboard();U.ClearSearch()
+        assert(bbPartyRows[1].key=='SHORT')
+        U.SortBy('duration');U.SortBy('duration')
+        assert(bbPartyRows[1].key=='LONG')
+        short.duration=30;U.Refresh(false);assert(bbPartyRows[1].key=='LONG')
+        U.Refresh();return bbPartyRows[1].key=='SHORT'
+    ''')
+
+
+def test_capability_range_and_portraits_still_enforce_recipient_and_variant_rules(dashboard):
+    assert dashboard.execute('''
+        local s=snapshot();source(s,'SELF','A',60,'a',1,{selfOnly=true})
+        source(s,'SELF','B',900,'b',1,{selfOnly=true})
+        setup(s,{request('SELF','A')});s.actors.B.alive=false;U.Refresh(false)
+        findrow('SELF')
+        assert(U.DashboardCell(bbPartyRowSelection,1).target=='A')
+        assert(U.DashboardCell(bbPartyRowSelection,2)==nil)
+        assert(U.RowDuration(bbPartyRowSelection)=='1.0m')
+        s.actors.B.alive=true;U.Refresh(false);U.SetRecipient(2);findrow('SELF')
+        return U.RowDuration(bbPartyRowSelection)=='15.0m' and U.DashboardCell(bbPartyRowSelection,1).target=='B'
+    ''')

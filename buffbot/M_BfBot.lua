@@ -25,15 +25,21 @@ Infinity_DoFile("BfBot5e")   -- 5E Spellcasting adapter (used by Scan + Exec)
 Infinity_DoFile("BfBotExe")  -- Execution engine (depends on Scan, _GetName)
 Infinity_DoFile("BfBotMp")   -- Multiplayer support / ownership probe (depends on _GetName)
 Infinity_DoFile("BfBotPer")  -- Persistence (depends on Scan, Class)
-Infinity_DoFile("BfBotInn")  -- Innate abilities (depends on Persist, Exec)
+Infinity_DoFile("BfBotInn")  -- Retired shortcut cleanup and legacy helper spells
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
 Infinity_DoFile("BfBotPln")  -- Recipient plans and resource reservations
+Infinity_DoFile("BfBotShr")  -- Engine-checked sharing and persistent return journal
 BfBot.Plan.Init()           -- Separate, versioned party-plan save handler
+Infinity_DoFile("BfBotIO")   -- Non-executable recipient-plan export/import
 Infinity_DoFile("BfBotRst")  -- Completed-rest recipient preset
 BfBot.Rest.Init()
+Infinity_DoFile("BfBotFst")  -- Native normal casting with temporary simulation speed
+BfBot.Fast.Init()
 Infinity_DoFile("BfBotPUI")  -- Recipient-first panel callbacks
-BfBot.Innate._EnsureSPLFiles()  -- Write innate SPL files to override (if missing)
-BfBot.Innate.Init()          -- Register sprite-loaded listener for innate grants
+Infinity_DoFile("BfBotVD")   -- Generated modular visual resources and design tokens
+Infinity_DoFile("BfBotVis")  -- Optional UI++ recipient presentation; old art fallback
+BfBot.Legacy.EnsureHelperSpells()
+BfBot.Legacy.Init()         -- Remove retired shortcuts when old characters load
 
 -- Late-join listener (issue #19): a summon spawning MID-RUN attaches to the
 -- running cast as its own caster. Thin wrapper — the guarded, testable body

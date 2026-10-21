@@ -770,6 +770,10 @@ function BfBot.UI._OnMenusLoaded()
 
     -- Load our .menu definitions
     EEex_Menu_LoadFile("BuffBot")
+    if BfBot.Visual and BfBot.Visual.Available() then
+        BfBot.Visual.InstallStyles()
+        EEex_Menu_LoadFile("BfBotRx")
+    end
 
     -- Apply current font size to live menu items (per-element point mutation).
     -- The engine snapshots `style.point` at parse time, so style changes only
@@ -840,7 +844,7 @@ function BfBot.UI._OnMenusLoaded()
     local oldOnOpen = EEex_Menu_GetItemFunction(actionbarMenu.reference_onOpen)
     EEex_Menu_SetItemFunction(actionbarMenu.reference_onOpen,
         BfBot._SafeCallback("ui.world_actionbar_open", function()
-        local result = oldOnOpen()
+        local result = oldOnOpen and oldOnOpen()
         BfBot.UI._OpenActionbarBtn()
         return result
     end))
@@ -849,7 +853,7 @@ function BfBot.UI._OnMenusLoaded()
     EEex_Menu_SetItemFunction(actionbarMenu.reference_onClose,
         BfBot._SafeCallback("ui.world_actionbar_close", function()
         BfBot.UI._CloseActionbarBtn()
-        return oldOnClose()
+        return oldOnClose and oldOnClose()
     end))
 
     -- F11 hotkey
@@ -879,6 +883,8 @@ function BfBot.UI._OnMenusLoaded()
                 BfBot.UI._panelY = math.max(0, sh - cph)
             end
         end
+        BfBot.UI._CloseQuickMenu()
+        BfBot.UI._OpenActionbarBtn()
         if buffbot_isOpen then
             BfBot.UI._Layout()
         end
@@ -898,17 +904,89 @@ end
 -- Actionbar Companion Button (pushed/popped with WORLD_ACTIONBAR)
 -- ============================================================
 
-function BfBot.UI._OpenActionbarBtn()
-    -- Position flush to the right of WORLD_ACTIONBAR at any resolution
-    local ax, ay, aw, ah = EEex_Menu_GetArea("WORLD_ACTIONBAR")
-    if ax then
-        Infinity_SetOffset("BUFFBOT_ACTIONBAR", ax + aw, ay)
-    end
-    Infinity_PushMenu("BUFFBOT_ACTIONBAR")
+function BfBot.UI._ActionbarVisible()
+    return e and worldScreen and e:GetActiveEngine()==worldScreen
+        and Infinity_IsMenuOnStack('WORLD_ACTIONBAR')==1
 end
-
+function BfBot.UI._OpenActionbarBtn()
+    local sw,sh=Infinity_GetScreenSize()
+    local ax,ay,aw,ah=EEex_Menu_GetArea('WORLD_ACTIONBAR')
+    -- Dock beside the visible controls, not UI++'s screen-spanning artwork.
+    local x=(ax or 0)+(aw or sw-122)+4
+    local y=(ay or sh)+(ah or 0)-56
+    if RgIsModernHud==1 and EEex_Menu_GetItemArea then
+        local bx,by,bw,bh=EEex_Menu_GetItemArea('rgActionbarGoldernButton11')
+        if bx and bw>0 then
+            x=bx+bw+8; y=by+bh-52
+            if x+56>sw then
+                local left=EEex_Menu_GetItemArea('rgActionbarButton1')
+                x=(left or bx)-60
+            end
+        end
+    end
+    x=math.max(0,math.min(sw-56,x))
+    y=math.max(0,math.min(sh-56,y))
+    BfBot.UI._hudX,BfBot.UI._hudY=x,y
+    Infinity_SetOffset('BUFFBOT_ACTIONBAR',x,y)
+    if Infinity_IsMenuOnStack('BUFFBOT_ACTIONBAR')~=1 then Infinity_PushMenu('BUFFBOT_ACTIONBAR') end
+    BfBot.UI._hudRaisePending=true
+end
+function BfBot.UI._PumpActionbarBtn()
+    if not BfBot.UI._ActionbarVisible() then return end
+    if Infinity_IsMenuOnStack('BUFFBOT_RX')==1 or Infinity_IsMenuOnStack('BUFFBOT_PARTY')==1 then return end
+    local pending=BfBot.UI._hudRaisePending
+    BfBot.UI._OpenActionbarBtn()
+    BfBot.UI._hudRaisePending=nil
+    if pending and Infinity_IsMenuOnStack('BUFFBOT_QUICK_PRESETS')~=1 then
+        Infinity_PopMenu('BUFFBOT_ACTIONBAR');Infinity_PushMenu('BUFFBOT_ACTIONBAR')
+    end
+end
+function BfBot.UI._CloseQuickMenu()
+    if Infinity_IsMenuOnStack('BUFFBOT_QUICK_PRESETS')==1 then Infinity_PopMenu('BUFFBOT_QUICK_PRESETS') end
+end
 function BfBot.UI._CloseActionbarBtn()
-    Infinity_PopMenu("BUFFBOT_ACTIONBAR")
+    -- Keep the zero-area tick companion alive; only its world button is visible.
+    BfBot.UI._CloseQuickMenu()
+end
+function BfBot.UI._QuickPresetName(row)
+    local entry=BfBot.UI._quickPresets and BfBot.UI._quickPresets[row]
+    return entry and entry.name or ''
+end
+function BfBot.UI._ToggleQuickMenu()
+    if Infinity_IsMenuOnStack('BUFFBOT_QUICK_PRESETS')==1 then return BfBot.UI._CloseQuickMenu() end
+    if not BfBot.UI._ActionbarVisible() then return end
+    local state=BfBot.Plan.GetState();if not state then return end
+    local rows={}
+    for index=1,8 do local p=state.presets[index]
+        if p then rows[#rows+1]={index=index,name=p.name,preset=p} end
+    end
+    BfBot.UI._quickPresets=rows
+    local sw,sh=Infinity_GetScreenSize();local w,h=252,16+#rows*36
+    local x=math.max(4,math.min(sw-w-4,BfBot.UI._hudX or sw-w-4))
+    local y=math.max(4,math.min(sh-h-4,(BfBot.UI._hudY or sh)-h-4))
+    Infinity_SetArea('bbQuickOutside',0,0,sw,sh)
+    Infinity_SetArea('bbQuickBody',x,y,w,h)
+    Infinity_SetArea('bbQuickTop',x,y,w,1);Infinity_SetArea('bbQuickBottom',x,y+h-1,w,1)
+    Infinity_SetArea('bbQuickLeft',x,y,1,h);Infinity_SetArea('bbQuickRight',x+w-1,y,1,h)
+    for i=1,8 do
+        local rowY=y+8+(i-1)*36
+        Infinity_SetArea('bbQuickPreset'..i,x+8,rowY,w-16,32)
+        Infinity_SetArea('bbQuickPreset'..i..'Caption',x+16,rowY+3,w-32,28)
+    end
+    Infinity_PushMenu('BUFFBOT_QUICK_PRESETS')
+end
+function BfBot.UI._CastQuickPreset(row)
+    local entry=BfBot.UI._quickPresets and BfBot.UI._quickPresets[row]
+    BfBot.UI._CloseQuickMenu()
+    local state=BfBot.Plan.GetState()
+    if not entry or not state or state.presets[entry.index]~=entry.preset then return end
+    if BfBot.Exec.GetState()=='running' or BfBot.Share and BfBot.Share.run then
+        BfBot._Display('BuffBot: already casting');return
+    end
+    local queue=BfBot.Plan.BuildQueue(BfBot.Plan.Snapshot(),entry.preset.requests)
+    if not queue then BfBot._Display('BuffBot: resolve unavailable casts or an empty plan');return end
+    -- Direct UI dispatch: no spell/innate action is queued on the selected PC.
+    if BfBot.Exec.Start(queue,state.fast==1 and 4 or 0,nil) then BfBot._Display('BuffBot: '..entry.name) end
 end
 
 -- ============================================================
@@ -1150,13 +1228,18 @@ end
 -- ============================================================
 
 function BfBot.UI.Toggle()
+    BfBot.UI._CloseQuickMenu()
+    local function open(name)
+        local state=Infinity_IsMenuOnStack(name)
+        return state==1 or state==true
+    end
     if BfBot.PartyUI then
-        if Infinity_IsMenuOnStack("BUFFBOT_PARTY") then BfBot.PartyUI.Close()
-        elseif Infinity_IsMenuOnStack("BUFFBOT_MAIN") then BfBot.UI.Close()
+        if open("BUFFBOT_RX") or open("BUFFBOT_PARTY") then BfBot.PartyUI.Close()
+        elseif open("BUFFBOT_MAIN") then BfBot.UI.Close()
         else BfBot.PartyUI.Open() end
         return
     end
-    if Infinity_IsMenuOnStack("BUFFBOT_MAIN") then
+    if open("BUFFBOT_MAIN") then
         Infinity_PopMenu("BUFFBOT_MAIN")
     else
         Infinity_PushMenu("BUFFBOT_MAIN")
@@ -2102,7 +2185,6 @@ function BfBot.UI.CreateNewPreset()
     if idx then
         BfBot.UI._ClearSpellSelection()
         BfBot.UI._presetIdx = idx
-        BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
     end
 end
@@ -2128,8 +2210,7 @@ function BfBot.UI.DeleteCurrentPreset()
                 local config = BfBot.Persist.GetConfig(sprite)
                 BfBot.UI._ClampPresetIdx(config)
             end
-            BfBot.Innate.RefreshAll()
-            BfBot.UI._Refresh()
+                BfBot.UI._Refresh()
         end
     end)
 end

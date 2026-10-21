@@ -1068,12 +1068,12 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
-def test_release_changelog_records_final_automated_and_live_boundaries():
+def test_upstream_release_changelog_retains_automated_and_live_boundaries():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
     releases = source.split("\n## ")[1:]
     if releases[0].startswith("Unreleased\n"):
         releases = releases[1:]
-    current_release = releases[0]
+    current_release = next(release for release in releases if release.startswith("v1.10.1 (2026-10-20)"))
     current_normalized = current_release.casefold()
 
     assert current_release.startswith("v1.10.1 (2026-10-20)")
@@ -1282,7 +1282,7 @@ def test_menu_localization_does_not_change_actions_layout_or_list_structure():
     ) + "\n"
     # Includes zero-area deferred 5E and completed-rest polling labels.
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
-        "0bdf424a0460eeb843489b6cbca1bf304daf2f9aad98108310cc7e680d0b41a7"
+        "dacc464f33d66ffb9b8b5740fdd62be120a8b83cd3a1c4e58eb4729a96563ed0"
     )
 
 

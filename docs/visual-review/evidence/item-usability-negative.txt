@@ -1,0 +1,1 @@
+minimum STR=3 before=true low STR=false restored=true protectedCall=true reason=item cannot be worn by this character

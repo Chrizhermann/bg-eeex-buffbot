@@ -328,3 +328,30 @@ def test_default_presets_only_seed_recognized_buffs_and_leave_items_disabled():
     )
     assert facts["good"] == 2 and facts["unknown"] == 0
     assert facts["enabled"] == 0 and facts["saved"]
+
+
+@pytest.mark.parametrize('override',[False,True])
+def test_nested_item_selection_menu_is_preserved_as_manual_only(override):
+    lua=_child_runtime();lua.globals().override=override
+    assert lua.execute('''
+      defineItem('GEAR',0,{{}})
+      power('GEAR',0,{effect(146,'CHILD',1)})
+      spell('CHILD',{effect(214,'PICK',9)})
+      if override then BfBot.Class.GetOverride=function()return true end end
+      placeItem(20,'GEAR',{3,0,0})
+      local row=BfBot.Scan._BuildItemCatalog(sprite).GEAR
+      return row.requiresChoice==true and row.count==3
+    ''')
+
+@pytest.mark.parametrize('nested',[False,True])
+def test_selection_menu_in_higher_level_child_header_is_manual_only(nested):
+    lua=_child_runtime();lua.globals().nested=nested
+    assert lua.execute('''
+      defineItem('GEAR',0,{{}});power('GEAR',0,{effect(146,'CHILD',1)})
+      local h,first=spell('CHILD',{effect(218,'',0,3600)})
+      local second={effects={nested and effect(146,'PICKER',1)or effect(214,'PICK',9)}}
+      h.abilityCount=2;h.getAbility=function(_,i)return i==0 and first or second end
+      if nested then spell('PICKER',{effect(214,'PICK',9)})end
+      placeItem(20,'GEAR',{3,0,0})
+      return BfBot.Scan._BuildItemCatalog(sprite).GEAR.requiresChoice==true
+    ''')

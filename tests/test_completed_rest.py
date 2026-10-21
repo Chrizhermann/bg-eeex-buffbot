@@ -162,8 +162,8 @@ def test_unavailable_plan_is_not_retried(lua):
     """)
 
 
-def test_config_defaults_off_and_rejects_missing_preset(lua):
-    assert lua.execute("return P.Validate(nil).rest.on==0 and P.Validate({rest={on=1,preset=8}}).rest.on==0")
+def test_fresh_config_defaults_to_wake_up_and_rejects_missing_preset(lua):
+    assert lua.execute("return P.Validate(nil).rest.on==1 and P.Validate({rest={on=1,preset=8}}).rest.on==0")
 
 
 def test_config_roundtrip_uses_marshal_safe_values(lua):
@@ -181,4 +181,39 @@ def test_ui_toggle_selects_current_plan_and_disables(lua):
         local enabled=state.rest.on==1 and state.rest.preset==2
         BfBot.PartyUI.ToggleRest()
         return enabled and state.rest.on==0
+    """)
+
+@pytest.mark.parametrize("menu", ["BUFFBOT_RX", "BUFFBOT_RX_POPMENU", "BUFFBOT_RX_DIALOG"])
+def test_redux_panel_and_popups_defer_rest_casting(menu):
+    r = LuaRuntime(unpack_returned_tuples=True)
+    r.execute("BfBot={Exec={}}")
+    r.execute((ROOT / "buffbot/BfBotRst.lua").read_text(encoding="utf-8"))
+    r.globals().openMenu = menu
+    assert r.execute('''
+        worldScreen={};e={GetActiveEngine=function()return worldScreen end}
+        EngineGlobals={g_pBaldurChitin={m_pObjectGame={m_gameSave={m_inputMode=1}}}}
+        EEex_Sprite_GetInPortrait=function()return nil end
+        Infinity_IsMenuOnStack=function(name)return name==openMenu end
+        assert(not BfBot.Rest.SafeWorld())
+        openMenu=nil
+        return BfBot.Rest.SafeWorld()
+    ''')
+
+
+def test_fresh_lists_are_empty_and_existing_preferences_stay_unchanged(lua):
+    assert lua.execute("""
+        local s=P.Validate(nil)
+        assert(s.active==1 and s.presets[1].name=='Pre-Battle Buffs')
+        assert(s.presets[2].name=='Wake Up Buffs' and #s.presets[1].requests==0 and #s.presets[2].requests==0)
+        assert(s.rest.on==1 and s.rest.preset==2)
+        s.presets[1].name='My old list';s.rest.on=0;s.rest.preset=1
+        local saved=P.Validate(s)
+        return saved.presets[1].name=='My old list' and saved.rest.on==0 and saved.rest.preset==1
+    """)
+
+
+def test_empty_rest_preset_is_a_silent_noop(lua):
+    assert lua.execute("""
+        pending();state.presets[1].requests={};R.Tick();now=now+500;R.Tick()
+        return calls==0 and R.pending==nil and #notices==0
     """)

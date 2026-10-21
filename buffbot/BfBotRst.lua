@@ -68,7 +68,8 @@ function R.SafeWorld()
     local input = game.m_gameSave.m_inputMode
     if bit.band(input - 0x1016E, 0xFFFDFFFF) == 0 or bit.band(input, 0x801) == 0 then return false end
     if sidebarsGreyed == 1 then return false end
-    for _, menu in ipairs({'BUFFBOT_PARTY','BUFFBOT_MAIN','POPUP_INFO',
+    for _, menu in ipairs({'BUFFBOT_PARTY','BUFFBOT_MAIN','BUFFBOT_RX',
+        'BUFFBOT_RX_POPMENU','BUFFBOT_RX_DIALOG','POPUP_INFO',
         'POPUP_TWOBUTTON','POPUP_THREEBUTTON','POPUP_FOURBUTTON','WORLD_DIALOG','WORLD_DIALOG_CONFIRM'}) do
         if Infinity_IsMenuOnStack(menu) then return false end
     end
@@ -98,13 +99,18 @@ function R.Notify(message)
 end
 
 function R.Tick()
+    if BfBot.Fast then BfBot.Fast.Tick() end
+    if BfBot.Share then BfBot.Share.Tick() end
     local now = Infinity_GetClockTicks()
     if R.lastPoll and now >= R.lastPoll and now - R.lastPoll < 250 then return false end
     R.lastPoll = now
+    if BfBot.Legacy then BfBot.Legacy.Tick() end
+    if BfBot.UI and BfBot.UI._PumpActionbarBtn then BfBot.UI._PumpActionbarBtn() end
     local sample = R.Sample()
     if not sample then R.Reset(); return false end
     local completed = R.Observe(sample)
     local state = BfBot.Plan.GetState()
+    if state and BfBot.Visual then BfBot.Visual.skinOverride=state.skin end
     local rest = state and state.rest
     if completed then
         R.pending = rest and rest.on == 1 and {preset=rest.preset, clock=now} or nil
@@ -119,11 +125,11 @@ function R.Tick()
     if now - pending.clock < 500 or not R.SafeWorld() then return false end
     R.pending = nil -- consume BEFORE planning/starting, including failures
     local preset = state.presets[pending.preset]
-    if not preset or #preset.requests == 0 then R.Notify('Rest plan is empty'); return false end
+    if not preset or #preset.requests == 0 then return false end
     BfBot.Scan.InvalidateAll()
     local queue = BfBot.Plan.BuildQueue(BfBot.Plan.Snapshot(),preset.requests)
     if not queue then R.Notify('Rest plan skipped: resolve unavailable casts'); return false end
-    local ok = BfBot.Exec.Start(queue,0,nil)
+    local ok = BfBot.Exec.Start(queue,state.fast==1 and 4 or 0,nil)
     if ok then R.Notify('Casting rest plan') end
     return false
 end

@@ -1,0 +1,1 @@
+All-spell native verification complete. No active execution, transfer journal, acceleration helper or late observer. No saves written.

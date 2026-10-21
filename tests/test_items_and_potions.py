@@ -359,7 +359,7 @@ def test_backpack_copy_does_not_hide_preferred_equipped_copy() -> None:
     assert found
 
 
-def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
+def test_quickslot_scrolls_and_wands_remain_available_for_manual_inclusion() -> None:
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(
         """
@@ -408,14 +408,14 @@ def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
 
         local catalog = BfBot.Scan._BuildItemCatalog(sprite)
         return {
-            wandAbsent = catalog.TESTWAND == nil,
-            scrollAbsent = catalog.TESTSCRL == nil,
+            wandPresent = catalog.TESTWAND ~= nil,
+            scrollPresent = catalog.TESTSCRL ~= nil,
         }
         """
     )
 
-    assert facts["wandAbsent"]
-    assert facts["scrollAbsent"]
+    assert facts["wandPresent"]
+    assert facts["scrollPresent"]
 
 
 def test_excluded_buff_item_remains_in_catalog_for_picker_recovery() -> None:

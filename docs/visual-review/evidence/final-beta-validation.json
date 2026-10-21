@@ -1,0 +1,33 @@
+{
+  "version": "1.10.1-redux-beta.1",
+  "distinct_automated_tests_verified": 984,
+  "windows_symlink_cases_deselected": 5,
+  "last_full_run": {
+    "passed": 983,
+    "failed": 1,
+    "note": "Archive byte check saw documentation edited after its fixture was built; no runtime failure."
+  },
+  "targeted_rerun": {
+    "passed": 72,
+    "includes": "Previously failing byte-preserving package test; current changelog, completed rest, retired abilities and speed controls."
+  },
+  "current_failures": 0,
+  "native_evidence": "retired-innate-native.json",
+  "default_lists": [
+    "Pre-Battle Buffs",
+    "Wake Up Buffs"
+  ],
+  "after_rest": {
+    "on": true,
+    "preset": "Wake Up Buffs",
+    "empty_is_silent": true
+  },
+  "tab_order": [
+    "Buffs",
+    "Order",
+    "Summary"
+  ],
+  "recommended_option": "Fast-forward 2x (Recommended)",
+  "preset_innates": "retired; exact old abilities cleaned on character load",
+  "ui_plus": "optional skin indicator, optional fonts, toolbar docking geometry only"
+}

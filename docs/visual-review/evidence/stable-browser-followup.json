@@ -1,0 +1,13 @@
+{
+  "status": "implemented; user visual confirmation pending",
+  "full_suite": {
+    "passed": 938,
+    "deselected": 5
+  },
+  "focused_planner_dashboard_visual": 118,
+  "native_preview": "Real copied 17-request Rest List: Death Ward 0/4, six portraits, 15-20 minute duration range; exterior canvas removed.",
+  "native_click_walkthrough": "Deferred to user after they offered visual testing.",
+  "original_dialogue_session": "Left running without restarting or saving over it.",
+  "code_on_disk": "Updated copied test game and release ZIP; running sessions require restart.",
+  "manual_checklist": "../browser-followup.md"
+}

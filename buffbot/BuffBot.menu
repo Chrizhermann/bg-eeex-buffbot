@@ -13,8 +13,11 @@ menu
 
 	button
 	{
-		action    "BfBot.UI.Toggle()"
-		tooltip lua "buffbot_btnTooltip"
+		name "bbHudButton"
+        enabled "BfBot.UI._ActionbarVisible()"
+        action    "BfBot.UI.Toggle()"
+        actionAlt "BfBot.UI._ToggleQuickMenu()"
+        tooltip "BuffBot: left-click to edit; right-click to cast a preset"
 		bam       "BFBOTAB"
 		sequence  0
 		frame lua "buffbot_btnFrame"
@@ -2232,6 +2235,45 @@ menu
 		text align left center
 		area 0 0 100 28
 	}
+	button
+	{
+		name "bpOrderSmart"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Smart order')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		fill 120 100 70 100
+		tooltip lua "BfBot.Plan.Text('Long first, with casting times considered to maximize buff duration.')"
+		action "BfBot.PartyUI.SortOrder('smart')"
+		area 0 0 140 28
+	}
+	button
+	{
+		name "bpOrderLong"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Long first')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		fill 120 100 70 100
+		tooltip lua "BfBot.Plan.Text('Longest-lasting buffs first.')"
+		action "BfBot.PartyUI.SortOrder('long')"
+		area 0 0 140 28
+	}
+	button
+	{
+		name "bpOrderUndo"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Undo')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		fill 120 100 70 100
+		tooltip lua "BfBot.Plan.Text('Restore the order before the last sort.')"
+		action "BfBot.PartyUI.UndoOrder()"
+		area 0 0 140 28
+	}
 	label
 	{
 		name "bpOrderHeadOrder"
@@ -2381,6 +2423,7 @@ menu
 			{
 				area 2 0 -1 52
 				text lua "BfBot.PartyUI.RowName(rowNumber)"
+				tooltip lua "BfBot.PartyUI.RowTip(rowNumber)"
 				text style "bb_normal_parchment"
 				text color lua "{38,32,26}"
 				text align left center
@@ -2763,6 +2806,7 @@ menu
 			{
 				area 2 0 -1 42
 				text lua "BfBot.PartyUI.SummaryName(rowNumber)"
+				tooltip lua "BfBot.PartyUI.SummaryTip(rowNumber)"
 				text style "bb_normal_parchment"
 				text color lua "{38,32,26}"
 				text align left center
@@ -2869,6 +2913,7 @@ menu
 			{
 				area 2 0 -1 42
 				text lua "BfBot.PartyUI.OrderName(rowNumber)"
+				tooltip lua "BfBot.PartyUI.OrderTip(rowNumber)"
 				text style "bb_normal_parchment"
 				text color lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].unavailable and {155,40,25} or {38,32,26}"
 				text align left center
@@ -3282,4 +3327,185 @@ menu
 		scaleToClip
 		area 0 0 100 28
 	}
+}
+
+
+menu
+{
+ name "BUFFBOT_QUICK_PRESETS"
+ button { area 0 0 0 0 on escape action "BfBot.UI._CloseQuickMenu()" }
+ button { name "bbQuickOutside" area 0 0 0 0 action "BfBot.UI._CloseQuickMenu()" actionAlt "BfBot.UI._CloseQuickMenu()" }
+ label { name "bbQuickBody" area 0 0 0 0 fill 22 18 14 248 ignoreEvents }
+ label { name "bbQuickTop" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ label { name "bbQuickBottom" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ label { name "bbQuickLeft" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ label { name "bbQuickRight" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ button
+ {
+  name "bbQuickPreset1"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(1)"
+ }
+ label
+ {
+  name "bbQuickPreset1Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1]~=nil"
+  text lua "BfBot.UI._QuickPresetName(1)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset2"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(2)"
+ }
+ label
+ {
+  name "bbQuickPreset2Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2]~=nil"
+  text lua "BfBot.UI._QuickPresetName(2)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset3"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(3)"
+ }
+ label
+ {
+  name "bbQuickPreset3Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3]~=nil"
+  text lua "BfBot.UI._QuickPresetName(3)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset4"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(4)"
+ }
+ label
+ {
+  name "bbQuickPreset4Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4]~=nil"
+  text lua "BfBot.UI._QuickPresetName(4)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset5"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(5)"
+ }
+ label
+ {
+  name "bbQuickPreset5Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5]~=nil"
+  text lua "BfBot.UI._QuickPresetName(5)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset6"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(6)"
+ }
+ label
+ {
+  name "bbQuickPreset6Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6]~=nil"
+  text lua "BfBot.UI._QuickPresetName(6)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset7"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(7)"
+ }
+ label
+ {
+  name "bbQuickPreset7Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7]~=nil"
+  text lua "BfBot.UI._QuickPresetName(7)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset8"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(8)"
+ }
+ label
+ {
+  name "bbQuickPreset8Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8]~=nil"
+  text lua "BfBot.UI._QuickPresetName(8)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
 }

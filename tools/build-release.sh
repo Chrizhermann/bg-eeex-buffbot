@@ -37,6 +37,8 @@ trap 'rm -rf "$STAGING"' EXIT
 
 "$PYTHON_BIN" - "$REPO_DIR" "$INSTALLER" "$OUTPUT" "$STAGING" <<'PY'
 import os
+import json
+import hashlib
 import re
 import shutil
 import sys
@@ -57,6 +59,12 @@ root_files = (
     "CHANGELOG.md",
     "LICENSE",
     "docs/5e-spellcasting.md",
+    "docs/plan-management-and-casting-beta.md",
+    "docs/buffbot-original-vs-redux.md",
+    "docs/compatibility-test-report.md",
+    "docs/fast-forward-performance-investigation.md",
+    "buffbot/BfBotVA.json",
+    "buffbot/BfBotVA.txt",
 )
 buffbot_files = (
     "setup-buffbot.tp2",
@@ -71,8 +79,14 @@ buffbot_files = (
     "BfBotMp.lua",
     "BfBotPer.lua",
     "BfBotPln.lua",
+    "BfBotIO.lua",
+    "BfBotShr.lua",
+    "BfBotFst.lua",
     "BfBotRst.lua",
     "BfBotPUI.lua",
+    "BfBotVD.lua",
+    "BfBotVis.lua",
+    "BfBotRx.menu",
     "BfBotInn.lua",
     "BfBotUI.lua",
     "BfBotTst.lua",
@@ -175,7 +189,24 @@ unexpected_catalogs = sorted(actual_catalogs - declared_catalogs)
 if unexpected_catalogs:
     fail("unexpected release file(s): " + ", ".join(unexpected_catalogs))
 
-release_sources = [*root_files, *sorted(expected_top), *sorted(declared_catalogs)]
+visual_manifest = json.loads((buffbot_root / 'BfBotVA.json').read_text(encoding='utf-8'))
+visual_names = visual_manifest['files']
+if not visual_names or len(visual_names) != len(set(visual_names)):
+    fail('invalid visual resource allowlist')
+visual_sources = []
+for name in visual_names:
+    if not re.fullmatch(r'[A-Z0-9]{1,8}\.(?:BAM|PVRZ)', name):
+        fail('invalid visual resource name: ' + name)
+    source = buffbot_root / 'visual' / name
+    if not source.is_file() or source.is_symlink():
+        fail('missing required visual resource: ' + name)
+    if hashlib.sha256(source.read_bytes()).hexdigest() != visual_manifest['sha256'][name]:
+        fail('visual resource hash mismatch: ' + name)
+    visual_sources.append('buffbot/visual/' + name)
+actual_visual = {p.name for p in (buffbot_root / 'visual').iterdir()}
+if actual_visual != set(visual_names):
+    fail('unexpected visual resource file(s): ' + ', '.join(sorted(actual_visual - set(visual_names))))
+release_sources = [*root_files, *sorted(expected_top), *sorted(declared_catalogs), *visual_sources]
 reject_casefold_collisions(release_sources)
 for relative in release_sources:
     source = repo / relative
