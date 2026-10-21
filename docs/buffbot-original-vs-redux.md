@@ -1,7 +1,7 @@
 # BuffBot and BuffBot Redux: features, changes and tradeoffs
 
-**Final beta report — 20 October 2026**  
-**Original baseline:** Chrizhermann/bg-eeex-buffbot v1.10.1, commit `c1f2eb6cea3b555024853d8e99fc55dc5bd372d7`.  
+**Final beta report — 20 October 2026**
+**Original baseline:** Chrizhermann/bg-eeex-buffbot v1.10.1, commit `c1f2eb6cea3b555024853d8e99fc55dc5bd372d7`.
 **Redux:** zach-hopkins/bg-eeex-buffbot, recipient-first beta.
 
 Original BuffBot organizes preparation around **who casts**. Redux organizes it around **who receives**. Redux retains the original scanning, classification, native action execution and compatibility infrastructure, then adds a shared party planner and a new interface.

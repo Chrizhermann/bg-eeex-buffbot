@@ -78,4 +78,3 @@ def test_codec_enforces_size_and_request_bounds(plans):
       for i=1,257 do p.requests[i]=request('BUFF','A') end
       return I.Encode(p)==nil
     ''')
-

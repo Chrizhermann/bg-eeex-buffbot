@@ -97,4 +97,3 @@ def test_only_legacy_cast_helpers_remain_and_no_preset_resources_are_generated(m
     assert 'AddSpecialAbility' not in SOURCE
     assert '_BuildSPL' not in SOURCE
     assert 'AddQuickListsCheckedListener' not in SOURCE
-
