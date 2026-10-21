@@ -13,8 +13,9 @@ def widget(kind,name,props=(),area='0 0 100 30'):
     emit(kind+'\n{\n name "'+name+'"\n area '+area+'\n'+'\n'.join(' '+p for p in props)+'\n}')
 def label(name,expr,style='text',enabled=None,extra=(),area='0 0 100 30'):
     widget('label',name,[f'text lua "{expr}"',f'text style "bvr_{style}"',f'text point {POINTS[style]}','text align left center','ignoreEvents',*([f'enabled "{enabled}"'] if enabled else []),*extra],area)
-def button(name,action,text=None,bam='RGDMBUT2',seq=None,frame='0',enabled='true',extra=(),style='button'):
-    props=[f'enabled "{enabled}"',f'action "{action}"',f'bam "{bam}"',f'sequence lua "{seq or V+".SkinIndex()"}"',f'frame lua "{frame}"','scaleToClip',*extra]
+def button(name,action,text=None,bam='RGDMBUT2',seq=None,frame='0',enabled='true',extra=(),style='button',bam_expr=None):
+    artwork=f'bam lua "{bam_expr}"' if bam_expr else f'bam "{bam}"'
+    props=[f'enabled "{enabled}"',f'action "{action}"',artwork,f'sequence lua "{seq or V+".SkinIndex()"}"',f'frame lua "{frame}"','scaleToClip',*extra]
     widget('button',name,props)
     # ITEM_BUTTON ignores text.point. An event-transparent label keeps native
     # button hit-testing while honoring the specified typography.
@@ -119,10 +120,10 @@ def order_page():
     global ROWHEIGHT,ROWERROR
     ROWERROR=True
     shown=f"{U}.view=='order'"
-    for key,mode,text,tip in [('Smart','smart','Smart order','Long first, with casting times considered to maximize buff duration.'),('Long','long','Long first','Longest-lasting buffs first.'),('Undo',None,'Undo','Restore the order before the last sort.')]:
+    for key,mode,text,tip in [('Smart','smart','Smart order','Long first, with casting times considered to maximize buff duration.'),('Long','long','Long first','Longest-lasting buffs first.'),('Custom','custom','Custom','Restore your saved manual order. Moving a buff selects Custom.'),('Undo',None,'Undo','Restore the order before the last sort.')]:
         action=f'{U}.UndoOrder()' if mode is None else f"{U}.SortOrder('{mode}')"
         available=f'{U}.CanUndoOrder()' if mode is None else f'{U}.CanSortOrder()'
-        button('rxOrder'+key,action,f"{P}.Text('{text}')",enabled=shown,extra=[f'greyscale lua "not {available}"',f'tooltip lua "{P}.Text(\'{tip}\')"'])
+        button('rxOrder'+key,action,f"{P}.Text('{text}')",frame=f"{U}.IsOrderMode('{mode}') and 2 or 0" if mode else '0',enabled=shown,bam_expr=f"{U}.IsOrderMode('{mode}') and 'BFBTAB' or 'BFBPLAT'" if mode else None,extra=[f'greyscale lua "not {available}"',f'tooltip lua "{P}.Text(\'{tip}\')"'])
     for key,text in [('Number','#'),('Name','Buff'),('Recipient','Recipient'),('Caster','Caster'),('Duration','Duration'),('Move','Move'),('Remove','Remove')]:label('rxOrderHead'+key,f"{P}.Text('{text}')",'header',shown)
     for wide,rh,widths,fw in [(False,46,[3,4,27,15,22,7,3,3,16],232),(True,50,[3,3,27,14,19,7,2,2,23],300)]:
         ROWHEIGHT=rh;emit('list\n{')

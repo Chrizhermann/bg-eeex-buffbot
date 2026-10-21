@@ -22,7 +22,7 @@ def lua():
         state=P.Validate({rest={on=1,preset=1}})
         state.presets[1].requests={{group='BUFF',target='protagonist',on=1}}
         P.GetState=function()return state end
-        P.Snapshot=function()return {}end
+        P.Snapshot=function()return {groups={},pools={},actors={}}end
         P.BuildQueue=function()return {{spell='BUFF'}}end
         BfBot.Scan={InvalidateAll=function()end}
         calls,notices=0,{}

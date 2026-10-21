@@ -750,6 +750,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             count = 1
         end
         if items[key] then
+            items[key].planningSources[#items[key].planningSources+1]={slot=slot,count=count}
             items[key].count = items[key].count + count
             if count > 0 then
                 table.insert(items[key].sources, { slot = slot, count = count })
@@ -793,6 +794,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
                 and EEex_ReadU16(ptr + 0x22) == 0 and 1 or 0,
             itemType = itemType,
             sources = count > 0 and { { slot = slot, count = count } } or {},
+            planningSources = {{slot=slot,count=count}},
             itemEffects = _itemEffectSignatures(header, ability),
             itemMultiAbility = header.abilityCount > 1 and 1 or 0,
             name = name,

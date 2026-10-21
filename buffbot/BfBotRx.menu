@@ -3523,9 +3523,9 @@ button
  area 0 0 100 30
  enabled "BfBot.PartyUI.view=='order'"
  action "BfBot.PartyUI.SortOrder('smart')"
- bam "BFBPLAT"
+ bam lua "BfBot.PartyUI.IsOrderMode('smart') and 'BFBTAB' or 'BFBPLAT'"
  sequence lua "BfBot.Visual.SkinIndex()"
- frame lua "0"
+ frame lua "BfBot.PartyUI.IsOrderMode('smart') and 2 or 0"
  scaleToClip
  greyscale lua "not BfBot.PartyUI.CanSortOrder()"
  tooltip lua "BfBot.Plan.Text('Long first, with casting times considered to maximize buff duration.')"
@@ -3548,9 +3548,9 @@ button
  area 0 0 100 30
  enabled "BfBot.PartyUI.view=='order'"
  action "BfBot.PartyUI.SortOrder('long')"
- bam "BFBPLAT"
+ bam lua "BfBot.PartyUI.IsOrderMode('long') and 'BFBTAB' or 'BFBPLAT'"
  sequence lua "BfBot.Visual.SkinIndex()"
- frame lua "0"
+ frame lua "BfBot.PartyUI.IsOrderMode('long') and 2 or 0"
  scaleToClip
  greyscale lua "not BfBot.PartyUI.CanSortOrder()"
  tooltip lua "BfBot.Plan.Text('Longest-lasting buffs first.')"
@@ -3566,6 +3566,30 @@ label
  ignoreEvents
  enabled "BfBot.PartyUI.view=='order'"
  text align center center
+}
+button
+{
+ name "rxOrderCustom"
+ area 0 0 100 30
+ enabled "BfBot.PartyUI.view=='order'"
+ action "BfBot.PartyUI.SortOrder('custom')"
+ bam lua "BfBot.PartyUI.IsOrderMode('custom') and 'BFBTAB' or 'BFBPLAT'"
+ sequence lua "BfBot.Visual.SkinIndex()"
+ frame lua "BfBot.PartyUI.IsOrderMode('custom') and 2 or 0"
+ scaleToClip
+ greyscale lua "not BfBot.PartyUI.CanSortOrder()"
+ tooltip lua "BfBot.Plan.Text('Restore your saved manual order. Moving a buff selects Custom.')"
+}
+label
+{
+ name "rxOrderCustomCaption"
+ area 0 0 100 30
+ text lua "BfBot.Plan.Text('Custom')"
+ text style "bvr_button"
+ text point 13
+ text align center center
+ ignoreEvents
+ enabled "BfBot.PartyUI.view=='order'"
 }
 button
 {

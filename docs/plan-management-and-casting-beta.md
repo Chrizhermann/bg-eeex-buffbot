@@ -335,3 +335,31 @@ never modified. All frame/control art is BuffBot-owned.
 Fresh party plans start with two empty lists: **Pre-Battle Buffs** (selected)
 and **Wake Up Buffs**. After Rest is enabled for Wake Up Buffs. An empty rest list
 does nothing silently; existing saved lists and rest preferences are preserved.
+
+
+## Saved ordering modes (beta.2)
+
+Smart order, Long first and Custom are persistent per-preset modes. Their active
+buttons use the same selected artwork/frame as the top tabs. New presets default
+to Smart order, including the empty starter lists; older saved/imported presets
+without a mode migrate to Custom, preserving their order.
+
+Adding/removing buffs, changing variants/enabled requests or changing a preferred
+caster updates an automatic mode during the normal UI refresh. A cached signature
+skips unchanged calculations; no sort loop runs every frame. Replenished prepared
+entries (including spent copies), shared spontaneous capacities and rechargeable
+item maxima are used only in an isolated ordering snapshot. Execution, live-use
+counters and casting validation continue to use real current resources. Known
+but unprepared spells do not acquire fictitious copies. Daily items with zero
+charges retain their ordering metadata without gaining live charges.
+
+Each request saves a manual position separately. Custom restores those positions;
+new requests append, deleted requests disappear, and caster/recipient/variant
+choices are shared across modes. Manual movement selects Custom and records the
+new manual sequence. Undo restores both the previous mode and order. Selecting a
+mode works even on empty/one-buff lists and even if the order already matches.
+
+Opening/refreshing the editor and launching an automatic preset also check for
+meaningful source changes while idle. A run in progress is never reordered.
+Plan export format 2 carries mode/manual positions; format 1 imports remain
+supported as Custom. Older mod versions cannot read the new export format.

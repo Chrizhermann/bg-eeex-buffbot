@@ -56,7 +56,7 @@ function U.Layout()
     headers("bpSummaryHead",{{"Icon",5},{"Name",38},{"Caster",32},{"Duration",17},{"Remove",8}})
     area("bpSummary",12,84,w-24,h-190)
     area("bpPlan",12,120,w-24,h-226)
-    for i,key in ipairs({'Smart','Long','Undo'}) do area('bpOrder'..key,12+(i-1)*148,48,140,28) end
+    for i,key in ipairs({'Smart','Long','Custom','Undo'}) do area('bpOrder'..key,12+(i-1)*148,48,140,28) end
     local dx=12
     for _,col in ipairs({{'Order',6},{'Icon',4},{'Name',29},{'Recipient',16},{'Caster',22},{'Duration',11},{'Move',8},{'Remove',4}}) do
         area('bpOrderHead'..col[1],dx+2,86,math.floor((w-24)*col[2]/100)-4,26)
@@ -122,6 +122,7 @@ function U.Refresh(fresh)
     if not U.state then return end
     U.snapshot = P.Snapshot()
     U.preset = U.state.presets[U.state.active]
+    P.ApplyOrder(U.snapshot,U.preset,P.EstimateCast)
     U.plan = P.Assign(U.snapshot, U.preset.requests)
     bbPartyName = U.preset.name
     bbPartyBuffs, bbPartyRequests, bbPartyTargets = {}, {}, {}
@@ -277,6 +278,7 @@ function U.Move(delta)
     for i, r in ipairs(U.preset.requests) do
         if r == U.request and U.preset.requests[i + delta] then
             U.preset.requests[i], U.preset.requests[i + delta] = U.preset.requests[i + delta], r
+            P.SaveCustomOrder(U.preset);U.undoOrder=nil
             U.Refresh(); return
         end
     end
@@ -296,7 +298,7 @@ end
 function U.NewPreset()
     for i = 1, 8 do
         if not U.state.presets[i] then
-            U.state.presets[i] = { name = P.Text("Preset ") .. i, requests = {} }
+            U.state.presets[i] = { name = P.Text("Preset ") .. i, requests = {}, orderMode="smart" }
             U.state.active = i; U.request = nil; U.Refresh(); return
         end
     end
@@ -346,6 +348,7 @@ function U.ImportLegacy()
     local requests, reason = P.ImportLegacy(U.snapshot, U.state.active)
     if not requests then bbPartyStatus = reason; return end
     U.preset.requests = requests
+    P.SaveCustomOrder(U.preset)
     U.Refresh()
 end
 function U.RestLabel()
@@ -374,6 +377,7 @@ function U.Cast()
     end
     U.Refresh() -- Commit only against fresh availability, never a cached preview.
     if not U.CanCast() then return end
+    P.ApplyOrder(U.snapshot,U.preset,P.EstimateCast)
     local queue, _, reason = P.BuildQueue(U.snapshot, U.preset.requests)
     if not queue then bbPartyStatus = reason or P.Text("Resolve unavailable casts before casting"); return end
     if BfBot.Exec.Start(queue, U.state.fast==1 and 4 or 0, nil) then U.Close() end
@@ -834,29 +838,37 @@ end
 function U.OrderTip(index) return U.OrderName(index) end
 function U.CanMove(index,delta) return bbPartyRequests[index]~=nil and bbPartyRequests[index+delta]~=nil end
 function U.CanSortOrder()
-    return U.preset and #U.preset.requests>1 and BfBot.Exec.GetState()~='running'
+    return U.preset~=nil and BfBot.Exec.GetState()~='running'
+end
+function U.IsOrderMode(mode)
+    return U.preset and (U.preset.orderMode or 'custom')==mode or false
 end
 function U.SortOrder(mode)
-    if not U.CanSortOrder() then return end
+    if not U.CanSortOrder() or (mode~='smart' and mode~='long' and mode~='custom') then return end
+    P.EnsureManualOrder(U.preset)
     local before={};for i,r in ipairs(U.preset.requests) do before[i]=r end
-    local sorted,changed=P.SortRequests(U.snapshot,U.preset.requests,mode,
-        P.EstimateCast)
-    if not changed then bbPartyFeedback=P.Text('Order already protects durations');return end
-    local after={};for i,r in ipairs(sorted) do after[i]=r end
-    U.undoOrder={preset=U.preset,before=before,after=after}
-    U.preset.requests=sorted;U.Refresh(false)
-    bbPartyFeedback=P.Text(mode=='smart' and 'Smart order applied' or 'Long durations first')
+    local oldMode=U.preset.orderMode or 'custom'
+    U.preset.orderMode=mode
+    if mode=='custom' then P.RestoreCustomOrder(U.preset)
+    else P.ApplyOrder(U.snapshot,U.preset,P.EstimateCast) end
+    local after={};local changed=oldMode~=mode
+    for i,r in ipairs(U.preset.requests) do after[i]=r;changed=changed or r~=before[i] end
+    if changed then U.undoOrder={preset=U.preset,before=before,after=after,mode=oldMode,afterMode=mode} end
+    U.Refresh(false)
+    bbPartyFeedback=P.Text(mode=='smart' and 'Smart order active' or mode=='long' and 'Long first active' or 'Custom order active')
 end
 function U.CanUndoOrder()
     local undo=U.undoOrder
     if not undo or U.preset~=undo.preset or BfBot.Exec.GetState()=='running'
-        or #U.preset.requests~=#undo.after then return false end
+        or (U.preset.orderMode or 'custom')~=undo.afterMode or #U.preset.requests~=#undo.after then return false end
     for i,r in ipairs(undo.after) do if U.preset.requests[i]~=r then return false end end
     return true
 end
 function U.UndoOrder()
     if not U.CanUndoOrder() then return end
-    U.preset.requests=U.undoOrder.before;U.undoOrder=nil;U.Refresh(false)
+    local undo=U.undoOrder
+    U.preset.requests=undo.before;U.preset.orderMode=undo.mode;U.undoOrder=nil
+    U.Refresh(false)
     bbPartyFeedback=P.Text('Previous order restored')
 end
 function U.OrderClick(column)

@@ -448,18 +448,27 @@ end
 function P.SortRequests(snapshot,requests,mode,estimate)
     if mode~='smart' and mode~='long' then return requests,false end
     local original=P.Assign(snapshot,requests)
+    local metadata={}
     local ranks={};for i,r in ipairs(requests) do ranks[r]=i end
     local function describe(list,plan)
         local result={}
         for i,r in ipairs(list) do
-            local d=plan.decisions[i];local t=d.source and estimate and estimate(d.source) or {}
+            local d=plan.decisions[i];local t={}
+            if d.source then
+                local key=d.source.id..':'..(r.var or '')
+                if not metadata[key] then
+                    metadata[key]={timing=estimate and estimate(d.source) or {},
+                        invisible=mode=='smart' and P.DeliversInvisibility(d.source.row,r.var)}
+                end
+                t=metadata[key].timing
+            end
             result[i]={request=r,index=ranks[r],caster=d.source and (d.source.lane or d.source.actor) or 'missing',
                 actor=d.source and d.source.actor,
                 duration=d.duration or 0,release=math.max(0,t.release or 64),aura=t.aura==true,
                 unavailable=not d.source,barrier=d.source and (d.source.itemOwner~=nil or t.barrier==true),
                 prerequisite=t.prerequisite==true,
                 affects=t.ownerPrerequisite and d.source.actor or r.target,
-                invisible=mode=='smart' and d.source and P.DeliversInvisibility(d.source.row,r.var),
+                invisible=d.source and metadata[d.source.id..':'..(r.var or '')].invisible,
                 party=d.source and (d.source.aoe or d.source.row.isAoE==1) or r.target=='party'}
         end
         return result
@@ -562,6 +571,116 @@ function P.SortRequests(snapshot,requests,mode,estimate)
     for _,d in ipairs(original.decisions) do if d.source and not available[d.request] then return requests,false end end
     local changed=false;for i,r in ipairs(sorted) do changed=changed or r~=requests[i] end
     return changed and sorted or requests,changed
+end
+
+-- Ordering reads replenished capacity. Execution always keeps the live pools.
+-- Read each memorization list once, including spent entries but excluding
+-- disabled ones. Known-but-unprepared spells do not invent prepared copies.
+local function memorizedCapacity(actor)
+    local counts={}
+    if not actor or not actor.sprite or not EEex_Utility_IterateCPtrList then return nil end
+    local ok=pcall(function()
+        for _,field in ipairs({'m_memorizedSpellsMage','m_memorizedSpellsPriest','m_memorizedSpellsInnate'}) do
+            local lists=actor.sprite[field]
+            if lists then for level=0,(field=='m_memorizedSpellsMage' and 8 or field=='m_memorizedSpellsPriest' and 6 or 0) do
+                local list=lists:getReference(level)
+                if list then EEex_Utility_IterateCPtrList(list,function(mem)
+                    if bit.band(mem.m_flags,2)==0 then
+                        local res=mem.m_spellId:get():upper()
+                        counts[res]=(counts[res] or 0)+1
+                    end
+                end) end
+            end end
+        end
+    end)
+    return ok and counts or nil
+end
+function P.OrderSnapshot(snapshot)
+    if snapshot.orderSnapshot then return snapshot.orderSnapshot end
+    local reference={};for k,v in pairs(snapshot) do reference[k]=v end
+    reference.pools={}
+    local counts,items,statsSeen,timingKeys={},{},{},{}
+    for _,group in pairs(snapshot.groups) do for _,source in ipairs(group.sources) do
+        if not statsSeen[source.actor] then
+            statsSeen[source.actor]=true
+            local actor=P.CasterActor(snapshot,source.actor)
+            if actor and actor.sprite and EEex_Sprite_GetActiveStats then
+                local ok,key=pcall(function()
+                    local stats=EEex_Sprite_GetActiveStats(actor.sprite)
+                    return table.concat({source.actor,tostring(stats.m_nCastingType),tostring(stats.m_nMentalSpeed),tostring(stats.m_bAuraCleansing)},':')
+                end)
+                if ok then timingKeys[#timingKeys+1]=key end
+            end
+        end
+        local cap=source.fullCount
+        if cap==nil and source.row.kind=='itm' then
+            local row=source.row
+            if items[row]==nil then
+                local ok,max=pcall(function()
+                    local h=EEex_Resource_Demand(row.itemResref,'ITM')
+                    local a=h and BfBot.Scan._GetItemAbility(h,row.abilityIdx or 0)
+                    local ptr=a and EEex_UDToPtr(a)
+                    if ptr and EEex_ReadU16(ptr+0x24)==3 then return EEex_ReadU16(ptr+0x22) end
+                end)
+                items[row]=ok and max or false
+            end
+            cap=items[row] or nil
+        elseif cap==nil then
+            if counts[source.actor]==nil then
+                counts[source.actor]=memorizedCapacity(P.CasterActor(snapshot,source.actor)) or false
+            end
+            local book=counts[source.actor]
+            if book then cap=book[source.row.resref:upper()] or 0 end
+        end
+        cap=cap or snapshot.pools[source.pool] or 0
+        reference.pools[source.pool]=math.max(reference.pools[source.pool] or 0,cap)
+    end end
+    table.sort(timingKeys);reference.timingKey=table.concat(timingKeys,"|")
+    snapshot.orderSnapshot=reference
+    return reference
+end
+function P.EnsureManualOrder(preset)
+    local max=0
+    for _,r in ipairs(preset.requests) do if integer(r.manual,1,1000000) then max=math.max(max,r.manual) end end
+    for _,r in ipairs(preset.requests) do
+        if not integer(r.manual,1,1000000) then max=max+1;r.manual=max end
+    end
+end
+function P.SaveCustomOrder(preset)
+    preset.orderMode='custom'
+    for i,r in ipairs(preset.requests) do r.manual=i end
+end
+function P.RestoreCustomOrder(preset)
+    P.EnsureManualOrder(preset)
+    local ranks={};for i,r in ipairs(preset.requests) do ranks[r]=i end
+    table.sort(preset.requests,function(a,b)
+        return a.manual==b.manual and ranks[a]<ranks[b] or a.manual<b.manual
+    end)
+end
+P._orderCache=setmetatable({},{__mode='k'})
+function P.ApplyOrder(snapshot,preset,estimate)
+    P.EnsureManualOrder(preset)
+    if preset.orderMode~='smart' and preset.orderMode~='long' then return false end
+    if #preset.requests<2 then return false end
+    if BfBot.Exec and BfBot.Exec.GetState and BfBot.Exec.GetState()=='running' then return false end
+    local reference=P.OrderSnapshot(snapshot)
+    local sources={}
+    for key,group in pairs(reference.groups) do for _,s in ipairs(group.sources) do
+        sources[#sources+1]=table.concat({key,s.id,tostring(reference.pools[s.pool] or 0),
+            tostring(s.duration),tostring(s.casterLevel),tostring(s.reason),tostring(s.selfOnly),tostring(s.aoe)},'|')
+    end end
+    table.sort(sources)
+    local sourceKey=table.concat(sources,'\n')
+    local function signature()
+        local parts={preset.orderMode,sourceKey,reference.timingKey or ''}
+        for _,r in ipairs(preset.requests) do parts[#parts+1]=table.concat({r.group,r.target,r.source or '',r.var or '',tostring(r.on),tostring(r.manual)},'|') end
+        return table.concat(parts,'\n')
+    end
+    if P._orderCache[preset]==signature() then return false end
+    local sorted,changed=P.SortRequests(reference,preset.requests,preset.orderMode,estimate or P.EstimateCast)
+    preset.requests=sorted
+    P._orderCache[preset]=signature()
+    return changed
 end
 
 -- Native pools. Sorcerer/shaman choices at one level share uses; prepared
@@ -705,13 +824,13 @@ function P.Snapshot()
                     or not actor.controlled and P.Text("Caster controlled by another player")
                     or row.requiresChoice and P.Text("Choose this item's power manually")
                     or poolReason
-                local function add(sourcePool, itemSlot, count)
+                local function add(sourcePool, itemSlot, count, fullCount)
                     if sourcePool then putPool(snap, sourcePool, count) end
                     local source = { id = (actor.poolKey or actor.key) .. "/" .. key .. "/" .. tostring(itemSlot or "spell"),
                         actor = actor.key, casterName = actor.name, slot = actor.slot,
                         casterRef = actor.casterRef,
                         lane = actor.poolKey or actor.key,
-                        row = row, pool = sourcePool or (actor.key .. ":unavailable"),
+                        row = row, fullCount=fullCount, pool = sourcePool or (actor.key .. ":unavailable"),
                         reason = reason, duration = row.duration, casterLevel = row.casterLevel,
                         selfOnly = row.isSelfOnly == 1, aoe = row.isAoE == 1,
                         variants = row.variants, variantDurations = {}, itemSlot = itemSlot }
@@ -742,11 +861,12 @@ function P.Snapshot()
                     group.sources[#group.sources + 1] = source
                 end
                 if row.kind == "itm" then
-                    for _, item in ipairs(row.sources or {}) do
+                    for _, item in ipairs(row.planningSources or row.sources or {}) do
                         local counter = row.abilityIdx < 3 and row.abilityIdx or 0
                         local itemPool = actor.key .. ":item:" .. item.slot .. ":"
                             .. row.itemResref:upper() .. ":" .. (row.atWill == 1 and "free" or counter)
-                        add(itemPool, item.slot, row.atWill == 1 and P.MAX_REQUESTS or item.count)
+                        add(itemPool, item.slot, row.atWill == 1 and P.MAX_REQUESTS or item.count,
+                            row.atWill == 1 and P.MAX_REQUESTS or item.fullCount)
                     end
                 else add(pool, nil, row.count) end
             end
@@ -766,21 +886,23 @@ function P.Validate(value)
     for i = 1, 8 do
         local input = type(value.presets) == "table" and value.presets[i]
         if type(input) == "table" then
-            local preset = { name = text(input.name, 80) and input.name or (P.Text("Preset ") .. i), requests = {} }
+            local preset = { name = text(input.name, 80) and input.name or (P.Text("Preset ") .. i), requests = {},
+                orderMode=(input.orderMode=="smart" or input.orderMode=="long") and input.orderMode or "custom" }
             for _, r in ipairs(type(input.requests) == "table" and input.requests or {}) do
                 if #preset.requests >= P.MAX_REQUESTS then break end
                 if type(r) == "table" and text(r.group, 100) and text(r.target, 200) then
                     preset.requests[#preset.requests + 1] = { group = r.group, target = r.target,
                         source = text(r.source, 200) and r.source or nil,
-                        var = text(r.var, 8) and r.var or nil, on = r.on == 0 and 0 or 1 }
+                        var = text(r.var, 8) and r.var or nil, on = r.on == 0 and 0 or 1,
+                        manual=integer(r.manual,1,1000000) and r.manual or #preset.requests+1 }
                 end
             end
             state.presets[i] = preset
         end
     end
     if not next(state.presets) then
-        state.presets[1] = { name = P.Text("Pre-Battle Buffs"), requests = {} }
-        state.presets[2] = { name = P.Text("Wake Up Buffs"), requests = {} }
+        state.presets[1] = { name = P.Text("Pre-Battle Buffs"), requests = {}, orderMode="smart" }
+        state.presets[2] = { name = P.Text("Wake Up Buffs"), requests = {}, orderMode="smart" }
     end
     if integer(value.active, 1, 8) and state.presets[value.active] then state.active = value.active
     else for i = 1, 8 do if state.presets[i] then state.active = i; break end end end

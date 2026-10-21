@@ -2243,10 +2243,10 @@ menu
 		text style "bb_normal_parchment"
 		text color lua "{38,32,26}"
 		text align center center
-		fill 120 100 70 100
 		tooltip lua "BfBot.Plan.Text('Long first, with casting times considered to maximize buff duration.')"
 		action "BfBot.PartyUI.SortOrder('smart')"
 		area 0 0 140 28
+		fill lua "BfBot.PartyUI.IsOrderMode('smart') and {224,184,104,245} or {120,100,70,100}"
 	}
 	button
 	{
@@ -2256,10 +2256,22 @@ menu
 		text style "bb_normal_parchment"
 		text color lua "{38,32,26}"
 		text align center center
-		fill 120 100 70 100
 		tooltip lua "BfBot.Plan.Text('Longest-lasting buffs first.')"
 		action "BfBot.PartyUI.SortOrder('long')"
 		area 0 0 140 28
+		fill lua "BfBot.PartyUI.IsOrderMode('long') and {224,184,104,245} or {120,100,70,100}"
+	}
+	button
+	{
+		name "bpOrderCustom"
+		area 0 0 140 28
+		enabled "BfBot.PartyUI.view=='order'"
+		text lua "BfBot.Plan.Text('Custom')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		action "BfBot.PartyUI.SortOrder('custom')"
+		fill lua "BfBot.PartyUI.IsOrderMode('custom') and {224,184,104,245} or {120,100,70,100}"
 	}
 	button
 	{

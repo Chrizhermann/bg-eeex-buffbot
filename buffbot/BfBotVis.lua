@@ -469,7 +469,7 @@ function V.LayoutContent()
     end
     a('rxSummaryHeadRemove',V.w-162,92,94,26)
     a('rxOrderList',68,158,width+28,V.h-254);a('rxOrderListWide',68,158,width+28,V.h-254)
-    for i,key in ipairs({'Smart','Long','Undo'}) do a('rxOrder'..key,68+(i-1)*156,90,148,30) end
+    for i,key in ipairs({'Smart','Long','Custom','Undo'}) do a('rxOrder'..key,68+(i-1)*156,90,148,30) end
     local ox=68;local orderWidths=wide and {3,3,27,14,19,7,2,2,23} or {3,4,27,15,22,7,3,3,16}
     for i,key in ipairs({'Number','Icon','Name','Recipient','Caster','Duration','Move'}) do
         if i~=2 then

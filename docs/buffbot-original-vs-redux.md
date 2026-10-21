@@ -1,6 +1,6 @@
 # BuffBot and BuffBot Redux: features, changes and tradeoffs
 
-**Final beta report — 20 October 2026**
+**Beta report — updated 21 October 2026**
 **Original baseline:** Chrizhermann/bg-eeex-buffbot v1.10.1, commit `c1f2eb6cea3b555024853d8e99fc55dc5bd372d7`.
 **Redux:** zach-hopkins/bg-eeex-buffbot, recipient-first beta.
 
@@ -223,3 +223,20 @@ Important remaining limits:
 - 4x performance depends on the PC, effects and game state. The default is 2x.
 
 The objective comparison is therefore a choice of workflow: original BuffBot emphasizes direct caster routines and detailed per-caster controls; Redux emphasizes recipient coverage and shared planning while retaining native casting semantics.
+
+
+### Saved ordering update — beta.2
+
+Smart order and Long first are now saved modes, with a selected state matching
+the top tabs. They update when requests are added, removed or changed. Full
+prepared capacities, including spent copies and daily item maxima, supply a
+separate sorting snapshot; actual available uses remain authoritative for casts.
+A spent spell therefore keeps its normal planning priority without needing rest.
+
+Custom restores a separately saved manual position on each request; adding a
+request appends to that manual sequence, while moving a row selects Custom.
+Recipients, preferred casters, variants and enabled choices remain shared across
+modes. Undo restores mode and order. Old presets/imports remain Custom; newly
+created presets start in Smart order. Export format 2 saves this information and
+still reads format 1. Signature caching avoids re-sorting unchanged plans on
+ordinary redraws; there is no continuous background sort task.

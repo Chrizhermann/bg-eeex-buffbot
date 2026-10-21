@@ -434,3 +434,11 @@ bg-eeex-buffbot/
 Fresh party plans start with two empty lists: **Pre-Battle Buffs** (selected)
 and **Wake Up Buffs**. After Rest is enabled for Wake Up Buffs. An empty rest list
 does nothing silently; existing saved lists and rest preferences are preserved.
+
+
+Order now has saved **Smart order**, **Long first**, and **Custom** modes, with
+an active highlight matching the top tabs. Automatic modes update when buffs are
+added, removed or edited, using replenished prepared uses/daily charges for order
+only. Live uses still govern casting. Custom restores the saved manual order;
+moving a row selects Custom. Existing presets migrate to Custom; new presets
+start in Smart order. Mode and manual positions also round-trip through exports.

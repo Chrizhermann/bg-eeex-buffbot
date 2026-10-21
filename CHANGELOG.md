@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10.1-redux-beta.2 — 21 October 2026
+
+- Save Smart order, Long first and Custom per preset; automatically update after buff edits.
+- Use replenished resource capacities for ordering without modifying live uses or casting validation.
+- Restore Custom manual positions, preserve caster/recipient/variant choices, and select Custom on manual movement.
+- Match the selected mode to the top tabs' brighter artwork; allow mode selection on empty and one-buff lists.
+- Cache unchanged sorts, retain Undo mode/order, and save ordering metadata in backward-reading export format 2.
+- Existing presets migrate to Custom; new presets start in Smart order.
+
 ## v1.10.1-redux-beta.1 — 20 October 2026
 
 Recipient-first fork, based on upstream v1.10.1.
