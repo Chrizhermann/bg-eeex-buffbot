@@ -1,0 +1,35 @@
+{
+  "version": "1.10.1-redux-beta.2",
+  "native": {
+    "ok": true,
+    "result": {
+      "addRefreshMilliseconds": 50,
+      "autoAdd": true,
+      "autoRemove": true,
+      "customButton": [
+        434,
+        153,
+        148,
+        30
+      ],
+      "customRestored": true,
+      "exportMode": "smart",
+      "fullAfter": 2,
+      "fullBefore": 2,
+      "liveAfter": 1,
+      "liveBefore": 2,
+      "spell": "SPPR506"
+    },
+    "seq": 235
+  },
+  "selected_style": {
+    "bam": "BFBTAB",
+    "frame": 2,
+    "matches": "top-level tabs"
+  },
+  "visual_screenshot": "No new screenshot; selected control uses the same resource/frame as the established top tabs.",
+  "automated": {
+    "passed": 996,
+    "deselected": 5
+  }
+}

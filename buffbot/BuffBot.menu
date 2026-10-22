@@ -13,8 +13,11 @@ menu
 
 	button
 	{
-		action    "BfBot.UI.Toggle()"
-		tooltip lua "buffbot_btnTooltip"
+		name "bbHudButton"
+        enabled "BfBot.UI._ActionbarVisible()"
+        action    "BfBot.UI.Toggle()"
+        actionAlt "BfBot.UI._ToggleQuickMenu()"
+        tooltip "BuffBot: left-click to edit; right-click to cast a preset"
 		bam       "BFBOTAB"
 		sequence  0
 		frame lua "buffbot_btnFrame"
@@ -27,6 +30,11 @@ menu
 	label
 	{
 		enabled "BfBot.Exec._SafetyTick()"
+		area 0 0 0 0
+	}
+	label
+	{
+		enabled "BfBot.Rest.Tick()"
 		area 0 0 0 0
 	}
 }
@@ -1875,4 +1883,1641 @@ menu
 		scaleToClip
 		area 580 355 140 28
 	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Recipient-first party planner (single-player beta).
+-- Dashboard content and allocations are prepared in BfBotPUI.lua.
+menu
+{
+	name "BUFFBOT_PARTY"
+	ignoreesc
+	onopen "BfBot.PartyUI.OnOpen()"
+	text
+	{
+		name "bpDismiss"
+		action "BfBot.PartyUI.Close()"
+		rectangle 1
+		rectangle opacity 140
+		on escape
+		area 0 0 99999 99999
+	}
+	label
+	{
+		name "bpBg"
+		enabled "true"
+		mosaic "BFBOTBG"
+		area 0 0 1000 600
+	}
+	label
+	{
+		name "bpTick"
+		enabled "BfBot.PartyUI.Tick()"
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bpDashboardTab"
+		enabled "true"
+		action "BfBot.PartyUI.SetView('dashboard')"
+		text lua "BfBot.Plan.Text('Buffs')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.view == 'dashboard' and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpSummaryTab"
+		enabled "true"
+		action "BfBot.PartyUI.SetView('summary')"
+		text lua "BfBot.Plan.Text('Summary')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.view == 'summary' and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpOrderTab"
+		enabled "true"
+		action "BfBot.PartyUI.SetView('order')"
+		text lua "BfBot.Plan.Text('Order')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.view == 'order' and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpPreset"
+		enabled "true"
+		action "BfBot.PartyUI.OpenChoices('presets')"
+		text lua "bbPartyName .. '  v'"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpNew"
+		enabled "true"
+		action "BfBot.PartyUI.CreatePreset()"
+		text lua "'+'"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		tooltip lua "BfBot.Plan.Text('New preset')"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpSettings"
+		enabled "true"
+		action "BfBot.PartyUI.OpenChoices('settings')"
+		text lua "'...'"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		tooltip lua "BfBot.Plan.Text('Options')"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpClose"
+		enabled "true"
+		action "BfBot.PartyUI.Close()"
+		text lua "'X'"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		tooltip lua "BfBot.Plan.Text('Close')"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient0"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		action "BfBot.PartyUI.SetRecipient(0)"
+		text lua "BfBot.PartyUI.RecipientName(0)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(0) and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient1"
+		enabled "BfBot.PartyUI.IsDashboard() and BfBot.PartyUI.RecipientName(1) ~= ''"
+		action "BfBot.PartyUI.SetRecipient(1)"
+		text lua "BfBot.PartyUI.RecipientName(1)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(1) and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient2"
+		enabled "BfBot.PartyUI.IsDashboard() and BfBot.PartyUI.RecipientName(2) ~= ''"
+		action "BfBot.PartyUI.SetRecipient(2)"
+		text lua "BfBot.PartyUI.RecipientName(2)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(2) and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient3"
+		enabled "BfBot.PartyUI.IsDashboard() and BfBot.PartyUI.RecipientName(3) ~= ''"
+		action "BfBot.PartyUI.SetRecipient(3)"
+		text lua "BfBot.PartyUI.RecipientName(3)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(3) and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient4"
+		enabled "BfBot.PartyUI.IsDashboard() and BfBot.PartyUI.RecipientName(4) ~= ''"
+		action "BfBot.PartyUI.SetRecipient(4)"
+		text lua "BfBot.PartyUI.RecipientName(4)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(4) and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient5"
+		enabled "BfBot.PartyUI.IsDashboard() and BfBot.PartyUI.RecipientName(5) ~= ''"
+		action "BfBot.PartyUI.SetRecipient(5)"
+		text lua "BfBot.PartyUI.RecipientName(5)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(5) and 1 or 0"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRecipient6"
+		enabled "BfBot.PartyUI.IsDashboard() and BfBot.PartyUI.RecipientName(6) ~= ''"
+		action "BfBot.PartyUI.SetRecipient(6)"
+		text lua "BfBot.PartyUI.RecipientName(6)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		frame lua "BfBot.PartyUI.IsRecipient(6) and 1 or 0"
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSearchFrame"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSearchBg"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		rectangle 1
+		rectangle opacity 45
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSearchHint"
+		enabled "BfBot.PartyUI.IsDashboard() and bbPartyQuery == ''"
+		text lua "BfBot.Plan.Text('Search')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	edit
+	{
+		name "bpSearch"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		var "bbPartyQuery"
+		action "return 1"
+		text style "bb_edit"
+		text color lua "{38,32,26}"
+		maxlines 1
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpSearchClear"
+		enabled "BfBot.PartyUI.IsDashboard() and bbPartyQuery ~= ''"
+		action "BfBot.PartyUI.ClearSearch()"
+		text lua "'X'"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadIcon"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Icon')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpHeadName"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		action "BfBot.PartyUI.SortBy('name')"
+		text lua "BfBot.PartyUI.SortHeading('name')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadUses"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Uses')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		tooltip lua "BfBot.Plan.Text('Free / total uses')"
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpHeadDuration"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		action "BfBot.PartyUI.SortBy('duration')"
+		text lua "BfBot.PartyUI.SortHeading('duration')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		tooltip lua "BfBot.Plan.Text('Sort by longest duration')"
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadRecipients"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Recipients')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpHeadActions"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		text lua "BfBot.Plan.Text('Actions')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpOrderSmart"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Smart order')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		tooltip lua "BfBot.Plan.Text('Long first, with casting times considered to maximize buff duration.')"
+		action "BfBot.PartyUI.SortOrder('smart')"
+		area 0 0 140 28
+		fill lua "BfBot.PartyUI.IsOrderMode('smart') and {224,184,104,245} or {120,100,70,100}"
+	}
+	button
+	{
+		name "bpOrderLong"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Long first')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		tooltip lua "BfBot.Plan.Text('Longest-lasting buffs first.')"
+		action "BfBot.PartyUI.SortOrder('long')"
+		area 0 0 140 28
+		fill lua "BfBot.PartyUI.IsOrderMode('long') and {224,184,104,245} or {120,100,70,100}"
+	}
+	button
+	{
+		name "bpOrderCustom"
+		area 0 0 140 28
+		enabled "BfBot.PartyUI.view=='order'"
+		text lua "BfBot.Plan.Text('Custom')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		action "BfBot.PartyUI.SortOrder('custom')"
+		fill lua "BfBot.PartyUI.IsOrderMode('custom') and {224,184,104,245} or {120,100,70,100}"
+	}
+	button
+	{
+		name "bpOrderUndo"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Undo')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align center center
+		fill 120 100 70 100
+		tooltip lua "BfBot.Plan.Text('Restore the order before the last sort.')"
+		action "BfBot.PartyUI.UndoOrder()"
+		area 0 0 140 28
+	}
+	label
+	{
+		name "bpOrderHeadOrder"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Order')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadIcon"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Icon')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadName"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Name')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadRecipient"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Recipient')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadCaster"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Caster')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadDuration"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Duration')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadMove"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Move')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpOrderHeadRemove"
+		enabled "BfBot.PartyUI.view == 'order'"
+		text lua "BfBot.Plan.Text('Remove')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSummaryHeadIcon"
+		enabled "BfBot.PartyUI.view == 'summary'"
+		text lua "BfBot.Plan.Text('Icon')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSummaryHeadName"
+		enabled "BfBot.PartyUI.view == 'summary'"
+		text lua "BfBot.Plan.Text('Name')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSummaryHeadCaster"
+		enabled "BfBot.PartyUI.view == 'summary'"
+		text lua "BfBot.Plan.Text('Caster')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSummaryHeadDuration"
+		enabled "BfBot.PartyUI.view == 'summary'"
+		text lua "BfBot.Plan.Text('Duration')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpSummaryHeadRemove"
+		enabled "BfBot.PartyUI.view == 'summary'"
+		text lua "BfBot.Plan.Text('Remove')"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	list
+	{
+		column
+		{
+			width 5
+			label
+			{
+				area 3 10 32 32
+				icon lua "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].icon or ''"
+				align center center
+			}
+		}
+		column
+		{
+			width 22
+			label
+			{
+				area 2 0 -1 52
+				text lua "BfBot.PartyUI.RowName(rowNumber)"
+				tooltip lua "BfBot.PartyUI.RowTip(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 0 -1 52
+				text lua "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].uses or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 11
+			label
+			{
+				area 2 0 -1 52
+				text lua "BfBot.PartyUI.RowDuration(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].party"
+				rectangle 1
+				rectangle opacity lua "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].partyCell.checked and 28 or 5"
+			}
+			label
+			{
+				area 4 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,1)"
+				scaleToClip
+			}
+			label
+			{
+				area 9 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,2)"
+				scaleToClip
+			}
+			label
+			{
+				area 14 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,3)"
+				scaleToClip
+			}
+			label
+			{
+				area 19 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,4)"
+				scaleToClip
+			}
+			label
+			{
+				area 24 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,5)"
+				scaleToClip
+			}
+			label
+			{
+				area 29 12 18 26
+				bitmap lua "BfBot.PartyUI.PartyPortrait(rowNumber,6)"
+				scaleToClip
+			}
+			label
+			{
+				area 51 0 -1 52
+				text lua "BfBot.PartyUI.PartyText(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.PartyColor(rowNumber)"
+				text align left center
+			}
+			label
+			{
+				area 2 3 -1 46
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,1) ~= nil"
+				rectangle 1
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,1) and BfBot.PartyUI.DashboardCell(rowNumber,1).checked and 28 or 5"
+			}
+			label
+			{
+				area 4 9 22 32
+				enabled "BfBot.PartyUI.CellPortrait(rowNumber,1) ~= ''"
+				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,1)"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,1) and not BfBot.PartyUI.DashboardCell(rowNumber,1).available"
+				scaleToClip
+			}
+			label
+			{
+				area 28 0 -1 30
+				text lua "BfBot.PartyUI.CellText(rowNumber,1)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,1)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,1)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,2) ~= nil"
+				rectangle 1
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,2) and BfBot.PartyUI.DashboardCell(rowNumber,2).checked and 28 or 5"
+			}
+			label
+			{
+				area 4 9 22 32
+				enabled "BfBot.PartyUI.CellPortrait(rowNumber,2) ~= ''"
+				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,2)"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,2) and not BfBot.PartyUI.DashboardCell(rowNumber,2).available"
+				scaleToClip
+			}
+			label
+			{
+				area 28 0 -1 30
+				text lua "BfBot.PartyUI.CellText(rowNumber,2)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,2)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,2)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,3) ~= nil"
+				rectangle 1
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,3) and BfBot.PartyUI.DashboardCell(rowNumber,3).checked and 28 or 5"
+			}
+			label
+			{
+				area 4 9 22 32
+				enabled "BfBot.PartyUI.CellPortrait(rowNumber,3) ~= ''"
+				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,3)"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,3) and not BfBot.PartyUI.DashboardCell(rowNumber,3).available"
+				scaleToClip
+			}
+			label
+			{
+				area 28 0 -1 30
+				text lua "BfBot.PartyUI.CellText(rowNumber,3)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,3)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,3)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,4) ~= nil"
+				rectangle 1
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,4) and BfBot.PartyUI.DashboardCell(rowNumber,4).checked and 28 or 5"
+			}
+			label
+			{
+				area 4 9 22 32
+				enabled "BfBot.PartyUI.CellPortrait(rowNumber,4) ~= ''"
+				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,4)"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,4) and not BfBot.PartyUI.DashboardCell(rowNumber,4).available"
+				scaleToClip
+			}
+			label
+			{
+				area 28 0 -1 30
+				text lua "BfBot.PartyUI.CellText(rowNumber,4)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,4)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,4)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,5) ~= nil"
+				rectangle 1
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,5) and BfBot.PartyUI.DashboardCell(rowNumber,5).checked and 28 or 5"
+			}
+			label
+			{
+				area 4 9 22 32
+				enabled "BfBot.PartyUI.CellPortrait(rowNumber,5) ~= ''"
+				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,5)"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,5) and not BfBot.PartyUI.DashboardCell(rowNumber,5).available"
+				scaleToClip
+			}
+			label
+			{
+				area 28 0 -1 30
+				text lua "BfBot.PartyUI.CellText(rowNumber,5)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,5)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,5)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 2 3 -1 46
+				enabled "BfBot.PartyUI.DashboardCell(rowNumber,6) ~= nil"
+				rectangle 1
+				rectangle opacity lua "BfBot.PartyUI.DashboardCell(rowNumber,6) and BfBot.PartyUI.DashboardCell(rowNumber,6).checked and 28 or 5"
+			}
+			label
+			{
+				area 4 9 22 32
+				enabled "BfBot.PartyUI.CellPortrait(rowNumber,6) ~= ''"
+				bitmap lua "BfBot.PartyUI.CellPortrait(rowNumber,6)"
+				greyscale lua "BfBot.PartyUI.DashboardCell(rowNumber,6) and not BfBot.PartyUI.DashboardCell(rowNumber,6).available"
+				scaleToClip
+			}
+			label
+			{
+				area 28 0 -1 30
+				text lua "BfBot.PartyUI.CellText(rowNumber,6)"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.DashboardColor(rowNumber,6)"
+				text align left center
+			}
+			label
+			{
+				area 28 28 -1 20
+				text lua "BfBot.PartyUI.CellDuration(rowNumber,6)"
+				text style "bb_normal_parchment"
+				text color lua "{90,75,60}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 6
+			label
+			{
+				area 2 0 -1 52
+				text lua "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].planned > 0 and BfBot.Plan.Text('Clear') or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		name "bpDashboard"
+		enabled "BfBot.PartyUI.view == 'dashboard'"
+		table "bbPartyRows"
+		var "bbPartyRowSelection"
+		action "BfBot.PartyUI.DashboardClick(cellNumber)"
+		actionAlt "BfBot.PartyUI.DashboardClick(1)"
+		rowheight 52
+		scrollbar "GUISCRC"
+		hidehighlight
+		area 0 0 900 300
+	}
+	list
+	{
+		column
+		{
+			width 5
+			label
+			{
+				area 2 0 -1 42
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].heading"
+				rectangle 1
+				rectangle opacity 35
+			}
+			label
+			{
+				area 4 7 22 30
+				bitmap lua "BfBot.PartyUI.SummaryPortrait(rowNumber,1)"
+				scaleToClip
+			}
+			label
+			{
+				area 9 7 22 30
+				bitmap lua "BfBot.PartyUI.SummaryPortrait(rowNumber,2)"
+				scaleToClip
+			}
+			label
+			{
+				area 14 7 22 30
+				bitmap lua "BfBot.PartyUI.SummaryPortrait(rowNumber,3)"
+				scaleToClip
+			}
+			label
+			{
+				area 19 7 22 30
+				bitmap lua "BfBot.PartyUI.SummaryPortrait(rowNumber,4)"
+				scaleToClip
+			}
+			label
+			{
+				area 24 7 22 30
+				bitmap lua "BfBot.PartyUI.SummaryPortrait(rowNumber,5)"
+				scaleToClip
+			}
+			label
+			{
+				area 29 7 22 30
+				bitmap lua "BfBot.PartyUI.SummaryPortrait(rowNumber,6)"
+				scaleToClip
+			}
+			label
+			{
+				area 4 6 30 30
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].request ~= nil"
+				icon lua "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].icon or ''"
+			}
+		}
+		column
+		{
+			width 38
+			label
+			{
+				area 2 0 -1 42
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].heading"
+				rectangle 1
+				rectangle opacity 35
+			}
+			label
+			{
+				area 2 0 -1 42
+				text lua "BfBot.PartyUI.SummaryName(rowNumber)"
+				tooltip lua "BfBot.PartyUI.SummaryTip(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 32
+			label
+			{
+				area 2 6 210 30
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].request ~= nil"
+				rectangle 5
+				rectangle opacity 200
+			}
+			label
+			{
+				area 8 0 178 42
+				text lua "BfBot.PartyUI.SummaryCaster(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+			label
+			{
+				area 190 0 18 42
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].request ~= nil"
+				text lua "'v'"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align center center
+			}
+		}
+		column
+		{
+			width 17
+			label
+			{
+				area 2 0 120 42
+				text lua "BfBot.PartyUI.SummaryDuration(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 8
+			label
+			{
+				area 4 7 30 28
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].request ~= nil"
+				rectangle 5
+				rectangle opacity 255
+			}
+			label
+			{
+				area 4 7 30 28
+				enabled "bbPartySummary[rowNumber] and bbPartySummary[rowNumber].request ~= nil"
+				text lua "'X'"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align center center
+				tooltip lua "BfBot.Plan.Text('Remove')"
+			}
+		}
+		name "bpSummary"
+		enabled "BfBot.PartyUI.view == 'summary'"
+		table "bbPartySummary"
+		var "bbPartySummarySelection"
+		action "BfBot.PartyUI.SummaryClick(cellNumber)"
+		rowheight 42
+		scrollbar "GUISCRC"
+		hidehighlight
+		area 0 0 900 300
+	}
+	list
+	{
+		column
+		{
+			width 6
+			label
+			{
+				area 2 0 -1 42
+				text lua "tostring(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 4
+			label
+			{
+				area 3 6 30 30
+				icon lua "BfBot.PartyUI.RequestIcon(rowNumber)"
+			}
+		}
+		column
+		{
+			width 29
+			label
+			{
+				area 2 0 -1 42
+				text lua "BfBot.PartyUI.OrderName(rowNumber)"
+				tooltip lua "BfBot.PartyUI.OrderTip(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].unavailable and {155,40,25} or {38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 16
+			label
+			{
+				area 2 0 -1 42
+				text lua "bbPartyRequests[rowNumber] and bbPartyRequests[rowNumber].target or ''"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 22
+			label
+			{
+				area 2 6 210 30
+				enabled "bbPartyRequests[rowNumber] ~= nil"
+				rectangle 5
+				rectangle opacity 200
+			}
+			label
+			{
+				area 8 0 178 42
+				text lua "BfBot.PartyUI.OrderCaster(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+			label
+			{
+				area 190 0 18 42
+				enabled "bbPartyRequests[rowNumber] ~= nil"
+				text lua "'v'"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align center center
+			}
+		}
+		column
+		{
+			width 11
+			label
+			{
+				area 2 0 120 42
+				text lua "BfBot.PartyUI.OrderDuration(rowNumber)"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align left center
+			}
+		}
+		column
+		{
+			width 4
+			label
+			{
+				area 4 7 30 28
+				enabled "BfBot.PartyUI.CanMove(rowNumber,-1)"
+				rectangle 5
+				rectangle opacity 255
+			}
+			label
+			{
+				area 4 7 30 28
+				enabled "BfBot.PartyUI.CanMove(rowNumber,-1)"
+				text lua "'^'"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align center center
+				tooltip lua "BfBot.Plan.Text('Up')"
+			}
+		}
+		column
+		{
+			width 4
+			label
+			{
+				area 4 7 30 28
+				enabled "BfBot.PartyUI.CanMove(rowNumber,1)"
+				rectangle 5
+				rectangle opacity 255
+			}
+			label
+			{
+				area 4 7 30 28
+				enabled "BfBot.PartyUI.CanMove(rowNumber,1)"
+				text lua "'v'"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align center center
+				tooltip lua "BfBot.Plan.Text('Down')"
+			}
+		}
+		column
+		{
+			width 4
+			label
+			{
+				area 4 7 30 28
+				enabled "bbPartyRequests[rowNumber] ~= nil"
+				rectangle 5
+				rectangle opacity 255
+			}
+			label
+			{
+				area 4 7 30 28
+				enabled "bbPartyRequests[rowNumber] ~= nil"
+				text lua "'X'"
+				text style "bb_normal_parchment"
+				text color lua "{38,32,26}"
+				text align center center
+				tooltip lua "BfBot.Plan.Text('Remove')"
+			}
+		}
+		name "bpPlan"
+		enabled "BfBot.PartyUI.view == 'order'"
+		table "bbPartyRequests"
+		var "bbPartyRequestSelection"
+		action "BfBot.PartyUI.OrderClick(cellNumber)"
+		rowheight 42
+		scrollbar "GUISCRC"
+		hidehighlight
+		area 0 0 900 300
+	}
+	button
+	{
+		name "bpAdd"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		action "BfBot.PartyUI.OpenChoices('add')"
+		text lua "BfBot.Plan.Text('Add spell / item')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpHidden"
+		enabled "BfBot.PartyUI.IsDashboard()"
+		action "BfBot.PartyUI.OpenChoices('hidden')"
+		text lua "BfBot.Plan.Text('Hidden')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpRest"
+		enabled "true"
+		action "BfBot.PartyUI.OpenChoices('rest')"
+		text lua "BfBot.PartyUI.RestLabel()"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpStatus"
+		enabled "true"
+		text lua "bbPartyStatus"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpFeedback"
+		enabled "true"
+		text lua "bbPartyFeedback"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpCast"
+		enabled "BfBot.PartyUI.CanCast()"
+		action "BfBot.PartyUI.Cast()"
+		text lua "BfBot.Plan.Text('Cast')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpStop"
+		enabled "BfBot.Exec.GetState() == 'running'"
+		action "BfBot.Exec.Stop()"
+		text lua "BfBot.Plan.Text('Stop')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+}
+menu
+{
+	name "BUFFBOT_PARTY_CHOICES"
+	ignoreesc
+	onopen "BfBot.PartyUI.PopupLayout(false)"
+	text
+	{
+		name "bpChoicesDismiss"
+		action "Infinity_PopMenu('BUFFBOT_PARTY_CHOICES')"
+		rectangle 1
+		rectangle opacity 130
+		on escape
+		area 0 0 99999 99999
+	}
+	label
+	{
+		name "bpChoicesShadow"
+		rectangle 5
+		rectangle opacity 160
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesTop"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesBottom"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesLeft"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesRight"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesBg"
+		mosaic "BFBOTBG"
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesTitle"
+		enabled "bbPartyChoiceTitle ~= ''"
+		text lua "bbPartyChoiceTitle"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpChoicesHint"
+		enabled "bbPartyChoiceHint ~= ''"
+		text lua "bbPartyChoiceHint"
+		text style "bb_normal_parchment"
+		text color lua "{38,32,26}"
+		text align left center
+		area 0 0 100 28
+	}
+	list
+	{
+		column
+		{
+			width 10
+			label
+			{
+				area 2 2 28 28
+				icon lua "bbPartyChoices[rowNumber] and bbPartyChoices[rowNumber].icon or ''"
+			}
+		}
+		column
+		{
+			width 90
+			label
+			{
+				area 2 0 -1 34
+				text lua "bbPartyChoices[rowNumber] and bbPartyChoices[rowNumber].name or ''"
+				text style "bb_normal_parchment"
+				text color lua "BfBot.PartyUI.choiceMode == 'caster' and bbPartyChoices[rowNumber] and bbPartyChoices[rowNumber].kind == 'info' and {125,120,112} or {38,32,26}"
+				text align left center
+			}
+		}
+		name "bpChoices"
+		enabled "true"
+		table "bbPartyChoices"
+		var "bbPartyChoiceSelection"
+		action "BfBot.PartyUI.Choose()"
+		rowheight 34
+		scrollbar "GUISCRC"
+		hidehighlight
+		area 0 0 900 300
+	}
+	button
+	{
+		name "bpChoicesClose"
+		enabled "true"
+		action "Infinity_PopMenu('BUFFBOT_PARTY_CHOICES')"
+		text lua "BfBot.Plan.Text('Close')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+}
+menu
+{
+	name "BUFFBOT_PARTY_RENAME"
+	ignoreesc
+	onopen "BfBot.PartyUI.PopupLayout(true)"
+	text
+	{
+		name "bpRenameDismiss"
+		action "Infinity_PopMenu('BUFFBOT_PARTY_RENAME'); bbPartyName = BfBot.PartyUI.preset.name"
+		rectangle 1
+		rectangle opacity 130
+		on escape
+		area 0 0 99999 99999
+	}
+	label
+	{
+		name "bpRenameShadow"
+		rectangle 5
+		rectangle opacity 160
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameTop"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameBottom"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameLeft"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameRight"
+		rectangle 5
+		rectangle opacity 255
+		area 0 0 100 28
+	}
+	label
+	{
+		name "bpRenameBg"
+		mosaic "BFBOTBG"
+		area 0 0 100 28
+	}
+	edit
+	{
+		name "bpName"
+		var "bbPartyName"
+		action "return 1"
+		text style "bb_edit"
+		text color lua "{38,32,26}"
+		maxlines 1
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpSaveName"
+		enabled "true"
+		action "BfBot.PartyUI.SaveName()"
+		text lua "BfBot.Plan.Text('Save')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+	button
+	{
+		name "bpCancelName"
+		enabled "true"
+		action "Infinity_PopMenu('BUFFBOT_PARTY_RENAME'); bbPartyName = BfBot.PartyUI.preset.name"
+		text lua "BfBot.Plan.Text('Cancel')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 100 28
+	}
+}
+
+
+menu
+{
+ name "BUFFBOT_QUICK_PRESETS"
+ button { area 0 0 0 0 on escape action "BfBot.UI._CloseQuickMenu()" }
+ button { name "bbQuickOutside" area 0 0 0 0 action "BfBot.UI._CloseQuickMenu()" actionAlt "BfBot.UI._CloseQuickMenu()" }
+ label { name "bbQuickBody" area 0 0 0 0 fill 22 18 14 248 ignoreEvents }
+ label { name "bbQuickTop" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ label { name "bbQuickBottom" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ label { name "bbQuickLeft" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ label { name "bbQuickRight" area 0 0 0 0 fill 176 138 74 255 ignoreEvents }
+ button
+ {
+  name "bbQuickPreset1"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(1)"
+ }
+ label
+ {
+  name "bbQuickPreset1Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1]~=nil"
+  text lua "BfBot.UI._QuickPresetName(1)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset2"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(2)"
+ }
+ label
+ {
+  name "bbQuickPreset2Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2]~=nil"
+  text lua "BfBot.UI._QuickPresetName(2)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset3"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(3)"
+ }
+ label
+ {
+  name "bbQuickPreset3Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3]~=nil"
+  text lua "BfBot.UI._QuickPresetName(3)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset4"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(4)"
+ }
+ label
+ {
+  name "bbQuickPreset4Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4]~=nil"
+  text lua "BfBot.UI._QuickPresetName(4)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset5"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(5)"
+ }
+ label
+ {
+  name "bbQuickPreset5Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5]~=nil"
+  text lua "BfBot.UI._QuickPresetName(5)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset6"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(6)"
+ }
+ label
+ {
+  name "bbQuickPreset6Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6]~=nil"
+  text lua "BfBot.UI._QuickPresetName(6)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset7"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(7)"
+ }
+ label
+ {
+  name "bbQuickPreset7Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7]~=nil"
+  text lua "BfBot.UI._QuickPresetName(7)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
+ button
+ {
+  name "bbQuickPreset8"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8]~=nil"
+  bam "BFBPLAT"
+  sequence lua "BfBot.Visual.SkinIndex()"
+  frame 0
+  scaleToClip
+  action "BfBot.UI._CastQuickPreset(8)"
+ }
+ label
+ {
+  name "bbQuickPreset8Caption"
+  area 0 0 0 0
+  enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8]~=nil"
+  text lua "BfBot.UI._QuickPresetName(8)"
+  text style "bb_normal"
+  text align left center
+  ignoreEvents
+ }
 }

@@ -1,0 +1,1 @@
+{"choices":[{"key":"dv:KELDORN","name":"[x] Keldorn"},{"key":"protagonist","name":"[x] Simmeon"},{"key":"dv:ANOMEN","name":"[x] Sir Anomen"},{"key":"dv:JAHEIRA","name":"[x] Jaheira"},{"key":"dv:HAERDALIS","name":"[x] Haer'Dalis"},{"key":"dv:JAN","name":"[x] Jan"}],"passed":true,"phases":{"all":[2,2,2,2,2,2],"none":[0,0,0,0,0,0],"one":[2,0,0,0,0,0]},"selection":{"dv:KELDORN":1}}

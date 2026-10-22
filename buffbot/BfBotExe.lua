@@ -12,6 +12,7 @@ local _nextItemToken = 0
 
 -- State
 BfBot.Exec._state = "idle"       -- "idle" | "running" | "done" | "stopped"
+BfBot.Exec._packRestores = {}    -- scalar slot/token jobs, serviced from the world UI tick
 BfBot.Exec._casters = {}         -- {[casterKey] = {ref=..., queue={}, index=0, done=false, name=n, cheatBoundary=0, cheatApplied=false}}
                                  -- Keyed by _CasterKey(ref) ("p<slot>" / "s<oid>"). Records hold NO
                                  -- sprite userdata — every step resolves fresh via _ResolveCaster (#19/#38).
@@ -125,7 +126,9 @@ function BfBot.Exec._ResolveCasterForStep(caster)
     local sprite = BfBot.Exec._ResolveCaster(caster.ref)
     if not sprite then return nil end
     if caster.ref.kind == "party" then
-        if caster.name and BfBot._GetName(sprite) ~= caster.name then
+        if caster.plannedActor and BfBot.Plan then
+            if BfBot.Plan.ActorKey(sprite)~=caster.plannedActor then return nil end
+        elseif caster.name and BfBot._GetName(sprite) ~= caster.name then
             return nil
         end
     else
@@ -177,11 +180,12 @@ end
 --- Check if a sprite has an active timed effect from a given spell resref.
 function BfBot.Exec._HasActiveEffect(sprite, resref)
     if not sprite or not resref then return false end
+    resref = resref:upper()
     local found = false
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
             local effectRes = effect.m_sourceRes:get()
-            if effectRes and effectRes == resref then
+            if effectRes and effectRes:upper() == resref then
                 found = true
                 return true -- stop iteration
             end
@@ -192,10 +196,11 @@ end
 
 function BfBot.Exec._HasActiveItemEffect(sprite, resref, signatures)
     if not signatures or #signatures == 0 then return false end
+    resref = resref:upper()
     local matched, remaining = {}, #signatures
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
-            if effect.m_sourceRes:get() ~= resref then return end
+            if effect.m_sourceRes:get():upper() ~= resref then return end
             for i, sig in ipairs(signatures) do
                 if not matched[i] and effect.m_effectId == sig.opcode
                     and effect.m_effectAmount == sig.amount
@@ -230,6 +235,7 @@ function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
     if not sprite or not resref or not stateIDs or #stateIDs == 0 then
         return false
     end
+    resref = resref:upper()
 
     local wanted = {}
     for _, stateID in ipairs(stateIDs) do wanted[stateID] = true end
@@ -240,7 +246,7 @@ function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
             local effectRes = effect.m_sourceRes:get()
             local opcode = effect.m_effectId
             local stateID = effect.m_dWFlags
-            if effectRes == resref
+            if effectRes:upper() == resref
                 and (opcode == 282 or opcode == 328)
                 and wanted[stateID] then
                 found = true
@@ -276,6 +282,10 @@ function BfBot.Exec._ConsumeSpellSlot(sprite, resref)
     local levelIndex = 0
     local hdrOk, header = pcall(EEex_Resource_Demand, resref, "SPL")
     if hdrOk and header then
+        -- Modded innates need not have an SPIN/SPCL filename.
+        if header.spellType==4 then listField='m_memorizedSpellsInnate'
+        elseif header.spellType==1 then listField='m_memorizedSpellsMage'
+        elseif header.spellType==2 then listField='m_memorizedSpellsPriest' end
         levelIndex = (header.spellLevel or 1) - 1
     end
     -- Innates are all at index 0
@@ -291,12 +301,25 @@ function BfBot.Exec._ConsumeSpellSlot(sprite, resref)
         EEex_Utility_IterateCPtrList(levelList, function(spell)
             if consumed then return true end
             local sid = spell.m_spellId:get()
-            if sid == resref and spell.m_flags == 1 then
-                spell.m_flags = 0
+            if sid == resref and bit.band(spell.m_flags,3)==1 then
+                spell.m_flags = bit.band(spell.m_flags,bit.bnot(1))
                 consumed = true
                 return true
             end
         end)
+        -- Native spontaneous casts spend one use of every choice at this
+        -- level. Forced variants must preserve that same shared-slot debit.
+        local cls=sprite.m_typeAI and sprite.m_typeAI.m_Class
+        if consumed and ((cls==19 and listField=='m_memorizedSpellsMage')
+            or (cls==21 and listField=='m_memorizedSpellsPriest')) then
+            local spent={[resref]=true}
+            EEex_Utility_IterateCPtrList(levelList,function(spell)
+                local sid=spell.m_spellId:get()
+                if not spent[sid] and bit.band(spell.m_flags,3)==1 then
+                    spell.m_flags=bit.band(spell.m_flags,bit.bnot(1));spent[sid]=true
+                end
+            end)
+        end
     end)
 
     return ok and consumed
@@ -490,7 +513,11 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         end
 
         local classResult = spellData.class
-        local isAoE = classResult and classResult.isAoE or false
+        -- Scanner resolves caster-centered friendly projectile delivery from
+        -- PRO metadata. Preserve that result at execution, so Party means one
+        -- radial cast rather than six individually targeted attempts.
+        local isAoE = spellData.radialParty == true
+            or (classResult and classResult.isAoE) or false
         local splstates = classResult and classResult.splstates or {}
         local spellName = spellData.name or resref
         local kind = spellData.kind or "spl"
@@ -550,6 +577,10 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                     casterName = casterName,
                     resref = resref,
                     kind = kind,
+                    plannedActor = entry.plannedActor,
+                    plannedTarget = entry.plannedTarget,
+                    planIndex = entry.planIndex, invisibilityTarget = entry.invisibilityTarget,
+                    plannedItemSlot = entry.plannedItemSlot,
                     itemResref = spellData.itemResref,
                     abilityIdx = spellData.abilityIdx,
                     itemEffects = spellData.itemEffects,
@@ -602,6 +633,23 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
 
     local label = entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
 
+    if entry.plannedActor and BfBot.Plan then
+        local identity = entry.casterRef and entry.casterRef.kind=='summon' and BfBot.Plan.CasterKey(casterSprite)
+            or BfBot.Plan.ActorKey(casterSprite)
+        local valid = identity == entry.plannedActor
+        if entry.plannedTarget ~= "party" and entry.targetSlot ~= nil then
+            local target = EEex_Sprite_GetInPortrait(entry.targetSlot)
+            valid = valid and target
+                and BfBot.Plan.ActorKey(target) == entry.plannedTarget
+            if valid then entry.targetSprite = target end
+        end
+        if not valid then
+            BfBot.Exec._LogEntry("SKIP", label .. " (party changed; rebuild the plan)")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            return false
+        end
+    end
+
     -- Caster alive
     if not BfBot.Exec._IsAlive(casterSprite) then
         BfBot.Exec._LogEntry("SKIP", label .. " (caster dead)")
@@ -623,6 +671,12 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
         end
         BfBot.Exec._LogEntry("SKIP", label .. " (" .. why .. ")")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+        return false
+    end
+
+    if spellData.requiresChoice then
+        BfBot.Exec._LogEntry("SKIP",label .. " (choose this item's power manually)")
+        BfBot.Exec._skipCount=BfBot.Exec._skipCount+1
         return false
     end
 
@@ -730,11 +784,11 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
 end
 
 -- Item actions use live slots, never stored slots from a preset. XEquipItem
--- EQUIP swaps its source and destination; UNEQUIP only removes effects and
--- must NOT be used to move gear back. Confirmed in BG2EE 2.6.6 action code.
+-- is used only for real equipment destinations. Empty-backpack returns use
+-- the stock inventory exchange, never the native EQUIP-to-backpack path.
 local function _itemAt(sprite, slot)
     local item = sprite.m_equipment.m_items:get(slot)
-    return item, item and item.pRes.resref:get() or ""
+    return item, item and item.pRes.resref:get():upper() or ""
 end
 
 local function _uniqueItem(sprite, resref)
@@ -742,7 +796,7 @@ local function _uniqueItem(sprite, resref)
     local count = 0
     for slot = 0, 38 do
         local _, r = _itemAt(sprite, slot)
-        if r == resref then count = count + 1 end
+        if r == resref:upper() then count = count + 1 end
     end
     return count == 1
 end
@@ -765,15 +819,73 @@ local function _swapMatches(sprite, journal, restored)
     local _, equip = _itemAt(sprite, journal.equip)
     if restored then
         -- Depleted items can be destroyed by the engine after their last use.
-        return (pack == journal.item or pack == "") and equip == journal.previous
+        return (pack == journal.item:upper() or pack == "") and equip == journal.previous:upper()
     end
-    return (equip == journal.item or equip == "") and pack == journal.previous
+    return (equip == journal.item:upper() or equip == "") and pack == journal.previous:upper()
 end
 
 local function _swapCaster(slot, token)
     local key = "p" .. slot
     local caster = BfBot.Exec._casters[key]
     if caster and caster.itemToken == token then return caster, key end
+end
+
+-- Item actions can finish inside the engine's equipment/effect traversal.
+-- Their native callback only records a scalar token. Resolve sprites and start
+-- another action from the next world UI tick, after that traversal returns.
+function BfBot.Exec._MakeItemAdvance(key,caster)
+    BfBot._itemAdvanceSequence=(BfBot._itemAdvanceSequence or 0)+1
+    caster.itemAdvanceToken=BfBot._itemAdvanceSequence;caster.itemAdvanceReady=nil
+    caster.itemAdvanceAction=string.format('EEex_LuaAction("BfBot.Exec._ItemAdvanceReady([[%s]],%d)")',key,caster.itemAdvanceToken)
+    return caster.itemAdvanceAction
+end
+function BfBot.Exec._ItemAdvanceReady(key,token)
+    local caster=BfBot.Exec._casters[key]
+    if BfBot.Exec._state=='running' and caster and not caster.done
+        and token==caster.itemAdvanceToken then caster.itemAdvanceReady=token end
+end
+function BfBot.Exec.PumpItemAdvances()
+    if e and worldScreen and e:GetActiveEngine()~=worldScreen then return end
+    BfBot.Exec._PumpPackRestores()
+    if BfBot.Exec._state~='running' then return end
+    local ready={}
+    for key,caster in pairs(BfBot.Exec._casters)do
+        if caster.itemAdvanceReady and caster.itemAdvanceReady==caster.itemAdvanceToken then
+            ready[#ready+1]={key=key,caster=caster,token=caster.itemAdvanceReady}
+        end
+    end
+    for _,job in ipairs(ready)do
+        local caster=BfBot.Exec._casters[job.key]
+        if caster==job.caster and caster.itemAdvanceReady==job.token then
+            caster.itemAdvanceReady=nil;caster.itemAdvanceToken=nil;caster.itemAdvanceAction=nil
+            BfBot.Exec._Advance(job.key)
+        end
+    end
+end
+
+-- Native inventory exchanges run outside the AI action callback. Pending
+-- returns survive Stop; each tick resolves the current sprite and journal.
+function BfBot.Exec._PumpPackRestores()
+    local jobs=BfBot.Exec._packRestores;BfBot.Exec._packRestores={}
+    for slot,token in pairs(jobs)do
+        local sprite,journal=_swapContext(slot,token)
+        if sprite and journal.phase=='restoring' then
+            local ok,reason
+            if _swapMatches(sprite,journal,true) then ok=true
+            elseif journal.previous=='' and _swapMatches(sprite,journal,false) then
+                ok,reason=BfBot.Scan._NativeMoveToBackpack(sprite,journal.equip,journal.pack)
+            end
+            if ok then BfBot.Exec._ItemRestored(slot,token)
+            else
+                journal.phase='failed'
+                local warning=tostring(reason or 'equipment changed')
+                if journal.packWarning~=warning then
+                    journal.packWarning=warning;BfBot._Warn('Item return paused: '..warning)
+                end
+                if BfBot.Exec._state=='running' then BfBot.Exec.Stop() end
+            end
+        end
+    end
 end
 
 function BfBot.Exec._ItemRestored(slot, token)
@@ -787,7 +899,9 @@ function BfBot.Exec._ItemRestored(slot, token)
     -- Preserve a manual weapon selection made during the run. XEquipItem
     -- itself selects the temporary weapon, or can reset it to fists on return.
     local selectedWeapon = sprite.m_equipment.m_selectedWeapon
-    if journal.weapon ~= nil and (selectedWeapon == journal.equip
+    local alreadySelected=selectedWeapon==journal.weapon
+        and sprite.m_equipment.m_selectedWeaponAbility==journal.weaponAbility
+    if journal.weapon ~= nil and not alreadySelected and (selectedWeapon == journal.equip
         or selectedWeapon == journal.weapon or selectedWeapon == 10) then
         EEex_Action_QueueResponseStringOnAIBase(string.format(
             'SelectWeaponAbility(%d,%d)', journal.weapon, journal.weaponAbility), sprite)
@@ -798,7 +912,7 @@ function BfBot.Exec._ItemRestored(slot, token)
         caster.itemToken = nil
         if BfBot.Exec._state == "running" and not caster.done then
             -- Put the next step after weapon-selection restoration.
-            EEex_Action_QueueResponseStringOnAIBase(string.format(
+            EEex_Action_QueueResponseStringOnAIBase(caster.itemAdvanceAction or string.format(
                 'EEex_LuaAction("BfBot.Exec._Advance([[%s]])")', key), sprite)
         end
     end
@@ -824,14 +938,20 @@ function BfBot.Exec._RestoreItemAtSlot(slot, token)
     end
     local _, equip = _itemAt(sprite, journal.equip)
     local move, destination
-    if equip == journal.item then
+    if journal.previous ~= "" then
+        -- Re-equip the displaced item into its real equipment slot. The
+        -- engine's exchange returns our temporary item to the same pack slot.
+        move, destination = journal.previous, journal.equip
+    elseif equip == journal.item:upper() then
         if not _uniqueItem(sprite, journal.item) then return end
         move, destination = journal.item, journal.pack
-    elseif journal.previous ~= "" then
-        move, destination = journal.previous, journal.equip
     end
     journal.phase = "restoring"
     journal.restoreAttempt = (journal.restoreAttempt or 0) + 1
+    if move and destination==journal.pack then
+        BfBot.Exec._packRestores[slot]=token
+        return
+    end
     if move then
         EEex_Action_QueueResponseStringOnAIBase(string.format(
             'XEquipItem("%s",Myself,%d,1)', move, destination), sprite)
@@ -869,7 +989,7 @@ function BfBot.Exec._AfterItemEquip(slot, token)
     local entry = caster and caster.queue[caster.index]
     local _, equipped = _itemAt(sprite, journal.equip)
     local usable = caster and not caster.done and BfBot.Exec._state == "running"
-        and equipped == journal.item and _swapMatches(sprite, journal, false)
+        and equipped == journal.item:upper() and _swapMatches(sprite, journal, false)
     if usable and BfBot.Persist.GetPref("CombatInterrupt") ~= 0
         and BfBot.Exec._DetectCombat() then
         BfBot.Exec.Stop()
@@ -923,11 +1043,26 @@ function BfBot.Exec._RecoverItemSwaps()
 end
 
 function BfBot.Exec._QueueItem(key, caster, entry, row, sprite, advanceAction)
+    if entry.plannedItemSlot ~= nil then
+        local available = false
+        for _, source in ipairs(row and row.sources or {}) do
+            if source.slot == entry.plannedItemSlot and source.count > 0 then available = true end
+        end
+        if not available then return false end
+        local copy = {}
+        for k, v in pairs(row) do copy[k] = v end
+        copy.itemSlot = entry.plannedItemSlot
+        row = copy
+    end
     if not row or row.kind ~= "itm" or row.itemSlot == nil then return false end
     if BfBot.Persist.GetItemSwap(sprite) then return false end
     local slot = row.itemSlot
     local mode = BfBot.Persist.GetPref("ItemUseMode")
     if mode == "swap" and slot >= 18 and slot <= 33 and row.itemType ~= 9 then
+        if caster.ref.kind~='party' then
+            BfBot.Exec._LogEntry("SKIP",entry.spellName .. " (summon item must already be equipped)")
+            return false
+        end
         local journal, reason = BfBot.Scan._PlanItemSwap(sprite, row)
         journal = BfBot.Persist._ValidateItemSwap(journal)
         if not journal then
@@ -988,7 +1123,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     end
 
     -- Watchdog: any caster stepping through its queue counts as forward progress.
-    BfBot.Exec._NoteProgress()
+    if not caster.visibilityWaiting then BfBot.Exec._NoteProgress() end
 
     -- This caster's queue exhausted
     if index > #caster.queue then
@@ -1008,6 +1143,34 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
 
     caster.index = index
     local entry = caster.queue[index]
+
+    if entry.invisibilityTarget then
+        local pending=false
+        for otherKey,other in pairs(BfBot.Exec._casters) do
+            if otherKey~=key and not other.done then
+                for i=math.max(1,other.index),#other.queue do
+                    local before=other.queue[i]
+                    if before.planIndex and entry.planIndex and before.planIndex<entry.planIndex
+                        and before.plannedTarget~='party' and not before.isAoE
+                        and before.plannedActor~=before.plannedTarget
+                        and (entry.invisibilityTarget=='party' or before.plannedTarget==entry.invisibilityTarget) then
+                        pending=true;break
+                    end
+                end
+            end
+            if pending then break end
+        end
+        if pending then
+            caster.visibilityWaiting=true
+            BfBot._visibilitySequence=(BfBot._visibilitySequence or 0)+1
+            caster.visibilityToken=BfBot._visibilitySequence
+            EEex_Action_QueueResponseStringOnAIBase('SmallWait(5)',sprite)
+            EEex_Action_QueueResponseStringOnAIBase(string.format(
+                'EEex_LuaAction("BfBot.Exec._VisibilityResume([[%s]],%d,%d)")',key,index,caster.visibilityToken),sprite)
+            return
+        end
+        caster.visibilityWaiting=nil
+    end
 
     -- 5E Spellcasting: a wrapper cast strips every wrapper and upstream
     -- regrants them after the delay the wrapper itself declares. Wait for
@@ -1128,6 +1291,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
         "EEex_LuaAction(\"BfBot.Exec._Advance([[%s]])\")", key)
 
     if entry.kind == "itm" then
+        advanceAction=BfBot.Exec._MakeItemAdvance(key,caster)
         if not BfBot.Exec._QueueItem(key, caster, entry, spellScan, sprite, advanceAction) then
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
             return BfBot.Exec._ProcessCasterEntry(key, index + 1)
@@ -1163,8 +1327,9 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
             entry.casterName .. " -> " .. entry.spellName .. " [" .. entry.var .. "] -> " .. entry.targetName)
         BfBot.Exec._castCount = BfBot.Exec._castCount + 1
     else
-        -- Normal path: queue SpellRES action (engine handles slot consumption)
-        local spellAction = string.format('SpellRES("%s",%s)', entry.resref, entry.targetObj)
+        -- The native action also preserves deliberate self-regranting innates
+        -- (for example this installation's SPIN137 removes/re-adds itself).
+        local spellAction = string.format('SpellRES("%s",%s)',entry.resref,entry.targetObj)
         EEex_Action_QueueResponseStringOnAIBase(spellAction, sprite)
         EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
         BfBot.Exec._LogEntry("CAST",
@@ -1231,6 +1396,14 @@ end
 
 --- Called by the engine via EEex_LuaAction after a caster's spell completes.
 -- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
+function BfBot.Exec._VisibilityResume(key,index,token)
+    local caster=BfBot.Exec._casters[key]
+    if not caster or caster.index~=index or caster.visibilityToken~=token then return end
+    if not _continueChain(key) then return end
+    caster.visibilityToken=nil
+    BfBot.Exec._ProcessCasterEntry(key,index)
+end
+
 function BfBot.Exec._Advance(key)
     if BfBot.Exec._state ~= "running" then return end
     local caster = BfBot.Exec._casters[key]
@@ -1242,7 +1415,8 @@ function BfBot.Exec._Advance(key)
         caster.d5Refresh.since = BfBot.Exec._GetGameTime()
     end
 
-    if not _continueChain(key) then return end
+    local live=_continueChain(key)
+    if not live then return end
     BfBot.Exec._ProcessCasterEntry(key, caster.index + 1)
 end
 
@@ -1254,6 +1428,7 @@ end
 --- keeps the function side-effect free so the in-game test suite can capture
 --- its own output to the log around each subtest.
 function BfBot.Exec._HardReset()
+    if BfBot.Fast then BfBot.Fast.Reset('execution reset') end
     BfBot.Exec._state         = "idle"
     BfBot.Exec._casters       = {}
     BfBot.Exec._activeCasters = 0
@@ -1296,8 +1471,12 @@ function BfBot.Exec._IsStateStale()
         local ref = caster.ref
         if ref and ref.kind == "party" and caster.name then
             local fresh = EEex_Sprite_GetInPortrait(ref.slot)
-            local freshName = fresh and BfBot._GetName(fresh) or nil
-            if freshName ~= caster.name then return true end
+            if caster.plannedActor and BfBot.Plan then
+                if not fresh or BfBot.Plan.ActorKey(fresh)~=caster.plannedActor then return true end
+            else
+                local freshName = fresh and BfBot._GetName(fresh) or nil
+                if freshName ~= caster.name then return true end
+            end
         end
     end
 
@@ -1344,6 +1523,7 @@ function BfBot.Exec._Complete()
     BfBot.Exec._StripCheatBuffs()
 
     BfBot.Exec._state = "done"
+    if BfBot.Fast then BfBot.Fast.CheckDone() end
     local cast = BfBot.Exec._castCount
     local skip = BfBot.Exec._skipCount
     local total = cast + skip
@@ -1368,6 +1548,8 @@ end
 --- unconditional safety net so the UI can never lock regardless of cause.
 --- @param reason string: logged WARN explaining why the run was force-completed
 function BfBot.Exec._ForceComplete(reason)
+    if BfBot.Fast then BfBot.Fast.Reset('execution timeout') end
+    if BfBot.Share and BfBot.Share.run then BfBot.Share.run.cancelled=true end
     -- Clean up lingering cheat buffs (see _Complete/Stop for the re-resolve rationale).
     BfBot.Exec._StripCheatBuffs()
 
@@ -1440,6 +1622,7 @@ function BfBot.Exec._AttachCaster(summonEntry, queue)
         index = 0,
         done = false,
         name = entries[1].casterName,
+        plannedActor=entries[1].plannedActor,
         cheatBoundary = BfBot.Exec._DeriveCheatBoundary(entries),
         cheatApplied = false,
     }
@@ -1591,9 +1774,15 @@ end
 --     is no preset to look a summon's config up under).
 -- @return true + nil + nil if started; false + reasonCode + detail if not
 function BfBot.Exec.Start(queue, qcMode, presetIdx)
+    if qcMode==4 and BfBot.Fast then return BfBot.Fast.Start(queue,presetIdx) end
     if BfBot.Exec._state == "running" then
         BfBot._Print("[BuffBot] Already running. Call BfBot.Exec.Stop() first.")
         return false, "reason.exec.already_running", {}
+    end
+    if BfBot.Share and not BfBot.Share.internal then
+        local state=BfBot.Plan.GetState()
+        if BfBot.Share.run or state and state.transfer then return false,'reason.exec.already_running',{} end
+        if BfBot.Share.NeedsSharing(queue) then return BfBot.Share.Start(queue,qcMode) end
     end
 
     -- Open execution log file
@@ -1608,6 +1797,7 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
     BfBot.Exec._skipCount = 0
     BfBot.Exec._totalEntries = 0
     BfBot.Exec._qcMode = qcMode or 0
+    if BfBot.Exec._qcMode==3 then BfBot.Exec._qcMode=0 end -- retired mode
     BfBot.Exec._lastProgressGameTime = nil
     BfBot.Exec._runPresetIdx = (type(presetIdx) == "number") and presetIdx or nil
     BfBot.Exec._pendingLateJoin = {}
@@ -1654,6 +1844,7 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
             index = 0,
             done = false,
             name = name,
+            plannedActor=entries[1].plannedActor,
             cheatBoundary = cheatBoundary,
             cheatApplied = false,
         }
@@ -1681,6 +1872,10 @@ end
 
 --- Stop execution mid-queue.
 function BfBot.Exec.Stop()
+    if BfBot.Fast then BfBot.Fast.Reset('stopped') end
+    if BfBot.Share and BfBot.Share.run and not BfBot.Share.internalStop then
+        return BfBot.Share.Stop()
+    end
     -- Fast-path recovery from save-reload mid-cast with party composition
     -- change (issue #38): hard-reset to idle without entering the cleanup
     -- loop — there's nothing to clean up because the buffs were applied to
@@ -1719,6 +1914,7 @@ end
 -- Called every frame by .menu enabled tick, rate-limited to ~2 seconds.
 -- NOT toggleable — this is the hard safety guarantee.
 function BfBot.Exec._SafetyTick()
+    BfBot.Exec.PumpItemAdvances()
     -- Rate-limit: ~2 seconds between checks
     local now = Infinity_GetClockTicks()
     if now - BfBot.Exec._lastSafetyTick < 2000 then return end
@@ -1733,26 +1929,6 @@ function BfBot.Exec._SafetyTick()
     -- branch below falls through to the BFBTCH cleanup loop.
     if BfBot.Exec._IsStateStale() then
         BfBot.Exec._HardReset()
-    end
-
-    -- A stale slot-bound F12 click during an active run cannot reconcile
-    -- immediately: BFBTRM/AddSpecialAbility actions would interleave with the
-    -- casting chains. Drain the root-level request once execution has settled.
-    -- Keep it pending after a Lua failure so the next safety tick retries.
-    if BfBot.Exec._state ~= "running" and BfBot._innateRefreshPending then
-        BfBot._innateRefreshPending = nil
-        local ok, err = pcall(function()
-            local refresh = BfBot.Innate and BfBot.Innate.RefreshAll
-            if type(refresh) ~= "function" then
-                error("BfBot.Innate.RefreshAll is unavailable")
-            end
-            refresh()
-        end)
-        if not ok then
-            BfBot._innateRefreshPending = true
-            BfBot._Warn("[Innate] Deferred stale-slot refresh failed; will retry: "
-                .. tostring(err))
-        end
     end
 
     -- Watchdog: force-complete a run that has stopped making progress. Known
@@ -1859,6 +2035,7 @@ end
 
 --- Get current execution state.
 function BfBot.Exec.GetState()
+    if BfBot.Share and BfBot.Share.run then return 'running' end
     return BfBot.Exec._state
 end
 

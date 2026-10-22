@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.10.1~
+VERSION ~v1.10.1-redux-beta.3~
 
 ALWAYS
 // Shared by both components so main validates exactly the state the helper
@@ -387,6 +387,16 @@ COPY ~buffbot/BfBot5e.lua~   ~override~
 COPY ~buffbot/BfBotExe.lua~  ~override~
 COPY ~buffbot/BfBotMp.lua~   ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~
+COPY ~buffbot/BfBotPln.lua~  ~override~
+COPY ~buffbot/BfBotIO.lua~   ~override~
+COPY ~buffbot/BfBotShr.lua~   ~override~
+COPY ~buffbot/BfBotFst.lua~   ~override~
+COPY ~buffbot/BfBotRst.lua~  ~override~
+COPY ~buffbot/BfBotPUI.lua~  ~override~
+COPY ~buffbot/BfBotVD.lua~   ~override~
+COPY ~buffbot/BfBotVis.lua~  ~override~
+COPY ~buffbot/BfBotRx.menu~  ~override~
+COPY ~buffbot/visual~        ~override~
 COPY ~buffbot/BfBotInn.lua~  ~override~
 COPY ~buffbot/BfBotUI.lua~   ~override~
 COPY ~buffbot/BfBotThm.lua~  ~override~

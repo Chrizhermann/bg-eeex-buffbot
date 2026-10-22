@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-19",
+  "scope": "Offline tests only; no native observation or gameplay acceptance",
+  "protocol": "balanced-observer-protocol.md",
+  "modules": [
+    "tools/research/balanced_capture.lua",
+    "tools/research/balanced_observer.lua"
+  ],
+  "validation": {
+    "observer_cases": 40,
+    "combined_focused_passed": 130,
+    "suites": [
+      "test_balanced_observer.py",
+      "test_balanced_timing_model.py",
+      "test_party_planner.py",
+      "test_completed_rest.py"
+    ],
+    "native_read_calls": 0,
+    "native_casts": 0,
+    "native_effect_writes": 0,
+    "native_input_actions": 0,
+    "production_source_changed": false,
+    "installed": false,
+    "automatic_listeners_registered": false
+  },
+  "contracts": {
+    "effect_ownership": "All exports state unproved ownership, including unique matching windows.",
+    "preexisting_effects": "Copied as baseline; duration-only field changes do not count as new casts.",
+    "ambiguity": "Repeated matching windows, changed/reused tokens and reappearing tokens remain explicit.",
+    "temporal_resolution": "Effect arrivals are sampling intervals, not exact engine delivery ticks.",
+    "phase_markers": "Caller-supplied observations only; action IDs do not infer start/release/aura readiness.",
+    "lifecycle": "Stop on epoch/clock/party identity change. Controller must supply fresh generation on load.",
+    "failure": "Partial native reads cannot seed or advance ledger; budget exhaustion stops without committing partial sample.",
+    "memory": "6 party actors, 4096 effects per sample, 32768 retained effect records, 512 samples, 256 cast windows and 2048 deltas.",
+    "userdata": "Only synchronous fresh native references; plain scalar/table snapshots; no saved pointer dereference."
+  },
+  "research_source_hashes": [
+    {
+      "file": "tools/research/balanced_capture.lua",
+      "sha256": "684d4eed7748d78d80594608c5b6ae953450ce8d4d9f2ab6a40fcff4e5213169"
+    },
+    {
+      "file": "tools/research/balanced_observer.lua",
+      "sha256": "8b6e58e9edb1061ec95ec4378ed4f82888e5c2f0be0406ded062900332f12d32"
+    }
+  ],
+  "remaining": [
+    "Native field/API acceptance for this adapter",
+    "Independent release/ready/delivery instrumentation",
+    "True per-cast ownership proof",
+    "Native collection overhead",
+    "Safe effect expiry mutation in separate later adapter"
+  ]
+}

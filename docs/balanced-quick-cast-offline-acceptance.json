@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-19",
+  "scope": "Offline source audit and pure timing mathematics, not native duration/casting acceptance",
+  "base_revision": "59ef7ecd3543b8c2f8ae8899abe97af05ebe09f8",
+  "source_reference_hashes": [
+    {
+      "file": "EEex_GameObject.lua",
+      "sha256": "2b141ec407e3a649d8614863bfcb39b38048449fc8323613b3cf7b21904e74ee"
+    },
+    {
+      "file": "EEex_Opcode.lua",
+      "sha256": "7000c87af1e11a204e468b9a6551c16266e8807fdf0083724d9af6cf79591966"
+    },
+    {
+      "file": "B3EffMen.lua",
+      "sha256": "41b4af98091ffd2c072d9cf27ee8f50884053f7b6f421bbaad5bb7959d944db2"
+    },
+    {
+      "file": "EEex_Fix.lua",
+      "sha256": "41e40a51116d1c55c3f6e6ccea6145251c1faf294d31a9ab640909a45213abaf"
+    }
+  ],
+  "audit": "balanced-quick-cast-feasibility.md",
+  "model": "tools/research/balanced_timing.lua",
+  "tests": "tests/test_balanced_timing_model.py",
+  "validation": {
+    "model_cases": 32,
+    "focused_passed": 90,
+    "focused_suites": [
+      "test_balanced_timing_model.py",
+      "test_party_planner.py",
+      "test_completed_rest.py"
+    ],
+    "new_native_acceptance": false,
+    "production_modules_changed": false,
+    "prototype_installed": false,
+    "game_windows_controlled": false,
+    "native_commands_issued": 0
+  },
+  "conclusions": {
+    "scheduling": "Linear fixed independent-lane model; preserve per-caster order, initial availability and effect-delivery delays.",
+    "accounting": "Compute reference age minus actual age per newly owned effect; do not subtract virtual age twice.",
+    "extension": "Exact JIT balance can require restoring time to a still-live new effect. Conservative no-extension policy is explicitly approximate.",
+    "primary_risk": "Attribution and engine-safe per-effect lifetime changes, not scheduling complexity.",
+    "recommended_next": "Observation-only timing/ownership ledger before any live expiry mutation.",
+    "unsupported_scope": "Dependent casts, item sharing/uses, periodic/delayed or irreversible effects, 5E wrappers and unverified variant delivery need separate acceptance."
+  },
+  "native_gates_open": [
+    "Timing and speed gear calibration",
+    "Per-cast effect ownership",
+    "Lifetime mutation and expiration semantics",
+    "Actual animation continuity",
+    "Abort/load/late-projectile handling",
+    "Observation callback cost"
+  ]
+}

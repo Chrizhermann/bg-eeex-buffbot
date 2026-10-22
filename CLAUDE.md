@@ -16,6 +16,8 @@ Stable — core BuffBot features are supported; 5E Spellcasting compatibility re
 - `BfBotScn.lua` — per-sprite spellbook scan (iterator-based, cached)
 - `BfBotExe.lua` — parallel per-caster execution, skip detection, combat safety
 - `BfBotPer.lua` — persistence (UDAux marshal, presets, INI, export/import)
+- `BfBotPln.lua` / `BfBotPUI.lua` — recipient plans, shared reservations and primary panel
+- `BfBotRst.lua` — opt-in standard completed-rest preset; transient work resets on load
 - `BfBotInn.lua` — per-preset F12 innate abilities (runtime SPL generation)
 - `BfBotUI.lua` + `BuffBot.menu` — in-game config panel (movable, resizable, dynamic ~80% screen)
 - `BfBotTst.lua` — in-game test suite (`BfBot.Test.RunAll()` in in-game console)
@@ -72,6 +74,8 @@ Generic IE / EEex / .menu gotchas (Lua 0-truthy, opcode 188/189 params, marshal-
 - `CHANGELOG.md` — per-release notes
 
 ## Workflow
+
+- **Recipient rest beta**: `BBParty.rest={on=0|1,preset=1..8}` remains in the separate `BuffBotParty` v1 handler. Standard eight-hour rests advance the native clock by about 36,000 ticks; require fresh rest timestamps for every living party member as well. Individual `Rest()` changes timestamps, `PartyRested()` can be consumed before UI polling, timestamps can differ by one tick, and adjacent native clock readings can reverse one tick. See `docs/recipient-first-live-acceptance.json`; do not replace this with spell-count reset detection or replay pending work from saves.
 
 - **Deploy**: `bash tools/deploy.sh` (reads `tools/deploy.conf` for game dir).
 - **Reload in running game**: `Infinity_DoFile` serves a memory cache and does NOT reread disk (verified 2026-04-19, re-confirmed 2026-07-11). Force-reload a changed module from disk via the `io.open`+`loadstring` pattern in `eeex-filesystem.md` (`forceLoad("override/BfBotX.lua")`, e.g. through the remote console); restart the game instead when many modules changed or init/listener re-registration is a concern.

@@ -18,17 +18,17 @@ import os
 import shutil
 
 STRINGS = [
-    "BuffBot 1",
-    "BuffBot 2",
-    "BuffBot 3",
-    "BuffBot 4",
-    "BuffBot 5",
-    "BuffBot 6",
-    "BuffBot 7",
-    "BuffBot 8",
+    "BuffBot: <BFBOT1>",
+    "BuffBot: <BFBOT2>",
+    "BuffBot: <BFBOT3>",
+    "BuffBot: <BFBOT4>",
+    "BuffBot: <BFBOT5>",
+    "BuffBot: <BFBOT6>",
+    "BuffBot: <BFBOT7>",
+    "BuffBot: <BFBOT8>",
 ]
 
-MARKER = "BuffBot 8"  # check last entries for the LAST string to detect full patching
+MARKER = "BuffBot: <BFBOT8>"  # check last entries for the LAST string to detect full patching
 
 HEADER_SIZE = 18
 ENTRY_SIZE = 26
@@ -73,7 +73,7 @@ def find_existing_base_strref(data, str_count, str_data_offset):
         if i < 0:
             continue
         text = read_entry(data, i, str_data_offset)
-        if text == "BuffBot 1":
+        if text == "BuffBot: <BFBOT1>":
             return i
     return None
 

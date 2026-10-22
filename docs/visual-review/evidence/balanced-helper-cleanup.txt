@@ -1,0 +1,6 @@
+before aura=1 speed=4 type=0
+BFBALSPD,189,4096,75973148,4,0
+A7_WLK1,188,4096,75971548,0,1
+after direct cleanup aura=1 speed=4 type=0
+BFBALSPD,189,4096,75973148,4,0
+A7_WLK1,188,4096,75971548,0,1

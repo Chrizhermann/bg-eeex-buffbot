@@ -1,0 +1,26 @@
+Native limited/unbalanced visible rows: 25
+Aura of Flaming Death	Limited duration balance: Effects can trigger later. Effects are never extended.
+Blade Barrier	Limited duration balance: External effect resource. Effects are never extended.
+Elemental Summoning	Limited duration balance: External effect resource. Effects are never extended.
+Energy Blades	Limited duration balance: External effect resource. Effects are never extended.
+Enrage	Limited duration balance: Delayed effect timing. Effects are never extended.
+EXPERTISE	Limited duration balance: Effects can trigger later. Effects are never extended.
+Globe of Blades	Limited duration balance: External effect resource. Effects are never extended.
+I-EXPERTISE	Limited duration balance: Effects can trigger later. Effects are never extended.
+Improved Alacrity	Limited duration balance: Casting-rule change. Effects are never extended.
+Improved Invisibility	Limited duration balance: Delayed effect timing. Effects are never extended.
+Invisibility, 10' Radius	Limited duration balance: Delayed effect timing. Effects are never extended.
+Mass Invisibility	Limited duration balance: Delayed effect timing. Effects are never extended.
+Mislead	Limited duration balance: Delayed effect timing. Effects are never extended.
+Power Attack — I-POWER_ATTACK	Limited duration balance: Effects can trigger later. Effects are never extended.
+Power Attack — POWER_ATTACK	Limited duration balance: Effects can trigger later. Effects are never extended.
+Project Image	Limited duration balance: Dependent spell delivery. Effects are never extended.
+Rapid Shot — RAPID_SHOT	Limited duration balance: Effects can trigger later. Effects are never extended.
+Righteous Wrath of the Faithful	Limited duration balance: Delayed effect timing. Effects are never extended.
+Shapeshift: Black Bear	Limited duration balance: External effect resource. Effects are never extended.
+Shapeshift: Brown Bear	Limited duration balance: External effect resource. Effects are never extended.
+Shapeshift: Wolf	Limited duration balance: External effect resource. Effects are never extended.
+Spirit Armor	Limited duration balance: Delayed effect timing. Effects are never extended.
+Time Stop	Limited duration balance: Delayed effect timing. Effects are never extended.
+Trollish Fortitude	Limited duration balance: External effect resource. Effects are never extended.
+True Sight	Limited duration balance: External effect resource. Effects are never extended.

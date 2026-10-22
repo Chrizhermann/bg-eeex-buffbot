@@ -1,0 +1,1259 @@
+{
+  "started": "2026-10-20T19:58:35.491380",
+  "isolation": "Fresh copied save and process for each item",
+  "cases": [
+    {
+      "matrixIndex": 1,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 351}",
+      "activated": true,
+      "after": 1,
+      "atWill": false,
+      "before": 2,
+      "caster": 0,
+      "casts": 1,
+      "counter": 0,
+      "destroyed": false,
+      "duration": 3600,
+      "effects": [
+        {
+          "expiry": 76024252,
+          "opcode": 218,
+          "res": "DW#GARGO",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 22,
+      "finished": 75970278,
+      "index": 0,
+      "itemType": 4,
+      "log": [
+        {
+          "msg": "Keldorn -> Gargoyle Boots (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 2,
+      "name": "Gargoyle Boots",
+      "party": 0,
+      "res": "BOOT12",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 3,
+        "item": "BOOT12",
+        "pack": 22,
+        "previous": "BOOT01",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 12402,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 2,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 352}",
+      "activated": true,
+      "after": 0,
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "casts": 1,
+      "counter": 1,
+      "destroyed": false,
+      "duration": 90,
+      "effects": [
+        {
+          "expiry": 75971636,
+          "opcode": 174,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971636,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971636,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971636,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971636,
+          "opcode": 328,
+          "res": "SPWI613A",
+          "slot": 0
+        },
+        {
+          "expiry": 75971636,
+          "opcode": 16,
+          "res": "SPWI613A",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970308,
+      "index": 1,
+      "itemType": 15,
+      "log": [
+        {
+          "msg": "Keldorn -> Darkfire Bow +5 \u00e2\u20ac\u201d Improved Haste (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 1,
+      "name": "Darkfire Bow +5",
+      "party": 0,
+      "res": "BOW21",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 38,
+        "item": "BOW21",
+        "pack": 18,
+        "previous": "",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 14208,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 18,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 353}",
+      "activated": true,
+      "after": 0,
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "casts": 1,
+      "counter": 1,
+      "destroyed": false,
+      "duration": 90,
+      "effects": [
+        {
+          "expiry": 75971638,
+          "opcode": 174,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 328,
+          "res": "SPWI613A",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 16,
+          "res": "SPWI613A",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970310,
+      "index": 1,
+      "itemType": 15,
+      "log": [
+        {
+          "msg": "Keldorn -> Darkfire Bow +4 \u00e2\u20ac\u201d Improved Haste (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 1,
+      "name": "Darkfire Bow +4",
+      "party": 0,
+      "res": "BOW20",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 38,
+        "item": "BOW20",
+        "pack": 18,
+        "previous": "",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 14238,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 4,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 354}",
+      "activated": true,
+      "after": 49,
+      "atWill": false,
+      "before": 50,
+      "caster": 0,
+      "casts": 1,
+      "counter": 0,
+      "destroyed": false,
+      "duration": 300,
+      "effects": [
+        {
+          "expiry": 75974755,
+          "opcode": 206,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 206,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 206,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 0,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 0,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 328,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 282,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 142,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 174,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 206,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 206,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75974755,
+          "opcode": 206,
+          "res": "SPWI114",
+          "slot": 0
+        },
+        {
+          "expiry": 75970285,
+          "opcode": 215,
+          "res": "SPWI114",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970282,
+      "index": 0,
+      "itemType": 1,
+      "log": [
+        {
+          "msg": "Keldorn -> Shield Amulet (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 50,
+      "name": "Shield Amulet",
+      "party": 0,
+      "res": "AMUL15",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 0,
+        "item": "AMUL15",
+        "pack": 18,
+        "previous": "AMUL27",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 12337,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 6,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 355}",
+      "activated": true,
+      "after": 0,
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "casts": 1,
+      "counter": 0,
+      "destroyed": false,
+      "duration": 90,
+      "effects": [
+        {
+          "expiry": 75971638,
+          "opcode": 174,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 206,
+          "res": "SPWI613",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 328,
+          "res": "SPWI613A",
+          "slot": 0
+        },
+        {
+          "expiry": 75971638,
+          "opcode": 16,
+          "res": "SPWI613A",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970311,
+      "index": 0,
+      "itemType": 1,
+      "log": [
+        {
+          "msg": "Keldorn -> Amulet of Cheetah Speed (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 1,
+      "name": "Amulet of Cheetah Speed",
+      "party": 0,
+      "res": "AMUL26",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 0,
+        "item": "AMUL26",
+        "pack": 18,
+        "previous": "AMUL27",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 14330,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 20,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 356}",
+      "atWill": false,
+      "before": 3,
+      "caster": 0,
+      "counter": 0,
+      "duration": -1,
+      "index": 0,
+      "itemType": 0,
+      "maxCharges": 3,
+      "name": "Undead Graft",
+      "party": 0,
+      "refusal": "cursed or undroppable item",
+      "res": "C0PMHN2",
+      "selfOnly": 1,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 37,
+        "item": "HAMM11",
+        "pack": 32,
+        "previous": "",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 8016,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 21,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 357}",
+      "atWill": false,
+      "before": 3,
+      "caster": 0,
+      "counter": 0,
+      "duration": -1,
+      "index": 0,
+      "itemType": 0,
+      "maxCharges": 3,
+      "name": "Undead Graft",
+      "party": 0,
+      "refusal": "cursed or undroppable item",
+      "res": "C0PMHN3",
+      "selfOnly": 1,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 15,
+        "item": "MISC3O",
+        "pack": 31,
+        "previous": "POTN55",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 7853,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 26,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 358}",
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "counter": 1,
+      "duration": 90,
+      "index": 1,
+      "itemType": 15,
+      "maxCharges": 1,
+      "name": "Darkfire Bow +4",
+      "party": 0,
+      "refusal": "cursed or undroppable item",
+      "res": "COMPB20",
+      "selfOnly": 1,
+      "started": 75970229,
+      "lastStage": {
+        "clock": 8010,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 27,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 359}",
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "counter": 1,
+      "duration": 90,
+      "index": 1,
+      "itemType": 15,
+      "maxCharges": 1,
+      "name": "Darkfire Bow +5",
+      "party": 0,
+      "refusal": "cursed or undroppable item",
+      "res": "COMPB21",
+      "selfOnly": 1,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 37,
+        "item": "HAMM11",
+        "pack": 32,
+        "previous": "",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 7932,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 161,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 360}",
+      "activated": true,
+      "after": 0,
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "casts": 1,
+      "counter": 1,
+      "destroyed": false,
+      "duration": 60,
+      "effects": [
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 267,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 267,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 169,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 169,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 174,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 215,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 185,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 20,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 20,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 20,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 1,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 328,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 142,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 101,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 120,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 206,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 120,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 291,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 205,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 101,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 173,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 28,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 85,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 30,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 84,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 27,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 29,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 86,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 87,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 88,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 89,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 31,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        },
+        {
+          "expiry": 75971196,
+          "opcode": 204,
+          "res": "SPWI413A",
+          "slot": 2
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970320,
+      "index": 1,
+      "itemType": 26,
+      "log": [
+        {
+          "msg": "Keldorn -> Stirv's Wrangler +2 [2] (equipped item) -> Sir Anomen",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 1,
+      "name": "Stirv's Wrangler +2",
+      "party": 0,
+      "res": "OHBSTAF1",
+      "selfOnly": 0,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 38,
+        "item": "OHBSTAF1",
+        "pack": 18,
+        "previous": "",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 14108,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 163,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 361}",
+      "atWill": false,
+      "before": 1,
+      "caster": 0,
+      "counter": 0,
+      "duration": 252,
+      "index": 0,
+      "itemType": 12,
+      "maxCharges": 1,
+      "name": "Shield of Fyrus Khal +2",
+      "party": 0,
+      "refusal": "no safe equipment slot",
+      "res": "OHNSHLD1",
+      "selfOnly": 1,
+      "started": 75970229,
+      "lastStage": {
+        "clock": 8414,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 168,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 362}",
+      "activated": true,
+      "after": 2,
+      "atWill": false,
+      "before": 3,
+      "caster": 0,
+      "casts": 1,
+      "counter": 0,
+      "destroyed": false,
+      "duration": 720,
+      "effects": [
+        {
+          "expiry": 75981117,
+          "opcode": 31,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75981117,
+          "opcode": 233,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75981117,
+          "opcode": 328,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75981117,
+          "opcode": 328,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75981117,
+          "opcode": 328,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75981117,
+          "opcode": 142,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75981117,
+          "opcode": 174,
+          "res": "SPWI606",
+          "slot": 0
+        },
+        {
+          "expiry": 75970347,
+          "opcode": 215,
+          "res": "SPWI606",
+          "slot": 0
+        }
+      ],
+      "finalSlot": 18,
+      "finished": 75970343,
+      "index": 0,
+      "itemType": 32,
+      "log": [
+        {
+          "msg": "Keldorn -> Cloak of the Dark Moon (equipped item) -> Keldorn",
+          "type": "CAST"
+        },
+        {
+          "msg": "Keldorn finished",
+          "type": "INFO"
+        },
+        {
+          "msg": "Total: 1 | Cast: 1 | Skipped: 0",
+          "type": "DONE"
+        }
+      ],
+      "maxCharges": 3,
+      "name": "Cloak of the Dark Moon",
+      "party": 0,
+      "res": "OHRCLCK4",
+      "selfOnly": 1,
+      "skips": 0,
+      "started": 75970229,
+      "swapPlan": {
+        "equip": 4,
+        "item": "OHRCLCK4",
+        "pack": 18,
+        "previous": "CLCK05",
+        "weapon": 35,
+        "weaponAbility": 0
+      },
+      "lastStage": {
+        "clock": 16033,
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    },
+    {
+      "matrixIndex": 169,
+      "startResult": "{\"ok\": true, \"result\": {\"cases\": 1, \"started\": true}, \"seq\": 363}",
+      "timeout": true,
+      "lastStage": {
+        "clock": 31988,
+        "current": {
+          "atWill": false,
+          "before": 1,
+          "caster": 4,
+          "counter": 0,
+          "duration": 54,
+          "index": 0,
+          "itemType": 7,
+          "maxCharges": 1,
+          "name": "Headband of the Devout",
+          "party": 0,
+          "res": "OHRHELM1",
+          "selfOnly": 1,
+          "started": 75970229,
+          "swapPlan": {
+            "equip": 6,
+            "item": "OHRHELM1",
+            "pack": 33,
+            "previous": "HELM32",
+            "weapon": 35,
+            "weaponAbility": 0
+          },
+          "timeout": "casting"
+        },
+        "index": 1,
+        "stage": "returned-_IsStateStale"
+      }
+    }
+  ],
+  "finished": "2026-10-20T20:02:57.353630"
+}

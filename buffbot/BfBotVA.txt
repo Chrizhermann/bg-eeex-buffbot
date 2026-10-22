@@ -1,0 +1,21 @@
+BuffBot Redux visual resources
+
+Frame kit: Infinity UI++ v1.15 by Pecca, adapted through the supplied
+Inventory Redux modular renderer and BuffBot Redux design manifests.
+Directional arrows: supplied rotations of UI++ RGDAROW1.
+Glyphs, layout and tokens: supplied BuffBot Redux design package.
+
+Control plates, checkbox states, popup rails/corners and the scrollbar are
+rebuilt from the supplied design PNG exports under private BFB-prefixed BAM
+names. This enables all four skins without an Infinity UI++ installation.
+No RG-prefixed game or UI++ resource is installed or overwritten.
+
+Optional UI++ fonts, spell/item icons and portraits are referenced by name
+from the game installation. Fonts, icons and portraits are not bundled.
+Stock NORMAL/STONESML fonts are used when the UI++ fonts are absent.
+
+The design package records the project owner's permission to use Pecca's
+artwork. Public redistribution remains subject to that permission.
+The original design package contains full provenance and font licenses.
+
+See BfBotVA.json for the exact generated resource allowlist and SHA-256 hashes.

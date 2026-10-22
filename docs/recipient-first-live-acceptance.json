@@ -1,0 +1,917 @@
+{
+  "date": "2026-10-19",
+  "environment": "isolated single-player EET copy, engine 2.6.6.0",
+  "personal_install_modified": false,
+  "visual_review": {
+    "resolution": [
+      2560,
+      1392
+    ],
+    "readable_panel": true,
+    "catalog_entries": 147,
+    "darkfire_improved_haste_visible": true,
+    "fix": "Render the parchment MOS using mosaic instead of an icon or a dark rectangle."
+  },
+  "source_assignment": {
+    "canCast": true,
+    "catalog": {
+      "casters": "Haer'Dalis, Jan, Simmeon",
+      "duration": "2.2m",
+      "key": "spl:SPIN137",
+      "name": "Improved Invisibility",
+      "uses": "1/3"
+    },
+    "requests": [
+      {
+        "active": false,
+        "caster": "Haer'Dalis",
+        "duration": 138,
+        "target": "Keldorn"
+      },
+      {
+        "active": false,
+        "caster": "Jan",
+        "duration": 138,
+        "target": "Simmeon"
+      }
+    ]
+  },
+  "manual_source_and_self_only": {
+    "auto": {
+      "caster": "Jan",
+      "duration": 138
+    },
+    "manual": {
+      "caster": "Simmeon",
+      "duration": 132
+    },
+    "requests": [
+      {
+        "assignment": "Haer'Dalis / 2.3m",
+        "name": "Improved Invisibility",
+        "request": {
+          "group": "spl:SPIN137",
+          "on": 1,
+          "target": "dv:KELDORN"
+        },
+        "target": "Keldorn",
+        "unavailable": false
+      },
+      {
+        "assignment": "Jan / 2.3m",
+        "name": "Improved Invisibility",
+        "request": {
+          "group": "spl:SPIN137",
+          "on": 1,
+          "target": "protagonist"
+        },
+        "target": "Simmeon",
+        "unavailable": false
+      }
+    ],
+    "selfOnly": [
+      {
+        "name": "Party",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Keldorn",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Simmeon",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Sir Anomen",
+        "reason": "Sir Anomen / 2.3m",
+        "unavailable": false
+      },
+      {
+        "name": "Jaheira",
+        "reason": "Jaheira / 1.8m",
+        "unavailable": false
+      },
+      {
+        "name": "Haer'Dalis",
+        "reason": "Self only",
+        "unavailable": true
+      },
+      {
+        "name": "Jan",
+        "reason": "Self only",
+        "unavailable": true
+      }
+    ]
+  },
+  "innate_execution": {
+    "casts": 2,
+    "counts": [
+      {
+        "after": 1,
+        "before": 1,
+        "caster": "Haer'Dalis"
+      },
+      {
+        "after": 1,
+        "before": 1,
+        "caster": "Jan"
+      }
+    ],
+    "effects": [
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPIN137"
+          }
+        ],
+        "target": "Keldorn"
+      },
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPIN137"
+          }
+        ],
+        "target": "Simmeon"
+      }
+    ],
+    "log": [
+      {
+        "msg": "Haer'Dalis -> Improved Invisibility -> Keldorn",
+        "type": "CAST"
+      },
+      {
+        "msg": "Jan -> Improved Invisibility -> Simmeon",
+        "type": "CAST"
+      },
+      {
+        "msg": "Jan finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Haer'Dalis finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Total: 2 | Cast: 2 | Skipped: 0",
+        "type": "DONE"
+      }
+    ],
+    "skips": 0,
+    "state": "done",
+    "timedOut": false
+  },
+  "innate_observation": {
+    "actors": [
+      {
+        "buttons": [
+          1
+        ],
+        "memorized": [
+          1
+        ],
+        "name": "Haer'Dalis"
+      },
+      {
+        "buttons": [
+          1
+        ],
+        "memorized": [
+          1
+        ],
+        "name": "Jan"
+      }
+    ],
+    "flags": 0,
+    "spellType": 4
+  },
+  "invisible_recipient_attempts": {
+    "assignments": [
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Keldorn"
+      },
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Simmeon"
+      }
+    ],
+    "casts": 2,
+    "counts": [
+      {
+        "after": 4,
+        "before": 4,
+        "caster": "Sir Anomen"
+      }
+    ],
+    "effects": [
+      {
+        "effects": [
+          {
+            "active": false,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Keldorn"
+      },
+      {
+        "effects": [
+          {
+            "active": false,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Simmeon"
+      }
+    ],
+    "group": "spl:SPPR306",
+    "log": [
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Keldorn",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Simmeon",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Total: 2 | Cast: 2 | Skipped: 0",
+        "type": "DONE"
+      }
+    ],
+    "skips": 0,
+    "state": "done",
+    "timedOut": false
+  },
+  "visible_prepared_execution": {
+    "assignments": [
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Jaheira"
+      },
+      {
+        "caster": "Sir Anomen",
+        "duration": 1200,
+        "target": "Jan"
+      }
+    ],
+    "casts": 2,
+    "counts": [
+      {
+        "after": 1,
+        "before": 3,
+        "caster": "Sir Anomen"
+      }
+    ],
+    "effects": [
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Jaheira"
+      },
+      {
+        "effects": [
+          {
+            "active": true,
+            "resref": "SPPR306"
+          }
+        ],
+        "target": "Jan"
+      }
+    ],
+    "group": "spl:SPPR306",
+    "log": [
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Jaheira",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen -> Protection From Fire -> Jan",
+        "type": "CAST"
+      },
+      {
+        "msg": "Sir Anomen finished",
+        "type": "INFO"
+      },
+      {
+        "msg": "Total: 2 | Cast: 2 | Skipped: 0",
+        "type": "DONE"
+      }
+    ],
+    "skips": 0,
+    "state": "done",
+    "timedOut": false
+  },
+  "invisibility_warning": {
+    "details": "Source: Jan / effective caster level 18\nTarget has Improved Invisibility; the engine may reject this cast.",
+    "presets": {
+      "active": 2,
+      "presets": [
+        {
+          "name": "Long Buffs",
+          "requests": [
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAHEIRA"
+            },
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAN"
+            }
+          ]
+        },
+        {
+          "name": "Short Buffs",
+          "requests": [
+            {
+              "group": "spl:SPWI613",
+              "on": 1,
+              "source": "dv:JAN",
+              "target": "dv:KELDORN"
+            }
+          ]
+        }
+      ],
+      "v": 1
+    },
+    "requests": [
+      {
+        "assignment": "Jan / 3.1m / improved invisible",
+        "name": "Improved Haste",
+        "request": {
+          "group": "spl:SPWI613",
+          "on": 1,
+          "source": "dv:JAN",
+          "target": "dv:KELDORN"
+        },
+        "target": "Keldorn",
+        "unavailable": false
+      }
+    ]
+  },
+  "save_load": {
+    "details": "Source: Jan / effective caster level 18\nTarget has Improved Invisibility; the engine may reject this cast.",
+    "presets": {
+      "active": 2,
+      "presets": [
+        {
+          "name": "Long Buffs",
+          "requests": [
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAHEIRA"
+            },
+            {
+              "group": "spl:SPPR306",
+              "on": 1,
+              "target": "dv:JAN"
+            }
+          ]
+        },
+        {
+          "name": "Short Buffs",
+          "requests": [
+            {
+              "group": "spl:SPWI613",
+              "on": 1,
+              "source": "dv:JAN",
+              "target": "dv:KELDORN"
+            }
+          ]
+        }
+      ],
+      "v": 1
+    },
+    "requests": [
+      {
+        "assignment": "Jan / 3.1m / improved invisible",
+        "name": "Improved Haste",
+        "request": {
+          "group": "spl:SPWI613",
+          "on": 1,
+          "source": "dv:JAN",
+          "target": "dv:KELDORN"
+        },
+        "target": "Keldorn",
+        "unavailable": false
+      }
+    ],
+    "saveLoadPassed": true
+  },
+  "limits": [
+    "The SPIN137 innate stayed available after its successful casts; this is recorded, not treated as proof of resource consumption.",
+    "CAST log entries record issued actions; invisible recipients can make the engine reject an action without spending a slot.",
+    "Expected durations come from metadata; remaining effect lifetimes were not measured.",
+    "Multiplayer, cross-character equipment sharing and balanced Quick Cast remain unverified. Item and standard completed-rest checks cover the specific cases below."
+  ],
+  "selection_context_and_toggle": {
+    "contextPassed": true,
+    "details": "Source: Jan / effective caster level 18\nTarget has Improved Invisibility; the engine may reject this cast.",
+    "group": "spl:SPWI613",
+    "togglePassed": true
+  },
+  "active_buff_skip": {
+    "after": {
+      "Jaheira": 2,
+      "Sir Anomen": 1
+    },
+    "before": {
+      "Jaheira": 2,
+      "Sir Anomen": 1
+    },
+    "casts": 0,
+    "skips": 2,
+    "state": "done"
+  },
+  "item_activation": {
+    "method": "Remote Lua harness in the isolated game. Native item actions; raw native charge counters and timed effects checked independently of the executor log. No personal game changes or test saves written.",
+    "fixtures": "Original BOOT12 and Haer'Dalis BOW21 used first. Additional BOW20/BOW21 and AROW01 fixtures created with native CreateItem actions. New BOW20 marked identified. Between cases, opcode 321 removed only the named test buff effects. Charge counters were never directly refilled.",
+    "boots_inventory_initial": {
+      "item": "BOOT12",
+      "slot": 22,
+      "charges_before": 2,
+      "charges_after": 1,
+      "effect_confirmed": [
+        {
+          "amount": 2,
+          "flags": 0,
+          "op": 218,
+          "res": "DW#GARGO"
+        }
+      ],
+      "gear_exchange": false
+    },
+    "boots_active_skip": {
+      "item": "BOOT12",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 0,
+      "skipped": 1,
+      "before": {
+        "slot": 22,
+        "charges": [
+          1,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 22,
+        "charges": [
+          1,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      }
+    },
+    "boots_swap": {
+      "item": "BOOT12",
+      "mode": "swap",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 22,
+        "charges": [
+          1,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 22,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "dw#gargo"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "all_inventory_positions_restored": true
+    },
+    "darkfire_plus5_no_ammunition": {
+      "item": "BOW21",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 18,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": false,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 18,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      }
+    },
+    "darkfire_plus4_no_ammunition": {
+      "item": "BOW20",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 24,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": false,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      },
+      "after": {
+        "slot": 24,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": []
+      }
+    },
+    "darkfire_plus5_with_ammunition": {
+      "item": "BOW21",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 1,
+      "skipped": 0,
+      "before": {
+        "slot": 18,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": false,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": false,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      },
+      "after": {
+        "slot": 18,
+        "charges": [
+          0,
+          0,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      }
+    },
+    "conditional_swap_guard": [
+      {
+        "reason": "conditional item usability; equip manually"
+      }
+    ],
+    "timing_observation": "Darkfire delivers a child spell after the item-use action. Final effect assertions allowed ten seconds after the executor stopped issuing actions. The first one-second check was too early and is not classified as a failed activation.",
+    "scope_limits": [
+      "Darkfire conditional opcode-319 equipment eligibility remains unsupported by automatic swap planning. Inventory mode retains upstream behavior; this does not prove the recipient may wear the item.",
+      "No cross-character sharing, interrupted swap recovery, actual duration measurement, or broad item-compatibility claim."
+    ],
+    "darkfire_active_skip": {
+      "item": "BOW20",
+      "mode": "inventory",
+      "state": "done",
+      "issued": 0,
+      "skipped": 1,
+      "before": {
+        "slot": 24,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      },
+      "after": {
+        "slot": 24,
+        "charges": [
+          0,
+          1,
+          0
+        ],
+        "effects": [
+          {
+            "active": true,
+            "leaf": "SpWi613"
+          },
+          {
+            "active": true,
+            "leaf": "SPWI613A"
+          }
+        ],
+        "selected_weapon": 35,
+        "selected_ability": 0,
+        "recovery_journal": null,
+        "ammo": [
+          {
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "res": "AROW01",
+            "slot": 11
+          }
+        ]
+      }
+    }
+  },
+  "completed_rest": {
+    "method": "Private EET game, native world-screen Rest button. Diagnostic-only in-memory AREA flag enabled indoor rest, then was restored. No personal installation changes.",
+    "standard_rest": {
+      "active": 2,
+      "after": {
+        "dv:ANOMEN": 2,
+        "dv:JAHEIRA": 2
+      },
+      "afterSample": {
+        "clock": 316866,
+        "complete": true,
+        "oldestStamp": 75932917,
+        "owner": 149358822,
+        "stamp": 75932917,
+        "time": 75933111
+      },
+      "before": {
+        "dv:ANOMEN": 4,
+        "dv:JAHEIRA": 2
+      },
+      "beforeCast": {
+        "dv:ANOMEN": 4,
+        "dv:JAHEIRA": 2
+      },
+      "beforeSample": {
+        "clock": 295626,
+        "complete": true,
+        "oldestStamp": 75896373,
+        "owner": 149358822,
+        "stamp": 75896373,
+        "time": 75896918
+      },
+      "casts": 2,
+      "effects": [
+        {
+          "active": true,
+          "name": "Jaheira"
+        },
+        {
+          "active": true,
+          "name": "Jan"
+        }
+      ],
+      "label": "After rest: Long Buffs",
+      "pending": false,
+      "rest": {
+        "on": 1,
+        "preset": 1
+      },
+      "restStatus": "Casting rest plan",
+      "scripted": false,
+      "skips": 0,
+      "startCount": 1,
+      "state": "done"
+    },
+    "failed_rest_attempt": {
+      "after": {
+        "clock": 379307,
+        "complete": true,
+        "oldestStamp": 75932917,
+        "owner": 149358822,
+        "stamp": 75932917,
+        "time": 75933229
+      },
+      "before": {
+        "clock": 363295,
+        "complete": true,
+        "oldestStamp": 75932917,
+        "owner": 149358822,
+        "stamp": 75932917,
+        "time": 75933111
+      },
+      "pending": false,
+      "spawned": {},
+      "startCount": 0,
+      "state": "done"
+    },
+    "failed_attempt_limit": "An enabled 100-percent interruption table prevented completion. No creature was observed spawning, so this is evidence for a failed-rest negative, not a full wilderness ambush test.",
+    "single_character_rest_reference": {
+      "before_rest_stamp": 75787759,
+      "after_rest_stamp": 75787922,
+      "reset_characters": [
+        "Keldorn"
+      ],
+      "game_time_before": 75787921,
+      "game_time_after": 75787950
+    },
+    "native_timing": {
+      "observed_eight_hour_clock_advances": [
+        35998,
+        35999
+      ],
+      "party_timestamp_spread_ticks": 1,
+      "adjacent_clock_rewind_tolerance_ticks": 2,
+      "transient_party_rested_trigger_required": false
+    },
+    "scope": "Standard eight-hour single-player rests. Shortened/custom rests, full wilderness ambushes, store-room flow, and story cutscene interactions need broader native acceptance.",
+    "save_load": {
+      "active": 2,
+      "casts": 0,
+      "label": "After rest: Long Buffs",
+      "paused": true,
+      "pending": false,
+      "rest": {
+        "on": 1,
+        "preset": 1
+      },
+      "saveLoadPassed": true,
+      "state": "idle"
+    }
+  }
+}

@@ -30,7 +30,13 @@ _spec.loader.exec_module(eeex_globals)
 # EEex_* names BuffBot may use although EEex v1.3.1 does not define them,
 # each with the reason. Only for deliberate, guarded probes (for example of a
 # newer EEex function behind `type(...) == "function"`). Stale entries fail.
-ALLOWED_UNDEFINED: dict[str, str] = {}
+ALLOWED_UNDEFINED: dict[str, str] = {
+    "EEex_CChitin": (
+        "Optional generated native class binding used by EEex's own UncapFPS adapter; "
+        "not enumerated in the pinned Lua/loader export list. Fast-forward probes it "
+        "under pcall, validates the numeric rate, and declines without a binding."
+    ),
+}
 
 
 @pytest.fixture(scope="module")

@@ -22,8 +22,8 @@ BfBot.Scan._SLOT_WEAPON_MAX = 38  --   indexes m_items directly; verified: STAF1
 BfBot.Scan._ITEM_COUNT_OFF = 0x1C -- CItem: count/charges u16 (no named field)
 BfBot.Scan._ABIL_TARGET_OFF = 0xC -- Item_ability_st: target byte (== ability.actionType)
 BfBot.Scan._CAT_POTION = 9        -- Item_Header_st.itemType
-BfBot.Scan._CAT_SCROLL = 11       -- deferred by issue #21
-BfBot.Scan._CAT_WAND = 35         -- deferred by issue #21
+BfBot.Scan._CAT_SCROLL = 11       -- manual inclusion: consumes valuable resources
+BfBot.Scan._CAT_WAND = 35         -- manual inclusion: spends charges
 
 --- Get item ability i via manual pointer arithmetic.
 -- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header sizeof=114
@@ -171,13 +171,16 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
     local durCat = "instant"
     local durationLeafResrefs = nil
     if header and ability then
-        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(header, ability)
+        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(
+            header, ability, nil, nil, nil, casterLevel)
         durCat = BfBot.Class.GetDurationCategory(duration)
     end
 
     -- Targeting flags (0/1 integers — no booleans in scan entries)
     local isAoE = (classResult and classResult.isAoE) and 1 or 0
     local isSelfOnly = (classResult and classResult.isSelfOnly) and 1 or 0
+    local radialParty=BfBot.Class.IsRadialParty and BfBot.Class.IsRadialParty(ability) or false
+    if radialParty then isAoE,isSelfOnly=1,0 end
 
     -- Variant detection (0/1 integer flag + variant array)
     local variants, variantsKnown = _variantsForLevel(
@@ -208,10 +211,12 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
         count = 0,          -- filled in by count overlay
         level = header.spellLevel or 0,
         spellType = spellType,
+        casterLevel = casterLevel,
         duration = duration,
         durCat = durCat,
         isAoE = isAoE,
         isSelfOnly = isSelfOnly,
+        radialParty = radialParty,
         isProjectImage = isProjectImage,
         hasVariants = hasVariants,
         variants = variants,
@@ -313,9 +318,166 @@ local _itemRaceMasks = {
     [5]=0x04000000, [6]=0x10000000, [7]=0x80000000,
 }
 
+-- BG2EE 2.6.6 native inventory eligibility, including conditional usability.
+-- No call is made on an unknown executable or a patched function body.
+local _nativeItemCheck, _nativeItemFFI, _nativeItemChecked
+function BfBot.Scan._NativeCanWearItem(sprite, item)
+    if not _nativeItemChecked then
+        _nativeItemChecked = true
+        local ok = pcall(function()
+            if not EEex_GetImageBase then return end
+            local base = EEex_GetImageBase()
+            if EEex_ReadU16(base) ~= 0x5A4D then return end
+            local pe = base + EEex_ReadU32(base + 0x3C)
+            if EEex_ReadU32(pe) ~= 0x4550 or EEex_ReadU32(pe + 8) ~= 0x609437B3
+                or EEex_ReadU32(pe + 24 + 56) ~= 0x3530000 then return end
+            local address = base + 0x271550
+            local signature = {0x48,0x89,0x74,0x24,0x20,0x57,0x48,0x83,0xEC,0x30,0x49,0x8B,0xF8}
+            for i, byte in ipairs(signature) do
+                if EEex_ReadU8(address + i - 1) ~= byte then return end
+            end
+            -- Use the complete party inventory query: it also checks blocked
+            -- item types after the ordinary class/kit/conditional predicate.
+            -- Pin both calls, rather than trusting a common function prologue.
+            for _, probe in ipairs({
+                {0x2715D7,{0xE8,0x74,0x00,0x00,0x00}},
+                {0x271617,{0xE8,0xE4,0x76,0xF8,0xFF}},
+            }) do
+                for i,byte in ipairs(probe[2]) do
+                    if EEex_ReadU8(base+probe[1]+i-1)~=byte then return end
+                end
+            end
+            _nativeItemFFI = require('ffi')
+            _nativeItemCheck = _nativeItemFFI.cast('int(*)(void*,int,void*,int*,int)', address)
+        end)
+        if not ok then _nativeItemCheck = nil end
+    end
+    if not _nativeItemCheck then return nil, 'native item usability unavailable' end
+    local ok, allowed, reason = pcall(function()
+        if not sprite or not item then return false, 'item unavailable' end
+        local chitin = rawget(_G, 'EEex_EngineGlobal_CBaldurChitin')
+            or (EngineGlobals and EngineGlobals.g_pBaldurChitin)
+        if not chitin then return false, 'game unavailable' end
+        local index=EEex_Sprite_GetPortraitIndex(sprite)
+        if type(index)~='number' or index<0 or index>5 then
+            return nil,'native party inventory query unavailable'
+        end
+        local why = _nativeItemFFI.new('int[1]', -1)
+        local ptr = function(value) return _nativeItemFFI.cast('void*', EEex_UDToPtr(value)) end
+        local result = _nativeItemCheck(ptr(chitin.m_pObjectGame),index,ptr(item),why,0)
+        return result ~= 0, result == 0 and 'item cannot be worn by this character' or nil
+    end)
+    if not ok then return nil, 'native item usability unavailable' end
+    return allowed, reason
+end
+
+-- XEquipItem's EQUIP path is for equipment destinations. Returning equipment
+-- to a backpack through that path corrupted native CString state in testing.
+-- Use the stock inventory exchanges for moves into an EMPTY backpack slot.
+local _packAPI, _packChecked, _packBusy
+local function packAPI()
+    if _packChecked then return _packAPI end
+    _packChecked=true
+    local ok=pcall(function()
+        if not EEex_GetImageBase then return end
+        local base=EEex_GetImageBase()
+        if EEex_ReadU16(base)~=0x5A4D then return end
+        local pe=base+EEex_ReadU32(base+0x3C)
+        if EEex_ReadU32(pe)~=0x4550 or EEex_ReadU32(pe+8)~=0x609437B3
+            or EEex_ReadU32(pe+80)~=0x3530000 then return end
+        for _,probe in ipairs({
+            {0x28F960,{0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x56,0x41,0x57}},
+            {0x290E00,{0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56}},
+        })do
+            for i,byte in ipairs(probe[2])do
+                if EEex_ReadU8(base+probe[1]+i-1)~=byte then return end
+            end
+        end
+        local ffi=require('ffi')
+        _packAPI={ffi=ffi,
+            swap=ffi.cast('int(*)(void*,short,short,void**,int*,unsigned short,unsigned char,void*)',base+0x28F960),
+            pack=ffi.cast('int(*)(void*,short,void**,short,int*,unsigned short,unsigned char,int,int)',base+0x290E00)}
+    end)
+    if not ok then _packAPI=nil end
+    return _packAPI
+end
+function BfBot.Scan.NativeBackpackMovesAvailable() return packAPI()~=nil end
+
+function BfBot.Scan._NativeMoveToBackpack(sprite,source,destination)
+    local api=packAPI()
+    if not api then return false,'native inventory move unavailable; equip manually' end
+    if _packBusy then return false,'inventory move already in progress' end
+    if type(source)~='number' or source<0 or source>38 or source~=math.floor(source)
+        or source==10 or source==34 or type(destination)~='number'
+        or destination<18 or destination>33 or destination~=math.floor(destination) then
+        return false,'invalid inventory move'
+    end
+    local ffi=api.ffi
+    local chitin=rawget(_G,'EEex_EngineGlobal_CBaldurChitin')
+        or (EngineGlobals and EngineGlobals.g_pBaldurChitin)
+    if not chitin or not sprite then return false,'inventory owner unavailable' end
+    local game=chitin.m_pObjectGame;local gamePtr=EEex_UDToPtr(game)
+    -- These stock routines index m_charactersPortrait, not m_characters.
+    local index=EEex_Sprite_GetPortraitIndex(sprite)
+    if type(index)~='number' or index<0 or index>5
+        or EEex_Read32(gamePtr+0x6618+index*4)~=sprite.m_id then
+        return false,'inventory owner changed'
+    end
+    local arr=sprite.m_equipment.m_items
+    local item=arr:get(source)
+    if source==destination then return item~=nil end
+    if not item or arr:get(destination) then return false,'inventory slots changed' end
+    local inventory=EEex_Read64(EEex_UDToPtr(chitin)+0x10C8)
+    if not inventory or inventory==0 then return false,'inventory unavailable' end
+    local cursor=ffi.cast('void**',inventory+0x50)
+    if cursor[0]~=nil then return false,'finish moving the held inventory item first' end
+    local pointer=EEex_UDToPtr(item)
+    local held=ffi.new('void*[1]');local why=ffi.new('int[1]',-1)
+    local gameArg=ffi.cast('void*',gamePtr)
+    -- Keep native custody strongly reachable until it is back in an engine
+    -- owner. This cell is never the UI cursor cell while a swap is executing.
+    BfBot.Scan._nativePackHeld=held
+    local function exchange(slot)
+        if slot>=18 and slot<=33 or slot==0x7FFF then
+            return api.pack(gameArg,index,held,slot,why,65535,0,0,0)
+        end
+        return api.swap(gameArg,index,slot,held,why,65535,0,nil)
+    end
+    _packBusy=true
+    local ok,result=pcall(function()
+        if exchange(source)==0 or held[0]==nil then return false end
+        if tonumber(ffi.cast('uintptr_t',held[0]))~=pointer or arr:get(source) then return false end
+        if exchange(destination)==0 or held[0]~=nil then return false end
+        local landed=arr:get(destination)
+        return landed and EEex_UDToPtr(landed)==pointer and arr:get(source)==nil
+    end)
+    if held[0]~=nil then
+        -- A refused drop normally rolls back to the now-empty source. If a
+        -- mod changes eligibility, use another free pack slot before exposing
+        -- native cursor custody for manual recovery. Never discard a CItem.
+        pcall(function()
+            if not arr:get(source) then exchange(source) end
+            if held[0]~=nil then exchange(0x7FFF) end
+        end)
+        if held[0]~=nil and cursor[0]==nil then
+            cursor[0]=held[0];held[0]=nil
+            _packBusy=false;BfBot.Scan._nativePackHeld=nil
+            return false,'item remains on the inventory cursor; open inventory to place it'
+        end
+    end
+    _packBusy=false
+    if held[0]==nil then BfBot.Scan._nativePackHeld=nil end
+    if not ok or not result then return false,'inventory move refused; recovery record retained' end
+    return true
+end
+
 -- XEquipItem bypasses the inventory UI's eligibility checks. Cover normal
 -- restrictions here; unknown custom conditional usability is not guessed.
-function BfBot.Scan._CanWearItem(sprite, header)
+function BfBot.Scan._CanWearItem(sprite, header, item)
+    if item then
+        local allowed, reason = BfBot.Scan._NativeCanWearItem(sprite, item)
+        if allowed ~= nil then return allowed, reason end
+    end
     local ok, allowed, reason = pcall(function()
         local ptr = EEex_UDToPtr(header)
         local restrictions = EEex_ReadU32(ptr + 0x1E)
@@ -392,6 +554,7 @@ end
 
 function BfBot.Scan._ItemEquipSlots(header)
     local itemType = header.itemType
+    if itemType==0 or itemType==9 or itemType==11 or itemType==13 or itemType==35 then return {15,16,17} end
     local mapped
     pcall(function()
         local tda = EEex_Resource_Load2DA("ITEMTYPE")
@@ -401,6 +564,7 @@ function BfBot.Scan._ItemEquipSlots(header)
     -- Chest armor (including robes) is never automatically exchanged.
     if mapped == 1 or itemType == 2 or (itemType >= 60 and itemType <= 68) then return {} end
     if mapped and mapped >= 0 then
+        if mapped>=15 and mapped<=17 then return {15,16,17} end
         if mapped == 7 or mapped == 8 then return {7,8} end
         if mapped >= 35 and mapped <= 38 then return {35,36,37,38} end
         if mapped <= 9 then return {mapped} end
@@ -418,22 +582,25 @@ function BfBot.Scan._PlanItemSwap(sprite, row)
     if not header then return nil, "item unavailable" end
     local destinations = BfBot.Scan._ItemEquipSlots(header)
     if #destinations == 0 then return nil, "item must be equipped manually" end
-    local allowed, reason = BfBot.Scan._CanWearItem(sprite, header)
+    local source = sprite.m_equipment.m_items:get(row.itemSlot)
+    local allowed, reason = BfBot.Scan._CanWearItem(sprite, header, source)
     if not allowed then return nil, reason end
     local arr, copies = sprite.m_equipment.m_items, {}
     for i = 0, 38 do
         local item = arr:get(i)
         if item then
-            local r = item.pRes.resref:get()
+            local r = item.pRes.resref:get():upper()
             copies[r] = (copies[r] or 0) + 1
         end
     end
-    if copies[row.itemResref] ~= 1 then return nil, "duplicate equipment; equip the desired copy manually" end
+    if copies[row.itemResref:upper()] ~= 1 then return nil, "duplicate equipment; equip the desired copy manually" end
     local source = arr:get(row.itemSlot)
-    if not source or source.pRes.resref:get() ~= row.itemResref then return nil, "item moved" end
+    if not source or source.pRes.resref:get():upper() ~= row.itemResref:upper() then return nil, "item moved" end
     local function movable(item, hdr)
+        -- Droppable is a positive ITM flag. XEquipItem can equip a scripted
+        -- non-droppable copy, but the normal inventory cannot return it.
         return bit.band(item.m_flags, 8) == 0
-            and bit.band(EEex_ReadU32(EEex_UDToPtr(hdr) + 0x18), 0x10) == 0
+            and bit.band(EEex_ReadU32(EEex_UDToPtr(hdr) + 0x18), 0x14) == 4
     end
     if not movable(source, header) then return nil, "cursed or undroppable item" end
     -- Prefer a free ring/weapon slot to disturbing another piece of gear.
@@ -442,9 +609,13 @@ function BfBot.Scan._PlanItemSwap(sprite, row)
         if emptyA ~= emptyB then return emptyA end
         return a < b
     end)
+    local missingPackAdapter=false
     for _, destination in ipairs(destinations) do
         local old = arr:get(destination)
-        local oldResref = old and old.pRes.resref:get() or ""
+        if not old and not BfBot.Scan.NativeBackpackMovesAvailable() then
+            missingPackAdapter=true;goto nextDestination
+        end
+        local oldResref = old and old.pRes.resref:get():upper() or ""
         local oldHeader = old and EEex_Resource_Demand(oldResref, "ITM")
         if old and (copies[oldResref] ~= 1 or not oldHeader or not movable(old, oldHeader)) then
             goto nextDestination
@@ -456,21 +627,34 @@ function BfBot.Scan._PlanItemSwap(sprite, row)
             goto nextDestination
         end
         if destination == 9 then
-            local selected = arr:get(sprite.m_equipment.m_selectedWeapon)
+            local selectedSlot=sprite.m_equipment.m_selectedWeapon
+            local selected = arr:get(selectedSlot)
+            -- A ranged selection can point at its ammunition. Ask EEex for
+            -- the actual launcher before deciding whether the other hand is
+            -- free; an arrow's flags do not describe a two-handed bow.
+            if selected and sprite.getLauncher and selected.getAbility then
+                local ok,launcher=pcall(function()
+                    return sprite:getLauncher(selected:getAbility(sprite.m_equipment.m_selectedWeaponAbility))
+                end)
+                if not ok then goto nextDestination end
+                selected=launcher or selected
+            elseif selectedSlot>=11 and selectedSlot<=14 then
+                goto nextDestination
+            end
             local selectedHeader = selected and EEex_Resource_Demand(selected.pRes.resref:get(), "ITM")
             if selectedHeader and bit.band(EEex_ReadU32(EEex_UDToPtr(selectedHeader) + 0x18), 2) ~= 0 then
                 goto nextDestination
             end
         end
         do return {
-            item = row.itemResref, previous = oldResref,
+            item = row.itemResref:upper(), previous = oldResref,
             pack = row.itemSlot, equip = destination,
             weapon = sprite.m_equipment.m_selectedWeapon,
             weaponAbility = sprite.m_equipment.m_selectedWeaponAbility,
         } end
         ::nextDestination::
     end
-    return nil, "no safe equipment slot"
+    return nil, missingPackAdapter and "native inventory move unavailable; equip manually" or "no safe equipment slot"
 end
 
 BfBot.Scan._itemNames = {}
@@ -543,12 +727,8 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         if not hdrOk or not header then return end
         if (header.abilityCount or 0) == 0 then return end  -- passive-only
         local itemType = header.itemType or 0
-        -- Scrolls and wands remain explicitly deferred even when placed in a
-        -- quickitem slot; issue #21 covers potions and equipped activatables.
-        if itemType == BfBot.Scan._CAT_SCROLL
-            or itemType == BfBot.Scan._CAT_WAND then
-            return
-        end
+        -- Scroll/wand powers stay available to manual Add. They never seed the
+        -- recipient browser automatically, to avoid spending them by accident.
         for index = 0, header.abilityCount - 1 do
         local aOk, ability = pcall(BfBot.Scan._GetItemAbility, header, index)
         if not (aOk and ability) then goto nextAbility end
@@ -570,6 +750,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
             count = 1
         end
         if items[key] then
+            items[key].planningSources[#items[key].planningSources+1]={slot=slot,count=count}
             items[key].count = items[key].count + count
             if count > 0 then
                 table.insert(items[key].sources, { slot = slot, count = count })
@@ -579,11 +760,17 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         local cOk, classResult = pcall(
             BfBot.Class.Classify, resref, header, ability, "itm", key)
         if not (cOk and classResult) then goto nextAbility end
-        -- Keep a user-excluded buff in the transient catalog so the Add
-        -- picker can recover it. Ordinary non-buffs remain out of scope.
-        if not classResult.isBuff and not classResult.overridden then goto nextAbility end
+        -- Discovery is independent of the buff verdict. Keep supported
+        -- activated powers in the transient catalog for manual inclusion;
+        -- preset seeding/auto-merge still require class.isBuff.
 
-        local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
+        local duration, _, leafs = BfBot.Class.GetDuration(header, ability,
+            nil, nil, nil, function(child)
+                local ok, level = pcall(function()
+                    return sprite:getCasterLevelForSpell(child, true)
+                end)
+                return ok and type(level) == "number" and level > 0 and level or 1
+            end)
         -- ITM naming: identifiedName FIRST (genericName is the
         -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
         local name = _tryStrref(header.identifiedName)
@@ -599,10 +786,15 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         items[key] = {
             resref = key,
             kind = "itm",
+            itemCandidate = 1,
+            requiresChoice = classResult.requiresSelection or false,
             itemResref = resref,
             abilityIdx = index,
+            atWill = itemType ~= BfBot.Scan._CAT_POTION
+                and EEex_ReadU16(ptr + 0x22) == 0 and 1 or 0,
             itemType = itemType,
             sources = count > 0 and { { slot = slot, count = count } } or {},
+            planningSources = {{slot=slot,count=count}},
             itemEffects = _itemEffectSignatures(header, ability),
             itemMultiAbility = header.abilityCount > 1 and 1 or 0,
             name = name,
@@ -642,7 +834,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
                 if bit.band(flags, 0x1) == 0 then goto nextItem end
 
                 local resref = nil
-                pcall(function() resref = it.pRes.resref:get() end)
+                pcall(function() resref = it.pRes.resref:get():upper() end)
                 if resref and resref ~= "FIST" then
                     _consider(resref, it, slot)
                 end

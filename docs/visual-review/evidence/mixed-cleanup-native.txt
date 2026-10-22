@@ -1,0 +1,2 @@
+BOOT12 owner=0 pack=22 charges=1
+No active run, loan journal, duration session or acceleration helper remains.

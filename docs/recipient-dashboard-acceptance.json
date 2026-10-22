@@ -1,0 +1,189 @@
+{
+  "date": "2026-10-19",
+  "environment": "isolated single-player EET copy, engine 2.6.6.0",
+  "personal_install_modified": false,
+  "automated": {
+    "full_suite_passed": 790,
+    "deselected": 5,
+    "deselection_reason": "Existing Windows symbolic-link privilege tests.",
+    "new_dashboard_tests": 42,
+    "final_targeted_passed": 140
+  },
+  "native": {
+    "catalog": 147,
+    "checks": {
+      "blocked_reason": "Self only",
+      "hide_restore": true,
+      "manual_include": "spl:SPWI812",
+      "party": "Bless",
+      "pickers": true,
+      "summary_order": true
+    },
+    "portrait": "NKELDORM",
+    "refresh_ms": 7,
+    "rows": 95
+  },
+  "visual_review": {
+    "resolution": [
+      2560,
+      1392
+    ],
+    "tabs_and_preset_share_top_row": true,
+    "title_banner_removed": true,
+    "duplicate_recipient_editor_removed": true,
+    "spell_icons": true,
+    "eligible_recipient_portraits": true,
+    "ineligible_cells_marked": false,
+    "search_field_visible": true,
+    "summary_grouped_by_recipient": true,
+    "coverage_is_a_separate_compact_matrix": false,
+    "ineligible_cells_hidden_on_dashboard": true,
+    "coverage_preserves_fixed_recipient_columns": false,
+    "dropdown_and_modal_frames": true,
+    "coverage_removed": true
+  },
+  "native_input_verified": [
+    "Party checkbox",
+    "Summary tab",
+    "Coverage tab",
+    "Preset dropdown"
+  ],
+  "save_contract": "Existing BuffBotParty v1 handler; validated numeric hidden/include maps. Existing requests and source locks are retained.",
+  "pending": [
+    "Alternate resolutions/fonts and full keyboard interaction matrix.",
+    "Same-name resources remain distinct until mechanical equivalence is established.",
+    "Cross-character item sharing and balanced quick casting remain separate milestones."
+  ],
+  "polish_verification": {
+    "focused_tests_passed": 60,
+    "full_suite_counts": "The 764-pass full-suite result above predates this polish; this change was checked with 60 focused tests.",
+    "native_packed_recipient_cells_checked": 210,
+    "native_dashboard_rows": 95,
+    "native_examples": [
+      {
+        "buff": "Armor of Faith",
+        "recipients": [
+          "Sir Anomen",
+          "Jaheira"
+        ]
+      },
+      {
+        "buff": "Aura of Flaming Death",
+        "recipients": [
+          "Sir Anomen"
+        ]
+      },
+      {
+        "buff": "Avoid Death",
+        "recipients": [
+          "Jan"
+        ]
+      }
+    ],
+    "dropdown_and_rename_frame_geometry_verified": true,
+    "dropdown_and_rename_visually_reviewed": true,
+    "unavailable_planned_recipients_remain_visible": true,
+    "personal_install_modified": false
+  },
+  "header_duration_verification": {
+    "focused_tests_passed": 117,
+    "dashboard_tests": 23,
+    "native": {
+      "duration_column_informational": true,
+      "durations": [
+        {
+          "duration": "1.8m - 2.3m",
+          "name": "Armor of Faith"
+        },
+        {
+          "duration": "1.0m",
+          "name": "Aura of Flaming Death"
+        },
+        {
+          "duration": "30s",
+          "name": "Avoid Death"
+        }
+      ],
+      "headers": [
+        "Icon",
+        "Name",
+        "Uses",
+        "Duration",
+        "Recipients",
+        "Actions"
+      ],
+      "no_everyone_action": true,
+      "party": "Bless",
+      "party_toggle_in_recipient_column": true,
+      "rows": 95
+    },
+    "native_input": {
+      "party": {
+        "bless_casts": 1,
+        "group": "spl:SPPR101",
+        "native_party_click": true,
+        "requests": 2
+      },
+      "clear": {
+        "group": "spl:SPPR101",
+        "native_clear_click": true,
+        "planned": 0,
+        "requests": 1
+      }
+    },
+    "visual_review": "Headers align with columns, durations appear in the row and below recipient names, Party uses stacked portraits in the recipient column, and Clear remains in Actions.",
+    "personal_install_modified": false
+  },
+  "search_sort_verification": {
+    "focused_tests_passed": 122,
+    "dashboard_tests": 28,
+    "native_keyboard_filter": {
+      "query": "h",
+      "rows": 34,
+      "typed_filter": true
+    },
+    "native_ui_callbacks": {
+      "clear_callback": {
+        "query": "",
+        "rows": 95
+      },
+      "duration_ascending": {
+        "descending": false,
+        "field": "duration",
+        "first": "Critical Strike"
+      },
+      "duration_descending": {
+        "descending": true,
+        "field": "duration",
+        "first": "Expertise"
+      },
+      "name_ascending": {
+        "descending": false,
+        "field": "name",
+        "first": "Armor of Faith"
+      },
+      "name_descending": {
+        "descending": true,
+        "field": "name",
+        "first": "Wondrous Recall"
+      }
+    },
+    "visual_review": "Compact framed search field above Actions; Name and Duration headers expose direction arrows. Placeholder precedes edit control so it cannot block focus.",
+    "sort_policy": "Duration uses range maximum, then minimum; unknown/unavailable durations remain last. Name comparison ignores case; equal names use stable resource identity. Browser sorting preserves cast order.",
+    "personal_install_modified": false
+  },
+  "variant_scroll_verification": {
+    "evidence": "recipient-variants-acceptance.json",
+    "upstream_audit": "recipient-upstream-compatibility.md",
+    "generic_selection_variants_expanded": true,
+    "per_recipient_variant_identity": true,
+    "shared_parent_resources": true,
+    "descriptive_source_popups": true,
+    "native_search_scroll_reset": {
+      "before": 2000,
+      "after": 0
+    },
+    "live_cast_effects_and_parent_consumption_verified": true
+  },
+  "inline_views_evidence": "recipient-inline-views-acceptance.json"
+}

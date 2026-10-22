@@ -1,0 +1,13 @@
+0 BOOT12 Gargoyle Boots barrier=false opcodes=
+1 SPWI201 Blur barrier=false opcodes=0,33,34,35,36,37,65,139,174,321
+1 SPWI613 Improved Haste barrier=true opcodes=146,174,206,221,324
+1 itm:RING39:1 Ring of Gaxx — Improved Haste barrier=false opcodes=
+2 SPPR111 Armor of Faith barrier=false opcodes=27,28,29,30,31,61,86,87,88,89,142,174,215,233,321,328
+2 SPPR202 Barkskin barrier=false opcodes=0,7,33,34,35,36,61,139,141,142,174,282,328
+3 SPPR111 Armor of Faith barrier=false opcodes=27,28,29,30,31,61,86,87,88,89,142,174,215,233,321,328
+3 SPPR202 Barkskin barrier=false opcodes=0,7,33,34,35,36,61,139,141,142,174,282,328
+4 SPWI201 Blur barrier=false opcodes=0,33,34,35,36,37,65,139,174,321
+4 SPWI613 Improved Haste barrier=true opcodes=146,174,206,221,324
+4 itm:BOW21:1 Darkfire Bow +5 — Improved Haste barrier=false opcodes=
+5 SPWI201 Blur barrier=false opcodes=0,33,34,35,36,37,65,139,174,321
+5 SPWI613 Improved Haste barrier=true opcodes=146,174,206,221,324

@@ -1,0 +1,666 @@
+[
+  {
+    "file": "01-shell-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1be080d90314ce54193d9d87b3302e9ee7636c03a26c54ac7073b907e5f544ea"
+  },
+  {
+    "file": "02-buffs-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "20ee07a81cce3bb05ee7132564a5819a89560cd1756edcbceddda87fd078161d"
+  },
+  {
+    "file": "03-summary-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "2045a5c30b7fda77cde2cd80d954c1c1ac31071ce7f1398e15234ff6f32db130"
+  },
+  {
+    "file": "04-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "e9dd5808cc394c4c777429fdb8ab0fb9e380a9878c5447590c76a4032315b574"
+  },
+  {
+    "file": "05-after-rest-menu-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "734ab2b4b805cdf8dba2e19d4c33572d5677558b9a4372832d56c91182827804"
+  },
+  {
+    "file": "05-caster-picker-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "7bc164d0df7523172ca0c7de2d97ae2e1a73dcb8c3cab24985f8756269a12597"
+  },
+  {
+    "file": "05-options-menu-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "21e1dc36b548de9907595400d64233204c6b122b9a6252c4643f9168f9cdcd89"
+  },
+  {
+    "file": "05-preset-menu-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "e4c50a6e0969827d385d7dc695c8e55a921e7c53785c58e320a5cb42991aa10d"
+  },
+  {
+    "file": "06-add-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "e9beaba6f76c308562f6181f89d7752023c46c25928bc6790e0759e5454aca54"
+  },
+  {
+    "file": "06-hidden-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1a554ad17a40b04d155279d8cb3eecbbfa9edbe1839bf52a3bbff1720992f8fa"
+  },
+  {
+    "file": "06-rename-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "6c27d385f4cecdb5dd89a11f55c90f59efaa0d539f17bf2ac99d554037892c0e"
+  },
+  {
+    "file": "06-shared-source-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "f93cbe9cd85b69c30f7bfac6554d1dc18c87a29aef9db5cdedbdf7724a38b3c1"
+  },
+  {
+    "file": "06-source-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "165baa29f19d162e886e984ff2d1d831faadc9ebcda64c68f092d41e80f330cc"
+  },
+  {
+    "file": "07-empty-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "f3f455cc927da18824c21177b62c916d085f9d6f8003bf10b8034a18229861f1"
+  },
+  {
+    "file": "07-empty-search-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "8351a7e67582d17dbfbeaa0933064151338191e62f49c1ca94b9509c9c4b42f5"
+  },
+  {
+    "file": "07-unavailable-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "3f34e5136d5c7c6f2efd05365622211f229d50b75535595887da923937b1a42d"
+  },
+  {
+    "file": "08-buffs-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "45181873e66b0e004fc5562ed247a7fe7fd4155c4c2a8fd556ba919ea15ff689"
+  },
+  {
+    "file": "08-buffs-bg2.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "29e65746f6977d69a833443ab61c56e4b12bac11eecc3127e6005d4881667fb3"
+  },
+  {
+    "file": "08-buffs-iwd.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "0d6bb875531487bcebd86a7e510f019c4866c2e698a209619eee7a18e2610dd7"
+  },
+  {
+    "file": "09-buffs-wide-sod.jpg",
+    "pixels": [
+      1920,
+      1080
+    ],
+    "sha256": "89cec15c5ee30918816a683a0ba04a0cac45c2cfb015cb34d6d57951aa87a7b6"
+  },
+  {
+    "file": "09-order-wide-sod.jpg",
+    "pixels": [
+      1920,
+      1080
+    ],
+    "sha256": "de235a9ac4e253f8a7ef1a1329632b2c78679eb9fde76f35a518ce429cc05e8e"
+  },
+  {
+    "file": "09-summary-wide-sod.jpg",
+    "pixels": [
+      1920,
+      1080
+    ],
+    "sha256": "008094417f8fb758c4a72c1755da776a7ebc288615100fa95edca48707773a81"
+  },
+  {
+    "file": "final-add-dialog-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "a142f27d7ddd7319ae74cb3173d7158a83b9457a1de13da1b203909dd586e9cb"
+  },
+  {
+    "file": "final-add-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "9d7030fdcdf910284c0cca67fff0b462479b55e81d214441b010f53b90771761"
+  },
+  {
+    "file": "final-after-rest-menu-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "6e4093af1271d8e1b349ff64dfcc790b3dc5d5a96e93c0381eacef351fa3c19a"
+  },
+  {
+    "file": "final-after-rest-menu-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "af9c77289491ae9ca39aac4306849bc96cf1c2b8b638e9c8f81536311b39a950"
+  },
+  {
+    "file": "final-bottom-right-popup.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "71c4a57431fa1ca222db30d988b25823eb245413145f87ba8e731733a5396d25"
+  },
+  {
+    "file": "final-buffs-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1cd03de4d573d910c8245ac68c1f5bf7516f8bf3937555fcf5d89efbee37ab5b"
+  },
+  {
+    "file": "final-buffs-bg2.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "76173940db0c12d8e77f87c29f026784000665eb3c5c8ce48e20b135a61037fe"
+  },
+  {
+    "file": "final-buffs-iwd.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "369bd7871ce954d95d2a4ad9de84c105976b0ae688510d76a02d4fc197b0ec38"
+  },
+  {
+    "file": "final-buffs-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1cb545a41a5859f72137600457a0aa5016a90d92ec5a3c83f9c625e8eba958b9"
+  },
+  {
+    "file": "final-caster-picker-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "75b5a6d724540f01165a9b83cd5b37c52622498c7d4cddda6fd0fb93b0b4cd18"
+  },
+  {
+    "file": "final-caster-picker-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1f172069e9b4f500bd08edefebcf3c0abe81807f45d5dfe8d65e5360eb0c3b20"
+  },
+  {
+    "file": "final-empty-add-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "d64cc14504245f50f841a0147d62809065fca023b45fe53efb9e41e17bcb44ae"
+  },
+  {
+    "file": "final-empty-hidden-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "3e60bae3b400fbdf4fedb32023c0419909f3eae80ae99a6dabcb30813a7e0214"
+  },
+  {
+    "file": "final-empty-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "5a6460af1b90692fa5d63d2784f8eb552cc8da39c0d08336e948b030b7b3d29a"
+  },
+  {
+    "file": "final-empty-search-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "f83840e5a035cf54d9b54f255c66a476fdaa1d24ae89f9cdf76fbb4db099c84d"
+  },
+  {
+    "file": "final-empty-summary-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1c29d6973a73096d0108786f2f3ad911d423e2f3f61176c27c3ecaac7475b144"
+  },
+  {
+    "file": "final-hidden-dialog-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "4f28685f30ab8c4eba116d2974f063fab30d67744e6dbacf55e79864c774a0c3"
+  },
+  {
+    "file": "final-hidden-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "421b03ab30e537e2299f5a0a95376db929f954e541655fc40dc37593a8aad3ba"
+  },
+  {
+    "file": "final-long-names.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "9dd7d06fcde5b534787ceee986c81eca18da811930d234a6261046092495733c"
+  },
+  {
+    "file": "final-maximized-fit.jpg",
+    "pixels": [
+      1920,
+      1032
+    ],
+    "sha256": "99ccab89b8b9687606226a6c703024093d7459f682aecb5ba9e72f77acdec4e3"
+  },
+  {
+    "file": "final-new-dialog-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "187c69e971960c29dd1f6d1a5041fa4ee1a2a3d201c22db9b7982523cf25e40e"
+  },
+  {
+    "file": "final-new-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "db99c8a5e00be8552629934d503645e160d437f648f93040fae0641b365bf842"
+  },
+  {
+    "file": "final-no-uiplus-fallback.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "8e73ceba7bd3645b3187aa329eaf9ee20a0ac0af5373f76135364d840d5eee97"
+  },
+  {
+    "file": "final-options-menu-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "2ce3358989fed1445ea8cd8fb34d1dd78b389e63f4855f7f7d0c066bcfaa8a5a"
+  },
+  {
+    "file": "final-options-menu-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "388e5aad3b097ee0f47b17e58bb1c0b9bc2e74a38cf4dcd8d5c4a76f2c936f31"
+  },
+  {
+    "file": "final-order-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "ae501a8cb446a6e7fea7a028a5a731d076dfe3eb21c471235c4645dfd17b03d5"
+  },
+  {
+    "file": "final-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "38a5b365ab51eef10ad7b753f2ae64eeec941f91adace6f400ef6c71f55aa663"
+  },
+  {
+    "file": "final-preset-menu-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "13a732f7d368cb7d04adf863fead04023b35766a3a248ffc44cb9ba520093a99"
+  },
+  {
+    "file": "final-preset-menu-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "a053228009e8be523372284ba6287c445696610252dbbc152fd32aea1d1c87d8"
+  },
+  {
+    "file": "final-rename-dialog-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "aec08caad275e9f9ae9e31e37a6b93ee963247ce25d393b7d86de6fd901edb46"
+  },
+  {
+    "file": "final-rename-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "8a350216732444ba151870887743aeaa9b4c707c78224c8ac1401fcb5be1f7a8"
+  },
+  {
+    "file": "final-self-caster-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "a25dafe824dcb37331ee1bb9ac712d317643fc94de17fa4db93cf07d023ea165"
+  },
+  {
+    "file": "final-self-caster-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "38a531baefa4cdbbb2d14e238b195c1a58f9f11ec0dafba9bf4e226ce9fba632"
+  },
+  {
+    "file": "final-shared-source-dialog-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "8aa454dcf5f8bed4156664505794e843e7e8f9ed0ffa2c509051ee12f27fe8f4"
+  },
+  {
+    "file": "final-shared-source-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "2badf18980c821f7bc67ab24c5b48f5ba24b577bd6b8f732f508fb3c11e2324b"
+  },
+  {
+    "file": "final-source-dialog-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "c76b4ca0955dbc6fbe877adc6873bddfc565b0d6991af9ebf2acc12d00500a61"
+  },
+  {
+    "file": "final-source-dialog-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "7d748d56dd6b86fad0c1b0eebfb7a87edebd87f57910cbfbec2c036b5cdfb205"
+  },
+  {
+    "file": "final-summary-bg1.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "690e53e86d248b429e0d257eeba45c69691309a96ab1733c558fa959d8f61e39"
+  },
+  {
+    "file": "final-summary-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "1884deffcf98db839ab055476fed13eb9e34e4eff1274b4732f6218b02a883c4"
+  },
+  {
+    "file": "final-unavailable-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "34c347fb70cfeed03b9d1072e9c38c3a4354240b674aac18af3a442965cb2d9d"
+  },
+  {
+    "file": "final-variants-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "3fd0d96d1aec8c8ccbd682c111bb51c4287d29264c490644bd855d8d0f3f1a26"
+  },
+  {
+    "file": "fix-caster-row-anchor-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "db6c37802aa6ab70152d044a4d76d47219b7f6326a6c83cf312364e9ef8cc1bd"
+  },
+  {
+    "file": "fix-compact-buffs-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "0c5f795b04fb4ec8c8766867473875bab6587ddfea9bd9facedd2088fbd64121"
+  },
+  {
+    "file": "fix-compact-order-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "0073b575abf772c7f52c932f3cab05676b17f019c8bacaf28a45ea70fb067735"
+  },
+  {
+    "file": "fix-compact-summary-sod.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "4a4a1ce5d740c80551576a8a51cc9c52b2d52c71a4ce183cb8010c8e92160e08"
+  },
+  {
+    "file": "fix-dialog-blank-clicks-sod.jpg",
+    "pixels": [
+      2560,
+      1392
+    ],
+    "sha256": "97bbace2e6fdeec70c88864982d3189c35598ff8dbfc9e2ce5a57833ceecdc79"
+  },
+  {
+    "file": "fix-stable-browser-depleted-portraits-sod.jpg",
+    "pixels": [
+      2560,
+      1392
+    ],
+    "sha256": "abf31ed073ec5bc37af4a38db5a6fc8050fd6895fb4dc93c8893283b97b6aa5e"
+  },
+  {
+    "file": "fix-wide-buffs-sod.jpg",
+    "pixels": [
+      2560,
+      1392
+    ],
+    "sha256": "fb83c61aaedbb7172d129feb442e4d5f853422e0866e7430ae77be48c0ca5192"
+  },
+  {
+    "file": "followup-duration-marker-buffs-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "db9f8e7f6cf6db06141348358dc18197de35e32189dac0a5eb65e183a627c03c"
+  },
+  {
+    "file": "followup-duration-marker-order-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "7be17caf4c58d0c3430dc1f096be28cbc06d22e830911558c7291094dee1197f"
+  },
+  {
+    "file": "followup-duration-marker-summary-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "0dbc4e213feefa527e928d93072eb90488b55e34e51408ae38c8e678c522b094"
+  },
+  {
+    "file": "followup-order-smart-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "0f1b90e72e6a5322e38fd6aae4c5ffc063ae0663ba5424d5dc1a26356cab8c38"
+  },
+  {
+    "file": "followup-order-smart-sod-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "7d078a337c3c49d39da9d0416a836808336ea51de952c1d0823d8c650996b0bb"
+  },
+  {
+    "file": "followup-order-tools-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "b768fd87214a984295e9e01fb53fcf783081cdf34eeef8b2ad7a39ae402e205c"
+  },
+  {
+    "file": "followup-preset-delete-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "2533718d35572ead42521fea3ae2ec26ecad6e38faea4f9d3828aab586958c90"
+  },
+  {
+    "file": "followup-preset-import-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "5d37cf6db1e85490bcc191230b4d0d913d8c210515f4db4e136ea66939b9a810"
+  },
+  {
+    "file": "followup-preset-options-bg1-wide.png",
+    "pixels": [
+      2560,
+      1369
+    ],
+    "sha256": "33612e4e4aefc8fb7fcc8d6eabd2c28ac397d11eac6590e1b8ede808cf59f35f"
+  },
+  {
+    "file": "walkthrough-cast-closes-panel.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "f211bd51260871264cb118edf285f5521ac68865f3412618fc6727ac939d60ba"
+  },
+  {
+    "file": "walkthrough-clear-variant.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "7d8617a78be45f1da20542f3a9dac78838d0c448f79f914413fd89ff252c8e59"
+  },
+  {
+    "file": "walkthrough-escape-popup.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "3c88871cfd8e785b3310f55b6f0902ad5616c737d9ab871d0ff89b4792f76871"
+  },
+  {
+    "file": "walkthrough-family-restored.jpg",
+    "pixels": [
+      1282,
+      752
+    ],
+    "sha256": "9dcf5aeebc37cc3d2d87615fc900f4ae873a2c0592d5c96df67e89eaca19fd03"
+  }
+]

@@ -180,6 +180,7 @@ def test_spell_and_item_resref_collisions_use_separate_classifier_caches() -> No
             return ability.buff and 3 or -3, ability.buff
         end
         BfBot.Class.ScoreMSECTYPE = function() return 0 end
+        BfBot.Class._IterateFeatureBlocks = function() end
         BfBot.Class.ScoreOpcodes = function(_, ability)
             return 0, {
                 splstates = {}, selfReplace = false, isToggle = false,
@@ -358,7 +359,7 @@ def test_backpack_copy_does_not_hide_preferred_equipped_copy() -> None:
     assert found
 
 
-def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
+def test_quickslot_scrolls_and_wands_remain_available_for_manual_inclusion() -> None:
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(
         """
@@ -407,14 +408,14 @@ def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
 
         local catalog = BfBot.Scan._BuildItemCatalog(sprite)
         return {
-            wandAbsent = catalog.TESTWAND == nil,
-            scrollAbsent = catalog.TESTSCRL == nil,
+            wandPresent = catalog.TESTWAND ~= nil,
+            scrollPresent = catalog.TESTSCRL ~= nil,
         }
         """
     )
 
-    assert facts["wandAbsent"]
-    assert facts["scrollAbsent"]
+    assert facts["wandPresent"]
+    assert facts["scrollPresent"]
 
 
 def test_excluded_buff_item_remains_in_catalog_for_picker_recovery() -> None:
@@ -773,6 +774,7 @@ def test_item_picker_recovery_requires_this_characters_exclusion() -> None:
         BfBot.Scan.GetCastableSpells = function()
             return { ITEM = {
                 kind = "itm", name = "Globally Excluded Elsewhere",
+                itemCandidate = 1,
                 icon = "", count = 1, durCat = "short",
                 class = { isBuff = false, overridden = true },
             } }

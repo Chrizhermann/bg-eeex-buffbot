@@ -1,0 +1,3 @@
+Private display-only plan; no cast. Skin: bg1
+Aura of Flaming Death *
+Limited duration balance: Effects can trigger later. Effects are never extended.

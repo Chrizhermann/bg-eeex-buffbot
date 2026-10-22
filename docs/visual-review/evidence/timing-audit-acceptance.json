@@ -1,0 +1,29 @@
+{
+  "casts": 5,
+  "skips": 0,
+  "normal_start_separation_ticks": 3,
+  "actual_execution_ticks": 101,
+  "modeled_preparation_ticks": 220,
+  "verified_adjustments": 12,
+  "independently_verified_final_expiries": 12,
+  "unchanged_normal_components": 140,
+  "first_quick_component_correction_ticks": -57,
+  "ticks_per_second": 15,
+  "projectile_followup": {
+    "requests": 3,
+    "casts": 2,
+    "skips": 1,
+    "skip_reason": "Jan -> Improved Haste -> Keldorn (already active: SPWI613A)",
+    "protection_from_evil_recipient_slots": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "unchanged_normal_components": 24,
+    "post_completion_observation": true
+  },
+  "independent_improved_haste_start_separation_ticks": 0
+}

@@ -274,7 +274,7 @@ end
 local function _subSpellRef(fb)
     local v = fb[BfBot._fields.fb_res]
     if v == nil then return nil end
-    if type(v) == "userdata" then
+    if type(v) == "userdata" or type(v) == "table" then
         local ok, s = pcall(function() return v:get() end)
         if ok and type(s) == "string" and s ~= "" then return s end
         return nil
@@ -421,10 +421,8 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
         -- Check for self-referencing protection/immunity opcodes
         local isSelfRef = false
         if (opcode == 318 or opcode == 324) and resrefUpper then
-            local ok, resVal = pcall(function()
-                return fb[BfBot._fields.fb_res]:get()
-            end)
-            if ok and resVal and resVal:upper() == resrefUpper then
+            local resVal = _subSpellRef(fb)
+            if resVal and resVal:upper() == resrefUpper then
                 isSelfRef = true
                 -- opcode 318 self-ref = toggle mechanism (like stances)
                 if opcode == 318 then
@@ -459,10 +457,8 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
         -- Detect self-replace: opcode 321 (Remove Effects by Resource)
         -- targeting the spell's own resref
         if opcode == 321 and resrefUpper then
-            local ok, resVal = pcall(function()
-                return fb[BfBot._fields.fb_res]:get()
-            end)
-            if ok and resVal and resVal:upper() == resrefUpper then
+            local resVal = _subSpellRef(fb)
+            if resVal and resVal:upper() == resrefUpper then
                 selfReplace = true
             end
         end
@@ -484,6 +480,123 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
         fbAoE = fbAoE,
         hasSubstantive = hasSubstantive,
     }
+end
+
+--- Score an activated item's immediate spell-delivery graph. Keep targeting
+-- on the item ability: a child does not change who may activate the power.
+-- Breadth-first traversal visits each SPL once at its shortest depth, so
+-- duplicate/case-varied links cannot inflate a buff's score. Two links match
+-- the existing duration/active-effect analysis. Anything beyond that, missing
+-- resources, or recursive delivery stays available for manual inclusion.
+-- An item child spell can have a harmless low-level header and a selection
+-- menu at a higher caster level. Classification is cached across casters, so
+-- inspect every child level for this unattended-casting restriction.
+function BfBot.Class._ItemOpensChoice(header, ability)
+    local pending={{header=header,ability=ability,depth=0}}
+    local seen,resourceCount={},0
+    local index=1
+    while index<=#pending do
+        local node=pending[index];index=index+1
+        local choice=false
+        BfBot.Class._IterateFeatureBlocks(node.header,node.ability,function(fb)
+            local opcode=fb[BfBot._fields.fb_opcode]
+            if opcode==214 then choice=true;return end
+            if opcode~=146 or node.depth>=2 then return end
+            local res=_subSpellRef(fb)
+            local key=res and res:upper()
+            if not key or seen[key] or resourceCount>=32 then return end
+            seen[key]=true;resourceCount=resourceCount+1
+            local ok,h=pcall(EEex_Resource_Demand,res,'SPL')
+            if not ok or not h then return end
+            for n=0,math.min(tonumber(h.abilityCount) or 1,256)-1 do
+                local loaded,a=pcall(function()return h:getAbility(n)end)
+                if loaded and a then pending[#pending+1]={header=h,ability=a,depth=node.depth+1}end
+            end
+        end)
+        if choice then return true end
+    end
+    return false
+end
+
+function BfBot.Class._ScoreItemOpcodes(header, ability, resref)
+    local queue = { { header = header, ability = ability, resref = resref,
+        depth = 0, path = {} } }
+    local seen, edges = {}, {}
+    local score = 0
+    local extras = { splstates = {}, selfReplace = false, isToggle = false,
+        fbAoE = false, hasSubstantive = false, analysisIncomplete = false,
+        requiresSelection = BfBot.Class._ItemOpensChoice(header,ability) }
+    local index = 1
+    while index <= #queue do
+        local node = queue[index]
+        index = index + 1
+        local ownScore, own = BfBot.Class.ScoreOpcodes(
+            node.header, node.ability, node.resref)
+        score = score + ownScore
+        -- Child states provide classification evidence, but must not become
+        -- item-wide fast-negative markers: they may apply to other targets
+        -- or belong to only one branch. Keep legacy root markers unchanged;
+        -- the existing leaf/source checks handle wrapper active-buff skips.
+        if node.depth == 0 then extras.splstates = own.splstates end
+        extras.selfReplace = extras.selfReplace or own.selfReplace
+        extras.isToggle = extras.isToggle or own.isToggle
+        extras.hasSubstantive = extras.hasSubstantive or own.hasSubstantive
+        if node.depth == 0 then extras.fbAoE = own.fbAoE end
+
+        BfBot.Class._IterateFeatureBlocks(node.header, node.ability, function(fb)
+            if fb[BfBot._fields.fb_opcode]==214 then extras.requiresSelection=true end
+            if fb[BfBot._fields.fb_opcode] ~= 146 then return end
+            local child = _subSpellRef(fb)
+            local key = child and child:upper()
+            if node.depth > 0 and key then
+                local parent = node.resref:upper()
+                edges[parent] = edges[parent] or {}
+                edges[parent][key] = true
+            end
+            local timing = bit.band(fb[BfBot._fields.fb_timing] or 0, 0xFF)
+            if not key or node.path[key]
+                or (timing ~= 0 and timing ~= 1 and timing ~= 9) then
+                extras.analysisIncomplete = true
+                return
+            end
+            if seen[key] then return end
+            if node.depth >= 2 or #queue >= 32 then
+                extras.analysisIncomplete = true
+                return
+            end
+            seen[key] = true
+            local ok, childHeader, childAbility = pcall(function()
+                local h = EEex_Resource_Demand(child, "SPL")
+                return h, h and h:getAbility(0)
+            end)
+            if not ok or not childHeader or not childAbility then
+                extras.analysisIncomplete = true
+                return
+            end
+            local path = {}
+            for ancestor in pairs(node.path) do path[ancestor] = true end
+            path[key] = true
+            queue[#queue + 1] = { header = childHeader, ability = childAbility,
+                resref = child, depth = node.depth + 1, path = path }
+        end)
+    end
+    -- Shortest-path de-duplication can hide a cycle whose nodes were reached
+    -- independently from the root (A -> B and B -> A). Check the graph too.
+    local visiting, finished = {}, {}
+    local function cyclic(key)
+        if visiting[key] then return true end
+        if finished[key] then return false end
+        visiting[key] = true
+        for child in pairs(edges[key] or {}) do
+            if cyclic(child) then return true end
+        end
+        visiting[key], finished[key] = nil, true
+        return false
+    end
+    for key in pairs(edges) do
+        if cyclic(key) then extras.analysisIncomplete = true; break end
+    end
+    return score, extras
 end
 
 -- ============================================================
@@ -585,7 +698,7 @@ end
 --- hierarchical spells (e.g. Prayer, Chaos of Battle, SR Barkskin)
 --- report the timed durations that live in their children.
 --- Depth-limited (max 2) and cycle-guarded to stay bounded.
-function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
+function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs, casterLevel)
     _depth = _depth or 0
     _visited = _visited or {}
     _leafs = _leafs or {}  -- collected op=146 sub-spell leaf resrefs
@@ -610,10 +723,19 @@ function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
                 table.insert(_leafs, subRes)
                 local rOk, subHdr = pcall(EEex_Resource_Demand, subRes, "SPL")
                 if rOk and subHdr then
-                    local subAbility = subHdr:getAbility(0)
+                    local childLevel = fb[BfBot._fields.fb_param1]
+                    if not childLevel or childLevel <= 0 then
+                        childLevel = type(casterLevel) == "function"
+                            and casterLevel(subRes) or casterLevel
+                    end
+                    local subAbility
+                    if childLevel and subHdr.getAbilityForLevel then
+                        subAbility = subHdr:getAbilityForLevel(childLevel)
+                    end
+                    subAbility = subAbility or subHdr:getAbility(0)
                     if subAbility then
                         local subDur, subType = BfBot.Class.GetDuration(
-                            subHdr, subAbility, _depth + 1, _visited, _leafs)
+                            subHdr, subAbility, _depth + 1, _visited, _leafs, childLevel)
                         if subDur and subDur > 0 then
                             if subDur > maxDuration then maxDuration = subDur end
                         elseif subType == "permanent" then
@@ -690,6 +812,31 @@ end
 function BfBot.Class.IsSelfOnly(ability)
     local targetType = ability.actionType
     return (targetType == 5 or targetType == 7)
+end
+
+-- A caster-centered spell can still deliver to nearby allies. Recognize that
+-- from its actual projectile, rather than a spell-name compatibility list.
+function BfBot.Class.IsRadialParty(ability)
+    if not BfBot.Class.IsSelfOnly(ability) then return false end
+    local missile=ability.missileType
+    if type(missile)~='number' or missile<=1 then return false end
+    local C=BfBot.Class
+    C._radialProjectiles=C._radialProjectiles or {}
+    if C._radialProjectiles[missile]~=nil then return C._radialProjectiles[missile] end
+    local ok,party=pcall(function()
+        C._projectileIDs=C._projectileIDs or EEex_Resource_LoadIDS('PROJECTL',true)
+        local name=C._projectileIDs:getLine(missile-1)
+        local resource=type(name)=='string' and name:match('(%S+)$')
+        local pro=resource and EEex_Resource_Demand(resource,'PRO')
+        if not pro or pro.m_wFileType~=3 then return false end
+        -- EEex's typed PRO header starts after the eight-byte file signature.
+        local ptr=EEex_UDToPtr(pro)
+        local flags=EEex_ReadU16(ptr+0x1F8)
+        local radius=EEex_ReadU16(ptr+0x1FC)
+        return radius>0 and bit.band(flags,0xC0)==0xC0
+    end)
+    C._radialProjectiles[missile]=ok and party==true
+    return C._radialProjectiles[missile]
 end
 
 --- Determine the smart default target for a spell.
@@ -785,6 +932,10 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
         result.hasSubstantive = true
         result.noSubstance = false
         result.friendlyFlag = false
+        if sourceKind=='itm' then
+            local _,extras=BfBot.Class._ScoreItemOpcodes(header,ability,resref)
+            result.requiresSelection=extras.requiresSelection or false
+        end
 
         -- Duration computed per-sprite in scan entry, not here (classification is resref-level)
         result.isAoE = BfBot.Class.IsAoE(ability, false)
@@ -816,11 +967,15 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
 
     -- Step 3: Opcode score + extract metadata
     local opcodeExtras
-    result.opcodeScore, opcodeExtras = BfBot.Class.ScoreOpcodes(header, ability, resref)
+    local scoreOpcodes = sourceKind == "itm"
+        and BfBot.Class._ScoreItemOpcodes or BfBot.Class.ScoreOpcodes
+    result.opcodeScore, opcodeExtras = scoreOpcodes(header, ability, resref)
     result.splstates = opcodeExtras.splstates
     result.selfReplace = opcodeExtras.selfReplace
     result.isToggle = opcodeExtras.isToggle
     result.hasSubstantive = opcodeExtras.hasSubstantive
+    result.analysisIncomplete = opcodeExtras.analysisIncomplete or false
+    result.requiresSelection = opcodeExtras.requiresSelection or false
 
     -- Toggle penalty: opcode 318 self-ref = stance/toggle, not prebuff
     -- (opcode 321 self-ref = normal buff refresh, no penalty)
@@ -878,6 +1033,13 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
     else
         result.hasVariants = false
         result.variants = nil
+    end
+
+    -- Variant discovery must not turn an incomplete automatic item analysis
+    -- back into a buff. Explicit include overrides return earlier.
+    if result.analysisIncomplete then
+        result.isBuff = false
+        result.isAmbiguous = true
     end
 
     -- Cache and return

@@ -281,6 +281,7 @@ BfBot.Theme._FONT_TO_BASE_POINT = {
 
 -- Menus we own (defined in buffbot/BuffBot.menu). Iterated by name.
 BfBot.Theme._OWNED_MENUS = {
+    "BUFFBOT_PARTY",
     "BUFFBOT_MAIN",
     "BUFFBOT_TARGETS",
     "BUFFBOT_RENAME",

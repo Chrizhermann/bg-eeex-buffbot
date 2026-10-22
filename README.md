@@ -1,266 +1,153 @@
-# BuffBot
+# BuffBot Redux
 
-**In-game configurable buff automation for Baldur's Gate: Enhanced Edition.**
+**In-game buff automation for Baldur's Gate: Enhanced Edition.**
 
-Cast all your pre-battle buffs with one click. BuffBot scans each character's spellbook, lets you configure which buffs to cast, in what order, on which targets — then executes the entire sequence automatically across all party members in parallel.
+Pick the buffs your party needs, then cast the whole list with one click. BuffBot finds who can cast each spell and lets party members cast at the same time.
 
-> **Stable release** — [Bug reports and feedback welcome.](https://github.com/Chrizhermann/bg-eeex-buffbot/issues)
-
-> **BuffBot requires EEex v0.11.0-alpha or later. EEex v1 is recommended.**
-
-[![BuffBot Showcase](https://img.youtube.com/vi/9fjnUKG1tfQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=9fjnUKG1tfQ)
+This is a **single-player beta fork of [BuffBot v1.10.1](https://github.com/Chrizhermann/bg-eeex-buffbot)**. Redux puts the person getting a buff first. The original caster editor is still available for its extra controls.
 
 ## Features
 
-- **Dynamic buff-source scanning** — discovers buff spells from memorized, innate, HLA, and kit sources, plus the F8 Use Item buff powers of identified equipment and potions carried by party members. No hardcoded spell or item lists
-- **Items and potions** — configure each item power independently, including powers beyond the first ability and items carried in the backpack. Item rows are visually distinct and disabled by default; BuffBot finds the current stack or equipped copy when casting
-- **In-game config panel** — per-character tabs, scrollable buff list with enable/disable, duration display, target assignment, per-entry R1–R5 repeat counts, priority ordering, sort-by-duration, and row locks
-- **Up to 8 presets** — independent buff configurations per character (Long Buffs, Short Buffs, Boss Fight, Undead Prebuff, etc.) with create/rename/delete
-- **Summons and clones as casters** — configure Project Images, Simulacra, and other allied spellcasting summons in a dedicated Summons view; cast one summon alone or let configured summons join Cast All
-- **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for fast casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally. 5E casters still pause while that mod refreshes their spell slots
-- **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
-- **Skip active buffs** — detects already-active buffs via spell state + effect list checks, including wrapper potion leaf spells. No wasted spell slots, stacks, or charges
-- **Manual override** — the Add picker can include spells the classifier missed and recover removed spells or items, grouped into separate sections
-- **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
-- **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
-- **Subwindow selection spells** — pre-configure which variant to cast for spells like Protection from Elemental Energy, and BuffBot bypasses the popup. Converted 5E casters must cast these spells manually
-- **Experimental 5E Spellcasting compatibility** — use normal spell names and presets while [5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting) handles preparation and shared spell slots. See the [current state and limitations](#5e-spellcasting-experimental)
-- **Mod-friendly** — tested with SCS, Spell Revisions, and kit mods. Reads spell data dynamically, so mod-added spells show up automatically
+- **One party list** — see your buffs in one place. Click a portrait to give that person a buff. A **Party** button adds one party-wide cast.
+- **Automatic caster choice** — BuffBot picks an eligible caster, usually favoring a longer duration. You can choose a caster yourself. Shared spells and item charges are counted together, so the plan cannot spend the same use twice.
+- **Clear spell choices** — see icons, uses and durations. Spell Immunity's schools have separate rows, but spend the same spell slots.
+- **Up to eight saved lists** — create, rename, delete, export and import plans. Your plans stay with your save.
+- **Helpful cast order** — Smart Order puts long buffs first, considers casting time, and puts spells aimed at someone before that person's invisibility. It updates as you edit the plan. Custom keeps your own order.
+- **Faster preparation** — normal spell and item actions run at **2x speed** by default. Casting rules, spell slots, buff timers and delayed effects still use the game's own clock.
+- **After-rest buffs** — choose a list to cast after a completed rest. Interrupted rests do not trigger it.
+- **Item powers** — use supported powers from carried gear and potions. For eligible daily-use gear, a party member can borrow it, use it and return it. The real charges are spent.
+- **Summon casters** — live allied casters, such as Simulacra and Project Images, can supply spells. Buff targets remain the six party members.
+- **Four themes** — SoD, IWD, BG1 and BG2. Infinity UI++ is optional. Auto follows its theme if installed; otherwise BuffBot uses BG1.
 
 ## Requirements
 
-- **BG:EE**, **BG2:EE**, or **EET**
-- **[EEex](https://github.com/Bubb13/EEex)** v0.11.0-alpha or later, with LuaJIT active (v1 recommended)
+- **BG:EE, BG2:EE or EET**.
+- **[EEex](https://github.com/Bubb13/EEex) v0.11.0-alpha or later**, with LuaJIT active. EEex v1 is recommended.
 
-EEex v0.11 and v1 have full BuffBot feature parity. LuaJIT must be active before BuffBot's main component installs. You can enable it through EEex's LuaJIT / Experimental option, or install BuffBot's **EEex LuaJIT Support** helper first. The main component validates the actual loader configuration and DLLs, so LuaJIT activated externally by EEex is accepted without requiring ownership by BuffBot.
-
-EEex v0.11 keeps its internal Lua files in `override/`. When using v0.11, install EEex and BuffBot late in the mod order — after generalized biffing and any later file-replacement step — so those files cannot be consumed or replaced.
-
-Do not assume an arbitrary save can be downgraded to v0.11 after EEex v1 and other EEex mods have written it; that downgrade is not guaranteed safe.
-
-<details>
-<summary><strong>For the curious: how EEex tiers and LuaJIT layouts interact</strong></summary>
-
-EEex v1's Minimal and Full tiers leave LuaJIT off by default; Experimental enables it. BuffBot checks the loader state and required DLLs instead of relying on EEex component numbers. Its helper enables or repairs LuaJIT when needed, using `LuaVersionExternal=5.1` for v0.11's older layout and `LuaVersionExternal=5.1-LuaJIT` for v1's newer layout. The helper makes no file changes when the matching runtime is already active.
-
-</details>
+Redux has been tested mainly in copied single-player BG2:EE/EET installs. Multiplayer and every game/mod combination have not been checked.
 
 ## Languages
 
-- English
-- Simplified Chinese (简体中文)
-- Italian (Italiano)
-- German (Deutsch)
-- French (Français)
-- Spanish (Español)
-- Polish (Polski)
-- Russian (Русский)
-- Brazilian Portuguese (Português do Brasil)
+The installer offers English, Simplified Chinese, Italian, German, French, Spanish, Polish, Russian and Brazilian Portuguese. Some new Redux text still uses English fallback text.
 
-The WeiDU installer asks which BuffBot translation to use and copies the selected UTF-8 catalog to `override/bfbot_l10n.tra`. BuffBot reads directly from that file for its UI, options, defaults, and player feedback; no BuffBot-owned UI string is fetched from the game TLK. Only the eight generated F12 innate names remain TLK-backed because SPL resources require numeric strrefs: WeiDU resolves catalog entries `@200` through `@207` and records them in `bfbot_strrefs.txt`.
+<details>
+<summary>Translation status and file details</summary>
 
-In a source checkout, the raw development deploy (`tools/deploy.sh`) has two explicit paths. When `override/bfbot_l10n.tra` and `override/bfbot_strrefs.txt` both exist, it preserves an existing `override/bfbot_l10n.tra` together with its innate references, preserves both files byte-for-byte, and skips TLK patching entirely. If the catalog exists without the reference file, the helper stops before copying runtime files and asks you to reinstall BuffBot with WeiDU. When no selected catalog exists, the clean English-fallback path patches only `lang/en_US/dialog.tlk` with the English F12 names and generates `bfbot_strrefs.txt`, leaving the root and other language TLKs untouched. This fallback requires Python 3 and an existing `lang/en_US/dialog.tlk`; it also refuses an unsafe catalog or reference path. If a prerequisite is missing, the helper refuses the fallback before copying files. An obsolete `bfbot_l10n.txt` alone is preserved but does not select localized deployment.
+WeiDU copies the selected UTF-8 catalog to `override/bfbot_l10n.tra`. BuffBot reads directly from it; no BuffBot-owned UI string is fetched from the game TLK. The installer still keeps `bfbot_strrefs.txt` for compatibility with older F12 innate resources. Redux no longer grants those shortcuts.
 
-All catalogs and installer paths have automated coverage. Live validation in the Copy Copy BG2:EE + EEex installation loaded a game and opened BuffBot successfully; user screenshots confirmed readable CJK labels and acceptable panel layout at the tested resolution/font. The Italian contributor tested the translated UI and buff casting in game. The six new catalogs began as AI-authored translations; the German catalog has since been reviewed by the German-speaking maintainer. None has yet been validated in-game, and native-speaker corrections remain welcome. The broader interaction/casting matrix and alternate resolutions/fonts remain pending, along with the compatibility boundaries listed in the changelog.
+The six new catalogs began as AI-authored translations. The German catalog has since been reviewed by the maintainer; none has yet been validated in-game. Native-speaker corrections remain welcome. Earlier Chinese user screenshots confirmed readable CJK labels at the tested resolution/font; alternate resolutions/fonts remain pending. Italian was tested by its contributor. These checks do not mean every new Redux label has been translated or reviewed.
+
+</details>
 
 ## Installation
 
-### WeiDU (recommended)
+1. Download the install ZIP from [Releases](https://github.com/zach-hopkins/bg-eeex-buffbot/releases). Extract it into your game folder.
+2. Run **setup-buffbot.exe**.
+3. If LuaJIT is not active, install **BuffBot: EEex LuaJIT Support** first.
+4. Install **BuffBot: In-Game Buff Automation**.
+5. Start the game through **InfinityLoader.exe**.
 
-1. Download the [latest release](https://github.com/Chrizhermann/bg-eeex-buffbot/releases/latest) and extract it into your game directory
-2. Run `setup-buffbot.exe` (or use your preferred WeiDU launcher)
-3. Select **BuffBot: EEex LuaJIT Support** first if EEex did not already activate LuaJIT
-4. Select **BuffBot: In-Game Buff Automation** after LuaJIT is active
+When updating, select or reinstall both BuffBot components together. If EEex already provides the matching LuaJIT runtime, only the main component is needed. In Project Infinity, put the LuaJIT helper before the main component when using both.
 
-For **Project Infinity**, explicitly select both BuffBot components and place **EEex LuaJIT Support** (component 1) before **In-Game Buff Automation** (component 0). Project Infinity does not infer that prerequisite from the component name. If EEex already activated the exact matching LuaJIT runtime, selecting only the main component is also valid.
+For EET, BuffBot can go after `EET_end`. With EEex v0.11, install EEex and BuffBot after generalized biffing and later steps that replace files. Do not downgrade an existing EEex v1 save just to use this mod.
 
-**Updating an existing BuffBot install:** select or reinstall both BuffBot components together. Older releases recorded the main component before the helper, so updating only main makes WeiDU temporarily remove LuaJIT support and the safety check rejects that pass. The helper is restored safely, but the main component is left uninstalled; if this already happened, run setup again to install main.
-
-For **EET**, BuffBot can be installed after `EET_end`; EEex and LuaJIT must be ready first. With EEex v0.11, keep EEex and BuffBot after generalized biffing or later file-replacement steps as noted above.
-
-**Uninstall:** remove **In-Game Buff Automation** first, then remove **EEex LuaJIT Support** if BuffBot installed it. The helper restores the exact loader files that preceded its installation. LuaJIT owned by EEex is left unchanged when BuffBot's helper made no changes.
-
-### Manual Development Copy
-
-Raw/manual copying is a development-only path from a source checkout, not the normal release installation. Only use it when EEex LuaJIT is already active, because it bypasses the prerequisite check. Copy the runtime Lua, menu, BAM, MOS, and PVRZ files from `buffbot/` to your game's `override/` directory. The deploy helper treats a pre-existing `bfbot_l10n.tra` plus `bfbot_strrefs.txt` as one WeiDU-owned localized pair: it preserves both and does not patch any TLK. A catalog without its reference file is refused as inconsistent installer state. With no catalog, the runtime uses English fallback text and the helper patches only the English TLK to create the eight F12 innate references. Copying files manually without either a coherent WeiDU pair or that fallback patch may leave the innate names blank; players should use WeiDU for complete localized strings.
+To uninstall, remove the main component first, then the LuaJIT helper if you used it.
 
 ## Usage
 
-### Opening the Panel
+### Open and cast
 
-- **Actionbar button** — appears to the right of the action bar
-- **F11** — keyboard shortcut
-- **F12 innates** — per-preset abilities in each character's special abilities
+- Press **F11** or left-click the **gear beside the action bar** to open BuffBot.
+- Right-click the gear and pick a saved list to cast it directly. This does not add an innate-ability action before the plan.
 
-### Basic Workflow
+### Make a list
 
-1. Open the panel (F11 or actionbar button)
-2. Select a character tab at the top
-3. Select a preset tab (default: "Long Buffs" / "Short Buffs")
-4. Enable/disable spells and items with the checkbox column (items start disabled)
-5. Set targets for each entry (Self, Party, or a specific character)
-6. Set each entry's repeat count from R1 to R5
-7. Reorder entries with the Up/Down buttons
-8. Click **Cast** to start buffing — or use the F12 innate for that preset
-9. **Quick Cast** button cycles Off → Long → All for fast casting
+1. Choose a list at the top right, or click **+** to make one.
+2. In **Buffs**, find a spell and click the portraits of the people who need it. Click again to remove it. **Clear** removes that row's choices.
+3. Use the search box or a character tab to narrow the list. Click **Name** or **Duration** to sort the browser. This does not change casting order.
+4. Open **Order** to choose the cast order or a preferred caster.
+5. Open **Summary** to check which buffs each person will get.
+6. Click **Cast**.
 
-### Presets
+**Uses** shows free uses / total uses. Portraits stay visible when uses run out, so you can move a buff from one person to another. Self-only spells stay self-only. A duration range means the available casters can give different durations; each portrait shows its assigned or next-cast duration.
 
-- Default presets auto-populate from scanned sources: long/permanent spells are enabled in preset 1, short spells in preset 2, and items are present but disabled
-- Create new presets for specific situations (up to 8 per character)
-- Each preset is fully independent — own spell list, targets, repeat counts, priorities, and Quick Cast setting
-- Newly recruited companions inherit the protagonist's current preset slots, names, and categories when BuffBot first configures them; their own spells and items start disabled and Quick Cast starts Off
+BuffBot skips buffs it recognizes as already active. Some effects and modded spells are harder to detect. Use **Add spell / item** if a power is missing, or **Hide** to tidy the browser. Hidden entries already in a plan stay planned.
 
-### Repeat Casts
+### Choose an order
 
-Each spell or item row shows R1–R5. Click its repeat cell to increase the count, or select the row and use **Repeat: N**: left-click increases and right-click decreases. Both controls wrap between 1 and 5 and remain editable when the source currently has zero uses.
+- **Smart Order**: long buffs first, with casting time and invisibility taken into account. It updates when you add, remove or change buffs.
+- **Long First**: sort by duration, longest first. It also updates as you edit.
+- **Custom**: restore your saved manual order. Use the up/down buttons to move a cast; moving one selects Custom.
+- **Undo**: undo the last order-mode change when available.
 
-Repeats are target-major. With targets A and B at R2, BuffBot attempts A, A, B, B. A party-wide AoE at R2 is cast twice total, not twice per party member. Every repeat rechecks availability, target state, and active effects. A spell attempt consumes one available use and follows normal aura/casting rules; an item attempt consumes a stack or charge and follows normal item-use rules. Quick Cast applies only to spells. Skipped attempts consume nothing.
+The active mode is highlighted and saved with the list. Automatic ordering treats prepared spells and daily charges as replenished, so spending a spell does not shuffle the list. **Casting still checks your real remaining uses.** Existing lists start in Custom to preserve their order; new lists start in Smart Order.
 
-### Items and Potions
+### Set up wake-up buffs
 
-BuffBot scans identified items in a party character's equipment, quick slots, and backpack. Each supported buff power from **F8 Use Item** gets its own row, including secondary powers on weapons. Powers keep their configuration when the item moves between slots. Exhausted powers remain visible with zero uses; the engine handles normal charges, consumption, and recharge rules.
+Fresh installs start with two empty lists: **Pre-Battle Buffs** and **Wake Up Buffs**. **After Rest** starts on Wake Up Buffs. Add spells to that list to use it; an empty list quietly does nothing.
 
-In **EEex options → BuffBot → Inventory item use**, choose:
+The After Rest picker can use any list, or **Off**. It is separate from the list you are editing. Existing saves keep their lists and rest choice.
 
-- **Use from inventory** (default) — activate the chosen power from its current slot.
-- **Equip, use, and restore** — temporarily equip carried gear, activate the chosen power, then restore the previous equipment. Potions are consumed directly in either mode.
+After a completed standard eight-hour rest, BuffBot waits until the party can act. Combat cancels a pending run. If a requested cast is unavailable, it skips the whole rest plan. Shortened rests and other mods' rest systems need more testing.
 
-Automatic swapping skips chest armor, gear the character cannot wear, and items with conditional usability restrictions. It also skips ambiguous equipment copies with the same item resource; equip the desired copy manually to use it. Unfinished swaps are recorded in the save for recovery after interruption or loading. If the relevant equipment has changed manually, BuffBot leaves it alone instead of overwriting the change.
+### Casting speed and interruptions
 
-Scrolls, wands, and items inside containers or Bags of Holding remain unsupported. The expanded item support has been inspected offline against BG2:EE 2.6.6.0; deployment and in-game acceptance on BG:EE/BG2:EE are still pending.
+In **Settings → Casting**, choose **Fast-forward 2x (Recommended)**, **4x**, or **Normal**. 4x is experimental and may not be faster on every setup. BuffBot restores the old speed when casting ends or stops.
 
-### Summons and Clones
+Time really passes faster during the plan. Existing buffs, fatigue and delayed effects follow that time too. Redux's party planner no longer uses Balanced Quick Cast or rewrites buff expiry times.
 
-1. Create the allied summon or clone, then open BuffBot and switch from **Party** to **Summons**.
-2. Select the live summon tab and enable the spells it should cast. Those enabled rows are its cast selection; there is no separate pre-cast queue checkbox.
-3. Use **Cast (this summon)** to run only that summon, or **Cast All** to run the party preset and every configured live summon together. A configured summon created during the run joins automatically.
-4. To create multiple ordinary summons, set R2–R5 on the summoning spell in its caster's party preset. Project Image is always limited to one attempt for owner-lock safety. Repeat counts in a summon tab instead control spells cast by that summon.
+Independent casters can act together. A shared item or a spell that must come before invisibility may need to wait. Combat and lost player control can stop casting. Moving someone yourself may interrupt their current spell; their chain does not reliably resume. Let the plan finish before giving new orders when possible.
 
-Clone presets are stored by owner identity and are reused when that owner's clone is created again. On first open they seed from the owner's matching preset, limited to spells the clone can cast. To disable automatic participation globally, set `SummonsJoinCast = 0` under `[BuffBot]` in `baldur.ini`.
+### Items, summons and saved plans
 
-Items are party-only in this release. Summon and clone presets remain spell-only even if a copied creature carries or inherits equipment.
+BuffBot scans supported powers on identified carried items, including backpack gear. Darkfire Bow's Improved Haste and Gargoyle Boots are supported. Item borrowing checks whether the borrower can use the gear, shares its charges, and tries to return it safely. Unsafe swaps, ambiguous copies and interactive item choices may need manual use.
 
-Project Image locks its owner while active. BuffBot limits the Project Image cast itself to one attempt, skips locked owners, and drops owner entries placed after it so they cannot fire later as delayed casts. Put anything the owner must cast before Project Image earlier in the priority order. Copied BuffBot F12 innates on clones are not supported; use the Summons panel actions instead.
+Summons must already exist to supply spells to a party plan. A missing saved summon makes its casts unavailable until a matching summon returns. Project Image also prevents its owner from casting while the image is active. Summon equipment borrowing is not supported.
 
-### Export / Import
-
-- Click **Export** to save a character's entire config (all presets + overrides) to a file
-- Click **Import** to load a config from any exported file onto the current character
-- Spells the target character doesn't have are silently skipped
-- Files are saved in `override/bfbot_presets/` — share them with other players or use across playthroughs
-
-## 5E Spellcasting (experimental)
-
-Starting with **v1.9.0-alpha**, BuffBot can work with the existing [5E Spellcasting mod](https://github.com/UnearthedArcana/5E_spellcasting). Install 5E Spellcasting before BuffBot, prepare spells through 5E's own interface, then rest. BuffBot detects the mod automatically; there is no separate compatibility component. This adds compatibility with that mod, not a separate implementation of 5e casting in EEex.
-
-Your spells appear under their normal names. Available casts come from 5E's shared pool for that spell level, so spending one level-2 slot also reduces the availability of other level-2 spells. A short pause between casts is expected, including with Quick Cast: 5E schedules a one-second spell-list refresh, and BuffBot waits for casting to become available again.
-
-**Current state:** a user playtest with BG2:EE 2.6.6, EEex 1.2.0 with LuaJIT, and 5E Spellcasting 2.7.2 confirmed that a short arcane buff preset with Quick Cast runs responsively after a performance fix. The logs also show active-buff skips. The release has 535 passing automated tests, but this is not a complete in-game compatibility test.
-
-- **Cast variant-selection spells manually** on converted casters; BuffBot skips them even if a variant is configured.
-- **Wider testing is still needed:** shared-slot exhaustion and rest/preparation changes, divine and multiclass/dual-class casters, mod-added spells, summons/clones, BG:EE, and EET.
-- **Existing presets:** entries that directly referenced an old internal `D5Z...I` casting ability must be replaced with the spell's normal entry. During an unfinished dual-class conversion or preparation step, BuffBot may leave affected spells unavailable; it will not spend ordinary memorization slots as a fallback.
-
-Feedback is welcome. The [5E tester guide](docs/5e-spellcasting.md) has a short checklist and explains which logs to include in a bug report.
+Use the gear menu to **export/import** a party plan as a `.bbp` file in `override/bfbot_plans`. Exports keep targets, caster choices, variants and order mode. They do not grant missing spells or items; those casts stay unavailable.
 
 ## Known Limitations
 
-The following limitations remain:
+- **Single-player first.** Multiplayer behavior has not received the same testing.
+- **5E Spellcasting:** converted casters are excluded from the new party planner. The retained **Settings → Caster editor** has the original experimental support; see the [5E guide](docs/5e-spellcasting.md).
+- **Extra legacy controls:** repeats, row locks and some summon workflows remain in the Caster editor. Its per-character lists and exports are separate from party plans.
+- **Missing powers:** automatic discovery does not cover every modded effect. Container contents are not scanned. Scrolls, wands and unusual powers may need manual inclusion/use; automatic coverage is not promised.
+- **Item safety:** chest armor, restricted gear, duplicate copies and some child-spell powers can need manual handling. See the [compatibility report](docs/compatibility-test-report.md) for tested exceptions.
+- **Estimates:** displayed durations do not capture every kit bonus or conditional effect. A cast appearing in the log does not prove its effect landed.
+- **Platform/UI:** file pickers use Windows directory listing. Other platforms and all resolutions/fonts have not been checked.
 
-- **Placeholder innate icons** — F12 abilities use the Stoneskin icon. Custom icons are planned
-- **Panel visuals** — functional but unpolished. The layout works, the aesthetics don't win awards
-- **Spell Revisions sub-spells** — some SR spells (Barkskin, Dispelling Screen) deliver effects via sub-spells, so the classifier may show them as ambiguous. Use "Add Spell" to manually include them
-- **Windows only for export/import listing** — the file picker uses Windows `dir /b` for directory listing. The core export/import file I/O works on any platform, but the picker won't list files on macOS/Linux
-- **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
-- **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
-- **Automatic equipment swaps** — chest armor, unusable or conditionally usable gear, and ambiguous duplicate equipment copies require manual equipping; see [Items and Potions](#items-and-potions)
-- **5E Spellcasting support is experimental** — basic BG2:EE casting has been user-tested; the [limitations and wider testing needs](#5e-spellcasting-experimental) above still apply
+For more detail, see the [feature guide](docs/plan-management-and-casting-beta.md), [comparison with original BuffBot](docs/buffbot-original-vs-redux.md), and [visual review](docs/visual-review/review.md). Source-only review material is also available in the separate review download.
 
 ## Testing & Bug Reports
 
-BuffBot includes a built-in test suite. In the in-game console (the BG:EE / BG2:EE console — toggle with Ctrl-Space when `CLUAConsole=1` is set in `baldur.ini`):
+Please [open an issue on this fork](https://github.com/zach-hopkins/bg-eeex-buffbot/issues) with your game/EEex versions, mod list, steps to repeat the problem, and a screenshot or log if useful.
 
-```
-BfBot.Test.RunAll()         -- full test suite (600+ assertions)
-BfBot.Test.ExportImport()   -- export/import tests
-BfBot.UI.Toggle()           -- open/close config panel
-```
-
-Log files are written to the game directory: `buffbot_test.log`, `buffbot_exec.log`.
-
-For 5E Spellcasting reports, also run `BfBot.FiveE.Diagnose()` in the console and include `buffbot_5e.log` and `WeiDU.log`. See the [5E tester guide](docs/5e-spellcasting.md#reporting-a-problem).
-
-**Reporting bugs:** please open an issue at [GitHub Issues](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) with:
-- Game version (BG:EE / BG2:EE / EET) and EEex version
-- Steps to reproduce
-- Mod list (especially SCS, Spell Revisions, kit mods)
-- Output from `BfBot.Test.RunAll()` if relevant
-
-## AI-Assisted Development
-
-BuffBot was built with significant assistance from [Claude Code](https://claude.ai/code) (Anthropic's AI coding tool). The architecture, code, tests, and documentation were developed collaboratively between a human developer and AI.
-
-The code is fully open source — judge it on its merits. If you have concerns about AI-assisted mods, that's understandable; the source is there for review.
+In the game console, `BfBot.Test.RunAll()` runs the built-in checks. Logs include `buffbot_test.log`, `buffbot_exec.log` and `buffbot_fast_forward_audit.jsonl`. For legacy 5E problems, run `BfBot.FiveE.Diagnose()` and include `buffbot_5e.log` and `WeiDU.log`.
 
 ## Contributing
 
-Found a bug? Have a feature idea? [Open an issue](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) on GitHub.
+Language pull requests are welcome. Translate a complete catalog from `buffbot/lang/english/setup.tra`; preserve IDs, placeholders and installer tokens. Use a safe lowercase folder name, set `@113` to it, and add its `LANGUAGE` stanza in `buffbot/setup-buffbot.tp2`. Keep UTF-8 and the existing one-line tilde format. Include your preferred translator credit.
 
-### Adding a Language
+Run `python -m pytest tests/test_localization.py tests/test_release_package.py -q` before submitting a language change.
 
-Language pull requests are welcome. BuffBot accepts complete catalogs so players never see a half-translated panel:
+<details>
+<summary>Development-only deployment</summary>
 
-1. Copy `buffbot/lang/english/setup.tra` to `buffbot/lang/<language>/setup.tra`. Choose a safe lowercase folder name that starts with a letter and uses only `a-z`, `0-9`, and underscores.
-2. Set `@113` to that exact folder name. This directory marker is non-translatable.
-3. Translate every other value while preserving the exact `@` IDs, all comments, all named placeholders such as `{name}`, and every WeiDU token such as `%lua_version%`. Do not add or omit entries.
-4. Keep the file UTF-8 and preserve the existing one-line tilde grammar (`@123 = ~Text~`).
-5. Add the matching `LANGUAGE` stanza to `buffbot/setup-buffbot.tp2`. The release package manifest is derived from the `LANGUAGE` declarations, and the tests reject missing or undeclared catalogs.
-6. Run `python -m pytest tests/test_localization.py tests/test_release_package.py -q` (and ideally the full test suite) before opening the PR.
-7. Include the translator credit you would like shown in the README and release notes.
+From a source checkout with EEex LuaJIT already active, run `bash tools/deploy.sh /path/to/game`. Players should use WeiDU instead.
 
-### Developer Setup
+The raw development deploy preserves an existing `override/bfbot_l10n.tra` together with `override/bfbot_strrefs.txt`: it preserves both files byte-for-byte and skips TLK patching. If the catalog lacks its reference file, it stops before copying runtime files; reinstall BuffBot with WeiDU to repair the pair.
 
-For iterative development without running WeiDU each time:
+With no selected catalog, the English fallback patches only `lang/en_US/dialog.tlk`, leaving other language TLKs untouched. It requires Python 3 and an existing `lang/en_US/dialog.tlk`; if prerequisites fail, it refuses the fallback before copying files. The retained references belong to old installer compatibility, not active preset shortcuts. An obsolete `bfbot_l10n.txt` alone is preserved but does not select localized deployment.
 
-```bash
-# Set your game path (one-time setup)
-echo 'BGEE_DIR="/path/to/your/game"' > tools/deploy.conf
+</details>
 
-# Deploy to game override
-bash tools/deploy.sh
-```
+## AI-Assisted Development
 
-Requires Python 3 only for the clean English-fallback TLK patch (innate ability tooltip names). Localized WeiDU state is preserved without invoking the patcher.
-
-### Repo Structure
-
-```
-bg-eeex-buffbot/
-├── buffbot/              # Mod source files (copied to override/)
-│   ├── setup-buffbot.tp2 # WeiDU installer
-│   ├── M_BfBot.lua       # Bootstrap (auto-loaded by EEex)
-│   ├── BfBotCor.lua      # Core namespace, logging, field resolution, caches
-│   ├── BfBotLoc.lua      # File-backed UTF-8 localization with English fallback
-│   ├── BfBotCls.lua      # Buff classifier (opcode scoring)
-│   ├── BfBotScn.lua      # Spellbook scanner (known spells iterators)
-│   ├── BfBot5e.lua       # Optional 5E Spellcasting compatibility
-│   ├── BfBotExe.lua      # Execution engine (parallel per-caster)
-│   ├── BfBotPer.lua      # Persistence (marshal handlers, presets, export/import)
-│   ├── BfBotInn.lua      # F12 innate abilities (runtime SPL generation)
-│   ├── BfBotUI.lua       # Config panel logic
-│   ├── BfBotTst.lua      # Test suite (600+ assertions)
-│   ├── BuffBot.menu      # UI definitions (.menu DSL)
-│   └── lang/             # Complete WeiDU translation catalogs
-├── tools/                # Dev utilities
-│   ├── deploy.sh         # Copy files to game override
-│   └── patch_tlk.py      # TLK patcher for innate tooltips
-├── docs/                 # Design docs and analysis
-└── README.md
-```
+Original BuffBot was developed with Claude Code; Redux was developed with OpenAI Codex. Human choices and AI assistance shaped the code and tests. The source and test evidence are open for review.
 
 ## Credits
 
+- **[Chrizhermann](https://github.com/Chrizhermann)** — original BuffBot, the base for this fork.
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
 - **[5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting)** by subtledoctor — the casting system used by BuffBot's experimental 5E compatibility

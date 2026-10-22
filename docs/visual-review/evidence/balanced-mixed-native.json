@@ -1,0 +1,911 @@
+{
+  "start": 75971652,
+  "events": [
+    {
+      "event": "entry",
+      "index": 1,
+      "quick": true,
+      "res": "SPPR306",
+      "key": "p2",
+      "tick": 75971652
+    },
+    {
+      "event": "advance",
+      "tick": 75971655,
+      "key": "p2"
+    },
+    {
+      "event": "entry",
+      "index": 2,
+      "key": "p2",
+      "tick": 75971655
+    },
+    {
+      "event": "entry",
+      "index": 1,
+      "quick": false,
+      "res": "SPPR101",
+      "key": "p2",
+      "tick": 75971656
+    },
+    {
+      "event": "advance",
+      "tick": 75971748,
+      "key": "p2"
+    },
+    {
+      "event": "entry",
+      "index": 2,
+      "key": "p2",
+      "tick": 75971748
+    },
+    {
+      "event": "entry",
+      "index": 1,
+      "quick": true,
+      "res": "SPPR306",
+      "key": "p2",
+      "tick": 75971748
+    },
+    {
+      "event": "advance",
+      "tick": 75971753,
+      "key": "p2"
+    },
+    {
+      "event": "entry",
+      "index": 2,
+      "key": "p2",
+      "tick": 75971753
+    }
+  ],
+  "sources": [
+    {
+      "slot": 2,
+      "speed": 6,
+      "name": "Sir Anomen",
+      "mentalSpeed": 4,
+      "aura": 1,
+      "duration": 1200
+    },
+    {
+      "slot": 2,
+      "speed": 9,
+      "name": "Sir Anomen",
+      "mentalSpeed": 4,
+      "aura": 1,
+      "duration": 36
+    },
+    {
+      "slot": 2,
+      "speed": 6,
+      "name": "Sir Anomen",
+      "mentalSpeed": 4,
+      "aura": 1,
+      "duration": 1200
+    }
+  ],
+  "mode": 3,
+  "baseline": {},
+  "log": [
+    {
+      "type": "INFO",
+      "msg": "Sir Anomen Quick Cast ON"
+    },
+    {
+      "type": "CAST",
+      "msg": "Sir Anomen -> Protection From Fire -> Jan"
+    },
+    {
+      "type": "INFO",
+      "msg": "Sir Anomen finished"
+    },
+    {
+      "type": "DONE",
+      "msg": "Total: 1 | Cast: 1 | Skipped: 0"
+    },
+    {
+      "type": "INFO",
+      "msg": "Balanced Quick Cast: 8 new effect components adjusted"
+    }
+  ],
+  "skips": 0,
+  "casts": 3,
+  "final": [
+    {
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675884496",
+      "opcode": 130
+    },
+    {
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675885904",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675883792",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675872880",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75971780,
+      "token": "675879216",
+      "opcode": 215
+    },
+    {
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675877456",
+      "opcode": 130
+    },
+    {
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675881328",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675882384",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675883088",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75971783,
+      "token": "675888016",
+      "opcode": 215
+    },
+    {
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989596,
+      "token": "675926032",
+      "opcode": 84
+    },
+    {
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989596,
+      "token": "675932016",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989596,
+      "token": "675933776",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989596,
+      "token": "675920752",
+      "opcode": 30
+    },
+    {
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75973724,
+      "token": "675921104",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "676127728",
+      "opcode": 130
+    },
+    {
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "676130896",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "676131248",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "675878160",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75971779,
+      "token": "675879920",
+      "opcode": 215
+    },
+    {
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675877808",
+      "opcode": 130
+    },
+    {
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675876400",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675881680",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675872528",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75971780,
+      "token": "675879568",
+      "opcode": 215
+    },
+    {
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675888720",
+      "opcode": 130
+    },
+    {
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675885200",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675889424",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675889776",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75971781,
+      "token": "675873232",
+      "opcode": 215
+    },
+    {
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675888368",
+      "opcode": 130
+    },
+    {
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675886256",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675878512",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675876048",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75971779,
+      "token": "675886960",
+      "opcode": 215
+    },
+    {
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616197232",
+      "opcode": 84
+    },
+    {
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616196176",
+      "opcode": 328
+    },
+    {
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616207440",
+      "opcode": 142
+    },
+    {
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616201104",
+      "opcode": 30
+    },
+    {
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75973822,
+      "token": "616195120",
+      "opcode": 174
+    },
+    {
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75971767,
+      "token": "616195472",
+      "opcode": 215
+    }
+  ],
+  "finish": 75971773,
+  "state": "done",
+  "effects": [
+    {
+      "amount": 80,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971655,
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989654,
+      "token": "675926032",
+      "flags": 0,
+      "opcode": 84
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971655,
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989654,
+      "token": "675932016",
+      "flags": 65,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971655,
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989654,
+      "token": "675933776",
+      "flags": 16,
+      "opcode": 142
+    },
+    {
+      "amount": 100,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971655,
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75989654,
+      "token": "675920752",
+      "flags": 0,
+      "opcode": 30
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971655,
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75973724,
+      "token": "675921104",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971655,
+      "res": "SPPR306",
+      "slot": 2,
+      "expiry": 75971669,
+      "token": "675925328",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "676127728",
+      "flags": 0,
+      "opcode": 130
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "676130896",
+      "flags": 68,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "676131248",
+      "flags": 17,
+      "opcode": 142
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75972289,
+      "token": "675878160",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 2,
+      "expiry": 75971779,
+      "token": "675879920",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675888368",
+      "flags": 0,
+      "opcode": 130
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675886256",
+      "flags": 68,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675878512",
+      "flags": 17,
+      "opcode": 142
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75972289,
+      "token": "675876048",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971750,
+      "res": "SPPR101",
+      "slot": 5,
+      "expiry": 75971779,
+      "token": "675886960",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675884496",
+      "flags": 0,
+      "opcode": 130
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675885904",
+      "flags": 68,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675883792",
+      "flags": 17,
+      "opcode": 142
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75972290,
+      "token": "675872880",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 0,
+      "expiry": 75971780,
+      "token": "675879216",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675877808",
+      "flags": 0,
+      "opcode": 130
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675876400",
+      "flags": 68,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675881680",
+      "flags": 17,
+      "opcode": 142
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75972290,
+      "token": "675872528",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971751,
+      "res": "SPPR101",
+      "slot": 3,
+      "expiry": 75971780,
+      "token": "675879568",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971752,
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675888720",
+      "flags": 0,
+      "opcode": 130
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971752,
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675885200",
+      "flags": 68,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971752,
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675889424",
+      "flags": 17,
+      "opcode": 142
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971752,
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75972291,
+      "token": "675889776",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971752,
+      "res": "SPPR101",
+      "slot": 4,
+      "expiry": 75971781,
+      "token": "675873232",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 80,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971753,
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616197232",
+      "flags": 0,
+      "opcode": 84
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971753,
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616196176",
+      "flags": 65,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971753,
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616207440",
+      "flags": 16,
+      "opcode": 142
+    },
+    {
+      "amount": 100,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971753,
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75989752,
+      "token": "616201104",
+      "flags": 0,
+      "opcode": 30
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971753,
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75973822,
+      "token": "616195120",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971753,
+      "res": "SPPR306",
+      "slot": 5,
+      "expiry": 75971767,
+      "token": "616195472",
+      "flags": 1,
+      "opcode": 215
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971754,
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675877456",
+      "flags": 0,
+      "opcode": 130
+    },
+    {
+      "amount": 1,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971754,
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675881328",
+      "flags": 68,
+      "opcode": 328
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971754,
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675882384",
+      "flags": 17,
+      "opcode": 142
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 7,
+      "tick": 75971754,
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75972293,
+      "token": "675883088",
+      "flags": 0,
+      "opcode": 174
+    },
+    {
+      "amount": 0,
+      "source": 149489896,
+      "timing": 4096,
+      "tick": 75971754,
+      "res": "SPPR101",
+      "slot": 1,
+      "expiry": 75971783,
+      "token": "675888016",
+      "flags": 1,
+      "opcode": 215
+    }
+  ]
+}

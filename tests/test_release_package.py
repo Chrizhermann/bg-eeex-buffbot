@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import shlex
 import shutil
@@ -53,6 +54,17 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/BfBotLoc.lua",
     "buffbot/BfBotMp.lua",
     "buffbot/BfBotPer.lua",
+    "buffbot/BfBotPln.lua",
+    "buffbot/BfBotIO.lua",
+    "buffbot/BfBotShr.lua",
+    "buffbot/BfBotFst.lua",
+    "buffbot/BfBotRst.lua",
+    "buffbot/BfBotPUI.lua",
+    "buffbot/BfBotVD.lua",
+    "buffbot/BfBotVis.lua",
+    "buffbot/BfBotRx.menu",
+    "buffbot/BfBotVA.json",
+    "buffbot/BfBotVA.txt",
     "buffbot/BfBotScn.lua",
     "buffbot/BfBotThm.lua",
     "buffbot/BfBotTst.lua",
@@ -82,12 +94,18 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/lang/spanish/setup.tra",
     "buffbot/setup-buffbot.tp2",
 }
+VISUAL_RESOURCES=json.loads((ROOT/'buffbot/BfBotVA.json').read_text())['files']
+BUFFBOT_RELEASE_FILES.update('buffbot/visual/'+name for name in VISUAL_RESOURCES)
 ARCHIVE_FILES = {
     "setup-buffbot.exe",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
     "docs/5e-spellcasting.md",
+    "docs/plan-management-and-casting-beta.md",
+    "docs/buffbot-original-vs-redux.md",
+    "docs/compatibility-test-report.md",
+    "docs/fast-forward-performance-investigation.md",
     *BUFFBOT_RELEASE_FILES,
 }
 
@@ -210,7 +228,7 @@ def _copy_release_source(tmp_path: Path) -> Path:
     (repo / "tools").mkdir(parents=True)
     shutil.copy2(BUILD_SCRIPT, repo / "tools/build-release.sh")
     shutil.copytree(ROOT / "buffbot", repo / "buffbot")
-    for name in ("README.md", "CHANGELOG.md", "LICENSE", "docs/5e-spellcasting.md"):
+    for name in ("README.md", "CHANGELOG.md", "LICENSE", "docs/5e-spellcasting.md", "docs/plan-management-and-casting-beta.md", "docs/compatibility-test-report.md", "docs/fast-forward-performance-investigation.md"):
         destination = repo / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / name, destination)
@@ -227,7 +245,7 @@ def test_release_builder_produces_exact_byte_preserving_allowlist(
     release_archive: Path,
 ) -> None:
     names = _archive_file_names(release_archive)
-    assert len(names) == 47
+    assert len(names) == len(ARCHIVE_FILES)
     assert len(names) == len({name.casefold() for name in names})
     assert set(names) == ARCHIVE_FILES
     assert all("\\" not in name for name in names)
@@ -440,52 +458,23 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "`override/bfbot_l10n.tra`" in source
     assert "reads directly" in normalized
     assert "no BuffBot-owned UI string is fetched from the game TLK".casefold() in normalized
-    assert "raw development deploy" in normalized
-    assert "English fallback".casefold() in normalized
-    assert "preserves an existing `override/bfbot_l10n.tra`" in source
-    assert "`override/bfbot_strrefs.txt`" in source
-    assert "preserves both files byte-for-byte" in normalized
-    assert "skips TLK patching".casefold() in normalized
-    assert "stops before copying runtime files" in normalized
-    assert "reinstall BuffBot with WeiDU".casefold() in normalized
-    assert "patches only `lang/en_US/dialog.tlk`".casefold() in normalized
-    assert "other language TLKs untouched".casefold() in normalized
-    assert "requires Python 3 and an existing `lang/en_US/dialog.tlk`" in source
-    assert "refuses the fallback before copying files" in normalized
-    assert "source checkout" in normalized
-    assert "development-only" in normalized
-    assert "f12 innate" in normalized
-    assert "innate references" in normalized
-    assert "only the eight generated F12 innate names".casefold() in normalized
-    assert "`@200` through `@207`" in source
-    assert "`bfbot_strrefs.txt`" in source
-    assert "Copy Copy" in source
-    assert "readable CJK labels" in source
-    assert "tested resolution/font" in source
-    assert "alternate resolutions/fonts remain pending" in normalized
-    assert "live in-game Chinese glyph and layout acceptance is still pending".casefold() not in normalized
-    assert "language pull requests are welcome" in normalized
-    assert "buffbot/lang/english/setup.tra" in source
-    assert "safe lowercase folder name" in normalized
-    assert "`a-z`, `0-9`, and underscores" in source
-    assert "complete catalog" in normalized
-    assert "exact `@` IDs" in source
-    assert "all comments" in normalized
-    assert "named placeholder" in normalized
-    assert "WeiDU token".casefold() in normalized
-    assert "`@113`" in source
-    assert "exact folder name" in normalized
-    assert "non-translatable" in normalized
-    assert "UTF-8" in source
-    assert "one-line" in normalized and "tilde" in normalized
-    assert "python -m pytest tests/test_localization.py" in source
-    assert "tests/test_release_package.py" in source
-    assert "`LANGUAGE` stanza" in source
-    assert "package manifest is derived from the `language` declarations" in normalized
-    assert "translator credit" in normalized
-    assert "robovoid" in normalized
-    assert "[robovoid](https://github.com/robvoid)" in source
-    assert "#50" in source
+    for phrase in (
+        "raw development deploy", "english fallback", "preserves both files byte-for-byte",
+        "skips tlk patching", "stops before copying runtime files",
+        "reinstall buffbot with weidu", "other language tlks untouched",
+        "refuses the fallback before copying files", "source checkout", "development-only",
+        "language pull requests are welcome", "complete catalog", "safe lowercase folder name",
+        "placeholders", "installer tokens", "one-line tilde", "translator credit",
+        "redux no longer grants those shortcuts",
+    ):
+        assert phrase in normalized
+    for literal in (
+        "`override/bfbot_strrefs.txt`", "`bfbot_strrefs.txt`",
+        "`lang/en_US/dialog.tlk`", "buffbot/lang/english/setup.tra", "`@113`",
+        "UTF-8", "`LANGUAGE` stanza", "python -m pytest tests/test_localization.py",
+        "tests/test_release_package.py", "[robovoid](https://github.com/robvoid)", "#50",
+    ):
+        assert literal in source
     assert (
         "An obsolete `bfbot_l10n.txt` alone is preserved but does not select "
         "localized deployment."
@@ -794,7 +783,7 @@ def test_raw_deploy_falls_back_to_valid_python_when_python3_is_unusable(
     assert "English fallback" in result.stdout
     refs = _read_deploy_strrefs(override)
     strings = _read_tlk_strings(english_tlk)
-    assert [strings[ref] for ref in refs] == [f"BuffBot {i}" for i in range(1, 9)]
+    assert [strings[ref] for ref in refs] == [f"BuffBot: <BFBOT{i}>" for i in range(1, 9)]
 
 
 def test_raw_deploy_stops_on_payload_copy_failure_before_tlk_mutation(

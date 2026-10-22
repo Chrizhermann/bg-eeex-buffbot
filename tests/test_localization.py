@@ -57,6 +57,115 @@ EXPECTED_CATALOG_DIRECTORIES = {
 # schema (or these same catalog comments), not introduce an uncontrolled fourth
 # hand-maintained copy of the ID/key contract.
 CATALOG_SCHEMA = {
+    1102: "party.text103",
+    1103: "party.text104",
+    1104: "party.text105",
+    1105: "party.text106",
+
+    1095: "party.text96",
+    1096: "party.text97",
+    1097: "party.text98",
+    1098: "party.text99",
+    1099: "party.text100",
+    1100: "party.text101",
+    1101: "party.text102",
+
+    1094: "party.text95",
+    1088: "party.text89",
+    1089: "party.text90",
+    1090: "party.text91",
+    1091: "party.text92",
+    1092: "party.text93",
+    1093: "party.text94",
+
+    1087: "party.text88",
+    1066: "party.text67",
+    1067: "party.text68",
+    1068: "party.text69",
+    1069: "party.text70",
+    1070: "party.text71",
+    1071: "party.text72",
+    1072: "party.text73",
+    1073: "party.text74",
+    1074: "party.text75",
+    1075: "party.text76",
+    1076: "party.text77",
+    1077: "party.text78",
+    1078: "party.text79",
+    1079: "party.text80",
+    1080: "party.text81",
+    1081: "party.text82",
+    1082: "party.text83",
+    1083: "party.text84",
+    1084: "party.text85",
+    1085: "party.text86",
+    1086: "party.text87",
+    1000: "party.text01",
+    1001: "party.text02",
+    1002: "party.text03",
+    1003: "party.text04",
+    1004: "party.text05",
+    1005: "party.text06",
+    1006: "party.text07",
+    1007: "party.text08",
+    1008: "party.text09",
+    1009: "party.text10",
+    1010: "party.text11",
+    1011: "party.text12",
+    1012: "party.text13",
+    1013: "party.text14",
+    1014: "party.text15",
+    1015: "party.text16",
+    1016: "party.text17",
+    1017: "party.text18",
+    1018: "party.text19",
+    1019: "party.text20",
+    1020: "party.text21",
+    1021: "party.text22",
+    1022: "party.text23",
+    1023: "party.text24",
+    1024: "party.text25",
+    1025: "party.text26",
+    1026: "party.text27",
+    1027: "party.text28",
+    1028: "party.text29",
+    1029: "party.text30",
+    1030: "party.text31",
+    1031: "party.text32",
+    1032: "party.text33",
+    1033: "party.text34",
+    1034: "party.text35",
+    1035: "party.text36",
+    1036: "party.text37",
+    1037: "party.text38",
+    1038: "party.text39",
+    1039: "party.text40",
+    1040: "party.text41",
+    1041: "party.text42",
+    1042: "party.text43",
+    1043: "party.text44",
+    1044: "party.text45",
+    1045: "party.text46",
+    1046: "party.text47",
+    1047: "party.text48",
+    1048: "party.text49",
+    1049: "party.text50",
+    1050: "party.text51",
+    1051: "party.text52",
+    1052: "party.text53",
+    1053: "party.text54",
+    1054: "party.text55",
+    1055: "party.text56",
+    1056: "party.text57",
+    1057: "party.text58",
+    1058: "party.text59",
+    1059: "party.text60",
+    1060: "party.text61",
+    1061: "party.text62",
+    1062: "party.text63",
+    1063: "party.text64",
+    1064: "party.text65",
+    1065: "party.text66",
     # Installer strings (100-199)
     100: "installer.component.luajit",
     101: "installer.require.game",
@@ -936,7 +1045,8 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     languages = readme.split("## Languages", 1)[1].split("## Installation", 1)[0]
     assert "`override/bfbot_l10n.tra`" in languages
     assert "no BuffBot-owned UI string is fetched from the game TLK" in languages
-    assert "Only the eight generated F12 innate names remain TLK-backed" in languages
+    assert "installer still keeps `bfbot_strrefs.txt`" in languages
+    assert "Redux no longer grants those shortcuts" in languages
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
     localization_release = changelog.split("\n## v1.8.0-alpha", 1)[1].split(
@@ -959,12 +1069,12 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     assert "retaining TLK ownership only for generated innate SPL names" in summary
 
 
-def test_release_changelog_records_final_automated_and_live_boundaries():
+def test_upstream_release_changelog_retains_automated_and_live_boundaries():
     source = CHANGELOG_PATH.read_text(encoding="utf-8")
     releases = source.split("\n## ")[1:]
     if releases[0].startswith("Unreleased\n"):
         releases = releases[1:]
-    current_release = releases[0]
+    current_release = next(release for release in releases if release.startswith("v1.10.1 (2026-10-20)"))
     current_normalized = current_release.casefold()
 
     assert current_release.startswith("v1.10.1 (2026-10-20)")
@@ -1164,15 +1274,16 @@ def test_menu_has_no_static_alphabetic_player_labels_or_legacy_markers():
 
 
 def test_menu_localization_does_not_change_actions_layout_or_list_structure():
-    source = MENU_PATH.read_text(encoding="utf-8")
+    # Preserve the original caster editor; the new party panel has its own tests.
+    source = MENU_PATH.read_text(encoding="utf-8").split("-- Recipient-first party planner", 1)[0].rstrip() + "\n"
     normalized = "\n".join(
         line
         for line in source.splitlines()
         if not re.match(r"^\s*(?:text|tooltip)\b", line)
     ) + "\n"
-    # Includes the zero-area label that drains deferred 5E spell-list updates.
+    # Includes zero-area deferred 5E and completed-rest polling labels.
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
-        "ad7f0022e20224d820601f4772fea7b4cec9ce47be6536c78bf91cdf9a6e6a0d"
+        "dacc464f33d66ffb9b8b5740fdd62be120a8b83cd3a1c4e58eb4729a96563ed0"
     )
 
 

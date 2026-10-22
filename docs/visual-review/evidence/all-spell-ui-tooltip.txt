@@ -1,0 +1,3 @@
+Aura of Flaming Death *
+Self only
+Limited duration balance: Effects can trigger later. Effects are never extended.

@@ -1,0 +1,2 @@
+state=done casts=2 skips=0 journal=nil
+owner=0 slot=22 charges=0

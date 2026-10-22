@@ -1,0 +1,30 @@
+[
+  {
+    "file": "stock-bg1-buffs.jpg",
+    "sha256": "e4d9ec6efb71f3b000ed794e88bac8025d9c826bca0705690791ce89b36f8af6"
+  },
+  {
+    "file": "stock-bg2-theme.jpg",
+    "sha256": "55672a0b03a5be8ff00e42ca277240d01e7a5fc3f17b7f18b7fbb6b29b1910b6"
+  },
+  {
+    "file": "stock-casting-modes.jpg",
+    "sha256": "d275245e24a22d85197f3067b365d6c26a5f872d4f761adede4f7039e6552445"
+  },
+  {
+    "file": "stock-hud-presets.jpg",
+    "sha256": "5f9aceef4eeaa2517ade597bcae281b2d3516922aad48b48f531cc374552a8e6"
+  },
+  {
+    "file": "stock-iwd-order.jpg",
+    "sha256": "bf16bda95bc4a8ac255786ceb7d686f3dba2dc3f818227a89fc0ce2fc6dbee5b"
+  },
+  {
+    "file": "stock-sod-summary.jpg",
+    "sha256": "82bbfe461f7cf4b80a742f13d898c2bda376c21e2bfa861a1099f69578528b86"
+  },
+  {
+    "file": "ui-plus-hud-presets.jpg",
+    "sha256": "6587274b6504bba4d35962fb85194bf788d3f7fee052f5ce7d1461d6289c3623"
+  }
+]

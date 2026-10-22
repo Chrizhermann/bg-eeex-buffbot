@@ -1,0 +1,99 @@
+{
+  "cases": [
+    {
+      "ok": true,
+      "result": {
+        "grantModuleRemoved": true,
+        "injected": {
+          "BFBT01": 2,
+          "BFBT58": 1
+        },
+        "nativeCleanup": true,
+        "normalAbilitiesKept": 10,
+        "removed": 3,
+        "savedPresetsKept": "Long Buffs",
+        "settings": [
+          "Theme...",
+          "Casting: Fast-forward 2x",
+          "Rename",
+          "Refresh",
+          "Import caster preset",
+          "Export plan",
+          "Import plan...",
+          "Delete preset...",
+          "Caster editor"
+        ]
+      },
+      "seq": 227
+    },
+    {
+      "ok": true,
+      "result": {
+        "realAbilitiesPreserved": 10,
+        "retiredCleanupVerified": true,
+        "settings": [
+          "Theme...",
+          "Casting: Fast-forward 2x",
+          "Rename",
+          "Refresh",
+          "Import caster preset",
+          "Export plan",
+          "Import plan...",
+          "Delete preset...",
+          "Caster editor"
+        ],
+        "tabOrder": [
+          "Buffs",
+          "Order",
+          "Summary"
+        ],
+        "tabX": [
+          384,
+          526,
+          668
+        ]
+      },
+      "seq": 228
+    },
+    {
+      "ok": true,
+      "result": {
+        "freshDefaults": {
+          "first": "Pre-Battle Buffs",
+          "restOn": 1,
+          "restPreset": 2,
+          "second": "Wake Up Buffs"
+        },
+        "priorSavedPresets": 2,
+        "recommended": "[x] Fast-forward 2x (Recommended)",
+        "retiredAbilities": true,
+        "tabOrder": [
+          "Buffs",
+          "Order",
+          "Summary"
+        ]
+      },
+      "seq": 229
+    },
+    {
+      "ok": true,
+      "result": {
+        "active": true,
+        "popup": "dialog",
+        "recommended": "[x] Fast-forward 2x (Recommended)",
+        "rect": [
+          42,
+          24,
+          1280,
+          720
+        ],
+        "screen": [
+          1365,
+          768
+        ]
+      },
+      "seq": 230
+    }
+  ],
+  "note": "Private native EET copy: exact shortcut cleanup preserves 10 real abilities; final defaults, tab geometry, and recommended option verified."
+}

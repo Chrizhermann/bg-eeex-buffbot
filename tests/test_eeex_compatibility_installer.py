@@ -62,6 +62,15 @@ MAIN_OUTPUT_FILES = {
     "bfbotexe.lua",
     "bfbotmp.lua",
     "bfbotper.lua",
+    "bfbotpln.lua",
+    "bfbotio.lua",
+    "bfbotshr.lua",
+    "bfbotfst.lua",
+    "bfbotrst.lua",
+    "bfbotpui.lua",
+    "bfbotvd.lua",
+    "bfbotvis.lua",
+    "bfbotrx.menu",
     "bfbotinn.lua",
     "bfbotui.lua",
     "bfbotthm.lua",
@@ -88,6 +97,8 @@ MAIN_OUTPUT_FILES = {
     "bfbot_strrefs.txt",
     "bfbot_l10n.tra",
 }
+
+MAIN_OUTPUT_FILES.update(p.name.lower() for p in (ROOT/'buffbot/visual').iterdir() if p.is_file())
 
 CAPABILITY_CASES = (
     ("none", False),
@@ -343,7 +354,7 @@ def _assert_english_innate_catalog_in_tlk(path: Path) -> None:
     }
     assert strings[0] == ""
     assert expected_values <= set(strings[1:])
-    assert set(strings[1:]) <= set(ENGLISH_CATALOG.values())
+    assert set(strings[1:]) <= set(ENGLISH_CATALOG.values()) | {f"BuffBot {i}" for i in range(1,9)}
 
 
 @dataclass(frozen=True)
@@ -1325,6 +1336,7 @@ def test_language_switch_preserves_released_main_first_stack_and_keeps_ownership
         chinese_catalog[catalog_id] for catalog_id in INNATE_CATALOG_IDS
     }
 
+    english_tlk_strings |= {f"BuffBot {i}" for i in range(1,9)}
     game.replace_buffbot_tp2(RELEASED_V170_TP2)
     _assert_installed(game, game.install(0))
     _assert_installed(game, game.install(1))

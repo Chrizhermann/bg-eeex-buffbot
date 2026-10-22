@@ -1,36 +1,68 @@
--- ============================================================
--- BfBotInn.lua — Innate Ability Management (BfBot.Innate)
--- Generates SPL files at runtime and grants per-preset innate
--- abilities to party members for F12 / special abilities access.
--- ============================================================
+-- Retired preset shortcuts: upgrade cleanup plus helper resources used by the
+-- legacy caster editor. No shortcut SPL generation, grants or recharge hooks.
+BfBot.Innate = nil -- Retire callbacks retained by a live module reload.
+BfBot.Legacy = { pending = {} }
+local L = BfBot.Legacy
 
--- v1.6.1 stored the sprite-loaded listener guard on this module table. Preserve
--- that fact when force-loading a newer module into the same game process; the legacy
--- callback already late-binds BfBot.Innate.Refresh and remains usable.
-local _previousInnate = BfBot.Innate
-BfBot.Innate = {}
-if type(_previousInnate) == "table" and _previousInnate._initDone
-        and not BfBot._innateLoadedListenerRegistered then
-    BfBot._innateLoadedListenerRegistered = true
+local function retired(res)
+    return type(res)=='string' and res:upper():match('^BFBT[0-5][1-8]$')~=nil
 end
 
--- Read per-preset strrefs from file (written by WeiDU at install time, or by
--- tools/patch_tlk.py during dev deploy). One strref per line, indexed by
--- preset (1..MAX_PRESETS). Empty array if the file is missing → innates show
--- no tooltip name. We read each preset explicitly rather than relying on
--- contiguous strref arithmetic, since WeiDU does not guarantee contiguity
--- across upgrades.
-BfBot.Innate._strrefs = {}
-if io then
-    local _sf = io.open("override/bfbot_strrefs.txt", "r")
-    if _sf then
-        for line in _sf:lines() do
-            local n = tonumber(line)
-            if n then table.insert(BfBot.Innate._strrefs, n) end
+-- Count before changing either engine list. Include spent/memorized-only entries
+-- and duplicate copies left by older versions; preserve all real game abilities.
+function L.PresetAbilityCounts(sprite)
+    local counts,memCounts={},{}
+    for _,_,res in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
+        if retired(res) then res=res:upper();counts[res]=(counts[res] or 0)+1 end
+    end
+    if sprite.m_memorizedSpellsInnate then
+        local list=sprite.m_memorizedSpellsInnate:getReference(0)
+        if list then EEex_Utility_IterateCPtrList(list,function(mem)
+            local res=mem.m_spellId:get()
+            if retired(res) then res=res:upper();memCounts[res]=(memCounts[res] or 0)+1 end
+        end) end
+    end
+    for res,count in pairs(memCounts) do counts[res]=math.max(counts[res] or 0,count) end
+    return counts
+end
+function L.RemovePresetAbilities(sprite)
+    local counts=L.PresetAbilityCounts(sprite)
+    local removed=0
+    for res,count in pairs(counts) do
+        for _=1,count do
+            sprite:applyEffect({effectID=172,timing=1,res=res,sourceID=sprite.m_id,targetID=sprite.m_id})
+            removed=removed+1
         end
-        _sf:close()
+    end
+    return removed
+end
+function L.QueueCleanup(sprite)
+    if sprite and next(L.PresetAbilityCounts(sprite)) then L.pending[sprite.m_id]=true end
+end
+function L.Tick()
+    if not e or not worldScreen or e:GetActiveEngine()~=worldScreen then return end
+    if BfBot.Exec.GetState()=='running' or BfBot.Share and BfBot.Share.run then return end
+    local n=0
+    for id in pairs(L.pending) do
+        local sprite=EEex_GameObject_Get(id)
+        if sprite and EEex_GameObject_IsSprite(sprite,false) then
+            L.RemovePresetAbilities(EEex_GameObject_CastUserType(sprite))
+        end
+        L.pending[id]=nil;n=n+1
+        if n>=6 then break end
     end
 end
+function L.Init()
+    if BfBot._retiredAbilitiesListenerRegistered then return end
+    BfBot._retiredAbilitiesListenerRegistered=true
+    EEex_Sprite_AddLoadedListener(BfBot._SafeCallback("legacy.preset_cleanup",function(sprite)
+        BfBot.Legacy.QueueCleanup(sprite)
+    end))
+end
+
+-- A saved action may still reference an old opcode-402 shortcut. It must never
+-- dispatch a plan after the feature is removed; the next world tick removes it.
+function BFBOTGO() end
 
 -- ---- Binary packing helpers (little-endian) ----
 
@@ -51,100 +83,7 @@ local function _splResref(s)
 end
 local function _splPad(n) return string.rep("\0", n) end
 
---- Build a minimal SPL binary for a BuffBot innate ability.
--- @param slot number: party slot (0-5), baked into opcode 402 param1
--- @param preset number: preset index (1-8), baked into opcode 402 param2
--- @return string: raw SPL binary data
-function BfBot.Innate._BuildSPL(slot, preset)
-    local numFeats = 1  -- opcode 402 dispatch only
-
-    -- Name strref: look up by preset index, fall back to "no name" if the
-    -- TLK patcher didn't run or this preset's strref wasn't written.
-    local nameStrref = BfBot.Innate._strrefs[preset] or 0xFFFFFFFF
-
-    local HEADER_SIZE = 0x72   -- 114 bytes
-    local EXT_SIZE    = 0x28   -- 40 bytes
-    local FEAT_SIZE   = 0x30   -- 48 bytes
-    local extOffset   = HEADER_SIZE
-    local featOffset  = HEADER_SIZE + EXT_SIZE
-
-    -- SPL Header (114 bytes)
-    local header = "SPL "                       -- 0x0000: Signature
-        .. "V1  "                               -- 0x0004: Version
-        .. _splDword(nameStrref)                 -- 0x0008: Unidentified name strref
-        .. _splDword(nameStrref)                 -- 0x000C: Identified name strref
-        .. _splResref("")                       -- 0x0010: Completion sound
-        .. _splDword(0)                         -- 0x0018: Flags
-        .. _splWord(4)                          -- 0x001C: Spell type = 4 (Innate)
-        .. _splDword(0)                         -- 0x001E: Exclusion flags
-        .. _splWord(0)                          -- 0x0022: Casting graphics
-        .. _splByte(0)                          -- 0x0024: unused
-        .. _splByte(0)                          -- 0x0025: Primary type
-        .. _splByte(0)                          -- 0x0026: unused
-        .. _splByte(0)                          -- 0x0027: Secondary type
-        .. _splPad(12)                          -- 0x0028: unused block
-        .. _splDword(preset)                      -- 0x0034: Spell level = preset (separate F12 lines)
-        .. _splWord(0)                          -- 0x0038: Stack amount
-        .. _splResref("BFBOTIB")                -- 0x003A: Spellbook icon (BuffBot innate BAM)
-        .. _splWord(0)                          -- 0x0042: Lore to ID
-        .. _splResref("")                       -- 0x0044: Ground icon
-        .. _splDword(0)                         -- 0x004C: Weight
-        .. _splDword(0xFFFFFFFF)                -- 0x0050: Description unidentified
-        .. _splDword(0xFFFFFFFF)                -- 0x0054: Description identified
-        .. _splResref("")                       -- 0x0058: Description icon
-        .. _splDword(0)                         -- 0x0060: Enchantment
-        .. _splDword(extOffset)                 -- 0x0064: Extended header offset
-        .. _splWord(1)                          -- 0x0068: Extended header count
-        .. _splDword(featOffset)                -- 0x006A: Feature block table offset
-        .. _splWord(0)                          -- 0x006E: Casting feature block offset
-        .. _splWord(0)                          -- 0x0070: Casting feature block count
-
-    -- Extended Header / Ability (40 bytes)
-    local ability = _splByte(1)                 -- 0x0000: Spell form = standard
-        .. _splByte(0x04)                       -- 0x0001: Flags = friendly
-        .. _splWord(4)                          -- 0x0002: Location = Innate
-        .. _splResref("BFBOTIB")                -- 0x0004: Memorised icon (BuffBot innate BAM)
-        .. _splByte(5)                          -- 0x000C: Target = self
-        .. _splByte(0)                          -- 0x000D: Target count
-        .. _splWord(0)                          -- 0x000E: Range
-        .. _splWord(preset)                      -- 0x0010: Level required = preset (matches spell level)
-        .. _splWord(0)                          -- 0x0012: Casting time = instant
-        .. _splWord(1)                          -- 0x0014: Times per day = 1
-        .. _splWord(0)                          -- 0x0016: Dice sides
-        .. _splWord(0)                          -- 0x0018: Dice thrown
-        .. _splWord(0)                          -- 0x001A: Enchanted
-        .. _splWord(0)                          -- 0x001C: Damage type
-        .. _splWord(numFeats)                   -- 0x001E: Feature block count
-        .. _splWord(0)                          -- 0x0020: Feature block offset (index)
-        .. _splWord(0)                          -- 0x0022: Charges
-        .. _splWord(0)                          -- 0x0024: Charge depletion
-        .. _splWord(1)                          -- 0x0026: Projectile = 1 (none)
-
-    -- Feature Block 1: Opcode 402 (EEex Invoke Lua)
-    local feat402 = _splWord(402)               -- 0x0000: Opcode
-        .. _splByte(1)                          -- 0x0002: Target = self
-        .. _splByte(0)                          -- 0x0003: Power
-        .. _splDword(slot)                      -- 0x0004: Param1 = party slot
-        .. _splDword(preset)                    -- 0x0008: Param2 = preset index
-        .. _splByte(0)                          -- 0x000C: Timing = 0 (instant/duration)
-        .. _splByte(0)                          -- 0x000D: Dispel/resistance
-        .. _splDword(0)                         -- 0x000E: Duration = 0 (one-shot)
-        .. _splByte(100)                        -- 0x0012: Probability1
-        .. _splByte(0)                          -- 0x0013: Probability2
-        .. _splResref("BFBOTGO")                -- 0x0014: Resource (function name)
-        .. _splDword(0)                         -- 0x001C: Dice thrown
-        .. _splDword(0)                         -- 0x0020: Dice sides
-        .. _splDword(0)                         -- 0x0024: Save type
-        .. _splDword(0)                         -- 0x0028: Save bonus
-        .. _splDword(0)                         -- 0x002C: Stacking ID
-
-    return header .. ability .. feat402
-end
-
---- Build a cheat-mode helper SPL (BFBTCH.SPL) that grants Improved Alacrity
--- + casting time reduction for 300 seconds. Invisible, self-only, no icon/name.
--- @return string: raw SPL binary data (250 bytes)
-function BfBot.Innate._BuildCheatSPL()
+function BfBot.Legacy._BuildCheatSPL()
     local HEADER_SIZE = 0x72   -- 114 bytes
     local EXT_SIZE    = 0x28   -- 40 bytes
     local FEAT_SIZE   = 0x30   -- 48 bytes
@@ -246,7 +185,7 @@ end
 --- Build a cheat-mode remover SPL (BFBTCR.SPL) that removes BFBTCH effects.
 -- Uses opcode 321 (Remove Effects by Resource) with instant/permanent timing.
 -- @return string: raw SPL binary data (202 bytes)
-function BfBot.Innate._BuildCheatRemoverSPL()
+function BfBot.Legacy._BuildCheatRemoverSPL()
     local HEADER_SIZE = 0x72   -- 114 bytes
     local EXT_SIZE    = 0x28   -- 40 bytes
     local FEAT_SIZE   = 0x30   -- 48 bytes
@@ -326,484 +265,13 @@ function BfBot.Innate._BuildCheatRemoverSPL()
     return header .. ability .. feat321
 end
 
---- Write all SPL files to the override folder (always overwrites).
--- Called once at mod init time (before menus load).
--- SPL version tag lets us detect when binary format changes.
-BfBot.Innate._SPL_VERSION = 7  -- v7: preset SPLs contain only opcode 402; recharge is Lua-side
 
-function BfBot.Innate._EnsureSPLFiles()
-    if BfBot._noIO then return 0 end
-    local count = 0
-    for slot = 0, 5 do
-        for preset = 1, BfBot.MAX_PRESETS do
-            local resref = string.format("BFBT%d%d", slot, preset)
-            local path = "override/" .. resref .. ".SPL"
-            local data = BfBot.Innate._BuildSPL(slot, preset)
-            local f = io.open(path, "wb")
-            if f then
-                f:write(data)
-                f:close()
-                count = count + 1
-            end
-        end
-    end
-
-    -- Write cheat-mode helper SPLs
-    local cheatPath = "override/BFBTCH.SPL"
-    local cheatData = BfBot.Innate._BuildCheatSPL()
-    local cf = io.open(cheatPath, "wb")
-    if cf then
-        cf:write(cheatData)
-        cf:close()
-        count = count + 1
-    end
-
-    local removerPath = "override/BFBTCR.SPL"
-    local removerData = BfBot.Innate._BuildCheatRemoverSPL()
-    local rf = io.open(removerPath, "wb")
-    if rf then
-        rf:write(removerData)
-        rf:close()
-        count = count + 1
-    end
-
-    -- Write innate remover SPL (opcode 172 for all BFBT resrefs)
-    local innRemoverPath = "override/BFBTRM.SPL"
-    local innRemoverData = BfBot.Innate._BuildRemoverSPL()
-    local irf = io.open(innRemoverPath, "wb")
-    if irf then
-        irf:write(innRemoverData)
-        irf:close()
-        count = count + 1
-    end
-
-    return count
-end
-
---- Build a remover SPL (BFBTRM.SPL) that removes ALL possible BuffBot innates
--- via opcode 172 (Remove Innate). One effect per BFBT{slot}{preset} resref.
--- Applied via ReallyForceSpellRES — reliable, unlike RemoveSpellRES which
--- silently fails when queued (not in INSTANT.IDS) and caused innate accumulation
--- that corrupted save files and crashed on rest.
--- @return string: raw SPL binary data
-function BfBot.Innate._BuildRemoverSPL()
-    local HEADER_SIZE = 0x72   -- 114 bytes
-    local EXT_SIZE    = 0x28   -- 40 bytes
-    local extOffset   = HEADER_SIZE
-    local featOffset  = HEADER_SIZE + EXT_SIZE
-
-    -- Build opcode 172 effects for all possible BFBT innate resrefs
-    local effects = {}
-    for slot = 0, 5 do
-        for preset = 1, BfBot.MAX_PRESETS do
-            local resref = string.format("BFBT%d%d", slot, preset)
-            table.insert(effects,
-                _splWord(172)              -- 0x0000: Opcode = Remove Innate
-                .. _splByte(1)             -- 0x0002: Target = self
-                .. _splByte(0)             -- 0x0003: Power
-                .. _splDword(0)            -- 0x0004: Param1
-                .. _splDword(0)            -- 0x0008: Param2
-                .. _splByte(1)             -- 0x000C: Timing = 1 (instant/permanent)
-                .. _splByte(0)             -- 0x000D: Dispel/resistance
-                .. _splDword(0)            -- 0x000E: Duration
-                .. _splByte(100)           -- 0x0012: Probability1
-                .. _splByte(0)             -- 0x0013: Probability2
-                .. _splResref(resref)      -- 0x0014: Resource = innate to remove
-                .. _splDword(0)            -- 0x001C: Dice thrown
-                .. _splDword(0)            -- 0x0020: Dice sides
-                .. _splDword(0)            -- 0x0024: Save type
-                .. _splDword(0)            -- 0x0028: Save bonus
-                .. _splDword(0)            -- 0x002C: Stacking ID
-            )
-        end
-    end
-
-    local numEffects = #effects
-
-    -- SPL Header (114 bytes)
-    local header = "SPL "                       -- 0x0000: Signature
-        .. "V1  "                               -- 0x0004: Version
-        .. _splDword(0xFFFFFFFF)                -- 0x0008: Unidentified name strref (none)
-        .. _splDword(0xFFFFFFFF)                -- 0x000C: Identified name strref (none)
-        .. _splResref("")                       -- 0x0010: Completion sound
-        .. _splDword(0)                         -- 0x0018: Flags
-        .. _splWord(4)                          -- 0x001C: Spell type = 4 (Innate)
-        .. _splDword(0)                         -- 0x001E: Exclusion flags
-        .. _splWord(0)                          -- 0x0022: Casting graphics
-        .. _splByte(0)                          -- 0x0024: unused
-        .. _splByte(0)                          -- 0x0025: Primary type
-        .. _splByte(0)                          -- 0x0026: unused
-        .. _splByte(0)                          -- 0x0027: Secondary type
-        .. _splPad(12)                          -- 0x0028: unused block
-        .. _splDword(1)                         -- 0x0034: Spell level = 1
-        .. _splWord(0)                          -- 0x0038: Stack amount
-        .. _splResref("")                       -- 0x003A: Spellbook icon (none — invisible)
-        .. _splWord(0)                          -- 0x0042: Lore to ID
-        .. _splResref("")                       -- 0x0044: Ground icon
-        .. _splDword(0)                         -- 0x004C: Weight
-        .. _splDword(0xFFFFFFFF)                -- 0x0050: Description unidentified
-        .. _splDword(0xFFFFFFFF)                -- 0x0054: Description identified
-        .. _splResref("")                       -- 0x0058: Description icon
-        .. _splDword(0)                         -- 0x0060: Enchantment
-        .. _splDword(extOffset)                 -- 0x0064: Extended header offset
-        .. _splWord(1)                          -- 0x0068: Extended header count
-        .. _splDword(featOffset)                -- 0x006A: Feature block table offset
-        .. _splWord(0)                          -- 0x006E: Casting feature block offset
-        .. _splWord(0)                          -- 0x0070: Casting feature block count
-
-    -- Extended Header / Ability (40 bytes)
-    local ability = _splByte(1)                 -- 0x0000: Spell form = standard
-        .. _splByte(0x04)                       -- 0x0001: Flags = friendly
-        .. _splWord(4)                          -- 0x0002: Location = Innate
-        .. _splResref("")                       -- 0x0004: Memorised icon (none — invisible)
-        .. _splByte(5)                          -- 0x000C: Target = self
-        .. _splByte(0)                          -- 0x000D: Target count
-        .. _splWord(0)                          -- 0x000E: Range
-        .. _splWord(1)                          -- 0x0010: Level required = 1
-        .. _splWord(0)                          -- 0x0012: Casting time = instant
-        .. _splWord(1)                          -- 0x0014: Times per day = 1
-        .. _splWord(0)                          -- 0x0016: Dice sides
-        .. _splWord(0)                          -- 0x0018: Dice thrown
-        .. _splWord(0)                          -- 0x001A: Enchanted
-        .. _splWord(0)                          -- 0x001C: Damage type
-        .. _splWord(numEffects)                 -- 0x001E: Feature block count
-        .. _splWord(0)                          -- 0x0020: Feature block offset (index)
-        .. _splWord(0)                          -- 0x0022: Charges
-        .. _splWord(0)                          -- 0x0024: Charge depletion
-        .. _splWord(1)                          -- 0x0026: Projectile = 1 (none)
-
-    return header .. ability .. table.concat(effects)
-end
-
---- Pure reconciliation planner. Examine the sprite's known-innate list once
--- and produce a plan describing the diff between all of the sprite's actual
--- BuffBot BFBT entries and the desired set for its current slot. No side
--- effects — safe to call from tests with a stub config.
---
--- Return value:
---   actual      [resref] = count of that BFBT{slot}{p} entry on sprite
---   desired     [resref] = true for each preset configured at config.presets[p]
---   maxCount    Highest count in actual (drives BFBTRM pass count when legacy
---               accumulation is present — every apply of BFBTRM removes ONE
---               copy of each BFBT entry, so N copies need N passes).
---   hasMismatch True iff any actual entry is duplicated (count > 1) OR is not
---               in desired (deleted-preset orphan or stale portrait slot).
-function BfBot.Innate._PlanReconciliation(sprite, slot, config)
-    local plan = { actual = {}, desired = {}, maxCount = 0, hasMismatch = false }
-    if not sprite or not config or not config.presets then return plan end
-
-    for idx = 1, BfBot.MAX_PRESETS do
-        if config.presets[idx] then
-            plan.desired[string.format("BFBT%d%d", slot, idx)] = true
-        end
-    end
-
-    local ok = pcall(function()
-        for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
-            if type(resref) == "string" then
-                if resref:match("^BFBT[0-5][1-8]$") then
-                    local n = (plan.actual[resref] or 0) + 1
-                    plan.actual[resref] = n
-                    if n > plan.maxCount then plan.maxCount = n end
-                    if n > 1 or not plan.desired[resref] then
-                        plan.hasMismatch = true
-                    end
-                end
-            end
-        end
-    end)
-    if not ok then
-        -- Iterator threw mid-walk. `actual` is now partial — if we leave it
-        -- and fall through to Refresh's clean branch, half-seen entries get
-        -- treated as already-granted and skipped silently. Clear `actual`
-        -- and `maxCount` so the orchestrator either grants everything
-        -- desired (clean branch with empty actual) or no-ops if desired is
-        -- empty. `hasMismatch` stays false so we don't unnecessarily revoke.
-        BfBot._Warn("[Innate] Known-innate iterator failed for slot " .. tostring(slot)
-            .. "; reconciliation may be incomplete")
-        plan.actual = {}
-        plan.maxCount = 0
-        plan.hasMismatch = false
-    end
-
-    return plan
-end
-
---- Reconcile sprite's BFBT innates with config in a single planner+apply pass.
--- Plan via _PlanReconciliation, then queue actions:
---   mismatch → (maxCount + 1) BFBTRM passes (revoke ALL BFBT) + grant every
---              desired entry. BCS action queue is FIFO so revokes run first.
---   clean    → grant only desired entries missing from actual.
--- The mismatch branch also covers legacy v1.3.9 accumulation (duplicates) and
--- orphans (issue #47) — same single reconciliation handles both.
-function BfBot.Innate.Refresh(slot)
+-- These two invisible helpers belong to the original caster editor's quick mode.
+-- They are not preset abilities and are never granted to a character.
+function L.EnsureHelperSpells()
     if BfBot._noIO then return end
-    local sprite = EEex_Sprite_GetInPortrait(slot)
-    if not sprite then return end
-    local config = BfBot.Persist.GetConfig(sprite)
-    if not config then return end
-
-    local plan = BfBot.Innate._PlanReconciliation(sprite, slot, config)
-
-    if plan.hasMismatch then
-        local passes = math.min(plan.maxCount + 1, 50)
-        for _ = 1, passes do
-            EEex_Action_QueueResponseStringOnAIBase(
-                'ReallyForceSpellRES("BFBTRM",Myself)', sprite)
-        end
-        for resref in pairs(plan.desired) do
-            EEex_Action_QueueResponseStringOnAIBase(
-                'AddSpecialAbility("' .. resref .. '")', sprite)
-        end
-    else
-        for resref in pairs(plan.desired) do
-            if not plan.actual[resref] then
-                EEex_Action_QueueResponseStringOnAIBase(
-                    'AddSpecialAbility("' .. resref .. '")', sprite)
-            end
-        end
-    end
-end
-
---- Refresh innates for ALL party members.
-function BfBot.Innate.RefreshAll()
-    if BfBot._noIO then return end
-    for slot = 0, 5 do
-        BfBot.Innate.Refresh(slot)
-    end
-end
-
---- Restore one spent use on the existing memorized innate entry.
--- BuffBot preset SPLs use levels 1-8 for F12 grouping, but the engine stores
--- every innate in the single level-0 innate memorization container.
-function BfBot.Innate._RestoreSpent(sprite, resref)
-    local innateLists = sprite and sprite.m_memorizedSpellsInnate
-    if not innateLists then return false, "missing_container" end
-    local memList = innateLists:getReference(0)
-    if not memList then return false, "missing_container" end
-
-    local found = false
-    local restored = false
-    EEex_Utility_IterateCPtrList(memList, function(mem)
-        if mem.m_spellId:get() ~= resref then return false end
-        found = true
-        local flags = mem.m_flags
-        if EEex_IsBitUnset(flags, 0) then
-            mem.m_flags = EEex_SetBit(flags, 0)
-            restored = true
-            return true
-        end
-        -- A legacy duplicate may already be available while the entry the
-        -- engine just spent appears later. Keep searching, but restore only
-        -- one spent entry for this one negative quick-list change.
-        return false
-    end)
-
-    if restored then return true, "restored" end
-    return false, found and "already_available" or "not_found"
-end
-
-local function _WarnRechargeOnce(resref, status)
-    local warned = BfBot._innateRechargeWarnings
-    if type(warned) ~= "table" then
-        warned = {}
-        BfBot._innateRechargeWarnings = warned
-    end
-    local key = tostring(resref) .. ":" .. tostring(status)
-    if warned[key] then return end
-    warned[key] = true
-    BfBot._Warn("[Innate] Could not recharge " .. tostring(resref)
-        .. " in place (" .. tostring(status) .. ")")
-end
-
---- Recharge a consumed BuffBot F12 innate in place.
--- This hook runs independently of BFBOTGO, so busy/empty/error paths all leave
--- the one-use innate immediately available without action 279 re-grant noise.
-function BfBot.Innate._OnQuickListsChecked(sprite, resref, changeAmount)
-    if not sprite or type(resref) ~= "string"
-            or type(changeAmount) ~= "number" or changeAmount >= 0 then
-        return false, "ignored"
-    end
-
-    local slotText = resref:match("^BFBT([0-5])[1-8]$")
-    if not slotText then return false, "ignored" end
-    if EEex_Sprite_GetPortraitIndex(sprite) ~= tonumber(slotText) then
-        return false, "identity_mismatch"
-    end
-
-    local restored, status = BfBot.Innate._RestoreSpent(sprite, resref)
-    if status == "missing_container" or status == "not_found" then
-        _WarnRechargeOnce(resref, status)
-    end
-    return restored, status
-end
-
---- Register the sprite-loaded listener so innates get granted/refreshed as
--- party members are loaded (new game, save load, area transition, party join).
--- The listener fires from EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled,
--- i.e. AFTER marshal restoration — so EEex_GetUDAux has the user's saved
--- config by the time Refresh queries it.
-function BfBot.Innate._OnSpriteLoaded(sprite)
-    if not sprite then return end
-    local slot = EEex_Sprite_GetPortraitIndex(sprite)
-    if slot < 0 or slot > 5 then return end
-    BfBot.Innate.Refresh(slot)
-end
-
---- Register innate listeners once per game process.
--- Root-level guards survive force-reloading this module (which replaces the
--- BfBot.Innate table), and the listener closures late-bind the current module
--- functions so a reload updates behavior without adding callbacks.
-function BfBot.Innate.Init()
-    if BfBot._noIO then return end
-
-    if not BfBot._innateLoadedListenerRegistered then
-        EEex_Sprite_AddLoadedListener(BfBot._SafeCallback(
-            "innate.sprite_loaded", function(...)
-                local callback = BfBot.Innate and BfBot.Innate._OnSpriteLoaded
-                if callback then return callback(...) end
-            end))
-        BfBot._innateLoadedListenerRegistered = true
-    end
-
-    if not BfBot._innateQuickListsListenerRegistered then
-        EEex_Sprite_AddQuickListsCheckedListener(BfBot._SafeCallback(
-            "innate.quick_lists_checked", function(...)
-                local callback = BfBot.Innate and BfBot.Innate._OnQuickListsChecked
-                if callback then return callback(...) end
-            end))
-        BfBot._innateQuickListsListenerRegistered = true
-    end
-end
-
--- ============================================================
--- Innate Ability Handler (Global Function for Opcode 402)
--- Called by the engine when a BFBT*.SPL innate is activated.
--- ============================================================
-
---- Log a message to the innate log file (append mode).
-local function _InnateLog(msg)
-    if not io then return end
-    local logf = io.open("buffbot_innate.log", "a")
-    if logf then
-        logf:write(string.format("[%s] %s\n", os.date and os.date("%Y-%m-%d %H:%M:%S") or "?", msg))
-        logf:close()
-    end
-end
-
---- Opcode 402 Invoke Lua handler — triggers a specific preset for a specific character.
--- param1 is a CGameEffect userdata: m_effectAmount = party slot,
--- m_dWFlags = preset index, m_sourceId = actual casting sprite object ID.
--- Wrapped in pcall so Lua errors produce diagnostics instead of engine "panic".
-function BFBOTGO(param1, param2, special)
-    local slot = param1 and param1.m_effectAmount or 0
-    local presetIdx = param1 and param1.m_dWFlags or 1
-
-    _InnateLog(string.format("BFBOTGO: slot=%d preset=%d", slot, presetIdx))
-
-    local ok, err = pcall(function()
-        -- Validate slot range
-        if slot < 0 or slot > 5 then
-            error("invalid slot " .. slot)
-        end
-        if presetIdx < 1 or presetIdx > BfBot.MAX_PRESETS then
-            error("invalid preset " .. presetIdx)
-        end
-
-        -- The slot baked into the SPL can become stale when portraits move.
-        -- Opcode 402's source ID identifies the character who actually clicked
-        -- the innate; refuse a party-member mismatch before the old slot's
-        -- current occupant can be used to build a queue. Non-party copies keep
-        -- their existing unsupported/fallback behavior (issue #60).
-        local sourceId = param1 and param1.m_sourceId
-        if sourceId ~= nil then
-            local sourceObject = EEex_GameObject_Get(sourceId)
-            if sourceObject and EEex_GameObject_IsSprite(sourceObject, false) then
-                local sourceSprite = EEex_GameObject_CastUserType(sourceObject)
-                local sourceSlot = EEex_Sprite_GetPortraitIndex(sourceSprite)
-                if sourceSlot >= 0 and sourceSlot <= 5 and sourceSlot ~= slot then
-                    _InnateLog(string.format(
-                        "STALE: casting sprite moved from slot %d to %d", slot, sourceSlot))
-                    if BfBot.Exec.GetState() == "running" then
-                        BfBot._innateRefreshPending = true
-                        BfBot._Display(BfBot.L10N.Get(
-                            "feedback.party_changed_after_run"))
-                        return
-                    end
-                    BfBot._Display(BfBot.L10N.Get(
-                        "feedback.party_changed_refreshing"))
-                    BfBot._innateRefreshPending = true
-                    local refreshOk, refreshErr = pcall(function()
-                        BfBot.Innate.RefreshAll()
-                    end)
-                    if refreshOk then
-                        BfBot._innateRefreshPending = nil
-                    else
-                        _InnateLog("ERROR: stale-slot refresh failed: " .. tostring(refreshErr))
-                        BfBot._Warn("[Innate] Stale-slot refresh failed; will retry: "
-                            .. tostring(refreshErr))
-                    end
-                    return
-                end
-            end
-        end
-
-        -- Get the sprite at this slot
-        local sprite = EEex_Sprite_GetInPortrait(slot)
-        if not sprite then
-            -- Party was likely rearranged since innates were granted.
-            -- Trigger refresh so next attempt works, and tell the player.
-            _InnateLog("ERROR: no sprite in slot " .. slot .. " — party may have changed")
-            BfBot._Display(BfBot.L10N.Get(
-                "feedback.party_changed_refreshing"))
-            pcall(function() BfBot.Innate.RefreshAll() end)
-            return
-        end
-
-        -- Already running?
-        if BfBot.Exec.GetState() == "running" then
-            _InnateLog("INFO: already running, showing busy message")
-            sprite:displayTextRef(14007)
-            return
-        end
-
-        -- Build the queue
-        local queue, queueErr, queueDetail =
-            BfBot.Persist.BuildQueueForCharacter(slot, presetIdx)
-        -- The builder queues its SKIP lines for the config panel
-        -- (Persist._pendingSkips); the innate path has no panel log to
-        -- surface into, so drain-and-discard here (review MINOR-3). The
-        -- lines were already written to buffbot_exec.log at build time —
-        -- without this drain they would leak until an unrelated panel
-        -- cast replayed them into that run's log.
-        if BfBot.Persist.DrainBuildSkips then BfBot.Persist.DrainBuildSkips() end
-        if not queue or #queue == 0 then
-            local reasonCode = queueErr or "reason.exec.empty_queue"
-            _InnateLog("INFO: no spells to cast — " .. tostring(reasonCode))
-            if reasonCode == "reason.queue.no_castable_spells_for_slot" then
-                BfBot._Display(BfBot.L10N.Get("feedback.no_spells_preset"))
-            else
-                BfBot._Display(BfBot.L10N.Format(
-                    "feedback.no_spells_with_reason", {
-                        reason = BfBot.L10N.Reason(reasonCode, queueDetail),
-                    }))
-            end
-            return
-        end
-
-        -- Execute
-        local qcMode = BfBot.Persist.GetQuickCast(sprite, presetIdx)
-        _InnateLog(string.format("Starting: %d entries, qcMode=%d", #queue, qcMode or 0))
-        -- presetIdx tags the run for the late-join listener (issue #19)
-        BfBot.Exec.Start(queue, qcMode, presetIdx)
-    end)
-
-    if not ok then
-        _InnateLog("ERROR: " .. tostring(err))
-        -- Try to show the error in-game (BfBot._Display may itself fail if modules aren't loaded)
-        pcall(function()
-            BfBot._Display(BfBot.L10N.Format(
-                "feedback.innate_error", { error = tostring(err) }))
-        end)
+    for name,data in pairs({BFBTCH=L._BuildCheatSPL(),BFBTCR=L._BuildCheatRemoverSPL()}) do
+        local f=io.open('override/'..name..'.SPL','wb')
+        if f then f:write(data);f:close() end
     end
 end
