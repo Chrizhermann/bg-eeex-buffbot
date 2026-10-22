@@ -288,6 +288,7 @@ BfBot.Theme._OWNED_MENUS = {
     "BUFFBOT_SPELLPICKER",
     "BUFFBOT_IMPORT",
     "BUFFBOT_VARIANTS",
+    "BUFFBOT_QUICK_PRESETS",
 }
 
 --- Compute the correct point size for a uiItem by looking up its font name

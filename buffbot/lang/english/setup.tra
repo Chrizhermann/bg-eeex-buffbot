@@ -366,3 +366,29 @@
 @715 = ~Use from inventory~
 // options.item_use_swap
 @716 = ~Equip, use, and restore~
+// ui.search
+@454 = ~Search~
+// ui.search.no_matches
+@455 = ~No matching spells or items~
+// ui.quick_presets
+@456 = ~Cast party preset~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: left-click to configure; right-click to cast a party preset~
+// ui.manual_only
+@458 = ~Manual~
+// ui.speed.normal
+@460 = ~Speed: Normal~
+// ui.speed.2x
+@461 = ~Speed: 2x~
+// ui.speed.4x
+@462 = ~Speed: 4x~
+// ui.speed.tooltip
+@463 = ~Applies to all preset starts. 2x and 4x temporarily accelerate the whole game with normal casting rules. Normal uses the saved Quick Cast setting. Click to cycle.~
+// ui.quick_cast.suspended
+@464 = ~Quick Cast: Suspended~
+// ui.quick_cast.tooltip_suspended
+@465 = ~Fast-forward uses normal casting rules. Your Quick Cast setting is saved and applies again at Normal speed.~
+// reason.item.manual_selection
+@552 = ~This item opens a selection menu. Use it manually; BuffBot skips it.~
+// reason.exec.fast_unavailable
+@553 = ~Fast-forward is unavailable here. Select Normal speed and try again.~

@@ -1199,7 +1199,7 @@ def test_exec_casts_through_wrapper_and_waits_for_upstream_refresh(
 
     assert facts["afterFirst"] == (
         'SpellRES("D5Z101I",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["stepped"] == "_Advance"
     assert facts["waited"] == (
@@ -1212,7 +1212,7 @@ def test_exec_casts_through_wrapper_and_waits_for_upstream_refresh(
     assert facts["resumed2"] == "_Resume"
     assert facts["final"] == (
         'SpellRES("D5Z102I",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],2)")'
     )
     assert "SPWI305" not in facts["done"]
     assert facts["casts"] == 2
@@ -1431,7 +1431,7 @@ def test_exec_waits_out_a_refresh_that_started_before_the_run(
     )
     assert facts["cast"] == (
         'SpellRES("D5Z101I",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["casts"] == 1
     assert facts["skips"] == 0
@@ -1505,25 +1505,32 @@ def test_exec_ignores_a_resume_left_over_from_a_stopped_run(
 
     assert facts["first"] == (
         'SpellRES("SPPR101",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["after"] == facts["first"]
     assert facts["casts"] == 1
 
 
-@pytest.mark.parametrize("hard_reset", [False, True])
+@pytest.mark.parametrize("reset_mode", ["stop", "hard_reset", "module_reload"])
 def test_old_resume_cannot_continue_a_new_run_that_is_also_waiting(
-    exec5_lua: LuaRuntime, hard_reset: bool,
+    exec5_lua: LuaRuntime, reset_mode: str,
 ) -> None:
+    exec5_lua.globals().reload_source = EXEC_SOURCE
     facts = exec5_lua.eval(
-        """function(hardReset)
+        """function(resetMode)
         local row = T_Row5("SPWI305", "D5Z101I", 0)
         row.d5.pending = 1
         T_ExecWorld({ SPWI305 = row })
         local queue = { { caster = 0, spell = "SPWI305", target = "self" } }
         T_Start(queue)
         BfBot.Exec.Stop()
-        if hardReset then BfBot.Exec._HardReset() end
+        if resetMode=='hard_reset' then BfBot.Exec._HardReset() end
+        if resetMode=='module_reload' then
+            local outstanding=T_Actions
+            assert(loadstring(reload_source))()
+            T_ExecWorld({SPWI305=row})
+            T_Actions=outstanding
+        end
         T_Start(queue)
         local currentWait = T_Actions[3] .. "|" .. T_Actions[4]
         local before = BfBot.Exec._casters.p0.d5Refresh.polls
@@ -1538,7 +1545,7 @@ def test_old_resume_cannot_continue_a_new_run_that_is_also_waiting(
             oldCallback = oldCallback, newCallback = newCallback,
             casts = BfBot.Exec._castCount }
         end"""
-    )(hard_reset)
+    )(reset_mode)
 
     assert facts["oldCallback"] == facts["newCallback"] == "_Resume"
     assert facts["afterOld"] == facts["before"]

@@ -795,7 +795,22 @@ function BFBOTGO(param1, param2, special)
         local qcMode = BfBot.Persist.GetQuickCast(sprite, presetIdx)
         _InnateLog(string.format("Starting: %d entries, qcMode=%d", #queue, qcMode or 0))
         -- presetIdx tags the run for the late-join listener (issue #19)
-        BfBot.Exec.Start(queue, qcMode, presetIdx)
+        local speed = BfBot.Persist.GetPref("FastForward")
+        local started, reason, detail
+        if speed == 2 or speed == 4 then
+            if BfBot.Fast and type(BfBot.Fast.Start) == "function" then
+                started, reason, detail = BfBot.Fast.Start(queue, speed, presetIdx)
+            else
+                -- Never substitute a saved Quick Cast mode for the player's
+                -- explicitly selected native-speed run.
+                started, reason = false, "reason.exec.fast_unavailable"
+            end
+        else
+            started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx)
+        end
+        if not started and reason then
+            BfBot._Display(BfBot.L10N.Reason(reason, detail))
+        end
     end)
 
     if not ok then

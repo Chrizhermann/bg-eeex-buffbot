@@ -810,12 +810,12 @@ def test_spell_list_columns_and_cell_actions_match_the_repeat_design() -> None:
 
     assert widths == [8, 8, 26, 10, 10, 8, 24, 6]
     assert sum(widths) == 100
-    assert "BfBot.UI._RepeatRowText(rowNumber)" in block
-    assert "BfBot.UI._RepeatColor(rowNumber)" in block
+    assert "BfBot.UI._RepeatRowText(BfBot.UI._VisibleSpellRow(rowNumber))" in block
+    assert "BfBot.UI._RepeatColor(BfBot.UI._VisibleSpellRow(rowNumber))" in block
     assert len(actions) == 1
     action = actions[0]
     assert "rowNumber" not in action
-    assert action == "BfBot.UI._OnSpellRowAction(cellNumber)"
+    assert action == "BfBot.UI._OnVisibleSpellRowAction(cellNumber)"
 
 
 def test_repeat_footer_binding_is_selection_only_and_supports_both_directions() -> None:

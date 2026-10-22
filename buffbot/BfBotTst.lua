@@ -932,11 +932,24 @@ function BfBot.Test.SpellLockOrder()
     local savedPending = BfBot.UI._pendingSpellSelectionSync
     local savedTargetAnchor = BfBot.UI._targetSpellAnchor
     local savedVariantAnchor = BfBot.UI._variantSpellAnchor
+    local savedSearch = {
+        text = buffbot_searchText,
+        rows = buffbot_visibleSpells,
+        selected = buffbot_visibleSelectedRow,
+        applied = BfBot.UI._appliedSearchText,
+        indices = BfBot.UI._visibleSpellIndices,
+        context = BfBot.UI._visibleSpellContext,
+    }
+    local savedRenum = BfBot.UI._RenumberPriorities
+    local fixtureOk, fixtureError = pcall(function()
+    -- These synthetic rows must not inherit the player's active search.
+    buffbot_searchText, buffbot_visibleSpells, buffbot_visibleSelectedRow = "", {}, 0
+    BfBot.UI._appliedSearchText, BfBot.UI._visibleSpellIndices = "", {}
+    BfBot.UI._visibleSpellContext = nil
     buffbot_isOpen = true
     BfBot.UI._ClearSpellSelection()
 
     -- We stub _RenumberPriorities to a no-op since it needs a real sprite
-    local savedRenum = BfBot.UI._RenumberPriorities
     BfBot.UI._RenumberPriorities = function() end
 
     -- Test 1: Sort pins locked rows
@@ -1029,8 +1042,9 @@ function BfBot.Test.SpellLockOrder()
            buffbot_spellTable[2].resref == "B" and
            buffbot_spellTable[3].resref == "A",
            "MoveSpellUp skips locked: C->1, A->3")
+    end)
 
-    -- Restore globals
+    -- Restore globals even if a fixture operation raises.
     buffbot_spellTable = saved
     buffbot_selectedRow = savedRow
     buffbot_selectedHasVariants = savedHasVariants
@@ -1040,6 +1054,16 @@ function BfBot.Test.SpellLockOrder()
     BfBot.UI._targetSpellAnchor = savedTargetAnchor
     BfBot.UI._variantSpellAnchor = savedVariantAnchor
     BfBot.UI._RenumberPriorities = savedRenum
+    buffbot_searchText = savedSearch.text
+    buffbot_visibleSpells = savedSearch.rows
+    buffbot_visibleSelectedRow = savedSearch.selected
+    BfBot.UI._appliedSearchText = savedSearch.applied
+    BfBot.UI._visibleSpellIndices = savedSearch.indices
+    BfBot.UI._visibleSpellContext = savedSearch.context
+
+    if not fixtureOk then
+        _nok("SpellLockOrder fixture errored: " .. tostring(fixtureError))
+    end
 
     return _summary("SpellLockOrder")
 end
@@ -2159,11 +2183,72 @@ function BfBot.Test.DurationRecursion()
                 label, resref, tostring(dur), minDur))
     end
 
+    -- Test the installed parent/child relationship, not an old mod layout's
+    -- resrefs or durations. A mod may replace the children and their lifetimes.
+    -- Each positive child duration must survive composition into the parent,
+    -- and the parent's leaf metadata must include the actual linked resource.
+    local function testLinkedSpell(resref, label)
+        local ok, hdr = pcall(EEex_Resource_Demand, resref, "SPL")
+        local ability = ok and hdr and hdr:getAbility(0) or nil
+        if not ability then
+            _warning(label .. " (" .. resref .. "): SPL/ability not loadable")
+            return
+        end
+        local dur, durationType, leafs = BfBot.Class.GetDuration(hdr, ability)
+        _check(type(dur) == "number" and type(leafs) == "table",
+            label .. ": installed duration and leaf metadata are available")
+        local function covers(childDur, childType)
+            if type(dur) ~= "number" or type(childDur) ~= "number" then
+                return false
+            end
+            if childDur > 0 then return dur >= childDur end
+            if childType == "permanent" then
+                return dur > 0 or durationType == "permanent"
+            end
+            return childDur == 0
+        end
+        -- Depth 2 suppresses child traversal, isolating any parent-owned
+        -- effects. This also checks a mod that replaced the wrapper entirely.
+        local directDur, directType = BfBot.Class.GetDuration(hdr, ability, 2)
+        _check(covers(directDur, directType),
+            label .. ": parent-owned duration is preserved")
+        BfBot.Class._IterateFeatureBlocks(hdr, ability, function(fb)
+            if fb[BfBot._fields.fb_opcode] ~= 146 then return end
+            local value = fb[BfBot._fields.fb_res]
+            local refOk, child = pcall(function()
+                return type(value) == "string" and value or value:get()
+            end)
+            local childOk, childHdr = false, nil
+            if refOk and type(child) == "string" and child ~= "" then
+                childOk, childHdr = pcall(EEex_Resource_Demand, child, "SPL")
+            end
+            _check(childOk and childHdr ~= nil,
+                label .. ": actual child " .. tostring(child) .. " loads")
+            if not childOk or not childHdr then return end
+            local fixedLevel = fb[BfBot._fields.fb_param1]
+            if not fixedLevel or fixedLevel <= 0 then fixedLevel = nil end
+            local childAbility = fixedLevel and childHdr:getAbilityForLevel(fixedLevel)
+                or childHdr:getAbility(0)
+            _check(childAbility ~= nil,
+                label .. ": actual child " .. child .. " has an ability")
+            if not childAbility then return end
+            local childDur, childType = BfBot.Class.GetDuration(
+                childHdr, childAbility, 1, nil, nil, fixedLevel)
+            local found = false
+            for _, leaf in ipairs(type(leafs) == "table" and leafs or {}) do
+                if leaf:upper() == child:upper() then found = true; break end
+            end
+            _check(covers(childDur, childType) and found,
+                string.format("%s: parent %ss includes actual child %s (%ss)",
+                    label, tostring(dur), child, tostring(childDur)))
+        end)
+    end
+
     -- Main fix: hierarchical spells that deliver effects via op=146 sub-spells.
     -- Parent SPLs contain only op=146 "Cast Spell" references; real timed
     -- effects live in the sub-spells. Classifier must recurse.
     testSpell("SPPR327", 30, "Prayer (op=146 -> #PRAYERG 30s)")
-    testSpell("OHTMPS2", 60, "Chaos of Battle (op=146 -> OHTMPS2D 60s)")
+    testLinkedSpell("OHTMPS2", "Chaos of Battle")
 
     -- Regression: Chant's parent SPL has a direct op=176 sibling at 60s.
     -- Must still report >= 60 after the fix (parent-own timed opcodes keep working).
@@ -3486,12 +3571,12 @@ function BfBot.Test.SummonCasters()
             ["p0"] = { ref = { kind = "party", slot = 0 }, name = leaderName,
                        cheatApplied = false,
                        queue = {}, index = 0, done = false, cheatBoundary = 0 },
-            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false,
+            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false, advanceToken = 1,
                                queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 2
 
-        local advOk = pcall(BfBot.Exec._Advance, "s999999999")
+        local advOk = pcall(BfBot.Exec._Advance, "s999999999", 1)
         local rec = BfBot.Exec._casters["s999999999"]
         _check(advOk and rec ~= nil and rec.done == true,
             "gone summon: _Advance marks the record done")
@@ -3501,7 +3586,7 @@ function BfBot.Test.SummonCasters()
             "gone summon: run continues for the remaining caster")
 
         -- Idempotent: advancing the already-done caster must not decrement again
-        local advOk2 = pcall(BfBot.Exec._Advance, "s999999999")
+        local advOk2 = pcall(BfBot.Exec._Advance, "s999999999", 1)
         _check(advOk2 and BfBot.Exec._activeCasters == 1,
             "gone summon: repeat _Advance does not double-decrement")
 
@@ -3511,11 +3596,11 @@ function BfBot.Test.SummonCasters()
         -- leave "running" — assert only that it did).
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
-            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false,
+            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false, advanceToken = 1,
                                queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 1
-        local advOk3 = pcall(BfBot.Exec._Advance, "s999999999")
+        local advOk3 = pcall(BfBot.Exec._Advance, "s999999999", 1)
         _reopenLog()  -- _Complete closed the suite's log
         _check(advOk3 and BfBot.Exec._state ~= "running",
             "gone summon as last caster completes the run (state="
@@ -4145,8 +4230,11 @@ function BfBot.Test.SummonCasters()
         local ok7, err7 = pcall(function()
             _check(type(BfBot.Persist._ApplyPuppetLockPolicy) == "function",
                 "_ApplyPuppetLockPolicy is a function")
-            local function mk(name, rep) return { caster = 0, spell = "X" .. name,
-                spellName = name, target = "self", pri = 1, rep = rep or 1 } end
+            local function mk(name, rep, isProjectImage)
+                return { caster = 0, spell = "X" .. name, spellName = name,
+                    target = "self", pri = 1, rep = rep or 1,
+                    isProjectImage = isProjectImage or 0 }
+            end
             local caster = { oid = 100, name = "Testmage" }
             local plain = { mk("Stoneskin"), mk("Blur") }
 
@@ -4177,13 +4265,13 @@ function BfBot.Test.SummonCasters()
                 { { cloneType = 3, ownerOid = 100, ownerName = "Testmage" } })
             _check(#kept == 2 and #skips == 0, "rule 3: Simulacrum locks nothing")
 
-            -- Rule 2: trailing entries after a "Project Image" cast drop; the
-            -- PI entry itself and everything before it stay (case-insensitive).
-            local chain = { mk("Stoneskin"), mk("PROJECT IMAGE", 5),
+            -- Rule 2 uses structural scan identity, independent of the TLK
+            -- name. The PI entry itself and everything before it stay.
+            local chain = { mk("Stoneskin"), mk("Abbild", 5, 1),
                 mk("Blur"), mk("Haste") }
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, chain, {})
             _check(#kept == 2 and kept[1].spellName == "Stoneskin"
-                and kept[2].spellName == "PROJECT IMAGE",
+                and kept[2].spellName == "Abbild",
                 "rule 2: entries before + the PI cast retained")
             _check(kept[2] ~= chain[2] and kept[2].rep == 1
                 and chain[2].rep == 5,
@@ -4193,10 +4281,20 @@ function BfBot.Test.SummonCasters()
                 "rule 2: trailing entries dropped with the documented skip line")
 
             -- Rule 2: PI last in chain → nothing dropped.
+            local finalImage = mk("Abbild", 4, 1)
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster,
-                { mk("Stoneskin"), mk("Project Image") }, {})
+                { mk("Stoneskin"), finalImage }, {})
             _check(#kept == 2 and #skips == 0,
                 "rule 2: PI as last entry drops nothing")
+            _check(kept[2] ~= finalImage and kept[2].rep == 1
+                and finalImage.rep == 4,
+                "rule 2: last PI is still copied with rep=1")
+
+            local nameOnly = { mk("Project Image", 3), mk("Blur") }
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, nameOnly, {})
+            _check(#kept == 2 and #skips == 0 and kept[1] == nameOnly[1]
+                and kept[1].rep == 3,
+                "rule 2: display name alone never identifies Project Image")
 
             -- No clones, no PI in chain → untouched.
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain, {})
@@ -4516,7 +4614,7 @@ function BfBot.Test.SummonCasters()
     -- BuildQueueForSummon must apply rule 2 (trailing-entry drop) to the
     -- summon's own chain; rule 1 does NOT apply (a clone is not a party
     -- owner). Scan is stubbed to a synthetic castable set whose middle
-    -- entry is named "Project Image".
+    -- entry carries structural Project Image identity and a localized name.
     if leader then
         local leaderName = BfBot._GetName(leader)
         local savedScan = BfBot.Scan.GetCastableSpells
@@ -4530,7 +4628,8 @@ function BfBot.Test.SummonCasters()
             BfBot.Scan.GetCastableSpells = function()
                 return {
                     XXTSTA = { count = 1, name = "Armor",         durCat = "long"  },
-                    XXTSTP = { count = 1, name = "Project Image", durCat = "short" },
+                    XXTSTP = { count = 1, name = "Abbild", durCat = "short",
+                        isProjectImage = 1 },
                     XXTSTB = { count = 1, name = "Blur",          durCat = "long"  },
                 }
             end
@@ -5005,7 +5104,15 @@ function BfBot.Test.SummonCasters()
         local savedQc   = BfBot.UI._summonQc
         local savedIdx  = BfBot.UI._presetIdx
         local savedPeek = BfBot.Persist.PeekSummonPreset
+        local savedGetPref = BfBot.Persist.GetPref
         local ok10, err10 = pcall(function()
+            -- This fixture exercises the normal-mode QC cache. Acceleration
+            -- intentionally suspends QC; do not inherit the user's speed
+            -- choice or write it to INI while testing this separate contract.
+            BfBot.Persist.GetPref = function(key, ...)
+                if key == "FastForward" then return 1 end
+                return savedGetPref(key, ...)
+            end
             local preset = BfBot.Persist.GetSummonPreset("test:qccache", 1)
             if not preset then error("no protagonist config for qc-cache checks") end
             preset.qc = 0
@@ -5039,6 +5146,7 @@ function BfBot.Test.SummonCasters()
                 "qc cache: no selection clears the cache")
         end)
         BfBot.Persist.PeekSummonPreset = savedPeek
+        BfBot.Persist.GetPref = savedGetPref
         BfBot.UI._view = savedView
         BfBot.UI._summonList = savedList
         BfBot.UI._summonSel = savedSel
@@ -5049,8 +5157,9 @@ function BfBot.Test.SummonCasters()
         local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
         if pcs then pcs["test:qccache"] = nil end
         _check(pcs ~= nil and pcs["test:qccache"] == nil
-            and BfBot.Persist.PeekSummonPreset("test:qccache", 1) == nil,
-            "cleanup: test:qccache identity purged")
+            and BfBot.Persist.PeekSummonPreset("test:qccache", 1) == nil
+            and BfBot.Persist.GetPref == savedGetPref,
+            "cleanup: test:qccache identity purged and preferences restored")
         if not ok10 then
             _nok("[T10.6] qc-cache block errored: " .. tostring(err10))
         end
@@ -5695,9 +5804,19 @@ function BfBot.Test.SelectionRefresh()
         targetAnchor = BfBot.UI._targetSpellAnchor,
         variantAnchor = BfBot.UI._variantSpellAnchor,
         renumber = BfBot.UI._RenumberPriorities,
+        searchText = buffbot_searchText,
+        visibleSpells = buffbot_visibleSpells,
+        visibleSelectedRow = buffbot_visibleSelectedRow,
+        appliedSearchText = BfBot.UI._appliedSearchText,
+        visibleSpellIndices = BfBot.UI._visibleSpellIndices,
+        visibleSpellContext = BfBot.UI._visibleSpellContext,
     }
 
     local fixtureOk, fixtureError = pcall(function()
+        -- Selection invariants use synthetic rows, independently of live search.
+        buffbot_searchText, buffbot_visibleSpells, buffbot_visibleSelectedRow = "", {}, 0
+        BfBot.UI._appliedSearchText, BfBot.UI._visibleSpellIndices = "", {}
+        BfBot.UI._visibleSpellContext = nil
         BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
         BfBot.UI._presetIdx = 1
@@ -5847,6 +5966,12 @@ function BfBot.Test.SelectionRefresh()
     BfBot.UI._targetSpellAnchor = saved.targetAnchor
     BfBot.UI._variantSpellAnchor = saved.variantAnchor
     BfBot.UI._RenumberPriorities = saved.renumber
+    buffbot_searchText = saved.searchText
+    buffbot_visibleSpells = saved.visibleSpells
+    buffbot_visibleSelectedRow = saved.visibleSelectedRow
+    BfBot.UI._appliedSearchText = saved.appliedSearchText
+    BfBot.UI._visibleSpellIndices = saved.visibleSpellIndices
+    BfBot.UI._visibleSpellContext = saved.visibleSpellContext
 
     if not fixtureOk then
         _nok("SelectionRefresh fixture errored: " .. tostring(fixtureError))

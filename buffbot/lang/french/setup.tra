@@ -366,3 +366,29 @@
 @715 = ~Utiliser depuis l’inventaire~
 // options.item_use_swap
 @716 = ~Équiper, utiliser et remettre~
+// ui.search
+@454 = ~Recherche~
+// ui.search.no_matches
+@455 = ~Aucun sort ni objet correspondant~
+// ui.quick_presets
+@456 = ~Lancer un préréglage de groupe~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot : clic gauche pour configurer ; clic droit pour lancer un préréglage de groupe~
+// ui.manual_only
+@458 = ~Manuel~
+// ui.speed.normal
+@460 = ~Vitesse : normale~
+// ui.speed.2x
+@461 = ~Vitesse : 2x~
+// ui.speed.4x
+@462 = ~Vitesse : 4x~
+// ui.speed.tooltip
+@463 = ~S'applique à tous les préréglages. 2x et 4x accélèrent temporairement tout le jeu en conservant les règles normales d'incantation. Normale utilise le réglage Incantation rapide enregistré. Cliquez pour changer.~
+// ui.quick_cast.suspended
+@464 = ~Incantation rapide : en pause~
+// ui.quick_cast.tooltip_suspended
+@465 = ~L'accélération conserve les règles normales d'incantation. Le réglage Incantation rapide reste enregistré et s'applique de nouveau à vitesse normale.~
+// reason.item.manual_selection
+@552 = ~Cet objet ouvre un menu de sélection. Utilisez-le manuellement ; BuffBot l'ignore.~
+// reason.exec.fast_unavailable
+@553 = ~L'accélération est indisponible ici. Sélectionnez la vitesse normale et réessayez.~

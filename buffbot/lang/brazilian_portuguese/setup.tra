@@ -366,3 +366,29 @@
 @715 = ~Usar do inventário~
 // options.item_use_swap
 @716 = ~Equipar, usar e restaurar~
+// ui.search
+@454 = ~Buscar~
+// ui.search.no_matches
+@455 = ~Nenhuma magia ou item correspondente~
+// ui.quick_presets
+@456 = ~Executar predefinição do grupo~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: clique esquerdo para configurar; clique direito para executar uma predefinição do grupo~
+// ui.manual_only
+@458 = ~Manual~
+// ui.speed.normal
+@460 = ~Velocidade: normal~
+// ui.speed.2x
+@461 = ~Velocidade: 2x~
+// ui.speed.4x
+@462 = ~Velocidade: 4x~
+// ui.speed.tooltip
+@463 = ~Aplica-se a todas as predefinições. 2x e 4x aceleram temporariamente todo o jogo com as regras normais de conjuração. Normal usa a configuração salva de Conjuração rápida. Clique para alternar.~
+// ui.quick_cast.suspended
+@464 = ~Conjuração rápida: suspensa~
+// ui.quick_cast.tooltip_suspended
+@465 = ~A aceleração usa as regras normais de conjuração. A configuração de Conjuração rápida permanece salva e volta a valer na velocidade normal.~
+// reason.item.manual_selection
+@552 = ~Este item abre um menu de seleção. Use-o manualmente; o BuffBot o ignora.~
+// reason.exec.fast_unavailable
+@553 = ~A aceleração não está disponível aqui. Selecione a velocidade normal e tente novamente.~

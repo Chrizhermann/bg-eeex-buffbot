@@ -366,3 +366,29 @@
 @715 = ~Usa dall’inventario~
 // options.item_use_swap
 @716 = ~Equipaggia, usa e ripristina~
+// ui.search
+@454 = ~Cerca~
+// ui.search.no_matches
+@455 = ~Nessun incantesimo o oggetto corrispondente~
+// ui.quick_presets
+@456 = ~Esegui configurazione del gruppo~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: clic sinistro per configurare; clic destro per eseguire una configurazione del gruppo~
+// ui.manual_only
+@458 = ~Manuale~
+// ui.speed.normal
+@460 = ~Velocità: normale~
+// ui.speed.2x
+@461 = ~Velocità: 2x~
+// ui.speed.4x
+@462 = ~Velocità: 4x~
+// ui.speed.tooltip
+@463 = ~Si applica a tutte le configurazioni. 2x e 4x accelerano temporaneamente tutto il gioco con le normali regole di lancio. Normale usa l'impostazione Lancio rapido salvata. Fai clic per cambiare.~
+// ui.quick_cast.suspended
+@464 = ~Lancio rapido: sospeso~
+// ui.quick_cast.tooltip_suspended
+@465 = ~L'accelerazione usa le normali regole di lancio. L'impostazione Lancio rapido resta salvata e si applica di nuovo a velocità normale.~
+// reason.item.manual_selection
+@552 = ~Questo oggetto apre un menu di selezione. Usalo manualmente; BuffBot lo salta.~
+// reason.exec.fast_unavailable
+@553 = ~L'accelerazione non è disponibile qui. Seleziona la velocità normale e riprova.~

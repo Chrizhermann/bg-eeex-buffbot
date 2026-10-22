@@ -171,7 +171,8 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
     local durCat = "instant"
     local durationLeafResrefs = nil
     if header and ability then
-        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(header, ability)
+        duration, _, durationLeafResrefs = BfBot.Class.GetDuration(
+            header, ability, nil, nil, nil, casterLevel)
         durCat = BfBot.Class.GetDurationCategory(duration)
     end
 
@@ -337,22 +338,31 @@ function BfBot.Scan._CanWearItem(sprite, header)
             bit.lshift(EEex_ReadU8(ptr + 0x2D), 8), EEex_ReadU8(ptr + 0x2F))
         if kits ~= 0 then
             local kit = sprite:getStat(152)
-            local table2da = EEex_Resource_Load2DA("KITLIST")
-            local idCol, maskCol = table2da:findColumnLabel("KITIDS"),
-                table2da:findColumnLabel("UNUSABLE")
-            local _, rows = table2da:getDimensions()
-            local found = false
-            for y = 0, rows - 1 do
-                if tonumber(table2da:getAtPoint(idCol, y)) == kit then
-                    local mask = tonumber(table2da:getAtPoint(maskCol, y))
-                    if not mask or bit.band(kits, mask) ~= 0 then
-                        return false, "item kit restriction"
-                    end
-                    found = true
-                    break
+            -- TRUECLASS / MAGESCHOOL_GENERALIST has no KITLIST row. Its
+            -- usability mask is still 0x4000 (ITM 0x2D bit 6: no kit), so
+            -- recognizing it must not bypass explicitly restricted items.
+            if kit == 0x4000 then
+                if bit.band(kits, 0x4000) ~= 0 then
+                    return false, "item kit restriction"
                 end
+            else
+                local table2da = EEex_Resource_Load2DA("KITLIST")
+                local idCol, maskCol = table2da:findColumnLabel("KITIDS"),
+                    table2da:findColumnLabel("UNUSABLE")
+                local _, rows = table2da:getDimensions()
+                local found = false
+                for y = 0, rows - 1 do
+                    if tonumber(table2da:getAtPoint(idCol, y)) == kit then
+                        local mask = tonumber(table2da:getAtPoint(maskCol, y))
+                        if not mask or bit.band(kits, mask) ~= 0 then
+                            return false, "item kit restriction"
+                        end
+                        found = true
+                        break
+                    end
+                end
+                if not found then return false, "unknown item kit restriction" end
             end
-            if not found then return false, "unknown item kit restriction" end
         end
         for _, req in ipairs({ {0x26,36,2}, {0x2A,38,1}, {0x2C,40,1},
             {0x2E,39,1}, {0x30,41,1}, {0x32,42,2} }) do
@@ -579,11 +589,16 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         local cOk, classResult = pcall(
             BfBot.Class.Classify, resref, header, ability, "itm", key)
         if not (cOk and classResult) then goto nextAbility end
-        -- Keep a user-excluded buff in the transient catalog so the Add
-        -- picker can recover it. Ordinary non-buffs remain out of scope.
-        if not classResult.isBuff and not classResult.overridden then goto nextAbility end
-
-        local duration, _, leafs = BfBot.Class.GetDuration(header, ability)
+        -- Supported powers stay discoverable for manual Add even when the
+        -- classifier cannot recognize their effect graph. Seeding and automatic
+        -- row merging continue to require class.isBuff; no uses are spent here.
+        local duration, _, leafs = BfBot.Class.GetDuration(header, ability,
+            nil, nil, nil, function(child)
+                local ok, level = pcall(function()
+                    return sprite:getCasterLevelForSpell(child, true)
+                end)
+                return ok and type(level) == "number" and level > 0 and level or 1
+            end)
         -- ITM naming: identifiedName FIRST (genericName is the
         -- unidentified "Potion"/"Ring" — reverse of the SR spell rule)
         local name = _tryStrref(header.identifiedName)
@@ -599,6 +614,8 @@ function BfBot.Scan._BuildItemCatalog(sprite)
         items[key] = {
             resref = key,
             kind = "itm",
+            itemCandidate = 1,
+            requiresChoice = classResult.requiresSelection and 1 or 0,
             itemResref = resref,
             abilityIdx = index,
             itemType = itemType,

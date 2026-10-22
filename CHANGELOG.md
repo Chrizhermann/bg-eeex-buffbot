@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — selective BuffBot Redux improvements
+
+Adapted from [Zach Hopkins' BuffBot Redux](https://github.com/zach-hopkins/bg-eeex-buffbot), with thanks and credit. Character-based presets, manual cast priorities and the classic BG presentation remain the primary workflow.
+
+- Match active-effect resource names without case sensitivity, preserving the source/opcode/state checks that distinguish shared SPLSTATE markers.
+- Add a named preset picker on right-clicking the HUD gear and keep its position within the screen. Existing F12 abilities remain available.
+- Add buff-name search without changing stored priorities or which enabled buffs a preset casts.
+- Discover item buff powers delivered through bounded immediate child spells and retain supported classifier misses for manual Add. Powers requiring an interactive spell picker remain manual-only; scrolls and wands remain outside discovery.
+- Use the applicable caster level when estimating child-spell durations, including fixed levels supplied by opcode 146.
+- Add optional 2x/4x temporary simulation speed. Normal remains the default. Accelerated runs retain the existing spell/item execution paths and suspend Quick Cast for that run, including late-joining summons. Saved Quick Cast settings and rendering/FPS preferences are preserved.
+- Restore temporary speed on completion, stop, combat, unsafe UI state, load/exit and timeout. Multiplayer acceleration is unavailable.
+- Ignore delayed or duplicate execution callbacks from an earlier run after Stop/restart, including across module reloads.
+- Preserve healthy long and paused runs; stalled execution uses the existing game-time progress watchdog.
+- Refuse accelerated F12 starts if the speed module is unavailable, and roll back partial speed writes when startup fails.
+
+- Fix configured spell variants bypassing casting time and aura: use the normal no-decrement cast action and consume only the parent's availability bit, preserving other memorization flags.
+- Fix wearable items being rejected for characters without a kit. Explicit no-kit restrictions and other eligibility checks remain enforced.
+- Restore temporarily equipped items through the inverse exchange, avoiding a native BG2:EE 2.7.3.0 first-backpack-slot overwrite that could corrupt the character name and crash the game. Empty equipment slots and interrupted restores are covered.
+- Keep detected stances excluded from automatic buffs even when they expose a variant picker, and refresh the panel's completion status while it remains open.
+
+Validation: **1130 automated tests pass**, including installer/release checks. Hidden native BG2:EE 2.7.3.0 / EEex 1.3.1 labs verified Normal/2x/4x with two simultaneous casters, spell/item consumption, buff expiry, variants, temporary equipment swaps, interruptions, late-joining allies and rate restoration. The subsequent EET/SR/SCS/modpack matrix also passed with experimental Scroll component 430 uninstalled and the published alpha.13 banking fix installed; Normal/2x/4x took 20.866/10.429/5.279 s with the same resource consumption. Nine fresh full-stack screenshots cover search, status, speed and HUD presets at 1024×768 and 1920×1080. The 430-inclusive configuration remains unaccepted; BG:EE and 5E are outside this task's scope. This remains unreleased. See [the validation record](docs/validation-fork-qol.md) for measurements and limits.
+
 ## v1.10.0 (2026-10-06)
 
 ### Added
