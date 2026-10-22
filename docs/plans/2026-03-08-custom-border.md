@@ -301,14 +301,14 @@ git commit -m "feat(tools): add 9-slice border extractor for custom panel frame"
 
 **Files:**
 - Read: `tools/extract_border.py` (from Task 1)
-- Source image: `C:/Users/chris/Downloads/Generated Image March 08, 2026 - 5_18PM.png`
+- Source image: `~/Downloads/Generated Image March 08, 2026 - 5_18PM.png`
 - Create: `buffbot/BFBOTFR.PVRZ`
 
 **Step 1: Run the extractor with preview**
 
 ```bash
 python3 tools/extract_border.py \
-    "C:/Users/chris/Downloads/Generated Image March 08, 2026 - 5_18PM.png" \
+    "$USERPROFILE/Downloads/Generated Image March 08, 2026 - 5_18PM.png" \
     buffbot/BFBOTFR.PVRZ \
     --preview /tmp/border_preview.png
 ```

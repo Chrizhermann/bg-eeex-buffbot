@@ -22,6 +22,17 @@ Adapted from [Zach Hopkins' BuffBot Redux](https://github.com/zach-hopkins/bg-ee
 
 Validation: **1130 automated tests pass**, including installer/release checks. Hidden native BG2:EE 2.7.3.0 / EEex 1.3.1 labs verified Normal/2x/4x with two simultaneous casters, spell/item consumption, buff expiry, variants, temporary equipment swaps, interruptions, late-joining allies and rate restoration. The subsequent EET/SR/SCS/modpack matrix also passed with experimental Scroll component 430 uninstalled and the published alpha.13 banking fix installed; Normal/2x/4x took 20.866/10.429/5.279 s with the same resource consumption. Nine fresh full-stack screenshots cover search, status, speed and HUD presets at 1024×768 and 1920×1080. The 430-inclusive configuration remains unaccepted; BG:EE and 5E are outside this task's scope. This remains unreleased. See [the validation record](docs/validation-fork-qol.md) for measurements and limits.
 
+## v1.10.1 (2026-10-20)
+
+### Fixed
+- The party leader now shows the "Combat detected - casting stopped" and "casting timed out" notices over their head. BuffBot called `EEex_Sprite_DisplayStringHead`, which no EEex release defines, and a `pcall` hid the error, so both notices were always lost; stopping itself worked. The notices now use the engine's overhead text message with the translated text. If that message cannot be queued, the notice goes to the message log and a one-time error names the cause. (#76)
+- The `BfBot.Probe` area probe tries `EEex_Area_GetVisible` and `EngineGlobals.g_pBaldurChitin` instead of three globals that never existed.
+
+### Testing
+- A new check fails when BuffBot's Lua or menu code uses an `EEex_*` global that EEex v1.3.1 does not define. `tools/eeex_globals.py` generates the list of defined names from the EEex v1.3.1 source. Every EEex global BuffBot now uses also exists in EEex v1.2.0 and v0.11.0-alpha.
+- The full automated suite passes **673 tests**.
+- **Lab check, EET 2.7.3.0 with EEex v1.3.1:** with the fixed core loaded at runtime, `BfBot._DisplayOverhead` made the engine attach a floating text object over the party leader with the exact combat-stop notice, in English and in German with UTF-8 characters. `EEex_Sprite_DisplayStringHead` is nil there. Not checked in game: a real combat stop during a buff run, the drawn text on screen, EEex v1.2.0, BG:EE and BG2:EE outside EET, and the in-game `BfBot.Test` suite.
+
 ## v1.10.0 (2026-10-06)
 
 ### Added

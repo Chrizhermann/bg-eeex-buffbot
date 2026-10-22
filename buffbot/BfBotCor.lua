@@ -6,7 +6,7 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.10.0"
+BfBot.VERSION = "1.10.1"
 BfBot.MAX_PRESETS = 8
 BfBot.MAX_SPELL_REPEATS = 5
 
@@ -90,6 +90,73 @@ function BfBot._Log(msg)
     if BfBot._logLevel >= 3 then
         BfBot._Print("[BuffBot] " .. tostring(msg))
     end
+end
+
+BfBot._reportedErrors = BfBot._reportedErrors or {}
+
+--- Display an error once per session; repeats of the same message stay quiet.
+--- For failures that would otherwise recur on every run or tick.
+function BfBot._ErrorOnce(msg)
+    local s = tostring(msg)
+    if BfBot._reportedErrors[s] then return end
+    BfBot._reportedErrors[s] = 1
+    BfBot._Error(s)
+end
+
+-- ============================================================
+-- Overhead feedback
+-- ============================================================
+
+-- Matches EEex_Sprite_DisplayTextRef's default text color.
+local _OVERHEAD_TEXT_COLOR = 0xBED7D7
+
+-- EEex has no overhead-text helper that takes a string:
+-- EEex_Sprite_DisplayTextRef and the DisplayStringHead action both want a TLK
+-- strref, while BuffBot feedback is UTF-8 catalog text (BfBotLoc). The engine's
+-- CMessageDisplayText carries CString text; with m_overHead set, its Run()
+-- attaches a floating CGameText to the target sprite (checked in the
+-- disassembly of 2.7.3.0 and 2.6.6.0); whether the text also reaches the
+-- message log is left to the engine. EEex v0.11, v1.2.0 and v1.3.1 bind the
+-- same CMessageDisplayText:Construct(name, text, nameColor, textColor,
+-- marker, caller, target), which copies both strings.
+local function _queueOverheadText(sprite, text)
+    local handler = EngineGlobals.g_pBaldurChitin.m_cMessageHandler
+    local id = sprite.m_id
+    local nameColor = CVidPalette.RANGE_COLORS:get(
+        sprite.m_baseStats.m_colors:get(2))
+    local message = EEex_NewUD("CMessageDisplayText")
+    local ok, err = pcall(EEex_RunWithStackManager, {
+        { ["name"] = "text", ["struct"] = "CString",
+          ["constructor"] = { ["args"] = { text } } } },
+        function(manager)
+            message:Construct(sprite.m_sName, manager:getUD("text"),
+                nameColor, _OVERHEAD_TEXT_COLOR, -1, id, id)
+        end)
+    if not ok then
+        EEex_FreeUD(message)
+        error(err, 0)
+    end
+    message.m_overHead = 1
+    -- The handler owns the message from here and deletes it after Run().
+    handler:AddMessage(message, false)
+end
+
+--- Show BuffBot feedback as floating text over a sprite.
+--- Falls back to the message log when there is no sprite or the engine
+--- message cannot be queued; a queueing failure is also reported once, so
+--- the notice is never silently lost (bg-eeex-buffbot#76).
+-- @param sprite userdata|nil: CGameSprite to show the text over
+-- @param text string: already-localized feedback text
+-- @return boolean: true when the overhead message was queued
+function BfBot._DisplayOverhead(sprite, text)
+    if sprite ~= nil then
+        local ok, err = pcall(_queueOverheadText, sprite, text)
+        if ok then return true end
+        BfBot._ErrorOnce("Overhead text failed, showing it in the message log: "
+            .. tostring(err))
+    end
+    BfBot._Display(text)
+    return false
 end
 
 -- EEex v0.11 lets listener errors escape into the engine. Keep every

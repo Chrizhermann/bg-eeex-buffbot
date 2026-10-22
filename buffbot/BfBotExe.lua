@@ -1209,6 +1209,19 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     end
 end
 
+--- Tell the player why a run ended: floating text over the party leader
+--- (portrait slot 0), or the message log when that cannot be shown. Runs
+--- inside engine callbacks and the .menu safety tick, so it never throws.
+-- @param text string: already-localized feedback text
+function BfBot.Exec._NotifyLeader(text)
+    local ok, leader = pcall(EEex_Sprite_GetInPortrait, 0)
+    if not ok then
+        BfBot._ErrorOnce("Party leader lookup failed: " .. tostring(leader))
+        leader = nil
+    end
+    BfBot._DisplayOverhead(leader, text)
+end
+
 --- Shared guard for engine-driven chain callbacks (_Advance / _Resume):
 --- returns the caster record when its chain may continue, else nil after
 --- finishing a gone caster or stopping the run on combat.
@@ -1232,14 +1245,7 @@ local function _continueChain(key)
     if BfBot.Exec._DetectCombat() then
         BfBot.Exec._LogEntry("INFO", "Combat detected — stopping execution")
         BfBot.Exec.Stop()
-        -- Notify player via overhead text on party leader
-        pcall(function()
-            local leader = EEex_Sprite_GetInPortrait(0)
-            if leader then
-                EEex_Sprite_DisplayStringHead(leader,
-                    BfBot.L10N.Get("feedback.combat_stopped"))
-            end
-        end)
+        BfBot.Exec._NotifyLeader(BfBot.L10N.Get("feedback.combat_stopped"))
         return nil
     end
     return caster
@@ -1848,13 +1854,7 @@ function BfBot.Exec._SafetyTick()
                 .. "by another player, a gone-summon edge case, or an engine stall). "
                 .. "Cast again if buffing is incomplete.",
                 gtNow - gtLast))
-            pcall(function()
-                local leader = EEex_Sprite_GetInPortrait(0)
-                if leader then
-                    EEex_Sprite_DisplayStringHead(leader,
-                        BfBot.L10N.Get("feedback.cast_timeout"))
-                end
-            end)
+            BfBot.Exec._NotifyLeader(BfBot.L10N.Get("feedback.cast_timeout"))
         end
         -- Whether or not it tripped, exec (or the force-complete) owns cheat
         -- management this tick — don't fall through to the orphan cleanup.

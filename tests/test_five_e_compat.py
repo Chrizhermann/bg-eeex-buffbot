@@ -1044,12 +1044,15 @@ def exec5_lua() -> LuaRuntime:
         " _Log = function(_) end,"
         " _OpenLogAppend = function(_) end, _CloseLog = function() end,"
         " _GetName = function(s) return type(s) == 'table' and (s.name or '?') or tostring(s) end,"
+        " _DisplayOverhead = function(s, text) T_Notices[#T_Notices + 1] = text return true end,"
+        " _ErrorOnce = function(message) T_Errors[#T_Errors + 1] = message end,"
         + FIELDS
         + "}"
     )
     runtime.execute(
+        "T_Notices = {}\n"
+        "T_Errors = {}\n"
         "EEex_BAnd = function() return 0 end\n"
-        "EEex_Sprite_DisplayStringHead = function() end\n"
         "io = nil"
     )
     runtime.execute(LOC_SOURCE)
