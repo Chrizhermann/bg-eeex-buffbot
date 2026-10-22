@@ -94,7 +94,13 @@ return function(source, chunkname)
     if not fn then return false, err end
     local gets, sets, strings = {}, {}, {}
     local function addString(value)
-        if type(value) == "string" then strings[#strings + 1] = value end
+        -- Only name-shaped constants can be a global's name, and only those
+        -- are read back. Byte-range patterns such as "[\194-\223][\128-\191]"
+        -- are legitimate Lua constants that are not valid UTF-8, so handing
+        -- them to the caller would fail decoding for no gain.
+        if type(value) == "string" and value:match("^[%w_]+$") then
+            strings[#strings + 1] = value
+        end
     end
     local function walk(f)
         for pc = 1, 1000000000 do

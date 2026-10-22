@@ -267,9 +267,9 @@ def test_combat_stop_shows_the_localized_notice_over_the_leader(exec_runtime) ->
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = { p0 = {
             ref = { kind = "party", slot = 0 }, queue = {}, index = 1,
-            done = false, name = "Imoen",
+            done = false, name = "Imoen", advanceToken = 1,
         } }
-        BfBot.Exec._Advance("p0")
+        BfBot.Exec._Advance("p0", 1)
         local m = T.added[1] and T.added[1].message
         return {
             stops = stops,
