@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.10.1-redux-beta.3 — 22 October 2026
+
+- Rewrite the README around the original Features / Requirements / Installation / Usage structure, with short player instructions for the Redux planner.
+- Correct retired shortcut, after-rest, summon and casting descriptions; keep development details folded away.
+- Documentation release only: gameplay behavior is unchanged from beta 2.
+
 ## v1.10.1-redux-beta.2 — 21 October 2026
 
 - Save Smart order, Long first and Custom per preset; automatically update after buff edits.

@@ -458,52 +458,23 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "`override/bfbot_l10n.tra`" in source
     assert "reads directly" in normalized
     assert "no BuffBot-owned UI string is fetched from the game TLK".casefold() in normalized
-    assert "raw development deploy" in normalized
-    assert "English fallback".casefold() in normalized
-    assert "preserves an existing `override/bfbot_l10n.tra`" in source
-    assert "`override/bfbot_strrefs.txt`" in source
-    assert "preserves both files byte-for-byte" in normalized
-    assert "skips TLK patching".casefold() in normalized
-    assert "stops before copying runtime files" in normalized
-    assert "reinstall BuffBot with WeiDU".casefold() in normalized
-    assert "patches only `lang/en_US/dialog.tlk`".casefold() in normalized
-    assert "other language TLKs untouched".casefold() in normalized
-    assert "requires Python 3 and an existing `lang/en_US/dialog.tlk`" in source
-    assert "refuses the fallback before copying files" in normalized
-    assert "source checkout" in normalized
-    assert "development-only" in normalized
-    assert "f12 innate" in normalized
-    assert "innate references" in normalized
-    assert "only the eight generated F12 innate names".casefold() in normalized
-    assert "`@200` through `@207`" in source
-    assert "`bfbot_strrefs.txt`" in source
-    assert "Copy Copy" in source
-    assert "readable CJK labels" in source
-    assert "tested resolution/font" in source
-    assert "alternate resolutions/fonts remain pending" in normalized
-    assert "live in-game Chinese glyph and layout acceptance is still pending".casefold() not in normalized
-    assert "language pull requests are welcome" in normalized
-    assert "buffbot/lang/english/setup.tra" in source
-    assert "safe lowercase folder name" in normalized
-    assert "`a-z`, `0-9`, and underscores" in source
-    assert "complete catalog" in normalized
-    assert "exact `@` IDs" in source
-    assert "all comments" in normalized
-    assert "named placeholder" in normalized
-    assert "WeiDU token".casefold() in normalized
-    assert "`@113`" in source
-    assert "exact folder name" in normalized
-    assert "non-translatable" in normalized
-    assert "UTF-8" in source
-    assert "one-line" in normalized and "tilde" in normalized
-    assert "python -m pytest tests/test_localization.py" in source
-    assert "tests/test_release_package.py" in source
-    assert "`LANGUAGE` stanza" in source
-    assert "package manifest is derived from the `language` declarations" in normalized
-    assert "translator credit" in normalized
-    assert "robovoid" in normalized
-    assert "[robovoid](https://github.com/robvoid)" in source
-    assert "#50" in source
+    for phrase in (
+        "raw development deploy", "english fallback", "preserves both files byte-for-byte",
+        "skips tlk patching", "stops before copying runtime files",
+        "reinstall buffbot with weidu", "other language tlks untouched",
+        "refuses the fallback before copying files", "source checkout", "development-only",
+        "language pull requests are welcome", "complete catalog", "safe lowercase folder name",
+        "placeholders", "installer tokens", "one-line tilde", "translator credit",
+        "redux no longer grants those shortcuts",
+    ):
+        assert phrase in normalized
+    for literal in (
+        "`override/bfbot_strrefs.txt`", "`bfbot_strrefs.txt`",
+        "`lang/en_US/dialog.tlk`", "buffbot/lang/english/setup.tra", "`@113`",
+        "UTF-8", "`LANGUAGE` stanza", "python -m pytest tests/test_localization.py",
+        "tests/test_release_package.py", "[robovoid](https://github.com/robvoid)", "#50",
+    ):
+        assert literal in source
     assert (
         "An obsolete `bfbot_l10n.txt` alone is preserved but does not select "
         "localized deployment."

@@ -1045,7 +1045,8 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     languages = readme.split("## Languages", 1)[1].split("## Installation", 1)[0]
     assert "`override/bfbot_l10n.tra`" in languages
     assert "no BuffBot-owned UI string is fetched from the game TLK" in languages
-    assert "Only the eight generated F12 innate names remain TLK-backed" in languages
+    assert "installer still keeps `bfbot_strrefs.txt`" in languages
+    assert "Redux no longer grants those shortcuts" in languages
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
     localization_release = changelog.split("\n## v1.8.0-alpha", 1)[1].split(
