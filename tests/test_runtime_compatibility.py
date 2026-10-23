@@ -3035,9 +3035,12 @@ def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
         end
         BfBot.Exec._ResolveCasterForStep = function() return freshSprite end
         BfBot.Exec._DetectCombat = function() return false end
-        BfBot.Exec._HasActiveEffect = function(_, resref)
+        BfBot.Exec._ActiveEffectRemaining = function(_, resref)
             if resref == "ITEMLEAF" then checkedLeaf = true end
-            return active and resref == "ITEMLEAF"
+            -- math.huge is "active, lifetime unknown or permanent": above
+            -- every finite RefreshBelow threshold, so it always skips.
+            if active and resref == "ITEMLEAF" then return math.huge end
+            return nil
         end
         BfBot.Exec._NoteProgress = function() end
         BfBot.Exec._Complete = function() BfBot.Exec._state = "done" end
@@ -3102,7 +3105,7 @@ def test_repeat_attempts_recheck_slots_and_continue_to_later_priority(
         end
         BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
         BfBot.Exec._DetectCombat = function() return false end
-        BfBot.Exec._HasActiveEffect = function() return false end
+        BfBot.Exec._ActiveEffectRemaining = function() return nil end
         BfBot.Exec._NoteProgress = function() end
         BfBot.Exec._state = "running"
         BfBot.Exec._castCount = 0
@@ -3159,7 +3162,9 @@ def test_repeat_attempts_recheck_active_effects_after_first_cast(
         EEex_Action_QueueResponseStringOnAIBase = function() end
         BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
         BfBot.Exec._DetectCombat = function() return false end
-        BfBot.Exec._HasActiveEffect = function() return active end
+        BfBot.Exec._ActiveEffectRemaining = function()
+            return active and math.huge or nil
+        end
         BfBot.Exec._NoteProgress = function() end
         BfBot.Exec._Complete = function()
             BfBot.Exec._state = "done"
@@ -3251,7 +3256,7 @@ def test_many_already_active_repeat_attempts_complete_without_stack_growth(
         EEex_Action_QueueResponseStringOnAIBase = function()
             actionCount = actionCount + 1
         end
-        BfBot.Exec._HasActiveEffect = function() return true end
+        BfBot.Exec._ActiveEffectRemaining = function() return math.huge end
         -- Keep the production skip/check/resolve/completion paths, but avoid
         -- retaining 12,000 log messages in this stack-safety regression.
         BfBot.Exec._LogEntry = function() end
@@ -3327,7 +3332,7 @@ def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
         end
         BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
         BfBot.Exec._DetectCombat = function() return false end
-        BfBot.Exec._HasActiveEffect = function() return false end
+        BfBot.Exec._ActiveEffectRemaining = function() return nil end
         BfBot.Exec._NoteProgress = function() end
         BfBot.Exec._state = "running"
         BfBot.Exec._castCount = 0
@@ -3428,7 +3433,7 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
         end
         BfBot.Exec._ResolveCasterForStep = function() return sprites[1] end
         BfBot.Exec._DetectCombat = function() return false end
-        BfBot.Exec._HasActiveEffect = function() return false end
+        BfBot.Exec._ActiveEffectRemaining = function() return nil end
         BfBot.Exec._NoteProgress = function() end
         BfBot.Exec._state = "running"
         BfBot.Exec._castCount = 0

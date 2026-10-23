@@ -84,6 +84,9 @@ BfBot.Persist._INI_DEFAULTS = {
     MpControlNames = "",     -- manual mode: comma-separated names the local player controls
     SummonsJoinCast = 1,     -- allied summons/clones with configured presets join party casts (#19)
     ItemUseMode = "inventory", -- "inventory" | "swap" (equip/use/restore)
+    RefreshBelow = 0,        -- seconds; cast an active buff again when less than
+                             -- this is left of it. 0 = off, every active buff
+                             -- skips (the behavior before issue #84).
 }
 
 -- ---- Default config ----
@@ -2208,6 +2211,39 @@ function BfBot.Persist.SetPref(key, value)
     else
         pcall(Infinity_SetINIValue, "BuffBot", key, value)
     end
+end
+
+--- Clamp a candidate RefreshBelow value to whole seconds in range (issue #84).
+--- baldur.ini is a plain text file a player can hand-edit, so a value read back
+--- is untrusted: NaN, infinities, fractions, negatives and strings all collapse
+--- to 0, which means "off" and keeps the old skip-every-active-buff behavior.
+-- @param value  candidate threshold in seconds
+-- @return number: integer in 0..BfBot.MAX_REFRESH_BELOW
+function BfBot.Persist._NormalizeRefreshBelow(value)
+    if type(value) == "string" then value = tonumber(value) end
+    if type(value) ~= "number" or value ~= value
+        or value == math.huge or value == -math.huge
+        or value < 0 then
+        return 0
+    end
+    value = math.floor(value)
+    if value > BfBot.MAX_REFRESH_BELOW then return BfBot.MAX_REFRESH_BELOW end
+    return value
+end
+
+--- Validated RefreshBelow threshold in seconds (0 = off). Every caller that
+--- compares a remaining duration must go through this, never GetPref directly.
+function BfBot.Persist.GetRefreshBelow()
+    return BfBot.Persist._NormalizeRefreshBelow(
+        BfBot.Persist.GetPref("RefreshBelow"))
+end
+
+--- Store a RefreshBelow threshold, validated the same way as on read.
+-- @return number: the value actually stored
+function BfBot.Persist.SetRefreshBelow(value)
+    local normalized = BfBot.Persist._NormalizeRefreshBelow(value)
+    BfBot.Persist.SetPref("RefreshBelow", normalized)
+    return normalized
 end
 
 -- ---- Preset management ----

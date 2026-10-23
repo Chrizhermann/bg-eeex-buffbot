@@ -24,6 +24,7 @@ def repeat_ui_lua() -> LuaRuntime:
         BfBot = {
             MAX_PRESETS = 8,
             MAX_SPELL_REPEATS = 5,
+            REFRESH_LOW_SECONDS = 300,
             Scan = {}, Class = {}, Innate = {}, Mp = {}, Exec = {}, Persist = {},
             _cache = { class = {}, scan = {} },
             _Warn = function(_) end,

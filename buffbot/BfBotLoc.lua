@@ -90,6 +90,12 @@ local _registry = {
     ["ui.category.unknown"] = { id = 451, fallback = [=[unknown]=] },
     ["ui.repeat.compact"] = { id = 452, fallback = [=[R{count}]=] },
     ["ui.lock.compact"] = { id = 453, fallback = [=[[L]]=] },
+    ["ui.force_recast.off"] = { id = 454, fallback = [=[Active: Skip]=] },
+    ["ui.force_recast.low"] = { id = 455, fallback = [=[Active: Refresh Low]=] },
+    ["ui.force_recast.all"] = { id = 456, fallback = [=[Active: Force All]=] },
+    ["ui.force_recast.tooltip_off"] = { id = 457, fallback = [=[Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.]=] },
+    ["ui.force_recast.tooltip_low"] = { id = 458, fallback = [=[Cast a running buff again when less than {seconds}s of it are left. Click to cycle.]=] },
+    ["ui.force_recast.tooltip_all"] = { id = 459, fallback = [=[Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.]=] },
     ["feedback.no_luajit"] = { id = 500, fallback = [=[BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.]=] },
     ["feedback.combat_stopped"] = { id = 501, fallback = [=[BuffBot: Combat detected - casting stopped]=] },
     ["feedback.cast_timeout"] = { id = 502, fallback = [=[BuffBot: casting timed out - stopped]=] },
@@ -162,6 +168,12 @@ local _registry = {
     ["options.item_use_mode_description"] = { id = 714, fallback = [=[Choose how BuffBot uses items carried by this character. Equip mode temporarily equips wearable gear, uses it, then restores the previous equipment. Chest armor and unusable items are not automatically swapped.]=] },
     ["options.item_use_inventory"] = { id = 715, fallback = [=[Use from inventory]=] },
     ["options.item_use_swap"] = { id = 716, fallback = [=[Equip, use, and restore]=] },
+    ["options.refresh_below"] = { id = 717, fallback = [=[Refresh buffs that are nearly over]=] },
+    ["options.refresh_below_description"] = { id = 718, fallback = [=[Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.]=] },
+    ["options.refresh_below_off"] = { id = 719, fallback = [=[Off]=] },
+    ["options.refresh_below_1m"] = { id = 720, fallback = [=[Under 1 minute left]=] },
+    ["options.refresh_below_5m"] = { id = 721, fallback = [=[Under 5 minutes left]=] },
+    ["options.refresh_below_1h"] = { id = 722, fallback = [=[Under 1 hour left]=] },
 }
 
 local _registryById = {}

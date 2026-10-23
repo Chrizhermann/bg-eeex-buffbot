@@ -5956,6 +5956,188 @@ end
 -- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
+-- Remaining-duration threshold / force re-cast (issue #84)
+-- ============================================================
+
+--- Live check of the active-buff policy: that an applied effect's remaining
+--- lifetime can really be read off this engine, that the threshold resolves
+--- from baldur.ini and the run-scoped toggle, and that the skip decision
+--- follows from the two.
+---
+--- Applies four tagged opcode-142 (portrait icon) effects to the party leader
+--- and removes them again with opcode 321 before returning, so nothing of the
+--- test survives it. A portrait icon carries no gameplay effect either way.
+function BfBot.Test.RefreshThreshold()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Remaining-Duration Threshold")
+    P("========================================")
+    P("")
+
+    if BfBot.Exec.GetState() == "running" then
+        _warning("Skipping: exec currently running")
+        return _summary("RefreshThreshold")
+    end
+
+    -- ---- 1. API surface ----
+    _check(type(BfBot.Exec._EffectRemaining) == "function",
+        "_EffectRemaining is a function")
+    _check(type(BfBot.Exec._ActiveEffectRemaining) == "function",
+        "_ActiveEffectRemaining is a function")
+    _check(type(BfBot.Exec._ActiveStateMarkerRemaining) == "function",
+        "_ActiveStateMarkerRemaining is a function")
+    _check(type(BfBot.Exec._ActiveItemEffectRemaining) == "function",
+        "_ActiveItemEffectRemaining is a function")
+    _check(type(BfBot.Exec._RefreshThreshold) == "function",
+        "_RefreshThreshold is a function")
+    _check(type(BfBot.Exec._ActiveBlocksCast) == "function",
+        "_ActiveBlocksCast is a function")
+    _check(type(BfBot.Persist.GetRefreshBelow) == "function",
+        "Persist.GetRefreshBelow is a function")
+    _check(type(BfBot.UI.CycleForceRecast) == "function",
+        "UI.CycleForceRecast is a function")
+
+    -- ---- 2. Threshold resolution against the real baldur.ini ----
+    local savedPref = BfBot.Persist.GetPref("RefreshBelow")
+    local savedForce = BfBot.Exec._forceMode
+
+    BfBot.Persist.SetRefreshBelow(0)
+    _check(BfBot.Exec._RefreshThreshold(0) == 0,
+        "option off: threshold 0 - every active buff still skips")
+    _check(BfBot.Exec._RefreshThreshold(1) == BfBot.REFRESH_LOW_SECONDS,
+        "option off + Refresh Low: falls back to "
+            .. tostring(BfBot.REFRESH_LOW_SECONDS) .. "s")
+    _check(BfBot.Exec._RefreshThreshold(2) == math.huge,
+        "Force All: infinite threshold, nothing skips for being active")
+
+    BfBot.Persist.SetRefreshBelow(45)
+    _check(BfBot.Persist.GetRefreshBelow() == 45,
+        "RefreshBelow round-trips through baldur.ini")
+    _check(BfBot.Exec._RefreshThreshold(0) == 45,
+        "option 45s reaches the default mode")
+    _check(BfBot.Exec._RefreshThreshold(1) == 45,
+        "Refresh Low prefers the configured option over the fallback")
+
+    -- A hand-edited baldur.ini must not widen the threshold.
+    BfBot.Persist.SetPref("RefreshBelow", -5)
+    _check(BfBot.Persist.GetRefreshBelow() == 0,
+        "a negative stored value validates back to off")
+    BfBot.Persist.SetPref("RefreshBelow", 10 * BfBot.MAX_REFRESH_BELOW)
+    _check(BfBot.Persist.GetRefreshBelow() == BfBot.MAX_REFRESH_BELOW,
+        "an oversized stored value clamps to "
+            .. tostring(BfBot.MAX_REFRESH_BELOW) .. "s")
+
+    -- ---- 3. Reading a LIVE applied effect ----
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    local now = BfBot.Exec._GetGameTime()
+    if not sprite then
+        _warning("No party leader - skipped the live effect reads")
+    elseif type(EEex_GameObject_ApplyEffect) ~= "function" then
+        _warning("EEex_GameObject_ApplyEffect missing - skipped live reads")
+    elseif type(now) ~= "number" then
+        _warning("World time unreadable - skipped the live effect reads")
+    else
+        local TAG = "BFBTPRB"
+        local probes = {
+            { name = "60s timed",   durationType = 0,  duration = 60 },
+            { name = "150 ticks",   durationType = 10, duration = 150 },
+            { name = "permanent",   durationType = 9,  duration = 0 },
+            { name = "delayed 60s", durationType = 3,  duration = 60 },
+        }
+        local applied = 0
+        for _, probe in ipairs(probes) do
+            local ok = pcall(EEex_GameObject_ApplyEffect, sprite, {
+                effectID     = 142,   -- Display Portrait Icon: timed, inert
+                targetType   = 2,
+                effectAmount = 1,
+                durationType = probe.durationType,
+                duration     = probe.duration,
+                m_sourceRes  = TAG,
+                sourceID     = sprite.m_id,
+                sourceTarget = sprite.m_id,
+            })
+            if ok then applied = applied + 1
+            else _nok("could not apply the " .. probe.name .. " probe") end
+        end
+        _check(applied == #probes,
+            "applied " .. applied .. "/" .. #probes .. " probe effects")
+
+        -- Collect what the engine now reports for each of them.
+        local seen = {}
+        local permanent, pending, timed = 0, 0, 0
+        pcall(function()
+            EEex_Utility_IterateCPtrList(sprite.m_timedEffectList,
+                function(effect)
+                    if effect.m_sourceRes:get() ~= TAG then return end
+                    local left, detail =
+                        BfBot.Exec._EffectRemaining(effect, now)
+                    seen[#seen + 1] = string.format("dt=%s -> %s",
+                        tostring(effect.m_durationType),
+                        BfBot.Exec._FormatRemaining(left, detail))
+                    if detail == "perm" then permanent = permanent + 1
+                    elseif detail == "pending" then pending = pending + 1
+                    elseif detail == nil and left < math.huge then
+                        timed = timed + 1
+                    end
+                end)
+        end)
+        for _, line in ipairs(seen) do P("    " .. line) end
+
+        _check(timed >= 2,
+            "both timed probes report a finite remaining lifetime ("
+                .. timed .. ")")
+        _check(permanent >= 1, "the permanent probe reports permanent")
+        if pending < 1 then
+            _warning("the delayed probe already fired - timing 6 not seen")
+        else
+            _ok("the delayed probe reports pending, not a remainder")
+        end
+
+        -- The permanent and delayed probes must NOT hide the 60s deadline:
+        -- real spells carry such siblings (live Armor has an op174 in mode 7).
+        local left, detail = BfBot.Exec._ActiveEffectRemaining(sprite, TAG)
+        _check(detail == nil and type(left) == "number" and left < math.huge,
+            "a readable deadline wins over permanent/delayed siblings ("
+                .. BfBot.Exec._FormatRemaining(left, detail) .. ")")
+        _check(type(left) == "number" and left > 30,
+            "and it is the LONGEST readable one, the 60s probe")
+        _check(BfBot.Exec._ActiveEffectRemaining(sprite, "BFBTNON") == nil,
+            "an unrelated resref reports nothing active")
+
+        -- The skip decision itself, on live data.
+        _check(BfBot.Exec._ActiveBlocksCast(left, 0) == true,
+            "an active buff blocks a cast at threshold 0")
+        _check(BfBot.Exec._ActiveBlocksCast(left, 3600) == false,
+            "and is cast again once the threshold is above what is left")
+        _check(BfBot.Exec._ActiveBlocksCast(left, math.huge) == false,
+            "Force All casts through regardless")
+
+        -- ---- Clean up: opcode 321 removes effects by source resource ----
+        pcall(EEex_GameObject_ApplyEffect, sprite, {
+            effectID     = 321,
+            targetType   = 2,
+            res          = TAG,
+            sourceID     = sprite.m_id,
+            sourceTarget = sprite.m_id,
+        })
+        if BfBot.Exec._ActiveEffectRemaining(sprite, TAG) == nil then
+            _ok("probe effects removed again - nothing left on the sprite")
+        else
+            _nok("probe effects SURVIVED cleanup: reload without saving")
+        end
+    end
+
+    -- ---- 4. Restore the player's own setting ----
+    BfBot.Persist.SetPref("RefreshBelow", savedPref)
+    BfBot.Exec._forceMode = savedForce
+    _check(BfBot.Persist.GetPref("RefreshBelow") == savedPref,
+        "restored the player's own RefreshBelow setting")
+
+    return _summary("RefreshThreshold")
+end
+
+-- ============================================================
 
 function BfBot.Test.RunAll()
     -- Open log file so output is captured
@@ -6075,6 +6257,10 @@ function BfBot.Test.RunAll()
     local mpOk = BfBot.Test.Mp()
     P("")
 
+    -- Phase 19: Remaining-duration threshold / force re-cast (issue #84)
+    local refreshOk = BfBot.Test.RefreshThreshold()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -6103,11 +6289,12 @@ function BfBot.Test.RunAll()
     P("  Items: " .. (itemsOk and "PASS" or "FAIL"))
     P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
+    P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk
 end
 
 -- ============================================================

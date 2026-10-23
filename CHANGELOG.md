@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.11.0 (2026-10-24)
+
+### Added
+- **Re-cast buffs that are nearly over instead of skipping them.** A long buff that survives a rest with a tiny remainder was treated as "already active" and never renewed. BuffBot now reads how much of a running buff is actually left and casts it again when that is below a threshold. (#84)
+- **"Refresh buffs that are nearly over"** in EEex options: off by default, or under 1 minute, 5 minutes, or 1 hour left. The threshold applies to every path, including the F12 preset innates, which is where buffing after a rest happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`; the list offers the common ones.
+- **An active-buff toggle in the panel**, beside the status line: *Active: Skip* (default), *Active: Refresh Low*, *Active: Force All*. It belongs to the run, not to a preset: nothing is written to the save, and a game restart returns to Skip. Force All casts every configured buff again, however much of it is left.
+- Skip and refresh decisions now name the remaining lifetime in `buffbot_exec.log`, so "why was this skipped" is answerable from the log.
+
+### Changed
+- **Repeat counts now repeat buffs under Force All.** Every repeat attempt goes through the active-buff check, so before this a `Repeat: 2` buff cast once and skipped the rest. With Force All the active check is off and the configured count is used in full. Each attempt still consumes a spell slot or charge. Skip and Refresh Low are unaffected.
+- No save-schema change. Existing presets, including repeat counts and summon presets, remain compatible.
+
+### Limitations
+- The threshold is a *time* threshold. Stoneskin's real resource is its skins (opcode 218), so "timer still running, no skins left" is not covered; a charge-aware check needs its own work.
+- A buff whose remaining lifetime cannot be read — a permanent effect, or one still inside its delay — keeps the old behaviour and is skipped unless Force All is used.
+- `config.opts.skip` in the save schema is still unused. This release carries the threshold in `baldur.ini` instead of reviving that field; removing it needs a migration decision and is tracked in #84.
+
+### Testing
+- The full automated suite passes **786 tests**, including 100 new checks covering the per-timing-mode duration reader, the longest-readable-deadline fold, threshold resolution and validation, `_CheckEntry` for spells, state markers and multi-ability items, the run-scoped plumbing, and the panel toggle.
+- A new in-game phase `BfBot.Test.RefreshThreshold()` applies one tagged effect per timing mode to the party leader, reads each one back, exercises the threshold and the skip decision, and removes the probes again. It runs inside `BfBot.Test.RunAll()`.
+- **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (disposable clone, own save profile): the in-game phase passed 28/28. End to end on Protection From Normal Weapons, with 1m 42s left: with the option off the log read `SKIP ... (already active: SPWI511, 1m 42s left)`, and with the threshold at one hour `INFO ... (refreshing: SPWI511, 1m 36s left, threshold 60m 0s)` followed by the cast. Force All cast a fully active Shield again. Live vanilla Armor was measured too, and it is why the fold prefers readable deadlines: its `op174` sits in timing mode 7 forever beside three mode-4096 effects with the real 45-minute deadline.
+- **Engine measurements** behind the reader, recorded in the knowledge base: on an applied effect, encoded timing modes 0, 10 and 4096 all become mode 4096 with an absolute deadline in game ticks; 1 and 9 stay permanent; 3 becomes 6 and 4 becomes 7 while the delay runs, where the stored value is the end of the *delay*, not of the buff. A live `m_durationType` must not be masked with `0xFF` — that would turn 4096 into 0.
+- Not checked in game: the EEex options entry and the panel toggle clicked by hand, BG:EE, EET, the Force All interaction with Quick Cast, summon casters, item powers with a measured remaining duration, and the full `BfBot.Test.RunAll()`. Two later log-only corrections — the threshold's wording and suppressing the SPLSTATE false-positive notice on a refresh — have automated coverage but were not re-run in the lab.
+
 ## v1.10.1 (2026-10-20)
 
 ### Fixed
