@@ -388,6 +388,18 @@
 @464 = ~Quick Cast: Suspended~
 // ui.quick_cast.tooltip_suspended
 @465 = ~Fast-forward uses normal casting rules. Your Quick Cast setting is saved and applies again at Normal speed.~
+// ui.header.spell
+@466 = ~Spell / Item~
+// ui.header.duration
+@467 = ~Duration~
+// ui.header.uses
+@468 = ~Uses~
+// ui.header.repeats
+@469 = ~Rep.~
+// ui.header.target
+@470 = ~Target~
+// ui.header.lock
+@471 = ~Lock~
 // reason.item.manual_selection
 @552 = ~This item opens a selection menu. Use it manually; BuffBot skips it.~
 // reason.exec.fast_unavailable

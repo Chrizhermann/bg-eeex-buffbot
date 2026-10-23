@@ -388,6 +388,18 @@
 @464 = ~Szybkie rzucanie: wstrzymane~
 // ui.quick_cast.tooltip_suspended
 @465 = ~Przyspieszenie stosuje zwykłe zasady rzucania zaklęć. Ustawienie szybkiego rzucania pozostaje zapisane i ponownie działa przy normalnym tempie.~
+// ui.header.spell
+@466 = ~Zaklęcie / Przedmiot~
+// ui.header.duration
+@467 = ~Czas~
+// ui.header.uses
+@468 = ~Użycia~
+// ui.header.repeats
+@469 = ~Powt.~
+// ui.header.target
+@470 = ~Cel~
+// ui.header.lock
+@471 = ~Blokada~
 // reason.item.manual_selection
 @552 = ~Ten przedmiot otwiera menu wyboru. Użyj go ręcznie; BuffBot go pomija.~
 // reason.exec.fast_unavailable

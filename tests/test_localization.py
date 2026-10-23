@@ -68,6 +68,12 @@ CATALOG_SCHEMA = {
     463: "ui.speed.tooltip",
     464: "ui.quick_cast.suspended",
     465: "ui.quick_cast.tooltip_suspended",
+    466: "ui.header.spell",
+    467: "ui.header.duration",
+    468: "ui.header.uses",
+    469: "ui.header.repeats",
+    470: "ui.header.target",
+    471: "ui.header.lock",
     552: "reason.item.manual_selection",
     553: "reason.exec.fast_unavailable",
     # Installer strings (100-199)

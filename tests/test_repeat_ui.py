@@ -916,3 +916,79 @@ def test_dynamic_minimum_layout_keeps_list_and_all_footer_rows_valid(
     assert list_y >= 50 and list_y + list_h <= areas["bbAdd"][1]
     for name, (_, y, _, height) in areas.items():
         assert 50 <= y and y + height <= 400, name
+
+
+HEADER_COLUMNS = {
+    "bbHName": (16, 26),
+    "bbHDur": (42, 10),
+    "bbHUses": (52, 10),
+    "bbHRep": (62, 8),
+    "bbHTgt": (70, 24),
+    "bbHLock": (94, 6),
+}
+
+
+def test_column_headers_are_captions_only_and_never_sort_the_cast_order() -> None:
+    # Row order IS the cast order, so a sortable header would have to rewrite
+    # stored priorities. Sorting stays the explicit Sort button.
+    for name in HEADER_COLUMNS:
+        block = _named_item_block(name)
+        assert block.lstrip().startswith("label"), name
+        assert "action" not in block, name
+        assert re.search(r"text lua \"BfBot\.L10N\.Get\('ui\.header\.\w+'\)\"", block), name
+
+
+def test_header_spans_follow_the_spell_list_column_widths() -> None:
+    widths = [int(w) for w in re.findall(r"\bwidth\s+(\d+)", _spell_list_block())]
+    assert sum(widths) == 100, widths
+    # The checkbox and icon columns carry no caption; the rest line up in order.
+    starts, offset = [], 0
+    for width in widths:
+        starts.append((offset, width))
+        offset += width
+    captioned = [starts[index] for index in (2, 3, 4, 5, 6, 7)]
+    assert captioned == list(HEADER_COLUMNS.values())
+
+
+def test_headers_sit_above_the_list_without_stealing_footer_space(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        lua_areas = repeat_ui_lua.execute(
+            """
+            local areas = {}
+            Infinity_GetScreenSize = function() return 1920, 1080 end
+            Infinity_SetArea = function(name, x, y, w, h)
+                areas[name] = { x, y, w, h }
+            end
+            BfBot.UI._Layout()
+            return areas
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    def area(name: str) -> tuple[int, int, int, int]:
+        values = lua_areas[name]
+        assert values is not None, name
+        return tuple(int(values[index]) for index in range(1, 5))
+
+    list_x, list_y, list_w, list_h = area("bbList")
+    assert list_y + list_h <= area("bbAdd")[1]
+
+    previous_right = list_x
+    for name, (start, width) in HEADER_COLUMNS.items():
+        hx, hy, hw, hh = area(name)
+        assert hy + hh <= list_y, name
+        assert hy >= 0 and hw > 0 and hh > 0, name
+        # Headers divide the list minus its scrollbar strip, in column order.
+        column_width = list_w - 16
+        assert hx == list_x + column_width * start // 100, name
+        assert hw == column_width * width // 100, name
+        assert hx >= previous_right or name == "bbHName", name
+        previous_right = hx + hw
+    assert previous_right <= list_x + list_w

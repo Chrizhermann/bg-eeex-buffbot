@@ -388,6 +388,18 @@
 @464 = ~Lancio rapido: sospeso~
 // ui.quick_cast.tooltip_suspended
 @465 = ~L'accelerazione usa le normali regole di lancio. L'impostazione Lancio rapido resta salvata e si applica di nuovo a velocità normale.~
+// ui.header.spell
+@466 = ~Incantesimo / Oggetto~
+// ui.header.duration
+@467 = ~Durata~
+// ui.header.uses
+@468 = ~Usi~
+// ui.header.repeats
+@469 = ~Rip.~
+// ui.header.target
+@470 = ~Bersaglio~
+// ui.header.lock
+@471 = ~Blocco~
 // reason.item.manual_selection
 @552 = ~Questo oggetto apre un menu di selezione. Usalo manualmente; BuffBot lo salta.~
 // reason.exec.fast_unavailable

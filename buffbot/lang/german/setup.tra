@@ -388,6 +388,18 @@
 @464 = ~Schnellzauber: Pausiert~
 // ui.quick_cast.tooltip_suspended
 @465 = ~Die Beschleunigung verwendet normale Zauberregeln. Deine Schnellzauber-Einstellung bleibt gespeichert und gilt wieder bei normalem Tempo.~
+// ui.header.spell
+@466 = ~Zauber / Gegenstand~
+// ui.header.duration
+@467 = ~Dauer~
+// ui.header.uses
+@468 = ~Anz.~
+// ui.header.repeats
+@469 = ~Wdh.~
+// ui.header.target
+@470 = ~Ziel~
+// ui.header.lock
+@471 = ~Sperre~
 // reason.item.manual_selection
 @552 = ~Dieser Gegenstand öffnet ein Auswahlmenü. Benutze ihn manuell; BuffBot überspringt ihn.~
 // reason.exec.fast_unavailable

@@ -734,6 +734,73 @@ menu
 		text align left center
 		area 0 0 200 28
 	}
+	-- ======================================================
+	-- Column headers. Captions only: the row order IS the cast order, so a
+	-- sortable header would have to rewrite stored priorities. Sorting stays
+	-- the explicit Sort button. _Layout aligns these to the column widths
+	-- below; the checkbox and icon columns carry no caption.
+	-- ======================================================
+	label
+	{
+		name "bbHName"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.spell')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align left center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHDur"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.duration')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHUses"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.uses')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHRep"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.repeats')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHTgt"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.target')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHLock"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.lock')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+
 	-- Spell list (click row to toggle enable/disable)
 	-- Columns MUST come before properties (parser quirk).
 	-- Only label elements inside columns (no buttons).

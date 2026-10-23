@@ -388,6 +388,18 @@
 @464 = ~快速施法：暂停~
 // ui.quick_cast.tooltip_suspended
 @465 = ~加速时遵守正常施法规则。快速施法设置仍会保存，恢复正常速度后再次生效。~
+// ui.header.spell
+@466 = ~法术 / 物品~
+// ui.header.duration
+@467 = ~持续时间~
+// ui.header.uses
+@468 = ~次数~
+// ui.header.repeats
+@469 = ~重复~
+// ui.header.target
+@470 = ~目标~
+// ui.header.lock
+@471 = ~锁定~
 // reason.item.manual_selection
 @552 = ~此物品会打开选择菜单。请手动使用；BuffBot会跳过它。~
 // reason.exec.fast_unavailable

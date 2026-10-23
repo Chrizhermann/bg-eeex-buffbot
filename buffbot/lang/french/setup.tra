@@ -388,6 +388,18 @@
 @464 = ~Incantation rapide : en pause~
 // ui.quick_cast.tooltip_suspended
 @465 = ~L'accélération conserve les règles normales d'incantation. Le réglage Incantation rapide reste enregistré et s'applique de nouveau à vitesse normale.~
+// ui.header.spell
+@466 = ~Sort / Objet~
+// ui.header.duration
+@467 = ~Durée~
+// ui.header.uses
+@468 = ~Usages~
+// ui.header.repeats
+@469 = ~Rép.~
+// ui.header.target
+@470 = ~Cible~
+// ui.header.lock
+@471 = ~Verrou~
 // reason.item.manual_selection
 @552 = ~Cet objet ouvre un menu de sélection. Utilisez-le manuellement ; BuffBot l'ignore.~
 // reason.exec.fast_unavailable

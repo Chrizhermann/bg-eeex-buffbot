@@ -388,6 +388,18 @@
 @464 = ~Conjuração rápida: suspensa~
 // ui.quick_cast.tooltip_suspended
 @465 = ~A aceleração usa as regras normais de conjuração. A configuração de Conjuração rápida permanece salva e volta a valer na velocidade normal.~
+// ui.header.spell
+@466 = ~Magia / Item~
+// ui.header.duration
+@467 = ~Duração~
+// ui.header.uses
+@468 = ~Usos~
+// ui.header.repeats
+@469 = ~Rep.~
+// ui.header.target
+@470 = ~Alvo~
+// ui.header.lock
+@471 = ~Trava~
 // reason.item.manual_selection
 @552 = ~Este item abre um menu de seleção. Use-o manualmente; o BuffBot o ignora.~
 // reason.exec.fast_unavailable

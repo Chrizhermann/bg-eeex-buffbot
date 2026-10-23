@@ -1197,10 +1197,28 @@ function BfBot.UI._Layout()
     setArea("bbSearch", cx + 78, searchY + 2, cw - 84 - 64 - speedW - 12, searchH - 4)
     setArea("bbSearchClear", cx + cw - speedW - 70, searchY, 60, searchH)
     setArea("bbSpeed", cx + cw - speedW, searchY, speedW, searchH)
+    -- Column headers sit in their own strip directly above the list, aligned
+    -- to the list's column widths. The engine reserves the scrollbar strip
+    -- from the list's content area, so the headers divide what is left of it.
+    local hdrY = py + 130
+    local hdrH = 20
+    local scrollbarW = 16
+    local colW = math.max(cw - scrollbarW, 1)
+    local function header(name, startPct, widthPct)
+        setArea(name, cx + math.floor(colW * startPct / 100), hdrY,
+                math.floor(colW * widthPct / 100), hdrH)
+    end
+    header("bbHName", 16, 26)
+    header("bbHDur",  42, 10)
+    header("bbHUses", 52, 10)
+    header("bbHRep",  62,  8)
+    header("bbHTgt",  70, 24)
+    header("bbHLock", 94,  6)
+
     -- Spell list (fills middle area)
-    local listY = py + 130
+    local listY = hdrY + hdrH
     local footerH = 130
-    local listH = math.max(ph - 130 - footerH, 50)
+    local listH = math.max(ph - 130 - hdrH - footerH, 50)
     setArea("bbList", cx, listY, cw, listH)
     setArea("bbSearchEmpty", cx + 10, listY + 8, cw - 20, 28)
 
