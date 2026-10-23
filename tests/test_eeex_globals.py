@@ -30,7 +30,16 @@ _spec.loader.exec_module(eeex_globals)
 # EEex_* names BuffBot may use although EEex v1.3.1 does not define them,
 # each with the reason. Only for deliberate, guarded probes (for example of a
 # newer EEex function behind `type(...) == "function"`). Stale entries fail.
-ALLOWED_UNDEFINED: dict[str, str] = {}
+ALLOWED_UNDEFINED: dict[str, str] = {
+    # Generated binding type registered by EEex.dll, which the generator
+    # deliberately does not list (see tools/eeex_globals.py). EEex v1.3.1 uses
+    # it itself at the pinned commit: EEex/copy/EEex_scripts/EEex_UncapFPS.lua
+    # writes EEex_CChitin.TIMER_UPDATES_PER_SECOND. BfBotFst.lua reads and
+    # writes the same field behind an `EEex_CChitin and ...` guard and fails
+    # closed when it is missing; native 2.7.3.0 / EEex 1.3.1 labs observed the
+    # rate actually changing and being restored (docs/validation-fork-qol.md).
+    "EEex_CChitin": "EEex.dll binding type; guarded read/write in BfBotFst.lua",
+}
 
 
 @pytest.fixture(scope="module")

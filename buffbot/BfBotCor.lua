@@ -6,7 +6,7 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.10.1"
+BfBot.VERSION = "1.11.0"
 BfBot.MAX_PRESETS = 8
 BfBot.MAX_SPELL_REPEATS = 5
 

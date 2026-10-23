@@ -4,3 +4,10 @@
 # Other text files (.lua, .menu, .tp2, .py) are left alone — Lua, WeiDU, and
 # Python all tolerate CRLF, and forcing normalization here would churn the diff.
 *.sh text eol=lf
+
+# Infinity Engine art is binary: never let autocrlf touch it. Git's content
+# detection already skips these, but the release build compares the shipped
+# bytes against the sources, so declare it rather than rely on a heuristic.
+*.BAM binary
+*.MOS binary
+*.PVRZ binary

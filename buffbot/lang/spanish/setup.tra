@@ -366,3 +366,41 @@
 @715 = ~Usar desde el inventario~
 // options.item_use_swap
 @716 = ~Equipar, usar y restaurar~
+// ui.search
+@454 = ~Buscar~
+// ui.search.no_matches
+@455 = ~No hay conjuros ni objetos coincidentes~
+// ui.quick_presets
+@456 = ~Ejecutar preajuste del grupo~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: clic izquierdo para configurar; clic derecho para ejecutar un preajuste del grupo~
+// ui.manual_only
+@458 = ~Manual~
+// ui.speed.normal
+@460 = ~Velocidad: normal~
+// ui.speed.2x
+@461 = ~Velocidad: 2x~
+// ui.speed.4x
+@462 = ~Velocidad: 4x~
+// ui.speed.tooltip
+@463 = ~Se aplica a todos los preajustes. 2x y 4x aceleran temporalmente todo el juego con las reglas normales de lanzamiento. Normal usa el ajuste guardado de Lanzamiento rápido. Haz clic para cambiar.~
+// ui.quick_cast.suspended
+@464 = ~Lanzamiento rápido: pausado~
+// ui.quick_cast.tooltip_suspended
+@465 = ~La aceleración usa las reglas normales de lanzamiento. El ajuste de Lanzamiento rápido se conserva y se aplica de nuevo a velocidad normal.~
+// ui.header.spell
+@466 = ~Hechizo / Objeto~
+// ui.header.duration
+@467 = ~Duración~
+// ui.header.uses
+@468 = ~Usos~
+// ui.header.repeats
+@469 = ~Rep.~
+// ui.header.target
+@470 = ~Objetivo~
+// ui.header.lock
+@471 = ~Bloqueo~
+// reason.item.manual_selection
+@552 = ~Este objeto abre un menú de selección. Úsalo manualmente; BuffBot lo omite.~
+// reason.exec.fast_unavailable
+@553 = ~La aceleración no está disponible aquí. Selecciona la velocidad normal e inténtalo de nuevo.~

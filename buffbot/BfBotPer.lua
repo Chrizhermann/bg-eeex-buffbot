@@ -84,6 +84,7 @@ BfBot.Persist._INI_DEFAULTS = {
     MpControlNames = "",     -- manual mode: comma-separated names the local player controls
     SummonsJoinCast = 1,     -- allied summons/clones with configured presets join party casts (#19)
     ItemUseMode = "inventory", -- "inventory" | "swap" (equip/use/restore)
+    FastForward = 1,      -- 1 = normal, 2/4 = temporary native simulation speed
 }
 
 -- ---- Default config ----

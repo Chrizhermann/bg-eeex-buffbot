@@ -366,3 +366,41 @@
 @715 = ~Direkt aus dem Inventar benutzen~
 // options.item_use_swap
 @716 = ~Anlegen, benutzen und zurücktauschen~
+// ui.search
+@454 = ~Suche~
+// ui.search.no_matches
+@455 = ~Keine passenden Zauber oder Gegenstände~
+// ui.quick_presets
+@456 = ~Gruppenvoreinstellung wirken~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: Linksklick zum Konfigurieren; Rechtsklick zum Wirken einer Gruppenvoreinstellung~
+// ui.manual_only
+@458 = ~Manuell~
+// ui.speed.normal
+@460 = ~Tempo: Normal~
+// ui.speed.2x
+@461 = ~Tempo: 2x~
+// ui.speed.4x
+@462 = ~Tempo: 4x~
+// ui.speed.tooltip
+@463 = ~Gilt für alle Voreinstellungen. 2x und 4x beschleunigen vorübergehend das gesamte Spiel mit normalen Zauberregeln. Normal verwendet die gespeicherte Schnellzauber-Einstellung. Klicken zum Wechseln.~
+// ui.quick_cast.suspended
+@464 = ~Schnellzauber: Pausiert~
+// ui.quick_cast.tooltip_suspended
+@465 = ~Die Beschleunigung verwendet normale Zauberregeln. Deine Schnellzauber-Einstellung bleibt gespeichert und gilt wieder bei normalem Tempo.~
+// ui.header.spell
+@466 = ~Zauber / Gegenstand~
+// ui.header.duration
+@467 = ~Dauer~
+// ui.header.uses
+@468 = ~Anz.~
+// ui.header.repeats
+@469 = ~Wdh.~
+// ui.header.target
+@470 = ~Ziel~
+// ui.header.lock
+@471 = ~Sperre~
+// reason.item.manual_selection
+@552 = ~Dieser Gegenstand öffnet ein Auswahlmenü. Benutze ihn manuell; BuffBot überspringt ihn.~
+// reason.exec.fast_unavailable
+@553 = ~Beschleunigung ist hier nicht verfügbar. Wähle normales Tempo und versuche es erneut.~

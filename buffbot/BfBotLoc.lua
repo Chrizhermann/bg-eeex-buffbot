@@ -3,6 +3,19 @@
 BfBot = BfBot or {}
 
 local _registry = {
+    ["ui.search"] = { id = 454, fallback = [=[Search]=] },
+    ["ui.search.no_matches"] = { id = 455, fallback = [=[No matching spells or items]=] },
+    ["ui.quick_presets"] = { id = 456, fallback = [=[Cast party preset]=] },
+    ["ui.tooltip.hud_shortcuts"] = { id = 457, fallback = [=[BuffBot: left-click to configure; right-click to cast a party preset]=] },
+    ["ui.manual_only"] = { id = 458, fallback = [=[Manual]=] },
+    ["ui.speed.normal"] = { id = 460, fallback = [=[Speed: Normal]=] },
+    ["ui.speed.2x"] = { id = 461, fallback = [=[Speed: 2x]=] },
+    ["ui.speed.4x"] = { id = 462, fallback = [=[Speed: 4x]=] },
+    ["ui.speed.tooltip"] = { id = 463, fallback = [=[Applies to all preset starts. 2x and 4x temporarily accelerate the whole game with normal casting rules. Normal uses the saved Quick Cast setting. Click to cycle.]=] },
+    ["ui.quick_cast.suspended"] = { id = 464, fallback = [=[Quick Cast: Suspended]=] },
+    ["ui.quick_cast.tooltip_suspended"] = { id = 465, fallback = [=[Fast-forward uses normal casting rules. Your Quick Cast setting is saved and applies again at Normal speed.]=] },
+    ["reason.item.manual_selection"] = { id = 552, fallback = [=[This item opens a selection menu. Use it manually; BuffBot skips it.]=] },
+    ["reason.exec.fast_unavailable"] = { id = 553, fallback = [=[Fast-forward is unavailable here. Select Normal speed and try again.]=] },
     ["common.buffbot"] = { id = 300, fallback = [=[BuffBot]=] },
     ["common.party"] = { id = 301, fallback = [=[Party]=] },
     ["common.summons"] = { id = 302, fallback = [=[Summons]=] },
@@ -90,6 +103,12 @@ local _registry = {
     ["ui.category.unknown"] = { id = 451, fallback = [=[unknown]=] },
     ["ui.repeat.compact"] = { id = 452, fallback = [=[R{count}]=] },
     ["ui.lock.compact"] = { id = 453, fallback = [=[[L]]=] },
+    ["ui.header.spell"] = { id = 466, fallback = [=[Spell / Item]=] },
+    ["ui.header.duration"] = { id = 467, fallback = [=[Duration]=] },
+    ["ui.header.uses"] = { id = 468, fallback = [=[Uses]=] },
+    ["ui.header.repeats"] = { id = 469, fallback = [=[Rep.]=] },
+    ["ui.header.target"] = { id = 470, fallback = [=[Target]=] },
+    ["ui.header.lock"] = { id = 471, fallback = [=[Lock]=] },
     ["feedback.no_luajit"] = { id = 500, fallback = [=[BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.]=] },
     ["feedback.combat_stopped"] = { id = 501, fallback = [=[BuffBot: Combat detected - casting stopped]=] },
     ["feedback.cast_timeout"] = { id = 502, fallback = [=[BuffBot: casting timed out - stopped]=] },
@@ -246,6 +265,8 @@ end
 -- caller-facing reason localization separate from arbitrary localization keys,
 -- and preserves prose returned by older hot-reloaded modules.
 local _reasonKeys = {
+    ["reason.item.manual_selection"] = "reason.item.manual_selection",
+    ["reason.exec.fast_unavailable"] = "reason.exec.fast_unavailable",
     ["reason.exec.empty_queue"] = "reason.exec.empty_queue",
     ["reason.exec.no_valid_entries"] = "reason.exec.no_valid_entries",
     ["reason.exec.already_running"] = "reason.exec.already_running",

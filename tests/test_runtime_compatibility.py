@@ -3053,7 +3053,7 @@ def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
 
         BfBot.Exec._ProcessCasterEntry("p0", 1)
         active = true
-        BfBot.Exec._Advance("p0")
+        BfBot.Exec._Advance("p0", BfBot.Exec._casters.p0.advanceToken)
         return {
             buildAndFreshDiffer = buildSprites[1] ~= freshSprite,
             queuedOnFresh = queuedOnFresh,
@@ -3073,7 +3073,7 @@ def test_item_execution_uses_fresh_sprite_and_leaf_recheck_skips_repeat(
     assert facts["actionCount"] == 2
     assert facts["firstAction"] == 'UseItemSlotAbility(Myself,21,0)'
     assert facts["secondAction"] == (
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["checkedLeaf"]
     assert facts["castCount"] == 1
@@ -3116,7 +3116,7 @@ def test_repeat_attempts_recheck_slots_and_continue_to_later_priority(
 
         BfBot.Exec._ProcessCasterEntry("p0", 1)
         spells.S.count = 0
-        BfBot.Exec._Advance("p0")
+        BfBot.Exec._Advance("p0", BfBot.Exec._casters.p0.advanceToken)
         local spellActions = {}
         for _, action in ipairs(actions) do
             if action:find("SpellRES", 1, true) == 1 then
@@ -3176,7 +3176,7 @@ def test_repeat_attempts_recheck_active_effects_after_first_cast(
 
         BfBot.Exec._ProcessCasterEntry("p0", 1)
         active = true
-        BfBot.Exec._Advance("p0")
+        BfBot.Exec._Advance("p0", BfBot.Exec._casters.p0.advanceToken)
         return {
             queueCount = #byCaster.p0,
             castCount = BfBot.Exec._castCount,
@@ -3300,9 +3300,111 @@ def test_many_already_active_repeat_attempts_complete_without_stack_growth(
     assert facts["state"] == "done"
 
 
-def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
+@pytest.mark.parametrize("flags", [0, 1, 2, 3, 0x8003])
+def test_consume_parent_slot_preserves_flags_and_unrelated_records(
+    exec_lua: LuaRuntime,
+    flags: int,
+) -> None:
+    exec_lua.globals().test_flags = flags
+    facts = exec_lua.execute(
+        """
+        local function record(resref, flags)
+            return { m_spellId = { get = function() return resref end },
+                     m_flags = flags }
+        end
+        local target = record("SpWi510", test_flags)
+        local before = record("SPWI511", 3)
+        local after = record("SPWI510X", 1)
+        local wrongLevel = record("SPWI510", 3)
+        local wrongBook = record("SPWI510", 3)
+        local sprite = {
+            m_memorizedSpellsMage = {
+                getReference = function(_, index)
+                    if index == 4 then return { before, target, after } end
+                    return { wrongLevel }
+                end,
+            },
+            m_memorizedSpellsPriest = {
+                getReference = function() return { wrongBook } end,
+            },
+        }
+        EEex_Resource_Demand = function(resref, kind)
+            assert(resref == "spwi510" and kind == "SPL")
+            return { spellLevel = 5 }
+        end
+        EEex_Utility_IterateCPtrList = function(list, fn)
+            for _, entry in ipairs(list) do
+                if fn(entry) then break end
+            end
+        end
+        local consumed = BfBot.Exec._ConsumeSpellSlot(sprite, "spwi510")
+        return {
+            consumed = consumed, target = target.m_flags,
+            before = before.m_flags, after = after.m_flags,
+            wrongLevel = wrongLevel.m_flags, wrongBook = wrongBook.m_flags,
+        }
+        """
+    )
+
+    assert facts["consumed"] is bool(flags & 1)
+    assert facts["target"] == flags & ~1
+    assert facts["before"] == 3
+    assert facts["after"] == 1
+    assert facts["wrongLevel"] == 3
+    assert facts["wrongBook"] == 3
+
+
+def test_consume_parent_slot_skips_spent_records_and_consumes_exactly_one(
     exec_lua: LuaRuntime,
 ) -> None:
+    facts = exec_lua.execute(
+        """
+        local function record(resref, flags)
+            return { m_spellId = { get = function() return resref end },
+                     m_flags = flags }
+        end
+        local records = {
+            record("SPWI510", 0), record("SPWI510", 2),
+            record("SPWI510", 3), record("SPWI510", 1),
+            record("SPWI511", 3),
+        }
+        local sprite = { m_memorizedSpellsMage = {
+            getReference = function(_, index)
+                assert(index == 4)
+                return records
+            end,
+        } }
+        EEex_Resource_Demand = function() return { spellLevel = 5 } end
+        EEex_Utility_IterateCPtrList = function(list, fn)
+            for _, entry in ipairs(list) do
+                if fn(entry) then break end
+            end
+        end
+        local attempts = {}
+        for attempt = 1, 3 do
+            local consumed = BfBot.Exec._ConsumeSpellSlot(sprite, "SPWI510")
+            local flags = {}
+            for i, entry in ipairs(records) do flags[i] = entry.m_flags end
+            attempts[attempt] = { consumed = consumed, flags = flags }
+        end
+        return attempts
+        """
+    )
+
+    assert [facts[i]["consumed"] for i in range(1, 4)] == [True, True, False]
+    assert [list(facts[i]["flags"].values()) for i in range(1, 4)] == [
+        [0, 2, 2, 1, 3],
+        [0, 2, 2, 0, 3],
+        [0, 2, 2, 0, 3],
+    ]
+
+
+@pytest.mark.parametrize("qc_mode", [0, 2], ids=["normal", "quick-cast-all"])
+def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
+    exec_lua: LuaRuntime,
+    qc_mode: int,
+) -> None:
+    exec_lua.globals().test_qc_mode = qc_mode
     facts = exec_lua.execute(
         """
         local spells = {
@@ -3314,7 +3416,7 @@ def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
         local byCaster = assert(BfBot.Exec._BuildQueue({
             { caster = 0, spell = "PARENT", target = "self",
               rep = 3, var = "VARIANT" },
-        }, 0))
+        }, test_qc_mode))
         local actions = {}
         local consumeCalls = 0
         BfBot.Exec._ConsumeSpellSlot = function(sprite, resref)
@@ -3336,22 +3438,18 @@ def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
         BfBot.Exec._casters = { p0 = {
             ref = { kind = "party", slot = 0 },
             queue = byCaster.p0, index = 0, done = false,
-            name = "A", cheatBoundary = 0, cheatApplied = false,
+            name = "A",
+            cheatBoundary = BfBot.Exec._DeriveCheatBoundary(byCaster.p0),
+            cheatApplied = false,
         } }
 
         BfBot.Exec._ProcessCasterEntry("p0", 1)
-        BfBot.Exec._Advance("p0")
-        BfBot.Exec._Advance("p0")
-        local variantCasts = 0
-        for _, action in ipairs(actions) do
-            if action == 'ReallyForceSpellRES("VARIANT",Myself)' then
-                variantCasts = variantCasts + 1
-            end
-        end
+        BfBot.Exec._Advance("p0", BfBot.Exec._casters.p0.advanceToken)
+        BfBot.Exec._Advance("p0", BfBot.Exec._casters.p0.advanceToken)
         return {
             queueCount = #byCaster.p0,
             consumeCalls = consumeCalls,
-            variantCasts = variantCasts,
+            actions = actions,
             castCount = BfBot.Exec._castCount,
             skipCount = BfBot.Exec._skipCount,
         }
@@ -3360,7 +3458,24 @@ def test_variant_repeat_attempts_consume_the_parent_slot_each_time(
 
     assert facts["queueCount"] == 3
     assert facts["consumeCalls"] == 3
-    assert facts["variantCasts"] == 2
+    actions = list(facts["actions"].values())
+    # The actual variant must use the interruptible, aura-paced action even
+    # when Quick Cast separately applies its opt-in casting-speed helper.
+    # SpellRES would require a memorized child; either ForceSpell action
+    # would bypass part of normal casting behavior.
+    assert [action for action in actions if '"VARIANT"' in action] == [
+        'SpellNoDecRES("VARIANT",Myself)',
+        'SpellNoDecRES("VARIANT",Myself)',
+    ]
+    callbacks = [action for action in actions if action.startswith("EEex_LuaAction(")]
+    assert len(callbacks) == 2
+    for index, action in enumerate(actions):
+        if action == 'SpellNoDecRES("VARIANT",Myself)':
+            assert actions[index + 1] in callbacks
+    assert len(actions) == (6 if qc_mode == 2 else 4)
+    if qc_mode == 2:
+        assert actions[0] == 'ReallyForceSpellRES("BFBTCH",Myself)'
+        assert actions[-1] == 'ReallyForceSpellRES("BFBTCR",Myself)'
     assert facts["castCount"] == 2
     assert facts["skipCount"] == 1
 
@@ -3441,7 +3556,7 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
         } }
         BfBot.Exec._ProcessCasterEntry("p0", 1)
         BfBot.Exec._state = "stopped"
-        BfBot.Exec._Advance("p0")
+        BfBot.Exec._Advance("p0", BfBot.Exec._casters.p0.advanceToken)
         local stoppedCastCount = BfBot.Exec._castCount
         local stoppedIndex = BfBot.Exec._casters.p0.index
         local stoppedActions = #actions
@@ -3460,7 +3575,8 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
             completed = true
             BfBot.Exec._state = "done"
         end
-        BfBot.Exec._Advance("s77")
+        BfBot.Exec._casters.s77.advanceToken = 1
+        BfBot.Exec._Advance("s77", 1)
         local summonDone = BfBot.Exec._casters.s77.done
         local activeAfterGone = BfBot.Exec._activeCasters
 
