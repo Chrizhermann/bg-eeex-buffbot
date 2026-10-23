@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Variant spells (opcode 214 "spell menu" spells such as Protection from Elemental Energy) no longer refuse every target but Self. Their targeting was read from the selection wrapper the engine casts on the caster, while BuffBot actually casts the chosen variant directly — so the target picker locked the row to "(Self-only)" even when the variant targets a single creature. The picker, and the AoE decision during execution, now follow the selected variant. (#82)
+- The Summons view can unlock targeting. A spell the classifier reports as self-only or party-wide disables every control in the target picker, and the Unlock button existed only in the party view, so such a row was a permanent dead end — which hit every variant spell. Summon spell entries now carry the same optional `tgtUnlock` field as party entries, and a clone seeded from its owner inherits the owner's unlock along with the copied targets.
+- Closing the target picker with "Done" while the row is still locked no longer replaces the stored target with the classifier's default. Nothing in a locked picker can express a target, so there is no intent to save.
+
+### Known limitations
+- A genuine area buff cast by a summon covers whatever stands near the *summon*, not the party, because the engine centers it on the caster. The picker still labels that case "(Party-wide)". Unlock the row and pick party members individually when the summon is not standing with the party.
+
+### Testing
+- The full automated suite passes **688 tests**, including the variant target shape read from the sub-spell, the parent verdict kept when a variant SPL cannot be read, the Summons-view unlock-and-save path, the locked-Done no-write guard, summon-schema validation of `tgtUnlock`, clone seeding, and `all` expansion for a party-wide variant.
+- Offline evidence from the reference install: 247 of its 249 opcode-214 abilities have ability target type 5 or 7 (caster), while the variants they select are single-creature or party-wide spells. `SPWI422` → `DVWI426` → `SPWI319`/`SPWI320`/`SPWI512`/`SPWI517`, all single-creature.
+- Not verified in game yet: the picker and a summon cast with a variant selected on a live summon.
+
 ## v1.10.1 (2026-10-20)
 
 ### Fixed

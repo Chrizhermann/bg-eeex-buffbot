@@ -1280,11 +1280,11 @@ menu
 		area 581 435 95 26
 	}
 
-	-- Unlock Targeting button (visible only when locked; party view only —
-	-- the summon spell-entry schema has no tgtUnlock field)
+	-- Unlock Targeting button (visible only when locked; both views — summon
+	-- spell entries carry the same optional tgtUnlock field, #82)
 	button
 	{
-		enabled "buffbot_targetLocked == 1 and BfBot.UI._IsPartyView()"
+		enabled "buffbot_targetLocked == 1"
 		action  "BfBot.UI.PickerUnlock()"
 		text lua "BfBot.L10N.Get('common.unlock_targeting')"
 		text style "bb_button"

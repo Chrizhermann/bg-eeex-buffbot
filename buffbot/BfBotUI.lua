@@ -1376,7 +1376,8 @@ _EnsureRepeatDisplayCache()
 --- Build the spell-list rows for one caster's preset, cross-referenced with
 --- scan data. Shared by the party view (ovr = config.ovr) and the summons
 --- view (ovr = nil — no per-summon classification overrides; absent
---- lock/tgtUnlock fields read as 0, which the v9 summon schema guarantees).
+--- absent lock reads as 0, which the summon schema guarantees; tgtUnlock is
+--- optional in both views).
 -- @param sprite    caster sprite (party member or freshly-resolved summon)
 -- @param preset    preset table { spells = { [resref] = entry } }
 -- @param castable  BfBot.Scan.GetCastableSpells(sprite) result
@@ -1446,12 +1447,20 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
         local variants = scan and scan.variants or nil
         local varResref = spellCfg.var or nil
         local variantName = nil
+        -- Targeting follows the EFFECTIVE spell: a selected variant is cast
+        -- directly at the resolved target, while the opcode-214 parent is
+        -- only the engine's self-cast selection wrapper and would otherwise
+        -- lock every variant row to "Self only" (#82).
+        local effIsAoE = scan and scan.isAoE or 0
+        local effIsSelfOnly = scan and scan.isSelfOnly or 0
         if varResref and variants then
-            for _, v in ipairs(variants) do
-                if v.resref:upper() == varResref:upper() then
-                    variantName = v.name
-                    break
+            local variant = BfBot.Class.FindVariant(variants, varResref)
+            if variant then
+                variantName = variant.name
+                if variant.isSelfOnly ~= nil then
+                    effIsSelfOnly = variant.isSelfOnly
                 end
+                if variant.isAoE ~= nil then effIsAoE = variant.isAoE end
             end
         end
 
@@ -1479,8 +1488,8 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             castable = isCastable,
             pri      = spellCfg.pri or 999,
             ovr      = (ovr and ovr[resref]) or 0,
-            isAoE    = scan and scan.isAoE or 0,
-            isSelfOnly = scan and scan.isSelfOnly or 0,
+            isAoE    = effIsAoE,
+            isSelfOnly = effIsSelfOnly,
             tgtUnlock = spellCfg.tgtUnlock or 0,
             lock      = spellCfg.lock or 0,
             hasVariants = hasVariants,
@@ -1501,8 +1510,8 @@ end
 --- Summons-view refresh: summon tab labels, preset tabs (names come from the
 --- protagonist's config — the preset axis is shared across views), and the
 --- selected summon's preset spell table. All config reads/writes go to the
---- summon preset on the protagonist (schema v9: {qc, spells={[res]={on,tgt,
---- pri,rep,var}}}); the summon SPRITE never gets a config of its own.
+--- summon preset on the protagonist (summon spell entry: {on, tgt, pri,
+--- rep, var?, tgtUnlock?}); the summon SPRITE never gets a config of its own.
 function BfBot.UI._RefreshSummonsView()
     BfBot.UI._UpdateSummonTabNames()
 
@@ -1569,7 +1578,8 @@ function BfBot.UI._RefreshSummonsView()
     -- Merge new castable buffs into the preset (disabled, at bottom) — same
     -- behavior as the party view minus the ovr filter (no per-summon
     -- classification overrides). New entries follow the v9 spell-entry
-    -- schema: on/tgt/pri/rep (lock/tgtUnlock do not exist for summons).
+    -- schema: on/tgt/pri/rep (no lock; tgtUnlock is written on demand by
+    -- the picker's Unlock button, never seeded here).
     local maxPri = 0
     for _, spellCfg in pairs(preset.spells) do
         if (spellCfg.pri or 0) > maxPri then maxPri = spellCfg.pri end
@@ -1647,7 +1657,7 @@ end
 --- Summons-view write path: the stored spell entry for `resref` in the
 --- selected summon's current preset (the table IS the persisted config —
 --- mutations stick). Read-only lookup unless `create` is set; created
---- entries follow the v9 schema (on/tgt/pri/rep).
+--- entries follow the summon schema (on/tgt/pri/rep).
 function BfBot.UI._SummonSpellEntry(resref, create)
     local sel = BfBot.UI._SelectedSummon()
     if not sel then return nil end
@@ -1923,7 +1933,7 @@ function BfBot.UI.PickerSelf()
 end
 
 --- View-routed target write: party → Persist setter, summons → the stored
---- summon spell entry (v9 schema keeps tgt as "s"/"p"/name/ordered table).
+--- summon spell entry (tgt stays "s"/"p"/name/ordered table).
 function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
     if BfBot.UI._view == "summons" then
         local se = BfBot.UI._SummonSpellEntry(resref, 1)
@@ -1931,6 +1941,19 @@ function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
         return
     end
     BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, resref, tgt)
+end
+
+--- View-routed tgtUnlock write (#82). Summon spell entries carry the same
+--- optional 0/1 field as party entries, so the summons view has the same
+--- escape hatch for spells the classifier reports as self-only / party-wide.
+function BfBot.UI._SetTgtUnlockForView(sprite, resref, value)
+    local normalized = (value == 1) and 1 or 0
+    if BfBot.UI._view == "summons" then
+        local se = BfBot.UI._SummonSpellEntry(resref, 1)
+        if se then se.tgtUnlock = normalized end
+        return
+    end
+    BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, resref, normalized)
 end
 
 --- Quick-set: All Party. Checks all party members, keeps current order.
@@ -1967,7 +1990,16 @@ function BfBot.UI.PickerClear()
 end
 
 --- Confirm and close the picker. Saves the working copy to persist.
+--- A still-locked spell closes WITHOUT writing: every control that could
+--- have produced a checked name was disabled, so the empty working copy
+--- carries no intent and must not overwrite the stored target with the
+--- classifier default (#82).
 function BfBot.UI.PickerDone()
+    if buffbot_targetLocked == 1 then
+        BfBot.UI._targetSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
+    end
     local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
     if not entry then
         BfBot.UI._targetSpellAnchor = nil
@@ -2008,11 +2040,11 @@ function BfBot.UI.PickerDone()
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
---- Unlock targeting for a locked spell. Party view only: the v9 summon
---- spell-entry schema has no tgtUnlock field (the picker's Unlock button is
---- hidden in the summons view).
+--- Unlock targeting for a locked spell. Available in BOTH views (#82): the
+--- summon spell entry carries the same optional tgtUnlock field, and without
+--- it a self-only/party-wide classification was a permanent dead end in the
+--- summons view — every control in the picker is gated on the lock.
 function BfBot.UI.PickerUnlock()
-    if BfBot.UI._view == "summons" then return end
     local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
     if not entry then
         BfBot.UI._targetSpellAnchor = nil
@@ -2026,7 +2058,7 @@ function BfBot.UI.PickerUnlock()
         return
     end
 
-    BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, entry.resref, 1)
+    BfBot.UI._SetTgtUnlockForView(sprite, entry.resref, 1)
     entry.tgtUnlock = 1
     buffbot_targetLocked = 0
     buffbot_targetLockText = ""
