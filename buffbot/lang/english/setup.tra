@@ -411,7 +411,7 @@
 // ui.force_recast.tooltip_low
 @476 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
 // ui.force_recast.tooltip_all
-@477 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
+@477 = ~Cast every configured buff again, whatever is left of it - including buffs that never expire. Ignores the refresh threshold completely. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
 // reason.item.manual_selection
 @552 = ~This item opens a selection menu. Use it manually; BuffBot skips it.~
 // reason.exec.fast_unavailable
@@ -419,7 +419,7 @@
 // options.refresh_below
 @717 = ~Refresh buffs that are nearly over~
 // options.refresh_below_description
-@718 = ~Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.~
+@718 = ~Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. The panel's "Active: Force All" overrides this and casts everything again regardless. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.~
 // options.refresh_below_off
 @719 = ~Off~
 // options.refresh_below_1m

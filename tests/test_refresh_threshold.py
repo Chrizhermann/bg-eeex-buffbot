@@ -543,11 +543,56 @@ def test_threshold_resolution_validates_the_option_and_honors_the_toggle(
     assert exec_lua.eval(f"BfBot.Exec._RefreshThreshold({force_mode})") == expected
 
 
-def test_force_all_reports_an_infinite_threshold_so_nothing_is_skipped(
+def test_force_all_is_a_flag_and_never_an_infinite_threshold(
     exec_lua: LuaRuntime,
 ) -> None:
+    # Christopher, 2026-10-24 (#84): force is a hard override, independent of
+    # RefreshBelow. Expressing it as threshold = infinity would make the
+    # override a value one stray comparison could undo, and no finite
+    # threshold can reach a permanent effect anyway.
     exec_lua.globals().T_Ini.RefreshBelow = 30
-    assert exec_lua.eval("BfBot.Exec._RefreshThreshold(2)") == float("inf")
+    assert exec_lua.eval("BfBot.Exec._RefreshThreshold(2)") == 30
+    assert exec_lua.eval("BfBot.Exec._ForceAll(2)") is True
+    assert exec_lua.eval("BfBot.Exec._ForceAll(1)") is False
+    assert exec_lua.eval("BfBot.Exec._ForceAll(0)") is False
+
+
+def test_force_all_works_with_the_option_off_and_at_every_stored_value(
+    exec_lua: LuaRuntime,
+) -> None:
+    # "Auch bei Schwelle 0 (aus) muss Force sofort funktionieren."
+    for stored in (0, 30, 3600, 86400, -5, "nonsense", None):
+        if stored is None:
+            exec_lua.execute("T_Ini.RefreshBelow = nil")
+        else:
+            exec_lua.globals().T_Ini.RefreshBelow = stored
+        assert exec_lua.eval("BfBot.Exec._ForceAll(2)") is True
+        assert exec_lua.eval(
+            "BfBot.Exec._ActiveBlocksCast(math.huge, "
+            "BfBot.Exec._RefreshThreshold(2), BfBot.Exec._ForceAll(2))"
+        ) is False
+
+
+def test_force_all_casts_through_permanent_effects(exec_lua: LuaRuntime) -> None:
+    # A permanent effect reports no remaining lifetime at all, so only the
+    # flag can reach it. Every real permanent timing mode is covered.
+    for timing in (1, 2, 4, 9):
+        facts = exec_lua.execute(
+            """
+            local effect = T_Effect("SPWI102", 0, { m_durationType = %d })
+            local remaining, detail = BfBot.Exec._EffectRemaining(effect, 0)
+            return {
+                remaining = remaining,
+                detail = detail,
+                skips = BfBot.Exec._ActiveBlocksCast(remaining, 0, false),
+                forced = BfBot.Exec._ActiveBlocksCast(remaining, 0, true),
+            }
+            """ % timing
+        )
+        assert facts["remaining"] == float("inf"), timing
+        assert facts["detail"] == "perm", timing
+        assert facts["skips"] is True, timing
+        assert facts["forced"] is False, timing
 
 
 def test_threshold_defaults_to_the_run_scoped_mode_when_called_without_one(
@@ -562,15 +607,21 @@ def test_threshold_defaults_to_the_run_scoped_mode_when_called_without_one(
         local low = BfBot.Exec._RefreshThreshold()
         BfBot.Exec._forceMode = 2
         local all = BfBot.Exec._RefreshThreshold()
+        local allForced = BfBot.Exec._ForceAll()
         BfBot.Exec._forceMode = nil
         local missing = BfBot.Exec._RefreshThreshold()
-        return { off = off, low = low, all = all, missing = missing }
+        local missingForced = BfBot.Exec._ForceAll()
+        return { off = off, low = low, all = all, allForced = allForced,
+                 missing = missing, missingForced = missingForced }
         """
     )
     assert facts["off"] == 0
     assert facts["low"] == 300
-    assert facts["all"] == float("inf")
+    # Force All leaves the threshold alone and raises the flag instead.
+    assert facts["all"] == 0
+    assert facts["allForced"] is True
     assert facts["missing"] == 0
+    assert facts["missingForced"] is False
 
 
 @pytest.mark.parametrize(
@@ -590,23 +641,44 @@ def test_force_mode_normalization_falls_back_to_the_conservative_mode(
     ("remaining", "threshold", "blocks"),
     [
         ("nil", "0", False),
-        ("nil", "math.huge", False),
+        ("nil", "3600", False),
         ("0", "0", True),
         ("0.5", "30", False),
         ("29.9", "30", False),
         ("30", "30", True),
         ("math.huge", "0", True),
         ("math.huge", "30", True),
-        ("math.huge", "math.huge", False),
-        ("3600", "math.huge", False),
+        # An unusable threshold keeps the conservative skip rather than
+        # quietly casting everything again.
+        ("30", "nil", True),
     ],
 )
 def test_active_buff_blocks_a_cast_only_at_or_above_the_threshold(
     exec_lua: LuaRuntime, remaining: str, threshold: str, blocks: bool
 ) -> None:
     assert exec_lua.eval(
-        f"BfBot.Exec._ActiveBlocksCast({remaining}, {threshold})"
+        f"BfBot.Exec._ActiveBlocksCast({remaining}, {threshold}, false)"
     ) is blocks
+
+
+@pytest.mark.parametrize(
+    ("remaining", "threshold"),
+    [
+        ("0", "0"),
+        ("30", "30"),
+        ("3600", "0"),
+        ("math.huge", "0"),
+        ("math.huge", "86400"),
+        ("30", "nil"),
+        ("nil", "nil"),
+    ],
+)
+def test_the_force_flag_outranks_every_threshold_and_remaining_value(
+    exec_lua: LuaRuntime, remaining: str, threshold: str
+) -> None:
+    assert exec_lua.eval(
+        f"BfBot.Exec._ActiveBlocksCast({remaining}, {threshold}, true)"
+    ) is False
 
 
 # --------------------------------------------------------------------------
@@ -974,7 +1046,13 @@ def test_innate_path_passes_no_force_mode_and_keeps_the_global_option() -> None:
 
 def test_every_panel_cast_path_carries_the_toggle_through_start_run() -> None:
     source = UI_SOURCE
-    assert "local forceMode = BfBot.UI._forceMode or 0" in source
+    # Read from Exec, with the reload fallback the rest of this file uses.
+    start = source.index("function BfBot.UI._StartRun(")
+    read = source[start:source.index("\n    if started then", start)]
+    assert "local forceMode = 0" in read
+    assert "if BfBot.Exec.GetForceMode then" in read
+    assert "pcall(BfBot.Exec.GetForceMode)" in read
+    assert "BfBot.UI._forceMode" not in read
     # _StartRun dispatches on the simulation rate, and both branches must carry
     # the same policy: fast-forward may not change what a run skips.
     assert "BfBot.Fast.Start(queue, rate, presetIdx,\n                forceMode)" in source
@@ -1047,9 +1125,9 @@ def test_the_toggle_cycles_through_its_three_states_and_wraps(
     facts = ui_lua.execute(
         """
         local seen = {}
-        BfBot.UI._forceMode = 0
+        BfBot.Exec.SetForceMode(0)
         for _ = 1, 4 do
-            seen[#seen + 1] = BfBot.UI._forceMode
+            seen[#seen + 1] = BfBot.Exec.GetForceMode()
             BfBot.UI.CycleForceRecast()
         end
         return seen
@@ -1066,7 +1144,7 @@ def test_each_state_has_its_own_label_color_and_tooltip(
         T_Ini.RefreshBelow = 0
         local rows = {}
         for mode = 0, 2 do
-            BfBot.UI._forceMode = mode
+            BfBot.Exec.SetForceMode(mode)
             BfBot.UI._RefreshForceRecastCache()
             rows[#rows + 1] = {
                 label = BfBot.UI._ForceRecastLabel(),
@@ -1095,7 +1173,7 @@ def test_the_low_tooltip_follows_the_option_after_a_refresh(
 ) -> None:
     facts = ui_lua.execute(
         """
-        BfBot.UI._forceMode = 1
+        BfBot.Exec.SetForceMode(1)
         T_Ini.RefreshBelow = 0
         BfBot.UI._RefreshForceRecastCache()
         local fallback = BfBot.UI._ForceRecastTooltip()
@@ -1117,7 +1195,7 @@ def test_the_label_is_empty_while_the_panel_is_closed(ui_lua: LuaRuntime) -> Non
     assert ui_lua.execute(
         """
         buffbot_isOpen = false
-        BfBot.UI._forceMode = 2
+        BfBot.Exec.SetForceMode(2)
         return BfBot.UI._ForceRecastLabel()
         """
     ) == ""
@@ -1190,3 +1268,141 @@ def test_a_real_splstate_false_positive_is_still_reported(
     assert facts["casts"] is True
     assert "false positive" in facts["log"]
     assert "refreshing" not in facts["log"]
+
+
+# --------------------------------------------------------------------------
+# Force All as a hard override (Christopher, 2026-10-24)
+# --------------------------------------------------------------------------
+
+
+def test_force_all_casts_a_permanent_buff_through_check_entry(
+    exec_lua: LuaRuntime,
+) -> None:
+    # The end-to-end case no finite threshold can reach: a permanent effect
+    # reports no remaining lifetime, so only the override gets past it.
+    facts = exec_lua.execute(
+        """
+        T_Ini.RefreshBelow = 0
+        local entry = T_Entry({
+            T_Effect("SPWI518", 0, { m_durationType = 1, m_duration = 0 }),
+        })
+        BfBot.Exec._forceMode = 0
+        local skipped = BfBot.Exec._CheckEntry(entry, T_Caster)
+        BfBot.Exec._log = {}
+        BfBot.Exec._forceMode = 2
+        local forced = BfBot.Exec._CheckEntry(entry, T_Caster)
+        return { skipped = skipped, forced = forced, log = T_LogText() }
+        """
+    )
+    assert facts["skipped"] is False
+    assert facts["forced"] is True
+    assert "force all" in facts["log"]
+
+
+def test_force_all_needs_no_option_set_at_all(exec_lua: LuaRuntime) -> None:
+    facts = exec_lua.execute(
+        """
+        T_Ini.RefreshBelow = nil
+        BfBot.Exec._forceMode = 2
+        local entry = T_Entry({ T_Effect("SPWI518", 4000) })
+        local casts = BfBot.Exec._CheckEntry(entry, T_Caster)
+        return { casts = casts, skips = BfBot.Exec._skipCount,
+                 log = T_LogText() }
+        """
+    )
+    assert facts["casts"] is True
+    assert facts["skips"] == 0
+    assert "force all" in facts["log"]
+    # The banner must name the override, never a threshold, under Force All.
+    assert "threshold" not in facts["log"]
+
+
+def test_force_all_does_not_weaken_the_other_preconditions(
+    exec_lua: LuaRuntime,
+) -> None:
+    # Force only lifts the active/remaining-duration check. A dead target and
+    # a missing spell slot must still refuse the cast under the override.
+    dead = exec_lua.execute(
+        """
+        BfBot.Exec._forceMode = 2
+        local entry = T_Entry({})
+        BfBot.Exec._IsAlive = function() return false end
+        return BfBot.Exec._CheckEntry(entry, T_Caster)
+        """
+    )
+    assert dead is False
+
+    no_slot = exec_lua.execute(
+        """
+        BfBot.Exec._forceMode = 2
+        local entry = T_Entry({})
+        BfBot.Exec._IsAlive = function() return true end
+        BfBot.Scan.GetCastableSpells = function() return {} end
+        return BfBot.Exec._CheckEntry(entry, T_Caster)
+        """
+    )
+    assert no_slot is False
+
+
+def test_the_force_state_is_reachable_without_the_panel(
+    exec_lua: LuaRuntime,
+) -> None:
+    # The panel is being rebuilt (#81), so Exec owns the selection and a plain
+    # Lua call must be able to set it. Nothing here touches BfBot.UI.
+    facts = exec_lua.execute(
+        """
+        local seen = {}
+        BfBot.Exec.SetForceMode(0)
+        for _ = 1, 4 do
+            seen[#seen + 1] = BfBot.Exec.GetForceMode()
+            BfBot.Exec.CycleForceMode()
+        end
+        return { cycle = seen,
+                 clamped = BfBot.Exec.SetForceMode(7),
+                 fromString = BfBot.Exec.SetForceMode("2"),
+                 explicit = BfBot.Exec.SetForceMode(2) }
+        """
+    )
+    assert list(facts["cycle"].values()) == [0, 1, 2, 0]
+    assert facts["clamped"] == 0
+    assert facts["fromString"] == 0
+    assert facts["explicit"] == 2
+
+
+def test_the_selection_and_the_running_mode_are_separate() -> None:
+    # Exec.Start takes the mode as an argument and must not read the pending
+    # selection itself, or F12 would inherit whatever the panel last showed.
+    source = EXEC_SOURCE
+    start = source.index("function BfBot.Exec.Start(")
+    end = source.index("\nfunction ", start + 1)
+    body = source[start:end]
+    assert "_NormalizeForceMode(forceMode)" in body
+    assert "_forceSelection" not in body
+    assert "GetForceMode" not in body
+
+
+def test_the_panel_side_holds_no_force_state_of_its_own() -> None:
+    # Keep the panel surface thin so the #81 rebuild only re-places a button.
+    source = UI_SOURCE
+    assert "BfBot.UI._forceMode" not in source
+    for name in ("CycleForceRecast", "_ForceRecastLabel", "_ForceRecastColor",
+                 "_ForceRecastTooltip"):
+        assert f"function BfBot.UI.{name}(" in source
+
+
+def test_a_panel_reloaded_against_an_older_exec_falls_back_to_skip(
+    ui_lua: LuaRuntime,
+) -> None:
+    # The reload fallback must choose the conservative mode, never force.
+    mode = ui_lua.execute(
+        """
+        BfBot.Exec.SetForceMode(2)
+        BfBot.Exec.GetForceMode = nil
+        local seen
+        BfBot.Exec.Start = function(_, _, _, force) seen = force; return true end
+        BfBot.UI._FastForwardRate = function() return 1 end
+        BfBot.UI._StartRun({ { resref = "SPWI518" } }, 0, 1)
+        return seen
+        """
+    )
+    assert mode == 0

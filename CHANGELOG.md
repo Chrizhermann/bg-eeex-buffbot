@@ -5,9 +5,11 @@
 ### Added
 - **Re-cast buffs that are nearly over instead of skipping them.** A long buff that survives a rest with a tiny remainder was treated as "already active" and never renewed. BuffBot now reads how much of a running buff is actually left and casts it again when that is below a threshold. (#84)
 - **"Refresh buffs that are nearly over"** in EEex options: off by default, or under 1 minute, 5 minutes, or 1 hour left. The threshold applies to every path, including the F12 preset innates, which is where buffing after a rest happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`; the list offers the common ones.
-- **An active-buff toggle in the panel**, beside the status line: *Active: Skip* (default), *Active: Refresh Low*, *Active: Force All*. It belongs to the run, not to a preset: nothing is written to the save, and a game restart returns to Skip. Force All casts every configured buff again, however much of it is left.
+- **An active-buff toggle in the panel**, beside the status line: *Active: Skip* (default), *Active: Refresh Low*, *Active: Force All*. It belongs to the run, not to a preset: nothing is written to the save, and a game restart returns to Skip.
+- **Force All is an unconditional override.** It is independent of the threshold — it works with the option off, ignores whatever value is configured, and also re-casts buffs that never expire, which no time threshold can reach. Wasted spell slots are accepted deliberately: a vanilla Stoneskin runs twelve hours, long buffs routinely survive a rest, and re-casting one or two unnecessarily beats guessing wrong. There is no confirmation prompt and no heuristic that softens it. Every other precondition stays in force: a dead caster or target, a spent slot, a missing variant, an interactive item and a live Project Image still refuse the cast.
 - Skip and refresh decisions now name the remaining lifetime in `buffbot_exec.log`, so "why was this skipped" is answerable from the log.
 - The toggle also applies to the 2x/4x fast-forward runs added in v1.11.0: simulation speed changes how long a run takes, never which buffs it skips.
+- The policy lives in `BfBot.Exec`, not in the panel, so `BfBot.Exec.SetForceMode(2)` works from the console without opening BuffBot — and the panel rebuild in #81 only has to re-place one button.
 
 ### Changed
 - **Repeat counts now repeat buffs under Force All.** Every repeat attempt goes through the active-buff check, so before this a `Repeat: 2` buff cast once and skipped the rest. With Force All the active check is off and the configured count is used in full. Each attempt still consumes a spell slot or charge. Skip and Refresh Low are unaffected.
@@ -15,15 +17,24 @@
 
 ### Limitations
 - The threshold is a *time* threshold. Stoneskin's real resource is its skins (opcode 218), so "timer still running, no skins left" is not covered; a charge-aware check needs its own work.
-- A buff whose remaining lifetime cannot be read — a permanent effect, or one still inside its delay — keeps the old behaviour and is skipped unless Force All is used.
+- A buff whose remaining lifetime cannot be read — a permanent effect, or one still inside its delay — keeps the old behaviour and is skipped. Only Force All reaches it; no threshold value can.
 - `config.opts.skip` in the save schema is still unused. This release carries the threshold in `baldur.ini` instead of reviving that field; removing it needs a migration decision and is tracked in #84.
 
 ### Testing
-- The full automated suite passes **1280 tests**, including 101 new checks covering the per-timing-mode duration reader, the longest-readable-deadline fold, threshold resolution and validation, `_CheckEntry` for spells, state markers and multi-ability items, the run-scoped plumbing through both the normal and the accelerated start path, and the panel toggle.
-- A new in-game phase `BfBot.Test.RefreshThreshold()` applies one tagged effect per timing mode to the party leader, reads each one back, exercises the threshold and the skip decision, and removes the probes again. It runs inside `BfBot.Test.RunAll()`.
+- The full automated suite passes **1295 tests**, including 116 new checks covering the per-timing-mode duration reader, the longest-readable-deadline fold, threshold resolution and validation, Force All as a flag that outranks every threshold and reaches permanent effects, the preconditions Force must *not* weaken, `_CheckEntry` for spells, state markers and multi-ability items, the plumbing through both the normal and the accelerated start path, and the panel toggle.
+- A new in-game phase `BfBot.Test.RefreshThreshold()` applies one tagged effect per timing mode to the party leader, reads each one back, exercises the threshold, the force flag and the skip decision, and removes the probes again. It runs inside `BfBot.Test.RunAll()` and passes 34/34.
 - **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (disposable clone, own save profile): the in-game phase passed 28/28. End to end on Protection From Normal Weapons, with 1m 42s left: with the option off the log read `SKIP ... (already active: SPWI511, 1m 42s left)`, and with the threshold at one hour `INFO ... (refreshing: SPWI511, 1m 36s left, threshold 60m 0s)` followed by the cast. Force All cast a fully active Shield again. Live vanilla Armor was measured too, and it is why the fold prefers readable deadlines: its `op174` sits in timing mode 7 forever beside three mode-4096 effects with the real 45-minute deadline.
 - **Engine measurements** behind the reader, recorded in the knowledge base: on an applied effect, encoded timing modes 0, 10 and 4096 all become mode 4096 with an absolute deadline in game ticks; 1 and 9 stay permanent; 3 becomes 6 and 4 becomes 7 while the delay runs, where the stored value is the end of the *delay*, not of the buff. A live `m_durationType` must not be masked with `0xFF` — that would turn 4096 into 0.
-- **Re-checked after merging v1.11.0**, same lab: the full `BfBot.Test.RunAll()` passes all 27 phases, the new phase 28/28. Force All was confirmed to survive the accelerated start path live — with the rate at 2x, `Exec.Start` received force mode 2 and resolved an infinite threshold, so simulation speed does not change what a run skips. The lab's `[BuffBot]` settings were restored afterwards.
+- **Re-checked after merging v1.11.0**, same lab: the full `BfBot.Test.RunAll()` passes all 27 phases, the refresh phase 34/34. Force All was confirmed to survive the accelerated start path live — with the rate at 2x, `Exec.Start` received force mode 2 — so simulation speed does not change what a run skips.
+- **Force All verified live as an override, with the option off** (`RefreshBelow=0`) on a permanent effect, the case no threshold can reach:
+
+  ```
+  # Active: Skip          SKIP: Zyntris -> Summon Djinni (already active: SPWI718, permanent)
+  # Active: Refresh Low   SKIP: Zyntris -> Summon Djinni (already active: SPWI718, permanent)
+  # Active: Force All     INFO: Zyntris -> Summon Djinni (refreshing: SPWI718, permanent, force all)
+  ```
+
+  The lab's `[BuffBot]` settings and the force selection were restored afterwards.
 - Also fixed while here: the Target Picker phase required a second party member to exist but not to have a *different* display name. On a save with two members called the same thing, a name-based target legitimately resolves both to the first slot, and the phase failed on correct behaviour. It now picks a member with a distinct name and warns when there is none. Unrelated to this feature; the underlying ambiguity — two party members sharing a display name cannot both be targeted by name — is filed as #87.
 - Not checked in game: the EEex options entry and the panel toggle clicked by hand, BG:EE, EET, the Force All interaction with Quick Cast, summon casters, and item powers with a measured remaining duration. Two log-only corrections — the threshold's wording and suppressing the SPLSTATE false-positive notice on a refresh — have automated coverage but were not re-run in the lab.
 

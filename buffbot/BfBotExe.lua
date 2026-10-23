@@ -266,28 +266,78 @@ end
 
 --- Remaining-duration threshold for the current run, in gameplay seconds.
 --- A buff with at least this much left is skipped; anything below is cast
---- again. math.huge means "Force all" — nothing is skipped for being active.
+--- again. Always a finite number of seconds; 0 is the historical behavior.
 --- @param forceMode number|nil: 0 skip active (default), 1 refresh low,
 ---        2 force all. Defaults to the run-scoped mode set by Exec.Start.
 function BfBot.Exec._RefreshThreshold(forceMode)
     if forceMode == nil then forceMode = BfBot.Exec._forceMode or 0 end
-    if forceMode == 2 then return math.huge end
 
     local configured = 0
     if BfBot.Persist and BfBot.Persist.GetRefreshBelow then
         local ok, value = pcall(BfBot.Persist.GetRefreshBelow)
         if ok and type(value) == "number" then configured = value end
     end
+    -- Refresh Low is the panel's "use a sensible value even though the option
+    -- is off" mode. It never overrides a configured threshold.
     if forceMode == 1 and configured <= 0 then
         return BfBot.REFRESH_LOW_SECONDS
     end
     return configured
 end
 
+--- Is the active-buff check off entirely for this run?
+---
+--- Force All is a hard override and deliberately NOT a threshold value
+--- (Christopher, 2026-10-24, issue #84: "einfach force als Überschreibung").
+--- Three things follow from that, and each is the reason it is its own flag:
+---   * it is independent of `RefreshBelow` and works with the option off,
+---   * it casts through PERMANENT effects (timing 1/2/4/9), which report no
+---     remaining lifetime at all and which no finite threshold can reach,
+---   * it needs no sentinel comparison, so the threshold stays a plain number
+---     everywhere and a stray math.huge cannot silently re-enable skipping.
+--- Wasted spell slots are accepted here by decision: a vanilla Stoneskin runs
+--- twelve hours, long buffs routinely survive a rest, and re-casting one or
+--- two of them unnecessarily is cheaper than guessing wrong. Do not add a
+--- heuristic that weakens this, and do not ask the player to confirm it.
+function BfBot.Exec._ForceAll(forceMode)
+    if forceMode == nil then forceMode = BfBot.Exec._forceMode or 0 end
+    return BfBot.Exec._NormalizeForceMode(forceMode) == 2
+end
+
+-- ---- The pending active-buff policy (what the NEXT run will use) ----
+--
+-- This lives here, not in BfBotUI, because the panel is being rebuilt (#81)
+-- and the rebuild should only have to re-place a button, never carry logic or
+-- state across. It also makes the policy reachable without a panel at all:
+--   BfBot.Exec.SetForceMode(2)   -- from the console or another module
+--
+-- Not persisted, by design: a game restart returns to Skip, so nobody finds
+-- their slots being spent by a setting they forgot they left on.
+BfBot.Exec._forceSelection = 0
+
+function BfBot.Exec.GetForceMode()
+    return BfBot.Exec._NormalizeForceMode(BfBot.Exec._forceSelection)
+end
+
+function BfBot.Exec.SetForceMode(value)
+    BfBot.Exec._forceSelection = BfBot.Exec._NormalizeForceMode(value)
+    return BfBot.Exec._forceSelection
+end
+
+--- Skip active → refresh low → force all → skip active.
+function BfBot.Exec.CycleForceMode()
+    return BfBot.Exec.SetForceMode((BfBot.Exec.GetForceMode() + 1) % 3)
+end
+
 --- Does an active buff with `remaining` seconds left block a cast?
-function BfBot.Exec._ActiveBlocksCast(remaining, threshold)
+--- @param forceAll boolean|nil: when true nothing blocks, whatever is left.
+function BfBot.Exec._ActiveBlocksCast(remaining, threshold, forceAll)
+    if forceAll then return false end
     if remaining == nil then return false end
-    if threshold == math.huge then return false end  -- Force all
+    -- Without a usable threshold, keep the conservative skip.
+    if type(remaining) ~= "number" or type(threshold) ~= "number" then
+        return true
+    end
     return remaining >= threshold
 end
 
@@ -861,10 +911,12 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
         end
     end
 
-    -- Remaining-duration threshold for this run (issue #84). math.huge means
-    -- "Force all": the active check is skipped entirely. 0 is the historical
-    -- behavior — every active buff skips, whatever is left of it.
+    -- Active-buff policy for this run (issue #84). The threshold is seconds;
+    -- 0 is the historical behavior, where every active buff skips whatever is
+    -- left of it. forceAll is the hard override and outranks the threshold.
+    -- Every other precondition above and below stays in force.
     local threshold = BfBot.Exec._RefreshThreshold()
+    local forceAll = BfBot.Exec._ForceAll()
 
     local foundActive = nil       -- resref whose buff blocks the cast
     local foundRemaining = nil    -- its remaining lifetime, for the log line
@@ -925,7 +977,7 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
         end
 
         if remaining ~= nil then
-            if BfBot.Exec._ActiveBlocksCast(remaining, threshold) then
+            if BfBot.Exec._ActiveBlocksCast(remaining, threshold, forceAll) then
                 -- Longest-lived blocker wins, so the log names the buff that
                 -- actually keeps this entry from casting.
                 if not foundActive or remaining > foundRemaining then
@@ -946,7 +998,7 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
     end
 
     if refreshing then
-        local why = threshold == math.huge and "force all"
+        local why = forceAll and "force all"
             or ("threshold "
                 .. (BfBot.Exec._FormatRemaining(threshold):gsub(" left", "")))
         BfBot.Exec._LogEntry("INFO", label .. " (refreshing: " .. refreshing.resref
@@ -1885,9 +1937,11 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx, forceMode)
     local casterCount = 0
     local qcLabel = BfBot.Exec._qcMode == 2 and " (Quick Cast: All)"
         or BfBot.Exec._qcMode == 1 and " (Quick Cast: Long)" or ""
+    -- Force All outranks the threshold, so the banner names it alone: under
+    -- the override the configured threshold has no bearing on the run.
     local forceLabel = ""
     local threshold = BfBot.Exec._RefreshThreshold()
-    if threshold == math.huge then
+    if BfBot.Exec._ForceAll() then
         forceLabel = " (Force all: active buffs cast again)"
     elseif threshold > 0 then
         forceLabel = " (Refresh below "

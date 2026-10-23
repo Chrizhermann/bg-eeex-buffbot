@@ -158,15 +158,28 @@ The **Active: Skip** button in the panel overrides that for one run:
 |---|---|
 | **Active: Skip** | The default. Skip running buffs, with the option's threshold still applied |
 | **Active: Refresh Low** | Cast a running buff again when it is below the threshold — the option's value, or 5 minutes when the option is off |
-| **Active: Force All** | Cast every configured buff again, whatever is left of it |
+| **Active: Force All** | Cast every configured buff again, whatever is left of it, threshold or no threshold |
 
 The toggle belongs to the run, not to a preset: nothing is written to the save, and a game
-restart returns it to Skip. Under **Force All** the active check is off, so a row's repeat
-count applies to buffs as well and every attempt uses a spell slot or a charge.
+restart returns it to Skip.
 
-Two kinds of buff are never refreshed on a timer, because they have no readable remaining
-lifetime: permanent effects, and effects still inside their casting delay. Force All casts
-those again too.
+**Force All is unconditional.** It does not consult the option at all, so it works with the
+threshold off and ignores whatever value is set. It also casts buffs that never expire, which
+no threshold can reach: permanent effects and effects still inside their casting delay have no
+readable remaining lifetime, so a timer can never decide to refresh them. You will sometimes
+spend a slot on a buff that did not need it — that is the point of the button, and BuffBot will
+not second-guess it or ask you to confirm.
+
+Everything else still applies under Force All: a dead caster or target, a spent spell slot, a
+missing variant, an item that opens a selection menu and a live Project Image all still refuse
+the cast. Force only switches off the "is this already running" question. A row's repeat count
+then applies to buffs as well, and every attempt uses a spell slot or a charge.
+
+You can also set it without the panel, from the console:
+
+```lua
+BfBot.Exec.SetForceMode(2)   -- 0 skip active, 1 refresh low, 2 force all
+```
 
 ### Items and Potions
 

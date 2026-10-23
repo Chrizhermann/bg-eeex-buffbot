@@ -38,6 +38,15 @@ def ui_lua() -> LuaRuntime:
                 _ResolveCaster = function(ref)
                     return { m_id = ref.oid, name = ref.name }
                 end,
+                -- Exec owns the active-buff policy (#84), so the fake carries
+                -- the real accessors rather than leaving _StartRun to its
+                -- reload fallback. T_ForceMode lets a test drive it.
+                GetForceMode = function() return T_ForceMode or 0 end,
+                SetForceMode = function(v) T_ForceMode = v; return v end,
+                CycleForceMode = function()
+                    T_ForceMode = ((T_ForceMode or 0) + 1) % 3
+                    return T_ForceMode
+                end,
             },
             Persist = {},
             Class = {},

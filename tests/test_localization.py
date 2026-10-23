@@ -1009,9 +1009,12 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     # config.opts.skip field is named rather than quietly left behind.
     assert "stoneskin's real resource is its skins (opcode 218)" in current_normalized
     assert "`config.opts.skip` in the save schema is still unused" in current_normalized
-    assert "full automated suite passes **1280 tests**" in current_normalized
+    assert "full automated suite passes **1295 tests**" in current_normalized
+    # Force All is a hard override, not a threshold value (#84).
+    assert "force all is an unconditional override" in current_normalized
+    assert "wasted spell slots are accepted deliberately" in current_normalized
     assert "lab check, bg2:ee 2.7.3.0 with eeex v1.3.1" in current_normalized
-    assert "28/28" in current_normalized
+    assert "34/34" in current_normalized
     assert "not checked in game: the eeex options entry" in current_normalized
 
     fork_release = source.split("\n## v1.11.0 (2026-10-24)", 1)[1].split(

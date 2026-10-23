@@ -6125,6 +6125,12 @@ function BfBot.Test.RefreshThreshold()
         "_RefreshThreshold is a function")
     _check(type(BfBot.Exec._ActiveBlocksCast) == "function",
         "_ActiveBlocksCast is a function")
+    _check(type(BfBot.Exec._ForceAll) == "function",
+        "_ForceAll is a function")
+    _check(type(BfBot.Exec.GetForceMode) == "function"
+            and type(BfBot.Exec.SetForceMode) == "function"
+            and type(BfBot.Exec.CycleForceMode) == "function",
+        "Exec owns the force selection, reachable without the panel")
     _check(type(BfBot.Persist.GetRefreshBelow) == "function",
         "Persist.GetRefreshBelow is a function")
     _check(type(BfBot.UI.CycleForceRecast) == "function",
@@ -6140,8 +6146,14 @@ function BfBot.Test.RefreshThreshold()
     _check(BfBot.Exec._RefreshThreshold(1) == BfBot.REFRESH_LOW_SECONDS,
         "option off + Refresh Low: falls back to "
             .. tostring(BfBot.REFRESH_LOW_SECONDS) .. "s")
-    _check(BfBot.Exec._RefreshThreshold(2) == math.huge,
-        "Force All: infinite threshold, nothing skips for being active")
+    -- Force All is a flag, not a threshold value: it must work with the
+    -- option off and leave the configured threshold untouched (#84).
+    _check(BfBot.Exec._RefreshThreshold(2) == 0,
+        "Force All does not pretend the threshold is infinite")
+    _check(BfBot.Exec._ForceAll(2) == true
+            and BfBot.Exec._ForceAll(1) == false
+            and BfBot.Exec._ForceAll(0) == false,
+        "Force All raises its own flag instead")
 
     BfBot.Persist.SetRefreshBelow(45)
     _check(BfBot.Persist.GetRefreshBelow() == 45,
@@ -6198,6 +6210,7 @@ function BfBot.Test.RefreshThreshold()
         -- Collect what the engine now reports for each of them.
         local seen = {}
         local permanent, pending, timed = 0, 0, 0
+        local permLeft, permDetail = nil, nil
         pcall(function()
             EEex_Utility_IterateCPtrList(sprite.m_timedEffectList,
                 function(effect)
@@ -6207,7 +6220,9 @@ function BfBot.Test.RefreshThreshold()
                     seen[#seen + 1] = string.format("dt=%s -> %s",
                         tostring(effect.m_durationType),
                         BfBot.Exec._FormatRemaining(left, detail))
-                    if detail == "perm" then permanent = permanent + 1
+                    if detail == "perm" then
+                        permanent = permanent + 1
+                        permLeft, permDetail = left, detail
                     elseif detail == "pending" then pending = pending + 1
                     elseif detail == nil and left < math.huge then
                         timed = timed + 1
@@ -6238,12 +6253,27 @@ function BfBot.Test.RefreshThreshold()
             "an unrelated resref reports nothing active")
 
         -- The skip decision itself, on live data.
-        _check(BfBot.Exec._ActiveBlocksCast(left, 0) == true,
+        _check(BfBot.Exec._ActiveBlocksCast(left, 0, false) == true,
             "an active buff blocks a cast at threshold 0")
-        _check(BfBot.Exec._ActiveBlocksCast(left, 3600) == false,
+        _check(BfBot.Exec._ActiveBlocksCast(left, 3600, false) == false,
             "and is cast again once the threshold is above what is left")
-        _check(BfBot.Exec._ActiveBlocksCast(left, math.huge) == false,
-            "Force All casts through regardless")
+        _check(BfBot.Exec._ActiveBlocksCast(left, 0, true) == false,
+            "Force All casts through regardless, at threshold 0")
+
+        -- The case only the flag can reach: the permanent probe reports no
+        -- remaining lifetime at all, so no threshold can ever refresh it.
+        if permDetail == "perm" then
+            _check(permLeft == math.huge,
+                "the permanent probe reports no readable lifetime")
+            _check(BfBot.Exec._ActiveBlocksCast(permLeft,
+                    BfBot.MAX_REFRESH_BELOW, false) == true,
+                "a permanent buff skips even at the largest threshold allowed")
+            _check(BfBot.Exec._ActiveBlocksCast(permLeft, 0, true) == false,
+                "and Force All casts it again anyway")
+        else
+            _warning("no permanent probe measured - skipping the Force All "
+                .. "override check on a permanent effect")
+        end
 
         -- ---- Clean up: opcode 321 removes effects by source resource ----
         pcall(EEex_GameObject_ApplyEffect, sprite, {
