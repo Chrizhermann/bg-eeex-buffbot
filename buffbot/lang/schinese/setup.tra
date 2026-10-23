@@ -219,18 +219,6 @@
 @452 = ~{count}次~
 // ui.lock.compact
 @453 = ~[锁]~
-// ui.force_recast.off
-@454 = ~Active: Skip~
-// ui.force_recast.low
-@455 = ~Active: Refresh Low~
-// ui.force_recast.all
-@456 = ~Active: Force All~
-// ui.force_recast.tooltip_off
-@457 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
-// ui.force_recast.tooltip_low
-@458 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
-// ui.force_recast.tooltip_all
-@459 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
 
 // feedback.no_luajit
 @500 = ~BuffBot：未检测到 LuaJIT。F12 特殊能力、快速施法、导入/导出和日志记录已禁用。请安装 EEex LuaJIT 组件以启用完整功能。~
@@ -378,6 +366,56 @@
 @715 = ~直接从背包使用~
 // options.item_use_swap
 @716 = ~装备、使用并还原~
+// ui.search
+@454 = ~搜索~
+// ui.search.no_matches
+@455 = ~没有匹配的法术或物品~
+// ui.quick_presets
+@456 = ~施放队伍预设~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot：左键配置；右键施放队伍预设~
+// ui.manual_only
+@458 = ~手动~
+// ui.speed.normal
+@460 = ~速度：正常~
+// ui.speed.2x
+@461 = ~速度：2倍~
+// ui.speed.4x
+@462 = ~速度：4倍~
+// ui.speed.tooltip
+@463 = ~适用于所有预设。2倍和4倍会暂时加速整个游戏，并遵守正常施法规则。正常速度使用已保存的快速施法设置。点击切换。~
+// ui.quick_cast.suspended
+@464 = ~快速施法：暂停~
+// ui.quick_cast.tooltip_suspended
+@465 = ~加速时遵守正常施法规则。快速施法设置仍会保存，恢复正常速度后再次生效。~
+// ui.header.spell
+@466 = ~法术 / 物品~
+// ui.header.duration
+@467 = ~持续时间~
+// ui.header.uses
+@468 = ~次数~
+// ui.header.repeats
+@469 = ~重复~
+// ui.header.target
+@470 = ~目标~
+// ui.header.lock
+@471 = ~锁定~
+// ui.force_recast.off
+@472 = ~Active: Skip~
+// ui.force_recast.low
+@473 = ~Active: Refresh Low~
+// ui.force_recast.all
+@474 = ~Active: Force All~
+// ui.force_recast.tooltip_off
+@475 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
+// ui.force_recast.tooltip_low
+@476 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
+// ui.force_recast.tooltip_all
+@477 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
+// reason.item.manual_selection
+@552 = ~此物品会打开选择菜单。请手动使用；BuffBot会跳过它。~
+// reason.exec.fast_unavailable
+@553 = ~此处无法加速。请选择正常速度后重试。~
 // options.refresh_below
 @717 = ~Refresh buffs that are nearly over~
 // options.refresh_below_description

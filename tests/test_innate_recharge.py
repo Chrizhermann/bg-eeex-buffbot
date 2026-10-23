@@ -716,6 +716,7 @@ def _run_bfbotgo_source_case(
                 assert(preset == 1)
                 return 0
             end,
+            GetPref = function(_) return 1 end,
         }}
 
         BFBOTGO({{
@@ -877,6 +878,7 @@ def test_recharge_is_independent_of_every_bfbotgo_outcome(
             GetQuickCast = function(_, _)
                 return {quick_cast_mode}
             end,
+            GetPref = function(_) return 1 end,
         }}
 
         local restored, rechargeStatus =

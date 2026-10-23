@@ -1,12 +1,13 @@
 # Changelog
 
-## v1.11.0 (2026-10-24)
+## v1.12.0 (2026-10-24)
 
 ### Added
 - **Re-cast buffs that are nearly over instead of skipping them.** A long buff that survives a rest with a tiny remainder was treated as "already active" and never renewed. BuffBot now reads how much of a running buff is actually left and casts it again when that is below a threshold. (#84)
 - **"Refresh buffs that are nearly over"** in EEex options: off by default, or under 1 minute, 5 minutes, or 1 hour left. The threshold applies to every path, including the F12 preset innates, which is where buffing after a rest happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`; the list offers the common ones.
 - **An active-buff toggle in the panel**, beside the status line: *Active: Skip* (default), *Active: Refresh Low*, *Active: Force All*. It belongs to the run, not to a preset: nothing is written to the save, and a game restart returns to Skip. Force All casts every configured buff again, however much of it is left.
 - Skip and refresh decisions now name the remaining lifetime in `buffbot_exec.log`, so "why was this skipped" is answerable from the log.
+- The toggle also applies to the 2x/4x fast-forward runs added in v1.11.0: simulation speed changes how long a run takes, never which buffs it skips.
 
 ### Changed
 - **Repeat counts now repeat buffs under Force All.** Every repeat attempt goes through the active-buff check, so before this a `Repeat: 2` buff cast once and skipped the rest. With Force All the active check is off and the configured count is used in full. Each attempt still consumes a spell slot or charge. Skip and Refresh Low are unaffected.
@@ -18,11 +19,38 @@
 - `config.opts.skip` in the save schema is still unused. This release carries the threshold in `baldur.ini` instead of reviving that field; removing it needs a migration decision and is tracked in #84.
 
 ### Testing
-- The full automated suite passes **786 tests**, including 100 new checks covering the per-timing-mode duration reader, the longest-readable-deadline fold, threshold resolution and validation, `_CheckEntry` for spells, state markers and multi-ability items, the run-scoped plumbing, and the panel toggle.
+- The full automated suite passes **1280 tests**, including 101 new checks covering the per-timing-mode duration reader, the longest-readable-deadline fold, threshold resolution and validation, `_CheckEntry` for spells, state markers and multi-ability items, the run-scoped plumbing through both the normal and the accelerated start path, and the panel toggle.
 - A new in-game phase `BfBot.Test.RefreshThreshold()` applies one tagged effect per timing mode to the party leader, reads each one back, exercises the threshold and the skip decision, and removes the probes again. It runs inside `BfBot.Test.RunAll()`.
 - **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (disposable clone, own save profile): the in-game phase passed 28/28. End to end on Protection From Normal Weapons, with 1m 42s left: with the option off the log read `SKIP ... (already active: SPWI511, 1m 42s left)`, and with the threshold at one hour `INFO ... (refreshing: SPWI511, 1m 36s left, threshold 60m 0s)` followed by the cast. Force All cast a fully active Shield again. Live vanilla Armor was measured too, and it is why the fold prefers readable deadlines: its `op174` sits in timing mode 7 forever beside three mode-4096 effects with the real 45-minute deadline.
 - **Engine measurements** behind the reader, recorded in the knowledge base: on an applied effect, encoded timing modes 0, 10 and 4096 all become mode 4096 with an absolute deadline in game ticks; 1 and 9 stay permanent; 3 becomes 6 and 4 becomes 7 while the delay runs, where the stored value is the end of the *delay*, not of the buff. A live `m_durationType` must not be masked with `0xFF` — that would turn 4096 into 0.
-- Not checked in game: the EEex options entry and the panel toggle clicked by hand, BG:EE, EET, the Force All interaction with Quick Cast, summon casters, item powers with a measured remaining duration, and the full `BfBot.Test.RunAll()`. Two later log-only corrections — the threshold's wording and suppressing the SPLSTATE false-positive notice on a refresh — have automated coverage but were not re-run in the lab.
+- Not checked in game: the EEex options entry and the panel toggle clicked by hand, BG:EE, EET, the Force All interaction with Quick Cast, summon casters, item powers with a measured remaining duration, and the full `BfBot.Test.RunAll()`. Two later log-only corrections — the threshold's wording and suppressing the SPLSTATE false-positive notice on a refresh — have automated coverage but were not re-run in the lab. The lab ran before this work was merged with v1.11.0, so the toggle at 2x/4x has automated coverage only.
+
+## v1.11.0 (2026-10-24) — selective BuffBot Redux improvements
+
+Adapted from [Zach Hopkins' BuffBot Redux](https://github.com/zach-hopkins/bg-eeex-buffbot), with thanks and credit. Character-based presets, manual cast priorities and the classic BG presentation remain the primary workflow.
+
+- Match active-effect resource names without case sensitivity, preserving the source/opcode/state checks that distinguish shared SPLSTATE markers.
+- Add a named preset picker on right-clicking the HUD gear and keep its position within the screen. Existing F12 abilities remain available.
+- Add buff-name search without changing stored priorities or which enabled buffs a preset casts.
+- Discover item buff powers delivered through bounded immediate child spells and retain supported classifier misses for manual Add. Powers requiring an interactive spell picker remain manual-only; scrolls and wands remain outside discovery.
+- Use the applicable caster level when estimating child-spell durations, including fixed levels supplied by opcode 146.
+- Add optional 2x/4x temporary simulation speed. Normal remains the default. Accelerated runs retain the existing spell/item execution paths and suspend Quick Cast for that run, including late-joining summons. Saved Quick Cast settings and rendering/FPS preferences are preserved.
+- Restore temporary speed on completion, stop, combat, unsafe UI state, load/exit and timeout. Multiplayer acceleration is unavailable.
+- Ignore delayed or duplicate execution callbacks from an earlier run after Stop/restart, including across module reloads.
+- Preserve healthy long and paused runs; stalled execution uses the existing game-time progress watchdog.
+- Refuse accelerated F12 starts if the speed module is unavailable, and roll back partial speed writes when startup fails.
+
+- Fix configured spell variants bypassing casting time and aura: use the normal no-decrement cast action and consume only the parent's availability bit, preserving other memorization flags.
+- Fix wearable items being rejected for characters without a kit. Explicit no-kit restrictions and other eligibility checks remain enforced.
+- Restore temporarily equipped items through the inverse exchange, avoiding a native BG2:EE 2.7.3.0 first-backpack-slot overwrite that could corrupt the character name and crash the game. Empty equipment slots and interrupted restores are covered.
+- Keep detected stances excluded from automatic buffs even when they expose a variant picker, and refresh the panel's completion status while it remains open.
+
+- Draw the enable and lock cells with real artwork instead of `[X]` and `[L]`, in the style of the active theme (BG2, SoD or BG1). The artwork comes from Zach Hopkins' BuffBot Redux and derives from Pecca's Infinity UI++, used with permission — see [ATTRIBUTION](ATTRIBUTION.md), whose terms it keeps. Infinity UI++ is not required and none of its files are touched. An install without `buffbot/visual` still shows the text markers.
+- Label the spell list's columns. The headers are captions only: the row order is the cast order, so sorting stays the explicit Sort button and stored priorities are never rewritten behind your back. Translated in all nine catalogs.
+
+Tooling: the EEex globals scanner now collects only name-shaped string constants, so a byte-range Lua pattern such as the search field's `[\194-\223][\128-\191]` no longer breaks the scan. `EEex_CChitin` is recorded as an EEex.dll binding type that the generator cannot list; EEex v1.3.1 writes `EEex_CChitin.TIMER_UPDATES_PER_SECOND` itself in `EEex_UncapFPS.lua`, and BuffBot's access is guarded and fails closed.
+
+Validation: **1166 automated tests pass**, including installer/release checks. Hidden native BG2:EE 2.7.3.0 / EEex 1.3.1 labs verified Normal/2x/4x with two simultaneous casters, spell/item consumption, buff expiry, variants, temporary equipment swaps, interruptions, late-joining allies and rate restoration. The subsequent EET/SR/SCS/modpack matrix also passed with experimental Scroll component 430 uninstalled and the published alpha.13 banking fix installed; Normal/2x/4x took 20.866/10.429/5.279 s with the same resource consumption. Nine fresh full-stack screenshots cover search, status, speed and HUD presets at 1024×768 and 1920×1080. The 430-inclusive configuration remains unaccepted; BG:EE and 5E are outside this task's scope. Not checked in game: the column headers and the control artwork, both added after those labs. The artwork is drawn only when all five control BAMs resolve and the text markers return otherwise, and the checkbox frames were re-authored at the list's 36-pixel row scale, which only a running game confirms. See [the validation record](docs/validation-fork-qol.md) for measurements and limits.
 
 ## v1.10.1 (2026-10-20)
 

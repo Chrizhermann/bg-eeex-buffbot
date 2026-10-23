@@ -363,6 +363,12 @@ buffbot_presetCount = 0          -- number of active presets
 -- Spell list (1-indexed array for list widget)
 buffbot_spellTable = {}
 buffbot_selectedRow = 0
+-- The widget displays references to canonical rows. Filtering never changes
+-- the preset's order, cast queue, or the indices used by editing actions.
+buffbot_visibleSpells = {}
+buffbot_visibleSelectedRow = 0
+buffbot_searchText = ""
+BfBot.UI._appliedSearchText = ""
 
 -- Cast button labels
 buffbot_castLabel = BfBot.L10N.Get("ui.cast.all")
@@ -477,6 +483,7 @@ function BfBot.UI._ClearSpellSelection()
     BfBot.UI._targetSpellAnchor = nil
     BfBot.UI._variantSpellAnchor = nil
     buffbot_selectedRow = 0
+    buffbot_visibleSelectedRow = 0
     buffbot_selectedHasVariants = 0
 end
 
@@ -516,6 +523,7 @@ end
 --- Project the canonical selection into the current rebuilt row table.
 --- Context changes and disappearance clear rather than transfer selection.
 function BfBot.UI._RestoreSpellSelection()
+    BfBot.UI._RebuildVisibleSpells()
     local sel = BfBot.UI._spellSel
     if not sel or not BfBot.UI._SameSpellSelectionContext(
         sel.context, BfBot.UI._SpellSelectionContext()) then
@@ -528,6 +536,7 @@ function BfBot.UI._RestoreSpellSelection()
         return nil
     end
     buffbot_selectedRow = row
+    BfBot.UI._ProjectVisibleSelection()
     BfBot.UI._UpdateVariantState()
     if buffbot_isOpen then
         -- The native list may write its bound var back to zero after a table
@@ -565,6 +574,7 @@ function BfBot.UI._SelectionSyncTick()
     end
 
     buffbot_selectedRow = row
+    BfBot.UI._ProjectVisibleSelection()
     BfBot.UI._UpdateVariantState()
     pending.passes = (pending.passes or 1) - 1
     if pending.passes <= 0 then
@@ -583,6 +593,91 @@ function BfBot.UI._OnSpellRowAction(cell)
     elseif cell == 8 then
         BfBot.UI.ToggleLock(buffbot_selectedRow)
     end
+end
+
+-- LuaJIT's string.lower handles ASCII only. Fold the Latin and Cyrillic
+-- letters used by our catalogs as UTF-8, leaving other scripts unchanged.
+function BfBot.UI._SearchName(text)
+    local value = tostring(text or ""):lower():gsub("ẞ", "ß")
+    return (value:gsub("[\194-\223][\128-\191]", function(char)
+        local a, b = char:byte(1, 2)
+        local cp = (a - 192) * 64 + b - 128
+        if (cp >= 0xC0 and cp <= 0xDE and cp ~= 0xD7)
+            or (cp >= 0x410 and cp <= 0x42F) then cp = cp + 32
+        elseif cp >= 0x400 and cp <= 0x40F then cp = cp + 80
+        elseif cp == 0x178 then cp = 0xFF
+        elseif ((cp >= 0x100 and cp <= 0x12F)
+            or (cp >= 0x132 and cp <= 0x137)
+            or (cp >= 0x14A and cp <= 0x177)) and cp % 2 == 0 then cp = cp + 1
+        elseif ((cp >= 0x139 and cp <= 0x148)
+            or (cp >= 0x179 and cp <= 0x17E)) and cp % 2 == 1 then cp = cp + 1
+        end
+        return string.char(192 + math.floor(cp / 64), 128 + cp % 64)
+    end))
+end
+
+function BfBot.UI._RebuildVisibleSpells()
+    local query = BfBot.UI._SearchName(buffbot_searchText)
+    local rows, indices = {}, {}
+    for index, entry in ipairs(buffbot_spellTable) do
+        if query == "" or BfBot.UI._SearchName(entry.name or entry.resref):find(query, 1, true) then
+            rows[#rows + 1] = entry
+            indices[#rows] = index
+        end
+    end
+    buffbot_visibleSpells = rows
+    BfBot.UI._visibleSpellIndices = indices
+    BfBot.UI._visibleSpellContext = BfBot.UI._SpellSelectionContext()
+    BfBot.UI._appliedSearchText = buffbot_searchText
+end
+
+function BfBot.UI._VisibleSpellRow(row)
+    return BfBot.UI._visibleSpellIndices and BfBot.UI._visibleSpellIndices[row] or 0
+end
+
+function BfBot.UI._ProjectVisibleSelection()
+    buffbot_visibleSelectedRow = 0
+    for visible, index in ipairs(BfBot.UI._visibleSpellIndices or {}) do
+        if index == buffbot_selectedRow then
+            buffbot_visibleSelectedRow = visible
+            return
+        end
+    end
+    -- Keep the identity anchor so clearing the search restores selection,
+    -- but disable actions while its row is hidden.
+    buffbot_selectedRow = 0
+end
+
+function BfBot.UI._SearchTick()
+    if not buffbot_isOpen or buffbot_searchText == BfBot.UI._appliedSearchText then return false end
+    BfBot.UI._PrepareSpellSelectionForRebuild()
+    BfBot.UI._RestoreSpellSelection()
+    if EEex_Menu_GetItem then
+        local item = EEex_Menu_GetItem("bbList")
+        if item and item.scrollbar then item.scrollbar.top = 0 end
+    end
+    return false
+end
+
+function BfBot.UI.ClearSearch()
+    buffbot_searchText = ""
+    BfBot.UI._SearchTick()
+end
+
+function BfBot.UI._OnVisibleSpellRowAction(cell)
+    -- A query/context change since the last render invalidates the click.
+    if buffbot_searchText ~= BfBot.UI._appliedSearchText
+        or not BfBot.UI._SameSpellSelectionContext(
+            BfBot.UI._visibleSpellContext, BfBot.UI._SpellSelectionContext()) then
+        BfBot.UI._SearchTick()
+        return
+    end
+    local entry = buffbot_visibleSpells[buffbot_visibleSelectedRow]
+    local row = entry and BfBot.UI._FindSpellRow(entry.resref)
+    if not row or buffbot_spellTable[row] ~= entry then return end
+    buffbot_selectedRow = row
+    BfBot.UI._OnSpellRowAction(cell)
+    BfBot.UI._ProjectVisibleSelection()
 end
 
 -- ============================================================
@@ -838,6 +933,7 @@ function BfBot.UI._OnMenusLoaded()
         EEex_Menu_AddBeforeUIItemRenderListener("bbPickFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbImpFrame", borderHook)
         EEex_Menu_AddBeforeUIItemRenderListener("bbVarFrame", borderHook)
+        EEex_Menu_AddBeforeUIItemRenderListener("bbQuickFrame", borderHook)
     end
 
     -- Hook WORLD_ACTIONBAR open/close to push/pop companion button menu
@@ -869,6 +965,8 @@ function BfBot.UI._OnMenusLoaded()
     -- Resolution change: regenerate MOS for every theme, clamp stored geometry, re-layout
     EEex_Menu_AddWindowSizeChangedListener(BfBot._SafeCallback(
         "ui.window_size_changed", function(w, h)
+        BfBot.UI._CloseQuickMenu()
+        if BfBot.UI._ActionbarVisible() then BfBot.UI._OpenActionbarBtn() end
         for _, resref in ipairs({"BFBOTBG", "BFBOTBG2", "BFBOTBG3"}) do
             BfBot.UI._GenerateBgMOS(resref)
         end
@@ -906,16 +1004,115 @@ end
 -- ============================================================
 
 function BfBot.UI._OpenActionbarBtn()
-    -- Position flush to the right of WORLD_ACTIONBAR at any resolution
+    local sw, sh = Infinity_GetScreenSize()
     local ax, ay, aw, ah = EEex_Menu_GetArea("WORLD_ACTIONBAR")
-    if ax then
-        Infinity_SetOffset("BUFFBOT_ACTIONBAR", ax + aw, ay)
+    if not sw or not sh or not ax then return end
+    local x, y = ax + aw, ay + ah - 56
+    -- UI++'s artwork can span several screens. Dock to its actual controls
+    -- when present; otherwise use the stock actionbar's bottom edge.
+    if RgIsModernHud == 1 and EEex_Menu_GetItemArea then
+        local bx, by, bw, bh = EEex_Menu_GetItemArea("rgActionbarGoldernButton11")
+        if bx and bw and bw > 0 then
+            x, y = bx + bw + 4, by + bh - 56
+            if x + 56 > sw then
+                local left = EEex_Menu_GetItemArea("rgActionbarButton1")
+                x = (left or bx) - 60
+            end
+        end
     end
-    Infinity_PushMenu("BUFFBOT_ACTIONBAR")
+    x, y = math.max(0, math.min(sw - 56, x)), math.max(0, math.min(sh - 56, y))
+    BfBot.UI._hudX, BfBot.UI._hudY = x, y
+    Infinity_SetOffset("BUFFBOT_ACTIONBAR", x, y)
+    local open = Infinity_IsMenuOnStack("BUFFBOT_ACTIONBAR")
+    if open ~= true and open ~= 1 then Infinity_PushMenu("BUFFBOT_ACTIONBAR") end
 end
 
 function BfBot.UI._CloseActionbarBtn()
+    if BfBot.Fast and BfBot.Fast.run then
+        BfBot.Fast.Release("world controls hidden")
+        BfBot.Exec.Stop()
+    end
+    BfBot.UI._CloseQuickMenu()
     Infinity_PopMenu("BUFFBOT_ACTIONBAR")
+end
+
+function BfBot.UI._ActionbarVisible()
+    local visible = Infinity_IsMenuOnStack("WORLD_ACTIONBAR")
+    return e and worldScreen and e:GetActiveEngine() == worldScreen
+        and (visible == true or visible == 1)
+end
+
+function BfBot.UI._ActionbarTick()
+    local now = Infinity_GetClockTicks()
+    if BfBot.UI._hudTick and now >= BfBot.UI._hudTick and now - BfBot.UI._hudTick < 250 then return false end
+    BfBot.UI._hudTick = now
+    if BfBot.UI._ActionbarVisible() then BfBot.UI._OpenActionbarBtn()
+    else BfBot.UI._CloseQuickMenu() end
+    return false
+end
+
+function BfBot.UI._CloseQuickMenu()
+    local open = Infinity_IsMenuOnStack("BUFFBOT_QUICK_PRESETS")
+    if open == true or open == 1 then Infinity_PopMenu("BUFFBOT_QUICK_PRESETS") end
+    BfBot.UI._quickPresets = nil
+end
+
+function BfBot.UI._QuickPresetName(row)
+    local entry = BfBot.UI._quickPresets and BfBot.UI._quickPresets[row]
+    return entry and entry.name or ""
+end
+
+function BfBot.UI._ToggleQuickMenu()
+    local open = Infinity_IsMenuOnStack("BUFFBOT_QUICK_PRESETS")
+    if open == true or open == 1 then return BfBot.UI._CloseQuickMenu() end
+    if not BfBot.UI._ActionbarVisible() then return end
+    local owner = BfBot.Persist._GetProtagonist()
+    local config = owner and BfBot.Persist.GetConfig(owner)
+    if not config or not config.presets then return end
+    local rows = {}
+    for index = 1, BfBot.MAX_PRESETS do
+        local preset = config.presets[index]
+        if preset then rows[#rows + 1] = { index = index, preset = preset,
+            name = preset.name or BfBot.L10N.Format("default.preset.indexed", { index = index }),
+            ownerId = owner.m_id, ownerName = BfBot._GetName(owner) } end
+    end
+    if #rows == 0 then return end
+    BfBot.UI._quickPresets = rows
+    local sw, sh = Infinity_GetScreenSize()
+    local margin, w = 28, math.min(300, sw - 56)
+    local rowH = math.min(34, math.floor((sh - 2 * margin - 44) / #rows))
+    local h = 44 + #rows * rowH
+    local x = math.max(margin, math.min(sw - w - margin, BfBot.UI._hudX or sw))
+    local y = math.max(margin, math.min(sh - h - margin, (BfBot.UI._hudY or sh) - h - margin))
+    Infinity_SetArea("bbQuickOutside", 0, 0, sw, sh)
+    for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
+        Infinity_SetArea(name, x, y, w, h)
+    end
+    Infinity_SetArea("bbQuickFrame", x - 24, y - 24, w + 48, h + 48)
+    Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
+    for i = 1, BfBot.MAX_PRESETS do
+        Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
+    end
+    Infinity_PushMenu("BUFFBOT_QUICK_PRESETS")
+end
+
+function BfBot.UI._CastQuickPreset(row)
+    local entry = BfBot.UI._quickPresets and BfBot.UI._quickPresets[row]
+    BfBot.UI._CloseQuickMenu()
+    if not entry or not BfBot.UI._ActionbarVisible() or BfBot.Exec.GetState() == "running" then return end
+    local owner = BfBot.Persist._GetProtagonist()
+    if not owner or owner.m_id ~= entry.ownerId or BfBot._GetName(owner) ~= entry.ownerName then return end
+    local config = BfBot.Persist.GetConfig(owner)
+    if not config or config.presets[entry.index] ~= entry.preset then return end
+    BfBot.Scan.InvalidateAll()
+    BfBot.Persist.DrainBuildSkips()
+    local queue = BfBot.Persist.BuildQueueFromPreset(entry.index)
+    if not queue or #queue == 0 then
+        BfBot.Persist.DrainBuildSkips()
+        BfBot._Display(BfBot.L10N.Get("feedback.no_spells_preset"))
+        return
+    end
+    return BfBot.UI._StartRun(queue, BfBot.Persist.GetQuickCast(owner, entry.index), entry.index)
 end
 
 -- ============================================================
@@ -999,11 +1196,38 @@ function BfBot.UI._Layout()
     setArea("bbRen", renX, preY, renW, preH)
     setArea("bbNew", renX + renW + preGap, preY, newW, preH)
 
+    -- Search stays separate from preset order. Casting speed belongs beside
+    -- it as a global run preference, leaving per-preset Quick Cast below.
+    local searchY, searchH, speedW = py + 98, 26, 130
+    setArea("bbSearchLabel", cx, searchY, 70, searchH)
+    setArea("bbSearchBg", cx + 72, searchY, cw - 72 - 64 - speedW - 12, searchH)
+    setArea("bbSearch", cx + 78, searchY + 2, cw - 84 - 64 - speedW - 12, searchH - 4)
+    setArea("bbSearchClear", cx + cw - speedW - 70, searchY, 60, searchH)
+    setArea("bbSpeed", cx + cw - speedW, searchY, speedW, searchH)
+    -- Column headers sit in their own strip directly above the list, aligned
+    -- to the list's column widths. The engine reserves the scrollbar strip
+    -- from the list's content area, so the headers divide what is left of it.
+    local hdrY = py + 130
+    local hdrH = 20
+    local scrollbarW = 16
+    local colW = math.max(cw - scrollbarW, 1)
+    local function header(name, startPct, widthPct)
+        setArea(name, cx + math.floor(colW * startPct / 100), hdrY,
+                math.floor(colW * widthPct / 100), hdrH)
+    end
+    header("bbHName", 16, 26)
+    header("bbHDur",  42, 10)
+    header("bbHUses", 52, 10)
+    header("bbHRep",  62,  8)
+    header("bbHTgt",  70, 24)
+    header("bbHLock", 94,  6)
+
     -- Spell list (fills middle area)
-    local listY = py + 98
+    local listY = hdrY + hdrH
     local footerH = 130
-    local listH = math.max(ph - 98 - footerH, 50)
+    local listH = math.max(ph - 130 - hdrH - footerH, 50)
     setArea("bbList", cx, listY, cw, listH)
+    setArea("bbSearchEmpty", cx + 10, listY + 8, cw - 20, 28)
 
     -- Bottom rows (positioned from panel bottom)
     local btnH = 28
@@ -1162,6 +1386,7 @@ end
 -- ============================================================
 
 function BfBot.UI.Toggle()
+    BfBot.UI._CloseQuickMenu()
     if Infinity_IsMenuOnStack("BUFFBOT_MAIN") then
         Infinity_PopMenu("BUFFBOT_MAIN")
     else
@@ -1482,7 +1707,9 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             durCat   = durCat,
             durCatText = BfBot.UI._CategoryText(durCat),
             count    = count,
-            countText = count > 0 and ("x" .. count) or "--",
+            countText = scan and scan.requiresChoice == 1 and BfBot.L10N.Get("ui.manual_only")
+                or (count > 0 and ("x" .. count) or "--"),
+            requiresChoice = scan and scan.requiresChoice or 0,
             rep      = rep,
             repeatText = repeatDisplay.compact,
             on       = spellCfg.on or 0,
@@ -2175,12 +2402,28 @@ end
 --- the panel (F12 innates, console queues) pass nothing and keep the global
 --- RefreshBelow option.
 function BfBot.UI._StartRun(queue, qcMode, presetIdx)
-    local started = BfBot.Exec.Start(queue, qcMode, presetIdx,
-        BfBot.UI._forceMode or 0)
+    local rate = BfBot.UI._FastForwardRate()
+    local forceMode = BfBot.UI._forceMode or 0
+    local started, reason, detail
+    if rate > 1 then
+        if BfBot.Fast and BfBot.Fast.Start then
+            started, reason, detail = BfBot.Fast.Start(queue, rate, presetIdx,
+                forceMode)
+        else
+            started, reason = false, "reason.exec.fast_unavailable"
+        end
+    else
+        started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx,
+            forceMode)
+    end
     if started then
         BfBot.UI._SurfaceBuildSkips()
     else
         BfBot.Persist.DrainBuildSkips()
+        if reason == "reason.exec.fast_unavailable" then
+            BfBot._Display(BfBot.L10N.Get("reason.exec.fast_unavailable"))
+            if detail and detail.reason then BfBot._Warn("Fast-forward: " .. tostring(detail.reason)) end
+        end
     end
     return started
 end
@@ -2488,6 +2731,8 @@ function BfBot.UI.MoveSpellUp()
         buffbot_spellTable[target], buffbot_spellTable[row]
     BfBot.UI._RenumberPriorities()
     buffbot_selectedRow = target
+    BfBot.UI._CaptureSpellSelection(target, true)
+    BfBot.UI._RestoreSpellSelection()
 end
 
 --- Move the selected spell down to the next unlocked row.
@@ -2502,6 +2747,8 @@ function BfBot.UI.MoveSpellDown()
         buffbot_spellTable[target], buffbot_spellTable[row]
     BfBot.UI._RenumberPriorities()
     buffbot_selectedRow = target
+    BfBot.UI._CaptureSpellSelection(target, true)
+    BfBot.UI._RestoreSpellSelection()
 end
 
 --- Sort the current preset's spell list by duration (longest first).
@@ -2574,11 +2821,11 @@ end
 
 --- Build the picker list: castable spells/items the user can add to the preset.
 --- Includes non-buff spells (manual inclusion) and previously-excluded buffs
---- (recovery from accidental Remove). Items ride the same excluded-buff path:
---- they auto-merge into presets as buffs, so they only surface here after the
---- user removed them (ovr == -1). The list is sectioned by kind — a [Spells]
---- header row, spell rows, an [Items] header row, item rows; a section with
---- no rows is omitted. Excluded entries sort to the top of their section.
+--- (recovery from accidental Remove), plus supported item powers retained
+--- by the scanner when classification missed them. Interactive item powers
+--- remain visibly manual-only. The list is sectioned by kind - a [Spells]
+--- header row, spell rows, an [Items] header row, item rows; empty sections
+--- are omitted. Excluded entries sort to the top of their section.
 function BfBot.UI._BuildPickerList()
     buffbot_pickerSpells = {}
     buffbot_pickerSelected = 0
@@ -2597,13 +2844,12 @@ function BfBot.UI._BuildPickerList()
         -- Skip entries with no classification
         if not scan.class then goto nextSpell end
         local ovr = config.ovr and config.ovr[resref]
-        -- Items use the picker only as a per-character recovery path. A
-        -- classifier override is process-global, so another character's
-        -- exclusion must not surface this item here without a matching local
-        -- persisted override. Spells retain the general non-buff add path.
-        if scan.kind == "itm" then
-            if ovr ~= -1 then goto nextSpell end
-        elseif scan.class.isBuff and ovr ~= -1 then
+        -- Ordinary classifier misses are manually addable. Process-global
+        -- overrides from another character must not leak into this picker.
+        if scan.kind == "itm" and scan.class.overridden and ovr == nil then
+            goto nextSpell
+        end
+        if scan.class.isBuff and ovr ~= -1 then
             goto nextSpell
         end
 
@@ -2613,7 +2859,8 @@ function BfBot.UI._BuildPickerList()
             name     = scan.name or resref,
             icon     = scan.icon or "",
             durCat   = scan.durCat or "?",
-            durCatText = BfBot.UI._CategoryText(scan.durCat),
+            durCatText = scan.requiresChoice == 1 and BfBot.L10N.Get("ui.manual_only")
+                or BfBot.UI._CategoryText(scan.durCat),
             count    = scan.count or 0,
             excluded = (ovr == -1) and 1 or 0,
         })
@@ -3003,6 +3250,13 @@ function BfBot.UI._SpellNameColor(row)
     return _parseColor(BfBot.UI._T("text"))
 end
 
+function BfBot.UI._SpellRowTooltip(row)
+    local entry = buffbot_spellTable[row]
+    if not entry then return "" end
+    if entry.requiresChoice == 1 then return BfBot.L10N.Get("reason.item.manual_selection") end
+    return entry.name or entry.resref
+end
+
 --- Picker name color: section-header tint for header rows, bronze tint for
 --- item rows, normal text tint for spell rows.
 function BfBot.UI._PickerNameColor(row)
@@ -3025,16 +3279,46 @@ function BfBot.UI._RepeatColor(row)
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
+-- The checkbox and lock cells render as art when buffbot/visual is installed
+-- and fall back to text markers when it is not (see BfBot.Theme.HasControlArt).
+-- Both the text label and the BAM label exist in the column; each blanks itself
+-- in the other's case, so exactly one is ever visible.
+
 function BfBot.UI._CheckboxText(row)
+    if BfBot.Theme.HasControlArt() then return "" end
     local entry = buffbot_spellTable[row]
     if entry and entry.on == 1 then return "[X]" end
     return "[ ]"
+end
+
+--- Checkbox art for the active skin, or "" to leave the cell to the text.
+function BfBot.UI._CheckBam()
+    if not BfBot.Theme.HasControlArt() then return "" end
+    return "BFBCHK" .. BfBot.Theme.ControlSkin()
+end
+
+--- BFBCHK cycle 0 is the skin's check mark, cycle 1 its empty box.
+function BfBot.UI._CheckSeq(row)
+    local entry = buffbot_spellTable[row]
+    return (entry and entry.on == 1) and 0 or 1
+end
+
+--- Lock art: the "blocked" glyph on locked rows only. An unlocked row stays
+--- empty rather than showing a second box — the column header names it, and
+--- the glyph sheet has no neutral "unlocked" symbol to pair with it.
+function BfBot.UI._LockBam(row)
+    if not BfBot.Theme.HasControlArt() then return "" end
+    if BfBot.UI._view == "summons" then return "" end
+    local entry = buffbot_spellTable[row]
+    if not entry or entry.lock ~= 1 then return "" end
+    return "BFBGLYPH"
 end
 
 --- Lock column display text. The summons view has no lock feature (the v9
 --- summon spell-entry schema has no lock field) — the column stays blank.
 function BfBot.UI._LockText(row)
     if BfBot.UI._view == "summons" then return "" end
+    if BfBot.Theme.HasControlArt() then return "" end
     local entry = buffbot_spellTable[row]
     if entry and entry.lock == 1 then
         return BfBot.L10N.Get("ui.lock.compact")
@@ -3157,6 +3441,7 @@ function BfBot.UI._UpdateSummonQc()
 end
 
 function BfBot.UI.CycleQuickCast()
+    if BfBot.UI._FastForwardRate() > 1 then return end
     if BfBot.UI._view == "summons" then
         local sel = BfBot.UI._SelectedSummon()
         local preset = sel and BfBot.Persist.PeekSummonPreset(
@@ -3175,6 +3460,7 @@ end
 
 function BfBot.UI._QuickCastLabel()
     if not buffbot_isOpen then return "" end
+    if BfBot.UI._FastForwardRate() > 1 then return BfBot.L10N.Get("ui.quick_cast.suspended") end
     local qc = BfBot.UI._ViewQuickCast()
     if qc == 1 then return BfBot.L10N.Get("ui.quick_cast.long") end
     if qc == 2 then return BfBot.L10N.Get("ui.quick_cast.all") end
@@ -3182,6 +3468,7 @@ function BfBot.UI._QuickCastLabel()
 end
 
 function BfBot.UI._QuickCastColor()
+    if BfBot.UI._FastForwardRate() > 1 then return _parseColor(BfBot.UI._T("textMuted")) end
     local qc = BfBot.UI._ViewQuickCast()
     if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
     if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
@@ -3189,6 +3476,7 @@ function BfBot.UI._QuickCastColor()
 end
 
 function BfBot.UI._QuickCastTooltip()
+    if BfBot.UI._FastForwardRate() > 1 then return BfBot.L10N.Get("ui.quick_cast.tooltip_suspended") end
     local qc = BfBot.UI._ViewQuickCast()
     if qc == nil then
         return BfBot.L10N.Get("ui.quick_cast.tooltip_unavailable")
@@ -3199,6 +3487,29 @@ function BfBot.UI._QuickCastTooltip()
 end
 
 -- ============================================================
+-- Global simulation speed (per-preset Quick Cast remains saved separately).
+function BfBot.UI._FastForwardRate()
+    local rate = BfBot.Persist.GetPref and BfBot.Persist.GetPref("FastForward") or 1
+    return (rate == 2 or rate == 4) and rate or 1
+end
+
+function BfBot.UI.CycleFastForward()
+    if BfBot.Exec.GetState() == "running" then return end
+    local rate = BfBot.UI._FastForwardRate()
+    BfBot.Persist.SetPref("FastForward", rate == 1 and 2 or rate == 2 and 4 or 1)
+end
+
+function BfBot.UI._FastForwardLabel()
+    local rate = BfBot.UI._FastForwardRate()
+    if rate == 2 then return BfBot.L10N.Get("ui.speed.2x") end
+    if rate == 4 then return BfBot.L10N.Get("ui.speed.4x") end
+    return BfBot.L10N.Get("ui.speed.normal")
+end
+
+function BfBot.UI._FastForwardTooltip()
+    return BfBot.L10N.Get("ui.speed.tooltip")
+end
+
 -- Force Re-Cast (active-buff policy for the next run, issue #84)
 -- ============================================================
 

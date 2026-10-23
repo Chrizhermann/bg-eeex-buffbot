@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pytest
 from lupa.luajit21 import LuaRuntime
@@ -40,7 +41,12 @@ def ui_lua() -> LuaRuntime:
             },
             Persist = {},
             Class = {},
-            Theme = {},
+            -- Control art off by default, so rows render their text markers.
+            -- Tests that want the themed cells flip HasControlArt.
+            Theme = {
+                HasControlArt = function() return false end,
+                ControlSkin = function() return 3 end,
+            },
             _GetName = function(sprite) return sprite and sprite.name or "" end,
             _SafeCallback = function(_, callback) return callback end,
             _Warn = function(_) end,
@@ -296,7 +302,7 @@ def test_refresh_clears_stale_selection_when_config_disappears(
 
 
 def test_main_spell_list_routes_row_actions_through_selection_controller() -> None:
-    assert 'action      "BfBot.UI._OnSpellRowAction(cellNumber)"' in MENU_SOURCE
+    assert 'action      "BfBot.UI._OnVisibleSpellRowAction(cellNumber)"' in MENU_SOURCE
 
 
 def test_unavailable_spell_remains_muted_but_can_be_toggled(
@@ -361,7 +367,7 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
     assert facts["colorBeforeR"] == 4
     assert facts["colorAfterR"] == 4
     assert (
-        'greyscale lua "buffbot_spellTable[rowNumber].castable == 0"'
+        'greyscale lua "not buffbot_visibleSpells[rowNumber] or buffbot_visibleSpells[rowNumber].castable == 0"'
         in MENU_SOURCE
     )
 
@@ -1293,3 +1299,65 @@ def test_in_game_test_source_parses_under_luajit() -> None:
     runtime = LuaRuntime(unpack_returned_tuples=True)
     runtime.execute("BfBot = { _Print = function(_) end }")
     runtime.execute(TEST_SOURCE)
+
+
+@pytest.mark.parametrize("phase", ["SpellLockOrder", "SelectionRefresh"])
+@pytest.mark.parametrize("query", ["", "no matching live spell", "Protection"])
+@pytest.mark.parametrize("raise_in_fixture", [False, True])
+def test_in_game_selection_fixtures_isolate_and_restore_search(
+    ui_lua: LuaRuntime, phase: str, query: str, raise_in_fixture: bool
+) -> None:
+    ui_lua.execute("BfBot._Print = function(_) end")
+    ui_lua.execute(TEST_SOURCE)
+    ui_lua.globals().fixtureQuery = query
+    ui_lua.execute(
+        """
+        liveRows = { {resref='LIVE', name='Protection', hasVariants=0} }
+        visibleRows = { liveRows[1] }
+        visibleIndices = { 1 }
+        visibleContext = { testMarker='live context' }
+        buffbot_spellTable = liveRows
+        buffbot_selectedRow = 1
+        buffbot_searchText = fixtureQuery
+        buffbot_visibleSpells = visibleRows
+        buffbot_visibleSelectedRow = 1
+        BfBot.UI._appliedSearchText = 'previous rendered query'
+        BfBot.UI._visibleSpellIndices = visibleIndices
+        BfBot.UI._visibleSpellContext = visibleContext
+        """
+    )
+    if raise_in_fixture:
+        method = "SortByDuration" if phase == "SpellLockOrder" else "_OnSpellRowAction"
+        ui_lua.execute(f'BfBot.UI.{method} = function() error("fixture failure") end')
+
+    passed = ui_lua.globals().BfBot.Test[phase]()
+
+    assert passed is not raise_in_fixture
+    assert ui_lua.execute(
+        """
+        return buffbot_spellTable == liveRows and buffbot_selectedRow == 1
+            and buffbot_searchText == fixtureQuery
+            and buffbot_visibleSpells == visibleRows
+            and buffbot_visibleSelectedRow == 1
+            and BfBot.UI._appliedSearchText == 'previous rendered query'
+            and BfBot.UI._visibleSpellIndices == visibleIndices
+            and BfBot.UI._visibleSpellContext == visibleContext
+        """
+    )
+
+
+def test_status_label_tracks_executor_without_refresh(ui_lua: LuaRuntime) -> None:
+    binding = re.search(r'name\s+"bbStatus".*?text lua\s+"([^"]+)"', MENU_SOURCE, re.S)
+    assert binding is not None
+    ui_lua.execute(
+        """
+        nativeState = 'running'
+        BfBot.Exec.GetState = function() return nativeState end
+        buffbot_status = 'Casting...'
+        """
+    )
+    assert ui_lua.eval(binding.group(1)) == "Casting..."
+    ui_lua.globals().nativeState = "done"
+    assert ui_lua.eval(binding.group(1)) == "Done"
+    ui_lua.globals().nativeState = "stopped"
+    assert ui_lua.eval(binding.group(1)) == "Stopped"

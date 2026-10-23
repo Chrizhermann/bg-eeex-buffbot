@@ -176,6 +176,7 @@ def test_spell_and_item_resref_collisions_use_separate_classifier_caches() -> No
     facts = lua.execute(
         """
         BfBot.Class.GetDuration = function() return 0, nil, {} end
+        BfBot.Class._IterateFeatureBlocks = function() end
         BfBot.Class.ScoreTargeting = function(ability)
             return ability.buff and 3 or -3, ability.buff
         end

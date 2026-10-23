@@ -93,6 +93,28 @@ Raw/manual copying is a development-only path from a source checkout, not the no
 - **F11** — keyboard shortcut
 - **F12 innates** — per-preset abilities in each character's special abilities
 
+In the unreleased development version, **right-click the actionbar gear** to
+choose a named party preset directly. This uses the existing preset slot across
+the party; each character keeps its own spells and targets. F12 shortcuts remain.
+
+The panel's **Search** field filters buff names for browsing. It does not change
+the preset's enabled entries, saved priorities, or casting queue. Clear the search
+to see the complete list again.
+
+The new **Speed** control selects Normal (default), 2x or 4x across preset starts.
+At 2x/4x, the whole game simulation advances faster during casting, including
+enemies and buff timers. Spells, selected variants and items retain engine-paced
+casting and resource use. Quick Cast is suspended during these accelerated runs; selecting
+Normal restores use of the saved Quick Cast settings. Rendering/FPS settings are
+unchanged. Acceleration is single-player only and stops on combat or unsafe UI
+transitions. The previous simulation rate is restored when the run ends or stops.
+Native BG2:EE 2.7.3.0 / EEex 1.3.1 tests cover two casters, items, selected variants,
+buff expiry and interruption/rate restoration. A subsequent EET/Spell Revisions/
+SCS/modpack lab also passed this bounded matrix with experimental Scroll component
+430 uninstalled and the published alpha.13 banking fix installed. The 430-inclusive
+configuration remains unaccepted. BG:EE and experimental 5E acceleration are outside
+that test's scope. See [measurements and limits](docs/validation-fork-qol.md).
+
 ### Basic Workflow
 
 1. Open the panel (F11 or actionbar button)
@@ -157,7 +179,7 @@ In **EEex options → BuffBot → Inventory item use**, choose:
 
 Automatic swapping skips chest armor, gear the character cannot wear, and items with conditional usability restrictions. It also skips ambiguous equipment copies with the same item resource; equip the desired copy manually to use it. Unfinished swaps are recorded in the save for recovery after interruption or loading. If the relevant equipment has changed manually, BuffBot leaves it alone instead of overwriting the change.
 
-Scrolls, wands, and items inside containers or Bags of Holding remain unsupported. The expanded item support has been inspected offline against BG2:EE 2.6.6.0; deployment and in-game acceptance on BG:EE/BG2:EE are still pending.
+Scrolls, wands, and items inside containers or Bags of Holding remain unsupported. Native BG2:EE 2.7.3.0 / EEex 1.3.1 tests now cover potion and amulet consumption, temporary swaps into occupied and empty equipment slots, and restoration after Stop. This is bounded item coverage; BG:EE and the wider mod/item matrix remain unverified. See [the validation record](docs/validation-fork-qol.md).
 
 ### Summons and Clones
 
@@ -291,6 +313,8 @@ bg-eeex-buffbot/
 
 ## Credits
 
+- **[Zach Hopkins](https://github.com/zach-hopkins/bg-eeex-buffbot)** — BuffBot Redux ideas and source contributions for HUD preset access, item discovery, child-spell durations, active-effect matching, temporary simulation acceleration and the themed control artwork
+- **[Pecca](https://www.gibberlings3.net/mods/ui/infinity-ui/)** — Infinity UI++, the artwork BuffBot's themed controls derive from, used with permission (see [ATTRIBUTION](ATTRIBUTION.md))
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
 - **[5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting)** by subtledoctor — the casting system used by BuffBot's experimental 5E compatibility
@@ -302,4 +326,6 @@ bg-eeex-buffbot/
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) for BuffBot's own code. The themed control artwork under
+`buffbot/visual/` is used with permission and is not covered by it — see
+[ATTRIBUTION](ATTRIBUTION.md) before redistributing it.

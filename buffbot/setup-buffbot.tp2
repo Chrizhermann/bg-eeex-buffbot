@@ -1,6 +1,6 @@
 BACKUP ~weidu_external/backup/buffbot~
 AUTHOR ~Chrizhermann (github.com/Chrizhermann/bg-eeex-buffbot)~
-VERSION ~v1.11.0~
+VERSION ~v1.12.0~
 
 ALWAYS
 // Shared by both components so main validates exactly the state the helper
@@ -385,6 +385,7 @@ COPY ~buffbot/BfBotCls.lua~  ~override~
 COPY ~buffbot/BfBotScn.lua~  ~override~
 COPY ~buffbot/BfBot5e.lua~   ~override~
 COPY ~buffbot/BfBotExe.lua~  ~override~
+COPY ~buffbot/BfBotFst.lua~  ~override~
 COPY ~buffbot/BfBotMp.lua~   ~override~
 COPY ~buffbot/BfBotPer.lua~  ~override~
 COPY ~buffbot/BfBotInn.lua~  ~override~
@@ -416,6 +417,12 @@ COPY ~buffbot/MOS9921.PVRZ~ ~override~
 COPY ~buffbot/MOS9922.PVRZ~ ~override~
 COPY ~buffbot/MOS9923.PVRZ~ ~override~
 COPY ~buffbot/BFBOTFR3.PVRZ~ ~override~
+
+// ---- Themed control art (checkboxes, tabs, plates, scrollbar, glyphs) ----
+// BFB*.BAM are BAM V2, so their pixels live in the numbered PVRZ pages beside
+// them (88809-88993). Copying the folder keeps the BAMs and their pages
+// together; see ATTRIBUTION.md for the artwork's terms.
+COPY ~buffbot/visual~ ~override~
 
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~

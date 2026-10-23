@@ -219,18 +219,6 @@
 @452 = ~R{count}~
 // ui.lock.compact
 @453 = ~[B]~
-// ui.force_recast.off
-@454 = ~Active: Skip~
-// ui.force_recast.low
-@455 = ~Active: Refresh Low~
-// ui.force_recast.all
-@456 = ~Active: Force All~
-// ui.force_recast.tooltip_off
-@457 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
-// ui.force_recast.tooltip_low
-@458 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
-// ui.force_recast.tooltip_all
-@459 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
 
 // feedback.no_luajit
 @500 = ~BuffBot: LuaJIT não foi detectado. As habilidades especiais do F12, a conjuração rápida, a exportação/importação e o registro estão desativados. Instale o componente EEex LuaJIT para ter todas as funcionalidades.~
@@ -378,6 +366,56 @@
 @715 = ~Usar do inventário~
 // options.item_use_swap
 @716 = ~Equipar, usar e restaurar~
+// ui.search
+@454 = ~Buscar~
+// ui.search.no_matches
+@455 = ~Nenhuma magia ou item correspondente~
+// ui.quick_presets
+@456 = ~Executar predefinição do grupo~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: clique esquerdo para configurar; clique direito para executar uma predefinição do grupo~
+// ui.manual_only
+@458 = ~Manual~
+// ui.speed.normal
+@460 = ~Velocidade: normal~
+// ui.speed.2x
+@461 = ~Velocidade: 2x~
+// ui.speed.4x
+@462 = ~Velocidade: 4x~
+// ui.speed.tooltip
+@463 = ~Aplica-se a todas as predefinições. 2x e 4x aceleram temporariamente todo o jogo com as regras normais de conjuração. Normal usa a configuração salva de Conjuração rápida. Clique para alternar.~
+// ui.quick_cast.suspended
+@464 = ~Conjuração rápida: suspensa~
+// ui.quick_cast.tooltip_suspended
+@465 = ~A aceleração usa as regras normais de conjuração. A configuração de Conjuração rápida permanece salva e volta a valer na velocidade normal.~
+// ui.header.spell
+@466 = ~Magia / Item~
+// ui.header.duration
+@467 = ~Duração~
+// ui.header.uses
+@468 = ~Usos~
+// ui.header.repeats
+@469 = ~Rep.~
+// ui.header.target
+@470 = ~Alvo~
+// ui.header.lock
+@471 = ~Trava~
+// ui.force_recast.off
+@472 = ~Active: Skip~
+// ui.force_recast.low
+@473 = ~Active: Refresh Low~
+// ui.force_recast.all
+@474 = ~Active: Force All~
+// ui.force_recast.tooltip_off
+@475 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
+// ui.force_recast.tooltip_low
+@476 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
+// ui.force_recast.tooltip_all
+@477 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
+// reason.item.manual_selection
+@552 = ~Este item abre um menu de seleção. Use-o manualmente; o BuffBot o ignora.~
+// reason.exec.fast_unavailable
+@553 = ~A aceleração não está disponível aqui. Selecione a velocidade normal e tente novamente.~
 // options.refresh_below
 @717 = ~Refresh buffs that are nearly over~
 // options.refresh_below_description

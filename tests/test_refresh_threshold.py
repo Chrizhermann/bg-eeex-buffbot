@@ -974,14 +974,29 @@ def test_innate_path_passes_no_force_mode_and_keeps_the_global_option() -> None:
 
 def test_every_panel_cast_path_carries_the_toggle_through_start_run() -> None:
     source = UI_SOURCE
+    assert "local forceMode = BfBot.UI._forceMode or 0" in source
+    # _StartRun dispatches on the simulation rate, and both branches must carry
+    # the same policy: fast-forward may not change what a run skips.
+    assert "BfBot.Fast.Start(queue, rate, presetIdx,\n                forceMode)" in source
     assert (
-        "BfBot.Exec.Start(queue, qcMode, presetIdx,\n"
-        "        BfBot.UI._forceMode or 0)"
+        "BfBot.Exec.Start(queue, qcMode, presetIdx,\n            forceMode)"
     ) in source
     # Cast All, Cast Character and the summons cast all go through _StartRun,
-    # so none of them may call Exec.Start itself.
+    # so none of them may start a run itself.
     assert source.count("BfBot.Exec.Start(") == 1
-    assert source.count("BfBot.UI._StartRun(") == 4  # 1 definition + 3 callers
+    assert source.count("BfBot.Fast.Start(") == 1
+    # Cast All, Cast Character, the summons cast and the HUD preset picker.
+    assert source.count("BfBot.UI._StartRun(") == 5  # 1 definition + 4 callers
+
+
+def test_the_accelerated_path_hands_the_policy_straight_to_exec() -> None:
+    # Fast.Start copies the queue and clears Quick Cast on it, so the policy
+    # has to travel as its own argument or the toggle would die at 2x/4x.
+    source = (ROOT / "buffbot/BfBotFst.lua").read_text(encoding="utf-8")
+    assert "function F.Start(queue, multiplier, presetIdx, forceMode)" in source
+    assert (
+        "pcall(BfBot.Exec.Start, copy, 0,\n        presetIdx, forceMode)"
+    ) in source
 
 
 def test_the_toggle_is_never_written_to_the_save_or_the_ini() -> None:

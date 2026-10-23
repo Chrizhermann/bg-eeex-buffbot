@@ -113,7 +113,13 @@ def _runtime() -> LuaRuntime:
         EEex_Sprite_GetKnownPriestSpellsWithAbilityIterator = emptyIterator
         EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator = emptyIterator
         EEex_Action_QueueResponseStringOnAIBase = function(action, who)
-            assert(who == sprite); actions[#actions+1] = action
+            assert(who == sprite)
+            local destination = action:match('^XEquipItem%("[^"]*",Myself,(%d+),1%)$')
+            -- BG2EE 2.7.3 writes quickItems[3] over the sprite's name when
+            -- XEquipItem targets backpack slot 18. Reject it at queue time,
+            -- including unsafe actions later canceled by a recovery test.
+            assert(tonumber(destination) ~= 18, "unsafe native XEquipItem destination 18")
+            actions[#actions+1] = action
         end
         BfBot.Class.Classify = function()
             return { isBuff=true, isSelfOnly=true }
@@ -142,14 +148,22 @@ def _runtime() -> LuaRuntime:
             local action = table.remove(actions, 1)
             assert(action, "no queued engine action")
             history[#history+1] = action
-            local item, destination = action:match('^XEquipItem%("([^"]+)",Myself,(%d+),1%)$')
+            local item, destination = action:match('^XEquipItem%("([^"]*)",Myself,(%d+),1%)$')
             if item then
                 destination = tonumber(destination)
                 local source
-                for i = 0, 38 do
-                    if slots[i] and slots[i].pRes.resref:get() == item then
-                        assert(source == nil, "mock engine refuses ambiguous item")
-                        source = i
+                if item == "" then
+                    -- The native empty-resref path selects the first free
+                    -- backpack slot, then swaps it with the destination.
+                    for i = 18, 33 do
+                        if slots[i] == nil then source = i; break end
+                    end
+                else
+                    for i = 0, 38 do
+                        if slots[i] and slots[i].pRes.resref:get() == item then
+                            assert(source == nil, "mock engine refuses ambiguous item")
+                            source = i
+                        end
                     end
                 end
                 assert(source ~= nil, "mock engine item missing")
@@ -186,17 +200,19 @@ def _runtime() -> LuaRuntime:
                 step()
             end
         end
-        function setupSwap(category)
+        function setupSwap(category, packSlot)
+            packSlot = packSlot or testPack or 21
+            local equipSlot = category == 26 and 35 or category == 1 and 0 or 4
             defineItem("NEW", category or 32)
             defineItem("OLD", category or 32)
-            newItem = placeItem(21, "NEW")
-            oldItem = placeItem(category == 26 and 35 or 4, "OLD")
+            newItem = placeItem(packSlot, "NEW")
+            oldItem = placeItem(equipSlot, "OLD")
             if category == 26 then
                 for i=36,38 do
                     defineItem("W"..i,26); placeItem(i,"W"..i)
                 end
             end
-            row = {kind="itm",itemResref="NEW",itemSlot=21,itemType=category or 32,abilityIdx=1}
+            row = {kind="itm",itemResref="NEW",itemSlot=packSlot,itemType=category or 32,abilityIdx=1}
             entry = {kind="itm",resref="itm:NEW:1",itemResref="NEW",abilityIdx=1,
                 casterName="Wearer",spellName="Power",targetName="Wearer",
                 targetObj="Myself",targetSprite=sprite,leafResrefs={"NEW"}}
@@ -319,21 +335,64 @@ def test_physical_swap_use_restore_precedes_next_entry_and_restores_weapon_selec
     assert facts["warnings"] == 0
     sequence = facts["actionSequence"]
     assert sequence.index('XEquipItem("NEW",Myself,35,1)') < sequence.index("UseItemSlotAbility")
-    assert sequence.index("UseItemSlotAbility") < sequence.index('XEquipItem("NEW",Myself,21,1)')
-    assert sequence.index('XEquipItem("NEW",Myself,21,1)') < sequence.index("SelectWeaponAbility(36,2)")
+    assert sequence.index("UseItemSlotAbility") < sequence.index('XEquipItem("OLD",Myself,35,1)')
+    assert sequence.index('XEquipItem("OLD",Myself,35,1)') < sequence.index("SelectWeaponAbility(36,2)")
     assert sequence.index("SelectWeaponAbility(36,2)") < sequence.index("_Advance")
 
 
+@pytest.mark.parametrize("pack_slot", range(18, 34))
+@pytest.mark.parametrize("had_previous", [True, False], ids=["occupied", "empty"])
+def test_swap_restores_exact_backpack_slot_without_targeting_native_slot_18(
+    pack_slot: int, had_previous: bool,
+) -> None:
+    lua = _runtime()
+    lua.globals().testPack, lua.globals().hadPrevious = pack_slot, had_previous
+    facts = lua.execute(
+        """
+        setupSwap(1)
+        if not hadPrevious then slots[0]=nil end
+        defineItem("UNRELATED",32)
+        local unrelatedSlot=testPack==33 and 32 or 33
+        local unrelated=placeItem(unrelatedSlot,"UNRELATED")
+        assert(queueSwap()); drain()
+        return {
+            restored=slots[testPack]==newItem
+                and (hadPrevious and slots[0]==oldItem or not hadPrevious and slots[0]==nil),
+            unrelated=slots[unrelatedSlot]==unrelated,
+            earlierEmptySlotPreserved=testPack==18 or slots[18]==nil,
+            usedCorrectItem=#uses==1 and uses[1].item==newItem and uses[1].slot==0,
+            noJournal=BfBot.Persist.GetItemSwap(sprite)==nil,
+            advanced=#advances,warnings=#warnings,history=history,
+        }
+        """
+    )
+    assert facts["restored"] and facts["unrelated"] and facts["earlierEmptySlotPreserved"]
+    assert facts["usedCorrectItem"] and facts["noJournal"]
+    assert facts["advanced"] == 1 and facts["warnings"] == 0
+    exchanges = [action for action in facts["history"].values() if action.startswith("XEquipItem(")]
+    if had_previous:
+        restore = 'XEquipItem("OLD",Myself,0,1)'
+    elif pack_slot == 18:
+        restore = 'XEquipItem("",Myself,0,1)'
+    else:
+        restore = f'XEquipItem("NEW",Myself,{pack_slot},1)'
+    assert exchanges == ['XEquipItem("NEW",Myself,0,1)', restore]
+
+
+@pytest.mark.parametrize("pack_slot", [18, 21])
 @pytest.mark.parametrize("steps_before_stop", [0, 1])
-def test_stop_recovers_when_forward_swap_is_pending_or_has_executed(steps_before_stop: int) -> None:
+def test_stop_recovers_when_forward_swap_is_pending_or_has_executed(
+    steps_before_stop: int, pack_slot: int,
+) -> None:
     lua = _runtime()
     lua.globals().stepsBeforeStop = steps_before_stop
+    lua.globals().testPack = pack_slot
     facts = lua.execute(
         """
         setupSwap(); assert(queueSwap())
         for _=1,stepsBeforeStop do step() end
         BfBot.Exec.Stop(); drain()
-        return {restored=slots[21]==newItem and slots[4]==oldItem,
+        return {restored=slots[testPack]==newItem and slots[4]==oldItem,
             used=#uses,advanced=#advances,noJournal=BfBot.Persist.GetItemSwap(sprite)==nil,
             stopped=BfBot.Exec._state=="stopped",warnings=#warnings}
         """
@@ -342,10 +401,14 @@ def test_stop_recovers_when_forward_swap_is_pending_or_has_executed(steps_before
     assert facts["used"] == facts["advanced"] == facts["warnings"] == 0
 
 
+@pytest.mark.parametrize("pack_slot", [18, 21])
 @pytest.mark.parametrize("steps_before_cancel", [4, 5])
-def test_recovery_finishes_when_restore_exchange_or_its_completion_was_canceled(steps_before_cancel: int) -> None:
+def test_recovery_finishes_when_restore_exchange_or_its_completion_was_canceled(
+    steps_before_cancel: int, pack_slot: int,
+) -> None:
     lua = _runtime()
     lua.globals().stepsBeforeCancel = steps_before_cancel
+    lua.globals().testPack = pack_slot
     facts = lua.execute(
         """
         setupSwap(); assert(queueSwap())
@@ -357,7 +420,7 @@ def test_recovery_finishes_when_restore_exchange_or_its_completion_was_canceled(
         for _,action in ipairs(history) do
             if action:find("XEquipItem",1,true) then exchanges=exchanges+1 end
         end
-        return {phaseBefore=phaseBefore,restored=slots[21]==newItem and slots[4]==oldItem,
+        return {phaseBefore=phaseBefore,restored=slots[testPack]==newItem and slots[4]==oldItem,
             noJournal=BfBot.Persist.GetItemSwap(sprite)==nil,
             used=#uses,advanced=#advances,exchanges=exchanges,warnings=#warnings}
         """
@@ -368,8 +431,11 @@ def test_recovery_finishes_when_restore_exchange_or_its_completion_was_canceled(
     assert facts["advanced"] == facts["warnings"] == 0
 
 
-def test_duplicate_recovery_callbacks_exchange_equipment_back_only_once() -> None:
-    facts = _runtime().execute(
+@pytest.mark.parametrize("pack_slot", [18, 21])
+def test_duplicate_recovery_callbacks_exchange_equipment_back_only_once(pack_slot: int) -> None:
+    lua = _runtime()
+    lua.globals().testPack = pack_slot
+    facts = lua.execute(
         """
         setupSwap(); assert(queueSwap())
         for _=1,4 do step() end
@@ -386,7 +452,7 @@ def test_duplicate_recovery_callbacks_exchange_equipment_back_only_once() -> Non
         for _,action in ipairs(history) do
             if action:find("XEquipItem",1,true) then exchanges=exchanges+1 end
         end
-        return {newerAttempt=newerAttempt,restored=slots[21]==newItem and slots[4]==oldItem,
+        return {newerAttempt=newerAttempt,restored=slots[testPack]==newItem and slots[4]==oldItem,
             noJournal=BfBot.Persist.GetItemSwap(sprite)==nil,exchanges=exchanges,
             used=#uses,advanced=#advances,warnings=#warnings}
         """
@@ -439,16 +505,20 @@ def test_direct_inventory_potions_and_already_equipped_items_skip_exchanges(
     assert facts["used"] == 1 and facts["slot"] == slot and facts["ability"] == 1
 
 
+@pytest.mark.parametrize("pack_slot", [18, 21])
 @pytest.mark.parametrize("had_previous", [True, False])
-def test_consumed_item_restores_displaced_equipment_without_recreating_consumed_item(had_previous: bool) -> None:
+def test_consumed_item_restores_displaced_equipment_without_recreating_consumed_item(
+    had_previous: bool, pack_slot: int,
+) -> None:
     lua = _runtime()
     lua.globals().hadPrevious = had_previous
+    lua.globals().testPack = pack_slot
     facts = lua.execute(
         """
         setupSwap(); if not hadPrevious then slots[4]=nil end
         consumeOnUse=true
         assert(queueSwap()); drain()
-        return {packEmpty=slots[21]==nil,
+        return {packEmpty=slots[testPack]==nil,
             restored=hadPrevious and slots[4]==oldItem or not hadPrevious and slots[4]==nil,
             used=#uses,noJournal=BfBot.Persist.GetItemSwap(sprite)==nil,
             advanced=#advances,warnings=#warnings}
@@ -459,12 +529,20 @@ def test_consumed_item_restores_displaced_equipment_without_recreating_consumed_
     assert facts["warnings"] == 0
 
 
-def test_stale_callbacks_cannot_operate_a_new_swap_record() -> None:
-    facts = _runtime().execute(
+@pytest.mark.parametrize("pack_slot", [18, 21])
+@pytest.mark.parametrize("reload_module", [False, True])
+def test_stale_callbacks_cannot_operate_a_new_swap_record(reload_module: bool, pack_slot: int) -> None:
+    lua = _runtime()
+    lua.globals().testPack = pack_slot
+    lua.globals().reload_source = (
+        (ROOT / "buffbot/BfBotExe.lua").read_text(encoding="utf-8") if reload_module else None
+    )
+    facts = lua.execute(
         """
         setupSwap(); assert(queueSwap())
         local oldToken=BfBot.Persist.GetItemSwap(sprite).token
         drain()
+        if reload_source then assert(loadstring(reload_source))();setupSwap() end
         assert(queueSwap())
         local current=BfBot.Persist.GetItemSwap(sprite)
         local queued=#actions
@@ -473,7 +551,7 @@ def test_stale_callbacks_cannot_operate_a_new_swap_record() -> None:
         BfBot.Exec._ItemRestored(0,oldToken)
         return {newToken=current.token~=oldToken,recordUnchanged=BfBot.Persist.GetItemSwap(sprite)==current,
             noNewActions=#actions==queued,phase=current.phase,
-            untouched=slots[21]==newItem and slots[4]==oldItem,warnings=#warnings}
+            untouched=slots[testPack]==newItem and slots[4]==oldItem,warnings=#warnings}
         """
     )
     assert facts["newToken"] and facts["recordUnchanged"] and facts["noNewActions"]

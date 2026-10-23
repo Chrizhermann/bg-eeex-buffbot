@@ -23,7 +23,7 @@ PATCH_TLK_SCRIPT="$SCRIPT_DIR/patch_tlk.py"
 ENGLISH_TLK="$GAME_DIR/lang/en_US/dialog.tlk"
 
 # Verify source files exist
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotFst.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     if [ ! -f "$SRC_DIR/$f" ]; then
         echo "ERROR: $SRC_DIR/$f not found"
         exit 1
@@ -87,7 +87,7 @@ else
 fi
 
 # Copy source files
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotFst.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 
@@ -103,8 +103,13 @@ done
 
 
 # Copy BAM files (spell icons, actionbar icon, etc.)
-# Copy BAM files (spell icons, etc.)
 for f in "$SRC_DIR"/*.BAM; do
+    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
+done
+
+# Copy themed control art. The BFB*.BAM files are BAM V2, so their pixels live
+# in the numbered PVRZ pages beside them — both must land in override/.
+for f in "$SRC_DIR"/visual/*; do
     [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
 done
 

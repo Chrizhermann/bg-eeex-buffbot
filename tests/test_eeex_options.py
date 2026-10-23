@@ -119,6 +119,67 @@ def test_inventory_item_mode_radio_stages_selection_and_persists_both_choices(op
 
 
 @pytest.mark.parametrize(
+    ("palette", "skin"),
+    [
+        ("bg2_light", 3), ("bg2_dark", 3),
+        ("sod_light", 0), ("sod_dark", 0),
+        ("bg1_light", 2), ("bg1_dark", 2),
+    ],
+)
+def test_control_skin_follows_the_accent_and_ignores_dark_mode(
+    options_lua, palette, skin
+):
+    # BuffBot has no IWD palette, so skin 1 is deliberately unreachable.
+    actual = options_lua.execute(
+        """
+        BfBot.Theme._active = BfBot.Theme._palettes["%s"]
+        return BfBot.Theme.ControlSkin()
+        """ % palette
+    )
+    assert actual == skin
+
+
+def test_control_art_is_absent_without_the_resource_api(options_lua):
+    assert options_lua.execute(
+        """
+        EEex_Resource_Fetch = nil
+        BfBot.Theme._controlArt = nil
+        return BfBot.Theme.HasControlArt()
+        """
+    ) is False
+
+
+def test_control_art_requires_every_checkbox_skin_and_the_glyph_sheet(options_lua):
+    facts = options_lua.execute(
+        """
+        local asked = {}
+        EEex_Resource_Fetch = function(resref, kind)
+            asked[#asked + 1] = resref .. ":" .. kind
+            return resref ~= "BFBCHK2"
+        end
+        BfBot.Theme._controlArt = nil
+        local missing = BfBot.Theme.HasControlArt()
+
+        EEex_Resource_Fetch = function() return true end
+        BfBot.Theme._controlArt = nil
+        local present = BfBot.Theme.HasControlArt()
+
+        -- A second call must not re-ask the engine for every rendered row.
+        local calls = 0
+        EEex_Resource_Fetch = function() calls = calls + 1 return true end
+        local cached = BfBot.Theme.HasControlArt()
+        return { missing = missing, present = present, cached = cached,
+                 calls = calls, asked = table.concat(asked, " ") }
+        """
+    )
+    assert facts["missing"] is False
+    assert facts["present"] is True
+    assert facts["cached"] is True
+    assert facts["calls"] == 0
+    assert facts["asked"] == "BFBCHK0:BAM BFBCHK1:BAM BFBCHK2:BAM"
+
+
+@pytest.mark.parametrize(
     ("stored", "selected"),
     [
         (0, 1),

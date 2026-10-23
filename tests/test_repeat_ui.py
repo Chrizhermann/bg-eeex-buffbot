@@ -26,6 +26,11 @@ def repeat_ui_lua() -> LuaRuntime:
             MAX_SPELL_REPEATS = 5,
             REFRESH_LOW_SECONDS = 300,
             Scan = {}, Class = {}, Innate = {}, Mp = {}, Exec = {}, Persist = {},
+            -- Control art off by default, so rows render their text markers.
+            Theme = {
+                HasControlArt = function() return false end,
+                ControlSkin = function() return 3 end,
+            },
             _cache = { class = {}, scan = {} },
             _Warn = function(_) end,
             _Print = function(_) end,
@@ -811,12 +816,12 @@ def test_spell_list_columns_and_cell_actions_match_the_repeat_design() -> None:
 
     assert widths == [8, 8, 26, 10, 10, 8, 24, 6]
     assert sum(widths) == 100
-    assert "BfBot.UI._RepeatRowText(rowNumber)" in block
-    assert "BfBot.UI._RepeatColor(rowNumber)" in block
+    assert "BfBot.UI._RepeatRowText(BfBot.UI._VisibleSpellRow(rowNumber))" in block
+    assert "BfBot.UI._RepeatColor(BfBot.UI._VisibleSpellRow(rowNumber))" in block
     assert len(actions) == 1
     action = actions[0]
     assert "rowNumber" not in action
-    assert action == "BfBot.UI._OnSpellRowAction(cellNumber)"
+    assert action == "BfBot.UI._OnVisibleSpellRowAction(cellNumber)"
 
 
 def test_repeat_footer_binding_is_selection_only_and_supports_both_directions() -> None:
@@ -917,3 +922,168 @@ def test_dynamic_minimum_layout_keeps_list_and_all_footer_rows_valid(
     assert list_y >= 50 and list_y + list_h <= areas["bbAdd"][1]
     for name, (_, y, _, height) in areas.items():
         assert 50 <= y and y + height <= 400, name
+
+
+HEADER_COLUMNS = {
+    "bbHName": (16, 26),
+    "bbHDur": (42, 10),
+    "bbHUses": (52, 10),
+    "bbHRep": (62, 8),
+    "bbHTgt": (70, 24),
+    "bbHLock": (94, 6),
+}
+
+
+def test_column_headers_are_captions_only_and_never_sort_the_cast_order() -> None:
+    # Row order IS the cast order, so a sortable header would have to rewrite
+    # stored priorities. Sorting stays the explicit Sort button.
+    for name in HEADER_COLUMNS:
+        block = _named_item_block(name)
+        assert block.lstrip().startswith("label"), name
+        assert "action" not in block, name
+        assert re.search(r"text lua \"BfBot\.L10N\.Get\('ui\.header\.\w+'\)\"", block), name
+
+
+def test_header_spans_follow_the_spell_list_column_widths() -> None:
+    widths = [int(w) for w in re.findall(r"\bwidth\s+(\d+)", _spell_list_block())]
+    assert sum(widths) == 100, widths
+    # The checkbox and icon columns carry no caption; the rest line up in order.
+    starts, offset = [], 0
+    for width in widths:
+        starts.append((offset, width))
+        offset += width
+    captioned = [starts[index] for index in (2, 3, 4, 5, 6, 7)]
+    assert captioned == list(HEADER_COLUMNS.values())
+
+
+def test_headers_sit_above_the_list_without_stealing_footer_space(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        lua_areas = repeat_ui_lua.execute(
+            """
+            local areas = {}
+            Infinity_GetScreenSize = function() return 1920, 1080 end
+            Infinity_SetArea = function(name, x, y, w, h)
+                areas[name] = { x, y, w, h }
+            end
+            BfBot.UI._Layout()
+            return areas
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    def area(name: str) -> tuple[int, int, int, int]:
+        values = lua_areas[name]
+        assert values is not None, name
+        return tuple(int(values[index]) for index in range(1, 5))
+
+    list_x, list_y, list_w, list_h = area("bbList")
+    assert list_y + list_h <= area("bbAdd")[1]
+
+    previous_right = list_x
+    for name, (start, width) in HEADER_COLUMNS.items():
+        hx, hy, hw, hh = area(name)
+        assert hy + hh <= list_y, name
+        assert hy >= 0 and hw > 0 and hh > 0, name
+        # Headers divide the list minus its scrollbar strip, in column order.
+        column_width = list_w - 16
+        assert hx == list_x + column_width * start // 100, name
+        assert hw == column_width * width // 100, name
+        assert hx >= previous_right or name == "bbHName", name
+        previous_right = hx + hw
+    assert previous_right <= list_x + list_w
+
+
+def _control_art_facts(runtime: LuaRuntime, has_art: str) -> dict:
+    return runtime.execute(
+        """
+        BfBot.Theme.HasControlArt = function() return %s end
+        BfBot.UI._view = "party"
+        buffbot_spellTable = {
+            { resref = "SPWI101", on = 1, lock = 1 },
+            { resref = "SPWI102", on = 0, lock = 0 },
+        }
+        local ui = BfBot.UI
+        return {
+            onText = ui._CheckboxText(1), offText = ui._CheckboxText(2),
+            bam = ui._CheckBam(),
+            onSeq = ui._CheckSeq(1), offSeq = ui._CheckSeq(2),
+            lockedText = ui._LockText(1), unlockedText = ui._LockText(2),
+            lockedBam = ui._LockBam(1), unlockedBam = ui._LockBam(2),
+        }
+        """ % has_art
+    )
+
+
+def test_rows_fall_back_to_text_markers_without_the_control_art(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = _control_art_facts(repeat_ui_lua, "false")
+
+    assert facts["onText"] == "[X]"
+    assert facts["offText"] == "[ ]"
+    assert facts["lockedText"] == "[L]"
+    assert facts["unlockedText"] == "[ ]"
+    # Nothing to draw, so the art labels stay empty and never render blank.
+    assert facts["bam"] == ""
+    assert facts["lockedBam"] == ""
+    assert facts["unlockedBam"] == ""
+
+
+def test_rows_render_themed_cells_when_the_control_art_is_installed(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = _control_art_facts(repeat_ui_lua, "true")
+
+    # Exactly one of text and art is visible, never both.
+    assert facts["onText"] == ""
+    assert facts["offText"] == ""
+    assert facts["lockedText"] == ""
+    assert facts["unlockedText"] == ""
+
+    assert facts["bam"] == "BFBCHK3"          # ControlSkin stub: BG2
+    assert facts["onSeq"] == 0                # cycle 0: check mark
+    assert facts["offSeq"] == 1               # cycle 1: empty box
+    assert facts["lockedBam"] == "BFBGLYPH"
+    assert facts["unlockedBam"] == ""         # no neutral "unlocked" symbol
+
+
+def test_summons_view_keeps_the_lock_cell_empty_in_both_modes(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        BfBot.UI._view = "summons"
+        buffbot_spellTable = { { resref = "SPWI101", on = 1, lock = 1 } }
+        local result = {}
+        for _, art in ipairs({ false, true }) do
+            BfBot.Theme.HasControlArt = function() return art end
+            result[#result + 1] = BfBot.UI._LockText(1)
+            result[#result + 1] = BfBot.UI._LockBam(1)
+        end
+        return result
+        """
+    )
+    assert [facts[index] for index in range(1, 5)] == ["", "", "", ""]
+
+
+def test_checkbox_and_lock_columns_bind_both_the_text_and_the_art_label() -> None:
+    block = _spell_list_block()
+    for text_call, bam_call in (
+        ("_CheckboxText", "_CheckBam"),
+        ("_LockText", "_LockBam"),
+    ):
+        assert f"BfBot.UI.{text_call}(" in block, text_call
+        assert f"BfBot.UI.{bam_call}(" in block, bam_call
+    # The checkbox cycle must follow the row, the lock glyph is fixed.
+    assert re.search(
+        r"bam lua \"BfBot\.UI\._CheckBam\(\)\"\s*\n\s*sequence lua "
+        r"\"BfBot\.UI\._CheckSeq\(BfBot\.UI\._VisibleSpellRow\(rowNumber\)\)\"",
+        block,
+    )
