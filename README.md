@@ -20,6 +20,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for fast casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally. 5E casters still pause while that mod refreshes their spell slots
 - **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
 - **Skip active buffs** — detects already-active buffs via spell state + effect list checks, including wrapper potion leaf spells. No wasted spell slots, stacks, or charges
+- **Refresh buffs that are nearly over** — a long buff that survived a rest with a tiny remainder is cast again instead of skipped. Set the threshold in EEex options, or force a re-cast for one run from the panel
 - **Manual override** — the Add picker can include spells the classifier missed and recover removed spells or items, grouped into separate sections
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
 - **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
@@ -125,6 +126,7 @@ that test's scope. See [measurements and limits](docs/validation-fork-qol.md).
 7. Reorder entries with the Up/Down buttons
 8. Click **Cast** to start buffing — or use the F12 innate for that preset
 9. **Quick Cast** button cycles Off → Long → All for fast casting
+10. **Active: Skip** button beside the status line cycles Skip → Refresh Low → Force All for this run
 
 ### Presets
 
@@ -138,6 +140,46 @@ that test's scope. See [measurements and limits](docs/validation-fork-qol.md).
 Each spell or item row shows R1–R5. Click its repeat cell to increase the count, or select the row and use **Repeat: N**: left-click increases and right-click decreases. Both controls wrap between 1 and 5 and remain editable when the source currently has zero uses.
 
 Repeats are target-major. With targets A and B at R2, BuffBot attempts A, A, B, B. A party-wide AoE at R2 is cast twice total, not twice per party member. Every repeat rechecks availability, target state, and active effects. A spell attempt consumes one available use and follows normal aura/casting rules; an item attempt consumes a stack or charge and follows normal item-use rules. Quick Cast applies only to spells. Skipped attempts consume nothing.
+
+### Active Buffs
+
+By default BuffBot skips a buff that is still running, however little of it is left. That is
+why a long buff can survive a rest with a tiny remainder and never get renewed.
+
+**EEex options → BuffBot → Refresh buffs that are nearly over** sets how much has to be left
+before BuffBot casts it again: off, under 1 minute, under 5 minutes, or under 1 hour. The
+threshold applies everywhere, including the F12 preset innates — which is where buffing after
+a rest usually happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`
+if none of the four suits you.
+
+The **Active: Skip** button in the panel overrides that for one run:
+
+| State | What it does |
+|---|---|
+| **Active: Skip** | The default. Skip running buffs, with the option's threshold still applied |
+| **Active: Refresh Low** | Cast a running buff again when it is below the threshold — the option's value, or 5 minutes when the option is off |
+| **Active: Force All** | Cast every configured buff again, whatever is left of it, threshold or no threshold |
+
+The toggle belongs to the run, not to a preset: nothing is written to the save, and a game
+restart returns it to Skip.
+
+**Force All is unconditional.** It does not consult the option at all, so it works with the
+threshold off and ignores whatever value is set. It also casts buffs that never expire, which
+no threshold can reach: permanent effects and effects still inside their casting delay have no
+readable remaining lifetime, so a timer can never decide to refresh them. You will sometimes
+spend a slot on a buff that did not need it — that is the point of the button, and BuffBot will
+not second-guess it or ask you to confirm.
+
+Everything else still applies under Force All: a dead caster or target, a spent spell slot, a
+missing variant, an item that opens a selection menu and a live Project Image all still refuse
+the cast. Force only switches off the "is this already running" question. A row's repeat count
+then applies to buffs as well, and every attempt uses a spell slot or a charge.
+
+You can also set it without the panel, from the console:
+
+```lua
+BfBot.Exec.SetForceMode(2)   -- 0 skip active, 1 refresh low, 2 force all
+```
 
 ### Items and Potions
 
@@ -196,6 +238,7 @@ The following limitations remain:
 - **Windows only for export/import listing** — the file picker uses Windows `dir /b` for directory listing. The core export/import file I/O works on any platform, but the picker won't list files on macOS/Linux
 - **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 - **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
+- **Charge-based buffs ignore the refresh threshold** — the threshold measures time. Stoneskin's real resource is its skins, so "timer still running, no skins left" is not detected; use Force All for those
 - **Automatic equipment swaps** — chest armor, unusable or conditionally usable gear, and ambiguous duplicate equipment copies require manual equipping; see [Items and Potions](#items-and-potions)
 - **5E Spellcasting support is experimental** — basic BG2:EE casting has been user-tested; the [limitations and wider testing needs](#5e-spellcasting-experimental) above still apply
 

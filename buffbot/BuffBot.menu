@@ -1287,6 +1287,23 @@ menu
 		area 800 468 70 28
 	}
 
+	-- Force Re-Cast cycling button (active-buff policy for the next run).
+	-- A text element like bbQC: only those support action + text color lua.
+	text
+	{
+		name    "bbForce"
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.CycleForceRecast()"
+		text lua "BfBot.UI._ForceRecastLabel()"
+		text style "bb_normal"
+		text color lua "BfBot.UI._ForceRecastColor()"
+		text align center center
+		tooltip lua "BfBot.UI._ForceRecastTooltip()"
+		rectangle 5
+		rectangle opacity 160
+		area 710 500 160 28
+	}
+
 	-- Status line
 	label
 	{
@@ -1295,7 +1312,7 @@ menu
 		text lua "BfBot.UI._GetStatusText()"
 		text style "bb_normal_parchment"
 		text align left center
-		area 350 500 520 24
+		area 350 500 354 24
 	}
 }
 

@@ -37,6 +37,12 @@ BfBot.UI._summonPage = 1         -- 1-based page into _summonList
 BfBot.UI._summonSel = nil        -- selection descriptor {identity, oid, name, cloneType} — NEVER a row index
 BfBot.UI._summonQc = nil         -- cached summons-view Quick Cast value (see _UpdateSummonQc)
 
+-- The active-buff policy for the next run (issue #84) is NOT panel state:
+-- BfBot.Exec owns it (BfBot.Exec.GetForceMode / SetForceMode / CycleForceMode)
+-- so the panel rebuild in #81 only has to re-place a button, and so the policy
+-- can be set from the console without a panel. The functions below are the
+-- panel's thin view of it: one cycle, one label, one color, one tooltip.
+
 -- Confirm dialog state (BUFFBOT_CONFIRM). _confirmMsg is read every frame
 -- by the dialog's message label; _confirmFn holds the pending action and
 -- runs only via RunConfirm. Runtime-only — never reaches the marshal layer.
@@ -1270,8 +1276,13 @@ function BfBot.UI._Layout()
     setArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
     setArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
 
-    -- Status line
-    setArea("bbStatus", cx, r7Y, cw, 24)
+    -- Status line, with the active-buff toggle right-aligned beside it.
+    -- Row 6 is full at the 550px minimum panel width (Cast All / Cast Char /
+    -- Stop meet Quick Cast / Close there), so the second run-policy toggle
+    -- sits under Quick Cast instead of next to it.
+    local forceW = 160
+    setArea("bbStatus", cx, r7Y, cw - forceW - 6, 24)
+    setArea("bbForce", cx + cw - forceW, r7Y, forceW, btnH)
 
     -- Drag handle covers title bar area
     setArea("bbDragHandle", px, py, pw, 35)
@@ -1421,6 +1432,7 @@ end
 -- Tab switches do NOT invalidate scan cache — reads cached data.
 function BfBot.UI._Refresh()
     BfBot.UI._spellListRefreshPending = nil
+    BfBot.UI._RefreshForceRecastCache()
     -- Keep identity canonical across automatic table replacement. The numeric
     -- row is only the list widget's projection and is rebuilt below.
     BfBot.UI._PrepareSpellSelectionForRebuild()
@@ -2383,17 +2395,32 @@ end
 --- presetIdx tags the run for the late-join listener (issue #19): every
 --- preset-driven entry point passes BfBot.UI._presetIdx so a summon
 --- spawning mid-run can look up its own summon preset.
+--- The selected active-buff policy (BfBot.Exec.GetForceMode) rides along on
+--- every run started here, which is why Cast All, Cast Character, the HUD
+--- preset picker and the summons cast all honor the toggle without each path
+--- repeating it. Paths outside the panel (F12 innates, console queues) pass
+--- nothing and keep the global RefreshBelow option.
 function BfBot.UI._StartRun(queue, qcMode, presetIdx)
     local rate = BfBot.UI._FastForwardRate()
+    -- Guarded like the tooltip's threshold read: this module can be
+    -- force-reloaded on its own against an older BfBotExe, and a cast button
+    -- that hard-errors would be worse than falling back to the safe mode.
+    local forceMode = 0
+    if BfBot.Exec.GetForceMode then
+        local ok, mode = pcall(BfBot.Exec.GetForceMode)
+        if ok and type(mode) == "number" then forceMode = mode end
+    end
     local started, reason, detail
     if rate > 1 then
         if BfBot.Fast and BfBot.Fast.Start then
-            started, reason, detail = BfBot.Fast.Start(queue, rate, presetIdx)
+            started, reason, detail = BfBot.Fast.Start(queue, rate, presetIdx,
+                forceMode)
         else
             started, reason = false, "reason.exec.fast_unavailable"
         end
     else
-        started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx)
+        started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx,
+            forceMode)
     end
     if started then
         BfBot.UI._SurfaceBuildSkips()
@@ -3489,6 +3516,88 @@ function BfBot.UI._FastForwardTooltip()
     return BfBot.L10N.Get("ui.speed.tooltip")
 end
 
+-- Force Re-Cast (active-buff policy for the next run, issue #84)
+-- ============================================================
+
+--- Cached "Refresh Low" tooltip. The threshold it names lives in baldur.ini,
+--- and `tooltip lua` is evaluated per frame, so reading the INI inside the
+--- tooltip would hit the file on every draw. The cache is rebuilt on panel
+--- refresh and on every click — the only moments the threshold can have
+--- changed, because the option itself sits in the EEex options menu, which is
+--- reachable only while this panel is closed.
+local _forceLowTooltip = nil
+local _forceLowSeconds = nil
+
+function BfBot.UI._RefreshForceRecastCache()
+    -- Exec owns the threshold and is the only authority the run itself uses.
+    -- Falling back to the constant keeps the tooltip readable when Exec has
+    -- not loaded yet; it cannot change what a run actually skips.
+    local seconds
+    if BfBot.Exec and BfBot.Exec._RefreshThreshold then
+        local ok, value = pcall(BfBot.Exec._RefreshThreshold, 1)
+        if ok then seconds = value end
+    end
+    if type(seconds) ~= "number" or seconds ~= seconds
+        or seconds == math.huge then
+        seconds = BfBot.REFRESH_LOW_SECONDS
+    end
+    seconds = math.floor(seconds)
+    if _forceLowSeconds == seconds and _forceLowTooltip then return end
+    _forceLowSeconds = seconds
+    _forceLowTooltip = BfBot.L10N.Format("ui.force_recast.tooltip_low",
+        { seconds = seconds })
+end
+
+--- The mode this control displays. Exec is the single source of truth; the
+--- fallback only keeps the panel drawable if Exec has not loaded yet.
+local function _forceMode()
+    if BfBot.Exec and BfBot.Exec.GetForceMode then
+        local ok, mode = pcall(BfBot.Exec.GetForceMode)
+        if ok and type(mode) == "number" then return mode end
+    end
+    return 0
+end
+
+--- Cycle the active-buff policy: skip active → refresh low → force all.
+--- Unlike Quick Cast this writes nothing: Exec holds the value for the next
+--- run only, so no preset and no save changes.
+function BfBot.UI.CycleForceRecast()
+    if BfBot.Exec and BfBot.Exec.CycleForceMode then
+        pcall(BfBot.Exec.CycleForceMode)
+    end
+    BfBot.UI._RefreshForceRecastCache()
+end
+
+function BfBot.UI._ForceRecastLabel()
+    if not buffbot_isOpen then return "" end
+    local mode = _forceMode()
+    if mode == 1 then return BfBot.L10N.Get("ui.force_recast.low") end
+    if mode == 2 then return BfBot.L10N.Get("ui.force_recast.all") end
+    return BfBot.L10N.Get("ui.force_recast.off")
+end
+
+--- Reuses the Quick Cast palette entries deliberately: both controls answer
+--- "how much is BuffBot allowed to do here", so off/warn/cheat read the same.
+function BfBot.UI._ForceRecastColor()
+    local mode = _forceMode()
+    if mode == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
+    if mode == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
+    return _parseColor(BfBot.UI._T("qcOff"))
+end
+
+function BfBot.UI._ForceRecastTooltip()
+    local mode = _forceMode()
+    if mode == 2 then return BfBot.L10N.Get("ui.force_recast.tooltip_all") end
+    if mode == 1 then
+        -- Names the threshold the run will really use: the option's value
+        -- when it is set, the built-in fallback when it is off.
+        if not _forceLowTooltip then BfBot.UI._RefreshForceRecastCache() end
+        return _forceLowTooltip
+    end
+    return BfBot.L10N.Get("ui.force_recast.tooltip_off")
+end
+
+-- ============================================================
 -- Debug Mode Toggle
 -- ============================================================
 

@@ -1079,7 +1079,7 @@ def exec5_lua() -> LuaRuntime:
             BfBot.Exec._ResolveCasterForStep = function() return caster end
             BfBot.Exec._IsAlive = function(sprite) return sprite ~= nil end
             BfBot.Exec._DetectCombat = function() return false end
-            BfBot.Exec._HasActiveEffect = function() return false end
+            BfBot.Exec._ActiveEffectRemaining = function() return nil end
             BfBot.Exec._NoteProgress = function() end
             BfBot.Exec._GetGameTime = function() return T_Now end
             BfBot.Exec._Complete = function() BfBot.Exec._state = "done" end
@@ -1596,8 +1596,9 @@ def test_exec_skips_an_active_buff_delivered_under_a_different_mem_resref(
             for _, id in ipairs(states) do if id == 29 then return true end end
             return false
         end
-        BfBot.Exec._HasActiveStateMarker = function(_, resref, _)
-            return resref == "SPPR101"
+        BfBot.Exec._ActiveStateMarkerRemaining = function(_, resref, _)
+            if resref == "SPPR101" then return math.huge end
+            return nil
         end
         T_Start({ { caster = 0, spell = "FNP101A", target = "self" } })
         return { actions = table.concat(T_Actions, "|"),
