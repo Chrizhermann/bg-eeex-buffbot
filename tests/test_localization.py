@@ -988,12 +988,21 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.10.1 (2026-10-20)")
-    assert 'now shows the "combat detected - casting stopped"' in current_normalized
-    assert "eeex_sprite_displaystringhead`, which no eeex release defines" in current_normalized
-    assert "full automated suite passes **673 tests**" in current_normalized
-    assert "lab check, eet 2.7.3.0 with eeex v1.3.1" in current_normalized
-    assert "not checked in game: a real combat stop during a buff run" in current_normalized
+    assert current_release.startswith("v1.11.0 (2026-10-24)")
+    assert "optional 2x/4x temporary simulation speed" in current_normalized
+    assert "derives from pecca's infinity ui++, used with permission" in current_normalized
+    assert "**1166 automated tests pass**" in current_normalized
+    assert "hidden native bg2:ee 2.7.3.0 / eeex 1.3.1 labs" in current_normalized
+    assert "not checked in game: the column headers and the control artwork" in current_normalized
+
+    notice_release = source.split("\n## v1.10.1 (2026-10-20)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert 'now shows the "combat detected - casting stopped"' in notice_release
+    assert "eeex_sprite_displaystringhead`, which no eeex release defines" in notice_release
+    assert "full automated suite passes **673 tests**" in notice_release
+    assert "lab check, eet 2.7.3.0 with eeex v1.3.1" in notice_release
+    assert "not checked in game: a real combat stop during a buff run" in notice_release
 
     item_release = source.split("\n## v1.10.0 (2026-10-06)", 1)[1].split(
         "\n## ", 1

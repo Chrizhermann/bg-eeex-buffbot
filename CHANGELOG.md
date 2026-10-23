@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — selective BuffBot Redux improvements
+## v1.11.0 (2026-10-24) — selective BuffBot Redux improvements
 
 Adapted from [Zach Hopkins' BuffBot Redux](https://github.com/zach-hopkins/bg-eeex-buffbot), with thanks and credit. Character-based presets, manual cast priorities and the classic BG presentation remain the primary workflow.
 
@@ -25,7 +25,7 @@ Adapted from [Zach Hopkins' BuffBot Redux](https://github.com/zach-hopkins/bg-ee
 
 Tooling: the EEex globals scanner now collects only name-shaped string constants, so a byte-range Lua pattern such as the search field's `[\194-\223][\128-\191]` no longer breaks the scan. `EEex_CChitin` is recorded as an EEex.dll binding type that the generator cannot list; EEex v1.3.1 writes `EEex_CChitin.TIMER_UPDATES_PER_SECOND` itself in `EEex_UncapFPS.lua`, and BuffBot's access is guarded and fails closed.
 
-Validation: **1166 automated tests pass**, including installer/release checks. Hidden native BG2:EE 2.7.3.0 / EEex 1.3.1 labs verified Normal/2x/4x with two simultaneous casters, spell/item consumption, buff expiry, variants, temporary equipment swaps, interruptions, late-joining allies and rate restoration. The subsequent EET/SR/SCS/modpack matrix also passed with experimental Scroll component 430 uninstalled and the published alpha.13 banking fix installed; Normal/2x/4x took 20.866/10.429/5.279 s with the same resource consumption. Nine fresh full-stack screenshots cover search, status, speed and HUD presets at 1024×768 and 1920×1080. The 430-inclusive configuration remains unaccepted; BG:EE and 5E are outside this task's scope. This remains unreleased. See [the validation record](docs/validation-fork-qol.md) for measurements and limits.
+Validation: **1166 automated tests pass**, including installer/release checks. Hidden native BG2:EE 2.7.3.0 / EEex 1.3.1 labs verified Normal/2x/4x with two simultaneous casters, spell/item consumption, buff expiry, variants, temporary equipment swaps, interruptions, late-joining allies and rate restoration. The subsequent EET/SR/SCS/modpack matrix also passed with experimental Scroll component 430 uninstalled and the published alpha.13 banking fix installed; Normal/2x/4x took 20.866/10.429/5.279 s with the same resource consumption. Nine fresh full-stack screenshots cover search, status, speed and HUD presets at 1024×768 and 1920×1080. The 430-inclusive configuration remains unaccepted; BG:EE and 5E are outside this task's scope. Not checked in game: the column headers and the control artwork, both added after those labs. The artwork is drawn only when all five control BAMs resolve and the text markers return otherwise, and the checkbox frames were re-authored at the list's 36-pixel row scale, which only a running game confirms. See [the validation record](docs/validation-fork-qol.md) for measurements and limits.
 
 ## v1.10.1 (2026-10-20)
 
