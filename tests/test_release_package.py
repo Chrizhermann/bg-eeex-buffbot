@@ -11,7 +11,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from tests.ie_formats import write_minimal_tlk
+from tests.ie_formats import visual_art_names, write_minimal_tlk
 from tests.test_eeex_compatibility_installer import (
     BuffBotGame,
     GAME_TLK_ATTRIBUTES,
@@ -83,13 +83,22 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/lang/spanish/setup.tra",
     "buffbot/setup-buffbot.tp2",
 }
+
+# The themed control art ships from buffbot/visual; see tests/ie_formats.py for
+# why its PVRZ pages are derived from the BAMs rather than listed.
+VISUAL_RELEASE_FILES = {
+    f"buffbot/visual/{name}" for name in visual_art_names(ROOT / "buffbot/visual")
+}
+
 ARCHIVE_FILES = {
     "setup-buffbot.exe",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "ATTRIBUTION.md",
     "docs/5e-spellcasting.md",
     *BUFFBOT_RELEASE_FILES,
+    *VISUAL_RELEASE_FILES,
 }
 
 
@@ -211,7 +220,8 @@ def _copy_release_source(tmp_path: Path) -> Path:
     (repo / "tools").mkdir(parents=True)
     shutil.copy2(BUILD_SCRIPT, repo / "tools/build-release.sh")
     shutil.copytree(ROOT / "buffbot", repo / "buffbot")
-    for name in ("README.md", "CHANGELOG.md", "LICENSE", "docs/5e-spellcasting.md"):
+    for name in ("README.md", "CHANGELOG.md", "LICENSE", "ATTRIBUTION.md",
+                 "docs/5e-spellcasting.md"):
         destination = repo / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / name, destination)

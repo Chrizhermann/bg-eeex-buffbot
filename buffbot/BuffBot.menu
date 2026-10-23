@@ -808,7 +808,9 @@ menu
 
 	list
 	{
-		-- Column 1: Enable/disable checkbox (text-based)
+		-- Column 1: Enable/disable checkbox. The art label and the text label
+		-- both live here; each blanks itself when the other applies, so an
+		-- install without buffbot/visual still shows [X] / [ ].
 		column
 		{
 			width 8
@@ -818,6 +820,14 @@ menu
 				text lua "BfBot.UI._CheckboxText(BfBot.UI._VisibleSpellRow(rowNumber))"
 				text style "bb_normal_parchment"
 				text align center center
+			}
+			label
+			{
+				area 0 0 -1 36
+				bam lua "BfBot.UI._CheckBam()"
+				sequence lua "BfBot.UI._CheckSeq(BfBot.UI._VisibleSpellRow(rowNumber))"
+				frame 0
+				align center center
 			}
 		}
 
@@ -903,7 +913,8 @@ menu
 			}
 		}
 
-		-- Column 8: Lock toggle ([L] / [ ])
+		-- Column 8: Lock toggle. Art shows the "blocked" glyph on locked rows
+		-- only; without the art it falls back to [L] / [ ].
 		column
 		{
 			width 6
@@ -914,6 +925,14 @@ menu
 				text style "bb_normal_parchment"
 				text align center center
 				text color lua "BfBot.UI._LockColor(BfBot.UI._VisibleSpellRow(rowNumber))"
+			}
+			label
+			{
+				area 0 0 -1 36
+				bam lua "BfBot.UI._LockBam(BfBot.UI._VisibleSpellRow(rowNumber))"
+				sequence 1
+				frame 0
+				align center center
 			}
 		}
 

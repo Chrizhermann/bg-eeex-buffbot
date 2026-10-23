@@ -25,6 +25,11 @@ def repeat_ui_lua() -> LuaRuntime:
             MAX_PRESETS = 8,
             MAX_SPELL_REPEATS = 5,
             Scan = {}, Class = {}, Innate = {}, Mp = {}, Exec = {}, Persist = {},
+            -- Control art off by default, so rows render their text markers.
+            Theme = {
+                HasControlArt = function() return false end,
+                ControlSkin = function() return 3 end,
+            },
             _cache = { class = {}, scan = {} },
             _Warn = function(_) end,
             _Print = function(_) end,
@@ -992,3 +997,92 @@ def test_headers_sit_above_the_list_without_stealing_footer_space(
         assert hx >= previous_right or name == "bbHName", name
         previous_right = hx + hw
     assert previous_right <= list_x + list_w
+
+
+def _control_art_facts(runtime: LuaRuntime, has_art: str) -> dict:
+    return runtime.execute(
+        """
+        BfBot.Theme.HasControlArt = function() return %s end
+        BfBot.UI._view = "party"
+        buffbot_spellTable = {
+            { resref = "SPWI101", on = 1, lock = 1 },
+            { resref = "SPWI102", on = 0, lock = 0 },
+        }
+        local ui = BfBot.UI
+        return {
+            onText = ui._CheckboxText(1), offText = ui._CheckboxText(2),
+            bam = ui._CheckBam(),
+            onSeq = ui._CheckSeq(1), offSeq = ui._CheckSeq(2),
+            lockedText = ui._LockText(1), unlockedText = ui._LockText(2),
+            lockedBam = ui._LockBam(1), unlockedBam = ui._LockBam(2),
+        }
+        """ % has_art
+    )
+
+
+def test_rows_fall_back_to_text_markers_without_the_control_art(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = _control_art_facts(repeat_ui_lua, "false")
+
+    assert facts["onText"] == "[X]"
+    assert facts["offText"] == "[ ]"
+    assert facts["lockedText"] == "[L]"
+    assert facts["unlockedText"] == "[ ]"
+    # Nothing to draw, so the art labels stay empty and never render blank.
+    assert facts["bam"] == ""
+    assert facts["lockedBam"] == ""
+    assert facts["unlockedBam"] == ""
+
+
+def test_rows_render_themed_cells_when_the_control_art_is_installed(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = _control_art_facts(repeat_ui_lua, "true")
+
+    # Exactly one of text and art is visible, never both.
+    assert facts["onText"] == ""
+    assert facts["offText"] == ""
+    assert facts["lockedText"] == ""
+    assert facts["unlockedText"] == ""
+
+    assert facts["bam"] == "BFBCHK3"          # ControlSkin stub: BG2
+    assert facts["onSeq"] == 0                # cycle 0: check mark
+    assert facts["offSeq"] == 1               # cycle 1: empty box
+    assert facts["lockedBam"] == "BFBGLYPH"
+    assert facts["unlockedBam"] == ""         # no neutral "unlocked" symbol
+
+
+def test_summons_view_keeps_the_lock_cell_empty_in_both_modes(
+    repeat_ui_lua: LuaRuntime,
+) -> None:
+    facts = repeat_ui_lua.execute(
+        """
+        BfBot.UI._view = "summons"
+        buffbot_spellTable = { { resref = "SPWI101", on = 1, lock = 1 } }
+        local result = {}
+        for _, art in ipairs({ false, true }) do
+            BfBot.Theme.HasControlArt = function() return art end
+            result[#result + 1] = BfBot.UI._LockText(1)
+            result[#result + 1] = BfBot.UI._LockBam(1)
+        end
+        return result
+        """
+    )
+    assert [facts[index] for index in range(1, 5)] == ["", "", "", ""]
+
+
+def test_checkbox_and_lock_columns_bind_both_the_text_and_the_art_label() -> None:
+    block = _spell_list_block()
+    for text_call, bam_call in (
+        ("_CheckboxText", "_CheckBam"),
+        ("_LockText", "_LockBam"),
+    ):
+        assert f"BfBot.UI.{text_call}(" in block, text_call
+        assert f"BfBot.UI.{bam_call}(" in block, bam_call
+    # The checkbox cycle must follow the row, the lock glyph is fixed.
+    assert re.search(
+        r"bam lua \"BfBot\.UI\._CheckBam\(\)\"\s*\n\s*sequence lua "
+        r"\"BfBot\.UI\._CheckSeq\(BfBot\.UI\._VisibleSpellRow\(rowNumber\)\)\"",
+        block,
+    )

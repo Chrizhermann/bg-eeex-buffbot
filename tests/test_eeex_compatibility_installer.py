@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from tests.ie_formats import write_minimal_bg2ee_key_biff, write_minimal_tlk
+from tests.ie_formats import (
+    visual_art_names,
+    write_minimal_bg2ee_key_biff,
+    write_minimal_tlk,
+)
 from tests.test_localization import parse_tra
 
 
@@ -88,6 +92,9 @@ MAIN_OUTPUT_FILES = {
     "bfbotfr3.pvrz",
     "bfbot_strrefs.txt",
     "bfbot_l10n.tra",
+    # The themed control art installs flat into override/ beside everything
+    # else — the engine resolves resources there, not in subfolders.
+    *(name.lower() for name in visual_art_names(ROOT / "buffbot/visual")),
 }
 
 CAPABILITY_CASES = (

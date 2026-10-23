@@ -3258,16 +3258,46 @@ function BfBot.UI._RepeatColor(row)
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
+-- The checkbox and lock cells render as art when buffbot/visual is installed
+-- and fall back to text markers when it is not (see BfBot.Theme.HasControlArt).
+-- Both the text label and the BAM label exist in the column; each blanks itself
+-- in the other's case, so exactly one is ever visible.
+
 function BfBot.UI._CheckboxText(row)
+    if BfBot.Theme.HasControlArt() then return "" end
     local entry = buffbot_spellTable[row]
     if entry and entry.on == 1 then return "[X]" end
     return "[ ]"
+end
+
+--- Checkbox art for the active skin, or "" to leave the cell to the text.
+function BfBot.UI._CheckBam()
+    if not BfBot.Theme.HasControlArt() then return "" end
+    return "BFBCHK" .. BfBot.Theme.ControlSkin()
+end
+
+--- BFBCHK cycle 0 is the skin's check mark, cycle 1 its empty box.
+function BfBot.UI._CheckSeq(row)
+    local entry = buffbot_spellTable[row]
+    return (entry and entry.on == 1) and 0 or 1
+end
+
+--- Lock art: the "blocked" glyph on locked rows only. An unlocked row stays
+--- empty rather than showing a second box — the column header names it, and
+--- the glyph sheet has no neutral "unlocked" symbol to pair with it.
+function BfBot.UI._LockBam(row)
+    if not BfBot.Theme.HasControlArt() then return "" end
+    if BfBot.UI._view == "summons" then return "" end
+    local entry = buffbot_spellTable[row]
+    if not entry or entry.lock ~= 1 then return "" end
+    return "BFBGLYPH"
 end
 
 --- Lock column display text. The summons view has no lock feature (the v9
 --- summon spell-entry schema has no lock field) — the column stays blank.
 function BfBot.UI._LockText(row)
     if BfBot.UI._view == "summons" then return "" end
+    if BfBot.Theme.HasControlArt() then return "" end
     local entry = buffbot_spellTable[row]
     if entry and entry.lock == 1 then
         return BfBot.L10N.Get("ui.lock.compact")

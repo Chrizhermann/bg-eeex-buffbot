@@ -103,8 +103,13 @@ done
 
 
 # Copy BAM files (spell icons, actionbar icon, etc.)
-# Copy BAM files (spell icons, etc.)
 for f in "$SRC_DIR"/*.BAM; do
+    [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
+done
+
+# Copy themed control art. The BFB*.BAM files are BAM V2, so their pixels live
+# in the numbered PVRZ pages beside them — both must land in override/.
+for f in "$SRC_DIR"/visual/*; do
     [ -f "$f" ] && cp "$f" "$OVERRIDE_DIR/$(basename "$f")"
 done
 

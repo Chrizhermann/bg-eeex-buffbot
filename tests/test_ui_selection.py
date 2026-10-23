@@ -40,7 +40,12 @@ def ui_lua() -> LuaRuntime:
             },
             Persist = {},
             Class = {},
-            Theme = {},
+            -- Control art off by default, so rows render their text markers.
+            -- Tests that want the themed cells flip HasControlArt.
+            Theme = {
+                HasControlArt = function() return false end,
+                ControlSkin = function() return 3 end,
+            },
             _GetName = function(sprite) return sprite and sprite.name or "" end,
             _SafeCallback = function(_, callback) return callback end,
             _Warn = function(_) end,

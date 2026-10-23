@@ -498,6 +498,38 @@ function BfBot.Theme._GetAccentIndex()
     return ({bg2=1, sod=2, bg1=3})[accent] or 1
 end
 
+-- ============================================================
+-- Themed control art (buffbot/visual)
+-- ============================================================
+-- The control BAMs are BAM V2: their pixels live in the numbered PVRZ pages
+-- shipped beside them. Each skin has its own look, carried either by the file
+-- name (BFBCHK<skin>) or by the cycle. The art carries a separate usage
+-- permission — see ATTRIBUTION.md — so an install can legitimately be without
+-- it. Every caller must degrade to the text markers rather than render blank.
+
+--- Skin index into the control art: 0 SoD, 1 IWD, 2 BG1, 3 BG2.
+-- BuffBot has no IWD palette; its accents map onto the other three.
+function BfBot.Theme.ControlSkin()
+    return ({ sod = 0, bg1 = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
+end
+
+--- True once the control art is confirmed present. Cached: a missing resource
+--- cannot appear while the game runs, and this is read per rendered row.
+function BfBot.Theme.HasControlArt()
+    if BfBot.Theme._controlArt ~= nil then return BfBot.Theme._controlArt end
+    if type(EEex_Resource_Fetch) ~= "function" then return false end
+    for _, resref in ipairs({ "BFBCHK0", "BFBCHK1", "BFBCHK2", "BFBCHK3", "BFBGLYPH" }) do
+        local ok, found = pcall(EEex_Resource_Fetch, resref, "BAM")
+        if not ok then return false end
+        if not found then
+            BfBot.Theme._controlArt = false
+            return false
+        end
+    end
+    BfBot.Theme._controlArt = true
+    return true
+end
+
 --- Set the accent by index (1=BG2, 2=SOD, 3=BG1) preserving dark/light.
 -- Out-of-range / non-numeric input falls back to BG2.
 function BfBot.Theme._SetAccent(idx)

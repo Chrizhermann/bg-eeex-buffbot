@@ -283,7 +283,8 @@ bg-eeex-buffbot/
 
 ## Credits
 
-- **[Zach Hopkins](https://github.com/zach-hopkins/bg-eeex-buffbot)** — BuffBot Redux ideas and source contributions for HUD preset access, item discovery, child-spell durations, active-effect matching and temporary simulation acceleration
+- **[Zach Hopkins](https://github.com/zach-hopkins/bg-eeex-buffbot)** — BuffBot Redux ideas and source contributions for HUD preset access, item discovery, child-spell durations, active-effect matching, temporary simulation acceleration and the themed control artwork
+- **[Pecca](https://www.gibberlings3.net/mods/ui/infinity-ui/)** — Infinity UI++, the artwork BuffBot's themed controls derive from, used with permission (see [ATTRIBUTION](ATTRIBUTION.md))
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
 - **[5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting)** by subtledoctor — the casting system used by BuffBot's experimental 5E compatibility
@@ -295,4 +296,6 @@ bg-eeex-buffbot/
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) for BuffBot's own code. The themed control artwork under
+`buffbot/visual/` is used with permission and is not covered by it — see
+[ATTRIBUTION](ATTRIBUTION.md) before redistributing it.

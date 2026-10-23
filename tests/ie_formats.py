@@ -95,3 +95,37 @@ def tree_hashes(root: Path, relative_paths: Iterable[str | Path]) -> dict[str, s
                 else "<missing>"
             )
     return result
+
+
+# BuffBot's themed control art. The BAM names are listed explicitly so a new or
+# dropped control file is a deliberate edit; their PVRZ pages are read out of
+# the BAMs, so a page the art no longer needs, or one lost in an edit, shows up
+# as a difference instead of silently shipping or going missing.
+VISUAL_BAM_NAMES = (
+    "BFBACT.BAM", "BFBARROW.BAM", "BFBCAST.BAM",
+    "BFBCHK0.BAM", "BFBCHK1.BAM", "BFBCHK2.BAM", "BFBCHK3.BAM",
+    "BFBCLOSE.BAM", "BFBCORN.BAM", "BFBGLYPH.BAM", "BFBPLAT.BAM",
+    "BFBRAH.BAM", "BFBRAV.BAM", "BFBSCRL.BAM", "BFBSEAR.BAM",
+    "BFBSLOT.BAM", "BFBTAB.BAM", "BFBWELL.BAM",
+)
+
+
+def bam_v2_pages(path: Path) -> set[int]:
+    """The PVRZ page numbers a BAM V2 file's data blocks reference."""
+    raw = path.read_bytes()
+    assert raw[:8] == b"BAM V2  ", path.name
+    block_count = struct.unpack_from("<I", raw, 16)[0]
+    block_offset = struct.unpack_from("<I", raw, 28)[0]
+    assert block_count and block_offset + block_count * 28 <= len(raw), path.name
+    return {
+        struct.unpack_from("<I", raw, block_offset + index * 28)[0]
+        for index in range(block_count)
+    }
+
+
+def visual_art_names(visual_root: Path) -> set[str]:
+    """Every control-art file name BuffBot ships, BAMs and their PVRZ pages."""
+    pages: set[int] = set()
+    for name in VISUAL_BAM_NAMES:
+        pages |= bam_v2_pages(visual_root / name)
+    return set(VISUAL_BAM_NAMES) | {f"MOS{page}.PVRZ" for page in pages}
