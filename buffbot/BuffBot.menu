@@ -1281,7 +1281,7 @@ menu
 	}
 
 	-- Unlock Targeting button (visible only when locked; both views — summon
-	-- spell entries carry the same optional tgtUnlock field, #78)
+	-- spell entries carry the same optional tgtUnlock field, #82)
 	button
 	{
 		enabled "buffbot_targetLocked == 1"

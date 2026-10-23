@@ -493,7 +493,7 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         local isAoE = classResult and classResult.isAoE or false
         -- A selected variant is cast directly via ReallyForceSpellRES, so its
         -- own target type — not the opcode-214 wrapper's — decides whether
-        -- "all" means one area cast or one cast per party member (#78).
+        -- "all" means one area cast or one cast per party member (#82).
         if entry.var and BfBot.Class and BfBot.Class.FindVariant then
             local variant = BfBot.Class.FindVariant(spellData.variants, entry.var)
             if variant and variant.isAoE ~= nil then

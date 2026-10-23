@@ -1172,9 +1172,9 @@ def test_menu_localization_does_not_change_actions_layout_or_list_structure():
     ) + "\n"
     # Includes the zero-area label that drains deferred 5E spell-list updates.
     # Refreshed when the target picker's Unlock button lost its party-view
-    # gate (#78) — the behaviour itself is asserted below.
+    # gate (#82) — the behaviour itself is asserted below.
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
-        "8b12fa9e903c7ed84d7f80724e1a84fa5f76b8cae3823b17fbc8562a3c3b2e5b"
+        "ed4ed6de99d0dd55b7ceaf859ad9ef2a6b4534cfee89fdefb5a37fb794eb8522"
     )
 
 

@@ -1,6 +1,6 @@
 """Target selection for summon casters and for opcode-214 variant spells.
 
-Issue #78. Two defects met in the Summons view:
+Issue #82. Two defects met in the Summons view:
 
 1. A row's targeting flags came from the opcode-214 PARENT ability, which is
    the engine's self-cast selection wrapper (target type 5/7 in 247 of the 249

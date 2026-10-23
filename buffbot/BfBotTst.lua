@@ -3805,7 +3805,7 @@ function BfBot.Test.SummonCasters()
         and #ef.spells.T1.tgt == 1 and ef.spells.T1.tgt[1] == "Imoen"
         and vc.summons["e:f"].presets[99] == nil,
         "validator: qc range, pri/var/tgt scrub, out-of-range preset index dropped")
-    -- tgtUnlock is optional in summon entries too (#78): a valid 1 survives,
+    -- tgtUnlock is optional in summon entries too (#82): a valid 1 survives,
     -- garbage normalizes to 0, and an untouched entry stays field-free.
     _check(ef ~= nil and ef.spells.T2.tgtUnlock == 1
         and ef.spells.T3.tgtUnlock == 0

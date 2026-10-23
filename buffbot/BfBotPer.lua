@@ -496,7 +496,7 @@ function BfBot.Persist._ValidateSummons(summons)
                             -- Optional, same contract as the party path: the
                             -- summons view needs the unlock escape hatch for
                             -- spells the classifier reports as self-only or
-                            -- party-wide (#78).
+                            -- party-wide (#82).
                             if se.tgtUnlock ~= nil and se.tgtUnlock ~= 0
                                 and se.tgtUnlock ~= 1 then
                                 se.tgtUnlock = 0
@@ -1041,7 +1041,7 @@ function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
             if type(entry.var) == "string" then copy.var = entry.var end
             -- The seeded tgt is copied verbatim, so the owner's unlock has to
             -- come along: otherwise a clone row would show a name target the
-            -- picker reports as locked (#78).
+            -- picker reports as locked (#82).
             if entry.tgtUnlock == 1 then copy.tgtUnlock = 1 end
             if type(entry.tgt) == "table" then
                 local t = {}

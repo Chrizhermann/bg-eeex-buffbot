@@ -1450,7 +1450,7 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
         -- Targeting follows the EFFECTIVE spell: a selected variant is cast
         -- directly at the resolved target, while the opcode-214 parent is
         -- only the engine's self-cast selection wrapper and would otherwise
-        -- lock every variant row to "Self only" (#78).
+        -- lock every variant row to "Self only" (#82).
         local effIsAoE = scan and scan.isAoE or 0
         local effIsSelfOnly = scan and scan.isSelfOnly or 0
         if varResref and variants then
@@ -1943,7 +1943,7 @@ function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
     BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, resref, tgt)
 end
 
---- View-routed tgtUnlock write (#78). Summon spell entries carry the same
+--- View-routed tgtUnlock write (#82). Summon spell entries carry the same
 --- optional 0/1 field as party entries, so the summons view has the same
 --- escape hatch for spells the classifier reports as self-only / party-wide.
 function BfBot.UI._SetTgtUnlockForView(sprite, resref, value)
@@ -1993,7 +1993,7 @@ end
 --- A still-locked spell closes WITHOUT writing: every control that could
 --- have produced a checked name was disabled, so the empty working copy
 --- carries no intent and must not overwrite the stored target with the
---- classifier default (#78).
+--- classifier default (#82).
 function BfBot.UI.PickerDone()
     if buffbot_targetLocked == 1 then
         BfBot.UI._targetSpellAnchor = nil
@@ -2040,7 +2040,7 @@ function BfBot.UI.PickerDone()
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
---- Unlock targeting for a locked spell. Available in BOTH views (#78): the
+--- Unlock targeting for a locked spell. Available in BOTH views (#82): the
 --- summon spell entry carries the same optional tgtUnlock field, and without
 --- it a self-only/party-wide classification was a permanent dead end in the
 --- summons view — every control in the picker is gated on the lock.

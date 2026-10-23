@@ -554,7 +554,7 @@ function BfBot.Class._DetectVariants(header, ability)
 
                     -- Targeting of the VARIANT, not of the op-214 wrapper:
                     -- execution casts this resref directly at the resolved
-                    -- target, so the picker must follow these flags (#78).
+                    -- target, so the picker must follow these flags (#82).
                     local tOk, resolved = pcall(
                         BfBot.Class.GetResourceTargeting, splHeader)
                     if tOk then targeting = resolved end

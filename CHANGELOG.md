@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Fixed
-- Variant spells (opcode 214 "spell menu" spells such as Protection from Elemental Energy) no longer refuse every target but Self. Their targeting was read from the selection wrapper the engine casts on the caster, while BuffBot actually casts the chosen variant directly — so the target picker locked the row to "(Self-only)" even when the variant targets a single creature. The picker, and the AoE decision during execution, now follow the selected variant. (#78)
+- Variant spells (opcode 214 "spell menu" spells such as Protection from Elemental Energy) no longer refuse every target but Self. Their targeting was read from the selection wrapper the engine casts on the caster, while BuffBot actually casts the chosen variant directly — so the target picker locked the row to "(Self-only)" even when the variant targets a single creature. The picker, and the AoE decision during execution, now follow the selected variant. (#82)
 - The Summons view can unlock targeting. A spell the classifier reports as self-only or party-wide disables every control in the target picker, and the Unlock button existed only in the party view, so such a row was a permanent dead end — which hit every variant spell. Summon spell entries now carry the same optional `tgtUnlock` field as party entries, and a clone seeded from its owner inherits the owner's unlock along with the copied targets.
 - Closing the target picker with "Done" while the row is still locked no longer replaces the stored target with the classifier's default. Nothing in a locked picker can express a target, so there is no intent to save.
 
