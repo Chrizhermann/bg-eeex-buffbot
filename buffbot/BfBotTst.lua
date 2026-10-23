@@ -1475,15 +1475,21 @@ function BfBot.Test.TargetPicker()
     _check(#r == 1 and r[1].target == 1,
         "tgt='" .. charName .. "' → target=1")
 
-    -- 2e: table of names preserves order
+    -- 2e: table of names preserves order. The second member must have a
+    -- DIFFERENT display name: two party members can share one, and a
+    -- name-based target then resolves both to the same slot, which is the
+    -- known ambiguity of name targets rather than an ordering bug.
     local name2 = nil
     local name2Slot = nil
     for slot = 1, 5 do
         local sp = EEex_Sprite_GetInPortrait(slot)
         if sp then
-            name2 = BfBot._GetName(sp)
-            name2Slot = slot
-            break
+            local candidate = BfBot._GetName(sp)
+            if candidate and candidate ~= charName then
+                name2 = candidate
+                name2Slot = slot
+                break
+            end
         end
     end
     if name2 then
@@ -1496,7 +1502,8 @@ function BfBot.Test.TargetPicker()
                 "Second entry is '" .. charName .. "' (target=" .. tostring(r[2].target) .. ")")
         end
     else
-        _warning("Only 1 party member — skipping ordered table test")
+        _warning("No second party member with a distinct name — "
+            .. "skipping ordered table test")
     end
 
     -- 2f: unresolved name in table → skipped
