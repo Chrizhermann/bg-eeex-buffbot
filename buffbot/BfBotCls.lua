@@ -526,6 +526,7 @@ function BfBot.Class._DetectVariants(header, ability)
                 -- Load sub-spell SPL for name and icon
                 local name = varResref
                 local icon = ""
+                local targeting = nil
                 local splOk, splHeader = pcall(EEex_Resource_Demand, varResref, "SPL")
                 if splOk and splHeader then
                     -- Name: try genericName first (SR puts real name there)
@@ -550,6 +551,13 @@ function BfBot.Class._DetectVariants(header, ability)
                         local iconOk, abilIcon = pcall(function() return abil.quickSlotIcon:get() end)
                         if iconOk and abilIcon and abilIcon ~= "" then icon = abilIcon end
                     end
+
+                    -- Targeting of the VARIANT, not of the op-214 wrapper:
+                    -- execution casts this resref directly at the resolved
+                    -- target, so the picker must follow these flags (#78).
+                    local tOk, resolved = pcall(
+                        BfBot.Class.GetResourceTargeting, splHeader)
+                    if tOk then targeting = resolved end
                 end
 
                 table.insert(variants, {
@@ -557,6 +565,11 @@ function BfBot.Class._DetectVariants(header, ability)
                     resref = varResref,
                     name = name,
                     icon = icon,
+                    -- nil when the variant SPL could not be read: callers
+                    -- then keep the parent's verdict rather than guessing.
+                    isSelfOnly = targeting and targeting.isSelfOnly or nil,
+                    isAoE = targeting and targeting.isAoE or nil,
+                    defaultTarget = targeting and targeting.defaultTarget or nil,
                 })
             end
         end
@@ -701,6 +714,70 @@ function BfBot.Class.GetDefaultTarget(ability, isAoE)
     if isAoE then return "p" end
     -- Single-target: default to self (user can override to party or specific member)
     return "s"
+end
+
+--- Targeting flags of a CONCRETE spell resource, derived from every ability
+--- it declares. An opcode-214 parent is only the engine's self-cast selection
+--- wrapper (its ability is practically always target type 5/7), while the
+--- chosen variant is cast DIRECTLY at the resolved target
+--- (`ReallyForceSpellRES` in BfBotExe) — so the variant's own abilities
+--- decide which targets are legal, not the parent's.
+--- Self-only is asserted only when NO ability can reach another creature:
+--- per-caster-level abilities normally share one target type, and a resource
+--- with even one creature-targeting ability must not be locked to Self.
+-- @param header SPL header (Spell_Header_st) or nil
+-- @return { isSelfOnly = 0|1, isAoE = 0|1, defaultTarget = "s"|"p" } or nil
+--         when no ability could be read (caller keeps its own verdict)
+function BfBot.Class.GetResourceTargeting(header)
+    if not header then return nil end
+    local selfOnly, aoe, seen = true, false, false
+
+    local function visit(ability)
+        if not ability then return end
+        local ok = pcall(function()
+            if not BfBot.Class.IsSelfOnly(ability) then selfOnly = false end
+            if BfBot.Class.IsAoE(ability, false) then aoe = true end
+        end)
+        if ok then seen = true end
+    end
+
+    local count = tonumber(header.abilityCount) or 0
+    for index = 0, count - 1 do
+        local ok, ability = pcall(function() return header:getAbility(index) end)
+        if ok then visit(ability) end
+    end
+    if not seen then
+        -- abilityCount unreadable/zero: fall back to the first ability, the
+        -- same shape the rest of the mod uses for hidden sub-spells.
+        local ok, ability = pcall(function() return header:getAbility(0) end)
+        if ok then visit(ability) end
+    end
+    if not seen then return nil end
+
+    if selfOnly then aoe = false end
+    return {
+        isSelfOnly = selfOnly and 1 or 0,
+        isAoE = aoe and 1 or 0,
+        defaultTarget = (selfOnly and "s") or (aoe and "p") or "s",
+    }
+end
+
+--- PURE: the variant record for `resref` in a scan entry's variant array,
+--- or nil. Resrefs are compared case-insensitively (2DA spelling and stored
+--- config spelling differ freely).
+function BfBot.Class.FindVariant(variants, resref)
+    if type(variants) ~= "table" or type(resref) ~= "string"
+        or resref == "" then
+        return nil
+    end
+    local wanted = resref:upper()
+    for _, variant in ipairs(variants) do
+        if type(variant) == "table" and type(variant.resref) == "string"
+            and variant.resref:upper() == wanted then
+            return variant
+        end
+    end
+    return nil
 end
 
 -- ============================================================

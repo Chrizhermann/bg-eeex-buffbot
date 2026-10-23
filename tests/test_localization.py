@@ -1171,8 +1171,10 @@ def test_menu_localization_does_not_change_actions_layout_or_list_structure():
         if not re.match(r"^\s*(?:text|tooltip)\b", line)
     ) + "\n"
     # Includes the zero-area label that drains deferred 5E spell-list updates.
+    # Refreshed when the target picker's Unlock button lost its party-view
+    # gate (#78) — the behaviour itself is asserted below.
     assert hashlib.sha256(normalized.encode("utf-8")).hexdigest() == (
-        "ad7f0022e20224d820601f4772fea7b4cec9ce47be6536c78bf91cdf9a6e6a0d"
+        "8b12fa9e903c7ed84d7f80724e1a84fa5f76b8cae3823b17fbc8562a3c3b2e5b"
     )
 
 
