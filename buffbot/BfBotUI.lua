@@ -878,7 +878,10 @@ function BfBot.UI._OnMenusLoaded()
     -- the new size on the next push, not on a live size change.
     BfBot.Theme._RegisterFontRenderListeners()
 
-    -- Register 9-slice border textures (one per theme variant)
+    -- Register 9-slice border textures (one per theme variant). The atlases
+    -- carry Pecca's corner at its native 38x28 and a short slice of each rail
+    -- for the edges, which the engine stretches — the rails are uniform, so a
+    -- stretched slice and a tiled one look the same.
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
     local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
@@ -887,16 +890,16 @@ function BfBot.UI._OnMenusLoaded()
     for _, resref in ipairs(BORDER_RESREFS) do
         local regOk, regErr = pcall(function()
             EEex.RegisterSlicedRect("BuffBot_Border_" .. resref, {
-                ["topLeft"]     = {   0,   0, 128, 128 },
-                ["top"]         = { 128,   0, 256, 128 },
-                ["topRight"]    = { 384,   0, 128, 128 },
-                ["right"]       = { 384, 128, 128, 256 },
-                ["bottomRight"] = { 384, 384, 128, 128 },
-                ["bottom"]      = { 128, 384, 256, 128 },
-                ["bottomLeft"]  = {   0, 384, 128, 128 },
-                ["left"]        = {   0, 128, 128, 256 },
-                ["center"]      = { 128, 128, 256, 256 },
-                ["dimensions"]  = { 512, 512 },
+                ["topLeft"]     = {   0,   0,  38,  28 },
+                ["top"]         = {  38,   0, 180,  28 },
+                ["topRight"]    = { 218,   0,  38,  28 },
+                ["right"]       = { 218,  28,  38,  72 },
+                ["bottomRight"] = { 218, 100,  38,  28 },
+                ["bottom"]      = {  38, 100, 180,  28 },
+                ["bottomLeft"]  = {   0, 100,  38,  28 },
+                ["left"]        = {   0,  28,  38,  72 },
+                ["center"]      = {  38,  28, 180,  72 },
+                ["dimensions"]  = { 256, 128 },
                 ["resref"]      = resref,
                 ["flags"]       = 0,
             })
@@ -1081,7 +1084,7 @@ function BfBot.UI._ToggleQuickMenu()
     for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
         Infinity_SetArea(name, x, y, w, h)
     end
-    Infinity_SetArea("bbQuickFrame", x - 24, y - 24, w + 48, h + 48)
+    Infinity_SetArea("bbQuickFrame", x - 14, y - 14, w + 28, h + 28)
     Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
     for i = 1, BfBot.MAX_PRESETS do
         Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
@@ -1141,7 +1144,7 @@ function BfBot.UI._Layout()
     setArea("bbBg2", px, py, pw, ph)
     setArea("bbBg3", px, py, pw, ph)
     setArea("bbDarkOverlay", px, py, pw, ph)
-    local bpad = 24  -- border overhang in pixels
+    local bpad = 14  -- border overhang: the rail sits just outside the parchment
     setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
 
     -- Title

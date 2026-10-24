@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Draw the panel frame with Pecca's thin rail and corner bosses instead of the generated leather border. The frame is the same 9-slice: corner at its native size, a slice of the rail stretched along each edge, so it still fits any panel size and resolution. It now draws on top of the parchment rather than behind it, because a thin frame with a transparent middle no longer needs to hide under it, and that keeps the whole corner visible. All eight panels follow, including the quick-preset menu.
+
 ## v1.11.0 (2026-10-24) — selective BuffBot Redux improvements
 
 Adapted from [Zach Hopkins' BuffBot Redux](https://github.com/zach-hopkins/bg-eeex-buffbot), with thanks and credit. Character-based presets, manual cast priorities and the classic BG presentation remain the primary workflow.

@@ -244,10 +244,13 @@ def test_manual_add_keeps_classifier_misses_without_borrowing_other_owners_overr
     ''')
 
 
-def test_quick_popup_frame_is_drawn_before_themed_background():
+def test_quick_popup_frame_is_drawn_after_themed_background_and_overlay():
+    # The frame is a thin rail with a transparent middle, so it draws last and
+    # keeps its whole corner. The old frame filled its rect and had to hide
+    # under the parchment; see the comment beside the main panel's border.
     source=(Path(__file__).resolve().parents[1]/'buffbot/BuffBot.menu').read_text(encoding='utf-8')
-    assert source.index('name "bbQuickFrame"') < source.index('name "bbQuickBg"')
     assert source.index('name "bbQuickBg"') < source.index('name "bbQuickOverlay"')
+    assert source.index('name "bbQuickOverlay"') < source.index('name "bbQuickFrame"')
 
 
 def test_empty_quick_preset_discards_build_skip_buffer(quick_ui):

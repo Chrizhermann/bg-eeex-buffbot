@@ -1086,3 +1086,49 @@ def test_checkbox_and_lock_columns_bind_both_the_text_and_the_art_label() -> Non
         r"\"BfBot\.UI\._CheckSeq\(BfBot\.UI\._VisibleSpellRow\(rowNumber\)\)\"",
         block,
     )
+
+
+def test_every_panel_draws_its_border_after_its_themed_background() -> None:
+    # Pecca's frame is a thin rail with corner bosses and nothing in between,
+    # so it draws last: on top of the parchment and the dark-mode overlay. The
+    # generated leather frame it replaced filled its whole rect and had to sit
+    # behind them. A frame that slips back in front of its background would
+    # render invisible, which no screenshot-free test would otherwise catch.
+    for frame, background in (
+        ("bbBgFrame", "bbBg"),
+        ("bbTgtFrame", "bbTgtBg"),
+        ("bbRenFrame", "bbRenBg"),
+        ("bbConfFrame", "bbConfBg"),
+        ("bbPickFrame", "bbPickBg"),
+        ("bbImpFrame", "bbImpBg"),
+        ("bbVarFrame", "bbVarBg"),
+        ("bbQuickFrame", "bbQuickBg"),
+    ):
+        frame_at = re.search(rf"name\s+\"{frame}\"", MENU_SOURCE)
+        background_at = re.search(rf"name\s+\"{background}\"", MENU_SOURCE)
+        assert frame_at and background_at, frame
+        assert background_at.start() < frame_at.start(), frame
+
+
+def test_the_border_atlas_matches_the_registered_nine_patch() -> None:
+    # The rects below index into BFBOTFR*.PVRZ. If an atlas is rebuilt at a
+    # different size the engine would sample the wrong pixels, and nothing
+    # else in the suite reads both sides.
+    source = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
+    block = source.split("EEex.RegisterSlicedRect(", 1)[1].split("end)", 1)[0]
+    rects = {
+        name: tuple(int(v) for v in values.replace(" ", "").split(","))
+        for name, values in re.findall(r'\["(\w+)"\]\s*=\s*\{([^}]+)\}', block)
+    }
+    width, height = rects.pop("dimensions")
+    for name, (x, y, w, h) in rects.items():
+        assert 0 <= x and x + w <= width, name
+        assert 0 <= y and y + h <= height, name
+    assert rects["topLeft"][2:] == rects["bottomRight"][2:]
+    assert rects["top"][2] == rects["center"][2] == rects["bottom"][2]
+    assert rects["left"][3] == rects["center"][3] == rects["right"][3]
+
+    from tests.ie_formats import pvrz_size
+
+    for resref in ("BFBOTFR", "BFBOTFR2", "BFBOTFR3"):
+        assert pvrz_size(ROOT / f"buffbot/{resref}.PVRZ") == (width, height), resref
