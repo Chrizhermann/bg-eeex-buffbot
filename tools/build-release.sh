@@ -39,6 +39,7 @@ trap 'rm -rf "$STAGING"' EXIT
 import os
 import re
 import shutil
+import struct
 import sys
 import tempfile
 from pathlib import Path
@@ -56,6 +57,7 @@ root_files = (
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "ATTRIBUTION.md",
     "docs/5e-spellcasting.md",
 )
 buffbot_files = (
@@ -68,6 +70,7 @@ buffbot_files = (
     "BfBotScn.lua",
     "BfBot5e.lua",
     "BfBotExe.lua",
+    "BfBotFst.lua",
     "BfBotMp.lua",
     "BfBotPer.lua",
     "BfBotInn.lua",
@@ -131,6 +134,58 @@ unexpected_top = sorted(actual_top - expected_top)
 if unexpected_top:
     fail("unexpected release file(s): " + ", ".join(unexpected_top))
 
+# buffbot/visual holds the themed control art. The BAMs are BAM V2, so their
+# pixels live in numbered PVRZ pages: ship exactly the pages the BAMs name.
+# Deriving the set catches an orphaned page and a page lost in an edit, which
+# a hand-kept list cannot.
+visual_bams = (
+    "BFBACT.BAM", "BFBARROW.BAM", "BFBCAST.BAM",
+    "BFBCHK0.BAM", "BFBCHK1.BAM", "BFBCHK2.BAM", "BFBCHK3.BAM",
+    "BFBCLOSE.BAM", "BFBCORN.BAM", "BFBGLYPH.BAM", "BFBPLAT.BAM",
+    "BFBRAH.BAM", "BFBRAV.BAM", "BFBSCRL.BAM", "BFBSEAR.BAM",
+    "BFBSLOT.BAM", "BFBTAB.BAM", "BFBWELL.BAM",
+)
+visual_root = buffbot_root / "visual"
+
+
+def bam_v2_pages(path):
+    raw = path.read_bytes()
+    if raw[:8] != b"BAM V2  ":
+        fail(f"{path.name}: expected a BAM V2 file")
+    if len(raw) < 32:
+        fail(f"{path.name}: truncated BAM V2 header")
+    block_count, block_offset = struct.unpack_from("<I", raw, 16)[0], struct.unpack_from("<I", raw, 28)[0]
+    end = block_offset + block_count * 28
+    if block_count == 0 or end > len(raw):
+        fail(f"{path.name}: BAM V2 data blocks out of range")
+    return {
+        struct.unpack_from("<I", raw, block_offset + index * 28)[0]
+        for index in range(block_count)
+    }
+
+
+required_pages = set()
+for name in visual_bams:
+    path = visual_root / name
+    if not path.is_file() or path.is_symlink():
+        fail(f"missing required release file: buffbot/visual/{name}")
+    required_pages |= bam_v2_pages(path)
+
+expected_visual = {f"buffbot/visual/{name}" for name in visual_bams}
+expected_visual |= {f"buffbot/visual/MOS{page}.PVRZ" for page in required_pages}
+actual_visual = {
+    f"buffbot/visual/{path.name}"
+    for path in visual_root.iterdir()
+    if path.is_file() and path.suffix.casefold() in allowed_suffixes
+}
+reject_casefold_collisions(actual_visual)
+missing_visual = sorted(expected_visual - actual_visual)
+if missing_visual:
+    fail("missing required release file(s): " + ", ".join(missing_visual))
+unexpected_visual = sorted(actual_visual - expected_visual)
+if unexpected_visual:
+    fail("unexpected release file(s): " + ", ".join(unexpected_visual))
+
 tp2_path = repo / "buffbot/setup-buffbot.tp2"
 try:
     tp2 = tp2_path.read_text(encoding="utf-8")
@@ -172,7 +227,12 @@ unexpected_catalogs = sorted(actual_catalogs - declared_catalogs)
 if unexpected_catalogs:
     fail("unexpected release file(s): " + ", ".join(unexpected_catalogs))
 
-release_sources = [*root_files, *sorted(expected_top), *sorted(declared_catalogs)]
+release_sources = [
+    *root_files,
+    *sorted(expected_top),
+    *sorted(expected_visual),
+    *sorted(declared_catalogs),
+]
 reject_casefold_collisions(release_sources)
 for relative in release_sources:
     source = repo / relative

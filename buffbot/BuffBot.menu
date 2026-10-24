@@ -13,8 +13,10 @@ menu
 
 	button
 	{
+		name "bbHudButton"
 		action    "BfBot.UI.Toggle()"
-		tooltip lua "buffbot_btnTooltip"
+		actionAlt "BfBot.UI._ToggleQuickMenu()"
+		tooltip lua "BfBot.L10N.Get('ui.tooltip.hud_shortcuts')"
 		bam       "BFBOTAB"
 		sequence  0
 		frame lua "buffbot_btnFrame"
@@ -29,9 +31,166 @@ menu
 		enabled "BfBot.Exec._SafetyTick()"
 		area 0 0 0 0
 	}
+	label
+	{
+		enabled "BfBot.UI._ActionbarTick()"
+		area 0 0 0 0
+	}
 }
 
 -- ==========================================================
+-- Named presets dispatch the existing party queue directly.
+menu
+{
+	name "BUFFBOT_QUICK_PRESETS"
+	ignoreesc
+	text
+	{
+		name "bbQuickOutside"
+		action "BfBot.UI._CloseQuickMenu()"
+		on escape
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbQuickFrame"
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbQuickBg"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
+		mosaic "BFBOTBG"
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbQuickBg2"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG2'"
+		mosaic "BFBOTBG2"
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbQuickBg3"
+		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG3'"
+		mosaic "BFBOTBG3"
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbQuickOverlay"
+		rectangle 5
+		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbQuickTitle"
+		text lua "BfBot.L10N.Get('ui.quick_presets')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('title')"
+		text align left center
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset1"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(1)"
+		text lua "BfBot.UI._QuickPresetName(1)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset2"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(2)"
+		text lua "BfBot.UI._QuickPresetName(2)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset3"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(3)"
+		text lua "BfBot.UI._QuickPresetName(3)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset4"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(4)"
+		text lua "BfBot.UI._QuickPresetName(4)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset5"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(5)"
+		text lua "BfBot.UI._QuickPresetName(5)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset6"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(6)"
+		text lua "BfBot.UI._QuickPresetName(6)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset7"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(7)"
+		text lua "BfBot.UI._QuickPresetName(7)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+	button
+	{
+		name "bbQuickPreset8"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8] ~= nil"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI._CastQuickPreset(8)"
+		text lua "BfBot.UI._QuickPresetName(8)"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 0 0
+	}
+}
+
 -- Main configuration panel
 -- ==========================================================
 menu
@@ -510,6 +669,138 @@ menu
 	}
 
 	-- ======================================================
+	-- Search filters names only; all actions still use the full preset.
+	label
+	{
+		name "bbSearchLabel"
+		text lua "BfBot.L10N.Get('ui.search')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align left center
+		area 0 0 70 26
+	}
+	label
+	{
+		name "bbSearchBg"
+		rectangle 5
+		rectangle opacity 35
+		area 0 0 200 26
+	}
+	edit
+	{
+		name "bbSearch"
+		var "buffbot_searchText"
+		action "return 1"
+		text style "bb_edit"
+		text color lua "BfBot.UI._T('text')"
+		maxlines 1
+		area 0 0 190 22
+	}
+	button
+	{
+		name "bbSearchClear"
+		clickable lua "buffbot_searchText ~= ''"
+		action "BfBot.UI.ClearSearch()"
+		text lua "BfBot.L10N.Get('common.clear')"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 60 26
+	}
+	button
+	{
+		name "bbSpeed"
+		clickable lua "BfBot.Exec.GetState() ~= 'running'"
+		action "BfBot.UI.CycleFastForward()"
+		text lua "BfBot.UI._FastForwardLabel()"
+		tooltip lua "BfBot.UI._FastForwardTooltip()"
+		text style "bb_button"
+		bam "GUIOSTUL"
+		scaleToClip
+		area 0 0 130 26
+	}
+	label
+	{
+		enabled "BfBot.UI._SearchTick()"
+		area 0 0 0 0
+	}
+	label
+	{
+		name "bbSearchEmpty"
+		enabled "buffbot_isOpen and buffbot_searchText ~= '' and #buffbot_visibleSpells == 0"
+		text lua "BfBot.L10N.Get('ui.search.no_matches')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('textMuted')"
+		text align left center
+		area 0 0 200 28
+	}
+	-- ======================================================
+	-- Column headers. Captions only: the row order IS the cast order, so a
+	-- sortable header would have to rewrite stored priorities. Sorting stays
+	-- the explicit Sort button. _Layout aligns these to the column widths
+	-- below; the checkbox and icon columns carry no caption.
+	-- ======================================================
+	label
+	{
+		name "bbHName"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.spell')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align left center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHDur"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.duration')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHUses"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.uses')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHRep"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.repeats')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHTgt"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.target')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbHLock"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('ui.header.lock')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align center center
+		area 0 0 100 20
+	}
+
 	-- Spell list (click row to toggle enable/disable)
 	-- Columns MUST come before properties (parser quirk).
 	-- Only label elements inside columns (no buttons).
@@ -517,16 +808,26 @@ menu
 
 	list
 	{
-		-- Column 1: Enable/disable checkbox (text-based)
+		-- Column 1: Enable/disable checkbox. The art label and the text label
+		-- both live here; each blanks itself when the other applies, so an
+		-- install without buffbot/visual still shows [X] / [ ].
 		column
 		{
 			width 8
 			label
 			{
 				area 0 0 -1 36
-				text lua "BfBot.UI._CheckboxText(rowNumber)"
+				text lua "BfBot.UI._CheckboxText(BfBot.UI._VisibleSpellRow(rowNumber))"
 				text style "bb_normal_parchment"
 				text align center center
+			}
+			label
+			{
+				area 0 0 -1 36
+				bam lua "BfBot.UI._CheckBam()"
+				sequence lua "BfBot.UI._CheckSeq(BfBot.UI._VisibleSpellRow(rowNumber))"
+				frame 0
+				align center center
 			}
 		}
 
@@ -537,9 +838,9 @@ menu
 			label
 			{
 				area 2 2 32 32
-				icon lua "buffbot_spellTable[rowNumber].icon"
-				count lua "buffbot_spellTable[rowNumber].count"
-				greyscale lua "buffbot_spellTable[rowNumber].castable == 0"
+				icon lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].icon or ''"
+				count lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].count or 0"
+				greyscale lua "not buffbot_visibleSpells[rowNumber] or buffbot_visibleSpells[rowNumber].castable == 0"
 				align center center
 			}
 		}
@@ -551,10 +852,11 @@ menu
 			label
 			{
 				area 0 0 -1 36
-				text lua "buffbot_spellTable[rowNumber].name"
+				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].name or ''"
+				tooltip lua "BfBot.UI._SpellRowTooltip(BfBot.UI._VisibleSpellRow(rowNumber))"
 				text style "bb_normal_parchment"
 				text align left center
-				text color lua "BfBot.UI._SpellNameColor(rowNumber)"
+				text color lua "BfBot.UI._SpellNameColor(BfBot.UI._VisibleSpellRow(rowNumber))"
 			}
 		}
 
@@ -565,7 +867,7 @@ menu
 			label
 			{
 				area 0 0 -1 36
-				text lua "buffbot_spellTable[rowNumber] and buffbot_spellTable[rowNumber].durText or ''"
+				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].durText or ''"
 				text style "bb_normal_parchment"
 				text align center center
 			}
@@ -578,7 +880,7 @@ menu
 			label
 			{
 				area 0 0 -1 36
-				text lua "buffbot_spellTable[rowNumber].countText"
+				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].countText or ''"
 				text style "bb_normal_parchment"
 				text align center center
 			}
@@ -591,10 +893,10 @@ menu
 			label
 			{
 				area 0 0 -1 36
-				text lua "BfBot.UI._RepeatRowText(rowNumber)"
+				text lua "BfBot.UI._RepeatRowText(BfBot.UI._VisibleSpellRow(rowNumber))"
 				text style "bb_normal_parchment"
 				text align center center
-				text color lua "BfBot.UI._RepeatColor(rowNumber)"
+				text color lua "BfBot.UI._RepeatColor(BfBot.UI._VisibleSpellRow(rowNumber))"
 			}
 		}
 
@@ -605,32 +907,41 @@ menu
 			label
 			{
 				area 0 0 -1 36
-				text lua "buffbot_spellTable[rowNumber].targetText"
+				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].targetText or ''"
 				text style "bb_normal_parchment"
 				text align center center
 			}
 		}
 
-		-- Column 8: Lock toggle ([L] / [ ])
+		-- Column 8: Lock toggle. Art shows the "blocked" glyph on locked rows
+		-- only; without the art it falls back to [L] / [ ].
 		column
 		{
 			width 6
 			label
 			{
 				area 0 0 -1 36
-				text lua "BfBot.UI._LockText(rowNumber)"
+				text lua "BfBot.UI._LockText(BfBot.UI._VisibleSpellRow(rowNumber))"
 				text style "bb_normal_parchment"
 				text align center center
-				text color lua "BfBot.UI._LockColor(rowNumber)"
+				text color lua "BfBot.UI._LockColor(BfBot.UI._VisibleSpellRow(rowNumber))"
+			}
+			label
+			{
+				area 0 0 -1 36
+				bam lua "BfBot.UI._LockBam(BfBot.UI._VisibleSpellRow(rowNumber))"
+				sequence 1
+				frame 0
+				align center center
 			}
 		}
 
 		area 350 148 520 250
 		name    "bbList"
-		action      "BfBot.UI._OnSpellRowAction(cellNumber)"
+		action      "BfBot.UI._OnVisibleSpellRowAction(cellNumber)"
 		enabled     "buffbot_isOpen"
-		table       "buffbot_spellTable"
-		var         "buffbot_selectedRow"
+		table       "buffbot_visibleSpells"
+		var         "buffbot_visibleSelectedRow"
 		rowheight   36
 		scrollbar   "GUISCRC"
 	}
@@ -951,6 +1262,7 @@ menu
 	{
 		name    "bbQC"
 		enabled "buffbot_isOpen and not BfBot._noIO"
+		clickable lua "BfBot.UI._FastForwardRate() == 1"
 		action  "BfBot.UI.CycleQuickCast()"
 		text lua "BfBot.UI._QuickCastLabel()"
 		text style "bb_normal"
@@ -975,15 +1287,32 @@ menu
 		area 800 468 70 28
 	}
 
+	-- Force Re-Cast cycling button (active-buff policy for the next run).
+	-- A text element like bbQC: only those support action + text color lua.
+	text
+	{
+		name    "bbForce"
+		enabled "buffbot_isOpen"
+		action  "BfBot.UI.CycleForceRecast()"
+		text lua "BfBot.UI._ForceRecastLabel()"
+		text style "bb_normal"
+		text color lua "BfBot.UI._ForceRecastColor()"
+		text align center center
+		tooltip lua "BfBot.UI._ForceRecastTooltip()"
+		rectangle 5
+		rectangle opacity 160
+		area 710 500 160 28
+	}
+
 	-- Status line
 	label
 	{
 		name    "bbStatus"
 		enabled "buffbot_isOpen"
-		text lua "buffbot_status"
+		text lua "BfBot.UI._GetStatusText()"
 		text style "bb_normal_parchment"
 		text align left center
-		area 350 500 520 24
+		area 350 500 354 24
 	}
 }
 

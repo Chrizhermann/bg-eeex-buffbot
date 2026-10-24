@@ -366,3 +366,65 @@
 @715 = ~Użyj z plecaka~
 // options.item_use_swap
 @716 = ~Załóż, użyj i przywróć~
+// ui.search
+@454 = ~Szukaj~
+// ui.search.no_matches
+@455 = ~Brak pasujących zaklęć lub przedmiotów~
+// ui.quick_presets
+@456 = ~Uruchom zestaw drużyny~
+// ui.tooltip.hud_shortcuts
+@457 = ~BuffBot: lewy przycisk konfiguruje; prawy uruchamia zestaw drużyny~
+// ui.manual_only
+@458 = ~Ręcznie~
+// ui.speed.normal
+@460 = ~Tempo: normalne~
+// ui.speed.2x
+@461 = ~Tempo: 2x~
+// ui.speed.4x
+@462 = ~Tempo: 4x~
+// ui.speed.tooltip
+@463 = ~Dotyczy wszystkich zestawów. 2x i 4x tymczasowo przyspieszają całą grę przy zwykłych zasadach rzucania zaklęć. Normalne tempo używa zapisanego ustawienia szybkiego rzucania. Kliknij, aby zmienić.~
+// ui.quick_cast.suspended
+@464 = ~Szybkie rzucanie: wstrzymane~
+// ui.quick_cast.tooltip_suspended
+@465 = ~Przyspieszenie stosuje zwykłe zasady rzucania zaklęć. Ustawienie szybkiego rzucania pozostaje zapisane i ponownie działa przy normalnym tempie.~
+// ui.header.spell
+@466 = ~Zaklęcie / Przedmiot~
+// ui.header.duration
+@467 = ~Czas~
+// ui.header.uses
+@468 = ~Użycia~
+// ui.header.repeats
+@469 = ~Powt.~
+// ui.header.target
+@470 = ~Cel~
+// ui.header.lock
+@471 = ~Blokada~
+// ui.force_recast.off
+@472 = ~Active: Skip~
+// ui.force_recast.low
+@473 = ~Active: Refresh Low~
+// ui.force_recast.all
+@474 = ~Active: Force All~
+// ui.force_recast.tooltip_off
+@475 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
+// ui.force_recast.tooltip_low
+@476 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
+// ui.force_recast.tooltip_all
+@477 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
+// reason.item.manual_selection
+@552 = ~Ten przedmiot otwiera menu wyboru. Użyj go ręcznie; BuffBot go pomija.~
+// reason.exec.fast_unavailable
+@553 = ~Przyspieszenie jest tutaj niedostępne. Wybierz normalne tempo i spróbuj ponownie.~
+// options.refresh_below
+@717 = ~Refresh buffs that are nearly over~
+// options.refresh_below_description
+@718 = ~Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.~
+// options.refresh_below_off
+@719 = ~Off~
+// options.refresh_below_1m
+@720 = ~Under 1 minute left~
+// options.refresh_below_5m
+@721 = ~Under 5 minutes left~
+// options.refresh_below_1h
+@722 = ~Under 1 hour left~

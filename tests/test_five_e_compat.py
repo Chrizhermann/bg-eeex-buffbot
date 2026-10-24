@@ -1079,7 +1079,7 @@ def exec5_lua() -> LuaRuntime:
             BfBot.Exec._ResolveCasterForStep = function() return caster end
             BfBot.Exec._IsAlive = function(sprite) return sprite ~= nil end
             BfBot.Exec._DetectCombat = function() return false end
-            BfBot.Exec._HasActiveEffect = function() return false end
+            BfBot.Exec._ActiveEffectRemaining = function() return nil end
             BfBot.Exec._NoteProgress = function() end
             BfBot.Exec._GetGameTime = function() return T_Now end
             BfBot.Exec._Complete = function() BfBot.Exec._state = "done" end
@@ -1202,7 +1202,7 @@ def test_exec_casts_through_wrapper_and_waits_for_upstream_refresh(
 
     assert facts["afterFirst"] == (
         'SpellRES("D5Z101I",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["stepped"] == "_Advance"
     assert facts["waited"] == (
@@ -1215,7 +1215,7 @@ def test_exec_casts_through_wrapper_and_waits_for_upstream_refresh(
     assert facts["resumed2"] == "_Resume"
     assert facts["final"] == (
         'SpellRES("D5Z102I",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],2)")'
     )
     assert "SPWI305" not in facts["done"]
     assert facts["casts"] == 2
@@ -1434,7 +1434,7 @@ def test_exec_waits_out_a_refresh_that_started_before_the_run(
     )
     assert facts["cast"] == (
         'SpellRES("D5Z101I",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["casts"] == 1
     assert facts["skips"] == 0
@@ -1508,25 +1508,32 @@ def test_exec_ignores_a_resume_left_over_from_a_stopped_run(
 
     assert facts["first"] == (
         'SpellRES("SPPR101",Myself)|'
-        'EEex_LuaAction("BfBot.Exec._Advance([[p0]])")'
+        'EEex_LuaAction("BfBot.Exec._Advance([[p0]],1)")'
     )
     assert facts["after"] == facts["first"]
     assert facts["casts"] == 1
 
 
-@pytest.mark.parametrize("hard_reset", [False, True])
+@pytest.mark.parametrize("reset_mode", ["stop", "hard_reset", "module_reload"])
 def test_old_resume_cannot_continue_a_new_run_that_is_also_waiting(
-    exec5_lua: LuaRuntime, hard_reset: bool,
+    exec5_lua: LuaRuntime, reset_mode: str,
 ) -> None:
+    exec5_lua.globals().reload_source = EXEC_SOURCE
     facts = exec5_lua.eval(
-        """function(hardReset)
+        """function(resetMode)
         local row = T_Row5("SPWI305", "D5Z101I", 0)
         row.d5.pending = 1
         T_ExecWorld({ SPWI305 = row })
         local queue = { { caster = 0, spell = "SPWI305", target = "self" } }
         T_Start(queue)
         BfBot.Exec.Stop()
-        if hardReset then BfBot.Exec._HardReset() end
+        if resetMode=='hard_reset' then BfBot.Exec._HardReset() end
+        if resetMode=='module_reload' then
+            local outstanding=T_Actions
+            assert(loadstring(reload_source))()
+            T_ExecWorld({SPWI305=row})
+            T_Actions=outstanding
+        end
         T_Start(queue)
         local currentWait = T_Actions[3] .. "|" .. T_Actions[4]
         local before = BfBot.Exec._casters.p0.d5Refresh.polls
@@ -1541,7 +1548,7 @@ def test_old_resume_cannot_continue_a_new_run_that_is_also_waiting(
             oldCallback = oldCallback, newCallback = newCallback,
             casts = BfBot.Exec._castCount }
         end"""
-    )(hard_reset)
+    )(reset_mode)
 
     assert facts["oldCallback"] == facts["newCallback"] == "_Resume"
     assert facts["afterOld"] == facts["before"]
@@ -1589,8 +1596,9 @@ def test_exec_skips_an_active_buff_delivered_under_a_different_mem_resref(
             for _, id in ipairs(states) do if id == 29 then return true end end
             return false
         end
-        BfBot.Exec._HasActiveStateMarker = function(_, resref, _)
-            return resref == "SPPR101"
+        BfBot.Exec._ActiveStateMarkerRemaining = function(_, resref, _)
+            if resref == "SPPR101" then return math.huge end
+            return nil
         end
         T_Start({ { caster = 0, spell = "FNP101A", target = "self" } })
         return { actions = table.concat(T_Actions, "|"),

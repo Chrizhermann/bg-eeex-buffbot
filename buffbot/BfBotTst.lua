@@ -932,11 +932,24 @@ function BfBot.Test.SpellLockOrder()
     local savedPending = BfBot.UI._pendingSpellSelectionSync
     local savedTargetAnchor = BfBot.UI._targetSpellAnchor
     local savedVariantAnchor = BfBot.UI._variantSpellAnchor
+    local savedSearch = {
+        text = buffbot_searchText,
+        rows = buffbot_visibleSpells,
+        selected = buffbot_visibleSelectedRow,
+        applied = BfBot.UI._appliedSearchText,
+        indices = BfBot.UI._visibleSpellIndices,
+        context = BfBot.UI._visibleSpellContext,
+    }
+    local savedRenum = BfBot.UI._RenumberPriorities
+    local fixtureOk, fixtureError = pcall(function()
+    -- These synthetic rows must not inherit the player's active search.
+    buffbot_searchText, buffbot_visibleSpells, buffbot_visibleSelectedRow = "", {}, 0
+    BfBot.UI._appliedSearchText, BfBot.UI._visibleSpellIndices = "", {}
+    BfBot.UI._visibleSpellContext = nil
     buffbot_isOpen = true
     BfBot.UI._ClearSpellSelection()
 
     -- We stub _RenumberPriorities to a no-op since it needs a real sprite
-    local savedRenum = BfBot.UI._RenumberPriorities
     BfBot.UI._RenumberPriorities = function() end
 
     -- Test 1: Sort pins locked rows
@@ -1029,8 +1042,9 @@ function BfBot.Test.SpellLockOrder()
            buffbot_spellTable[2].resref == "B" and
            buffbot_spellTable[3].resref == "A",
            "MoveSpellUp skips locked: C->1, A->3")
+    end)
 
-    -- Restore globals
+    -- Restore globals even if a fixture operation raises.
     buffbot_spellTable = saved
     buffbot_selectedRow = savedRow
     buffbot_selectedHasVariants = savedHasVariants
@@ -1040,6 +1054,16 @@ function BfBot.Test.SpellLockOrder()
     BfBot.UI._targetSpellAnchor = savedTargetAnchor
     BfBot.UI._variantSpellAnchor = savedVariantAnchor
     BfBot.UI._RenumberPriorities = savedRenum
+    buffbot_searchText = savedSearch.text
+    buffbot_visibleSpells = savedSearch.rows
+    buffbot_visibleSelectedRow = savedSearch.selected
+    BfBot.UI._appliedSearchText = savedSearch.applied
+    BfBot.UI._visibleSpellIndices = savedSearch.indices
+    BfBot.UI._visibleSpellContext = savedSearch.context
+
+    if not fixtureOk then
+        _nok("SpellLockOrder fixture errored: " .. tostring(fixtureError))
+    end
 
     return _summary("SpellLockOrder")
 end
@@ -1451,15 +1475,21 @@ function BfBot.Test.TargetPicker()
     _check(#r == 1 and r[1].target == 1,
         "tgt='" .. charName .. "' → target=1")
 
-    -- 2e: table of names preserves order
+    -- 2e: table of names preserves order. The second member must have a
+    -- DIFFERENT display name: two party members can share one, and a
+    -- name-based target then resolves both to the same slot, which is the
+    -- known ambiguity of name targets rather than an ordering bug.
     local name2 = nil
     local name2Slot = nil
     for slot = 1, 5 do
         local sp = EEex_Sprite_GetInPortrait(slot)
         if sp then
-            name2 = BfBot._GetName(sp)
-            name2Slot = slot
-            break
+            local candidate = BfBot._GetName(sp)
+            if candidate and candidate ~= charName then
+                name2 = candidate
+                name2Slot = slot
+                break
+            end
         end
     end
     if name2 then
@@ -1472,7 +1502,8 @@ function BfBot.Test.TargetPicker()
                 "Second entry is '" .. charName .. "' (target=" .. tostring(r[2].target) .. ")")
         end
     else
-        _warning("Only 1 party member — skipping ordered table test")
+        _warning("No second party member with a distinct name — "
+            .. "skipping ordered table test")
     end
 
     -- 2f: unresolved name in table → skipped
@@ -2179,11 +2210,72 @@ function BfBot.Test.DurationRecursion()
                 label, resref, tostring(dur), minDur))
     end
 
+    -- Test the installed parent/child relationship, not an old mod layout's
+    -- resrefs or durations. A mod may replace the children and their lifetimes.
+    -- Each positive child duration must survive composition into the parent,
+    -- and the parent's leaf metadata must include the actual linked resource.
+    local function testLinkedSpell(resref, label)
+        local ok, hdr = pcall(EEex_Resource_Demand, resref, "SPL")
+        local ability = ok and hdr and hdr:getAbility(0) or nil
+        if not ability then
+            _warning(label .. " (" .. resref .. "): SPL/ability not loadable")
+            return
+        end
+        local dur, durationType, leafs = BfBot.Class.GetDuration(hdr, ability)
+        _check(type(dur) == "number" and type(leafs) == "table",
+            label .. ": installed duration and leaf metadata are available")
+        local function covers(childDur, childType)
+            if type(dur) ~= "number" or type(childDur) ~= "number" then
+                return false
+            end
+            if childDur > 0 then return dur >= childDur end
+            if childType == "permanent" then
+                return dur > 0 or durationType == "permanent"
+            end
+            return childDur == 0
+        end
+        -- Depth 2 suppresses child traversal, isolating any parent-owned
+        -- effects. This also checks a mod that replaced the wrapper entirely.
+        local directDur, directType = BfBot.Class.GetDuration(hdr, ability, 2)
+        _check(covers(directDur, directType),
+            label .. ": parent-owned duration is preserved")
+        BfBot.Class._IterateFeatureBlocks(hdr, ability, function(fb)
+            if fb[BfBot._fields.fb_opcode] ~= 146 then return end
+            local value = fb[BfBot._fields.fb_res]
+            local refOk, child = pcall(function()
+                return type(value) == "string" and value or value:get()
+            end)
+            local childOk, childHdr = false, nil
+            if refOk and type(child) == "string" and child ~= "" then
+                childOk, childHdr = pcall(EEex_Resource_Demand, child, "SPL")
+            end
+            _check(childOk and childHdr ~= nil,
+                label .. ": actual child " .. tostring(child) .. " loads")
+            if not childOk or not childHdr then return end
+            local fixedLevel = fb[BfBot._fields.fb_param1]
+            if not fixedLevel or fixedLevel <= 0 then fixedLevel = nil end
+            local childAbility = fixedLevel and childHdr:getAbilityForLevel(fixedLevel)
+                or childHdr:getAbility(0)
+            _check(childAbility ~= nil,
+                label .. ": actual child " .. child .. " has an ability")
+            if not childAbility then return end
+            local childDur, childType = BfBot.Class.GetDuration(
+                childHdr, childAbility, 1, nil, nil, fixedLevel)
+            local found = false
+            for _, leaf in ipairs(type(leafs) == "table" and leafs or {}) do
+                if leaf:upper() == child:upper() then found = true; break end
+            end
+            _check(covers(childDur, childType) and found,
+                string.format("%s: parent %ss includes actual child %s (%ss)",
+                    label, tostring(dur), child, tostring(childDur)))
+        end)
+    end
+
     -- Main fix: hierarchical spells that deliver effects via op=146 sub-spells.
     -- Parent SPLs contain only op=146 "Cast Spell" references; real timed
     -- effects live in the sub-spells. Classifier must recurse.
     testSpell("SPPR327", 30, "Prayer (op=146 -> #PRAYERG 30s)")
-    testSpell("OHTMPS2", 60, "Chaos of Battle (op=146 -> OHTMPS2D 60s)")
+    testLinkedSpell("OHTMPS2", "Chaos of Battle")
 
     -- Regression: Chant's parent SPL has a direct op=176 sibling at 60s.
     -- Must still report >= 60 after the fix (parent-own timed opcodes keep working).
@@ -3506,12 +3598,12 @@ function BfBot.Test.SummonCasters()
             ["p0"] = { ref = { kind = "party", slot = 0 }, name = leaderName,
                        cheatApplied = false,
                        queue = {}, index = 0, done = false, cheatBoundary = 0 },
-            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false,
+            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false, advanceToken = 1,
                                queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 2
 
-        local advOk = pcall(BfBot.Exec._Advance, "s999999999")
+        local advOk = pcall(BfBot.Exec._Advance, "s999999999", 1)
         local rec = BfBot.Exec._casters["s999999999"]
         _check(advOk and rec ~= nil and rec.done == true,
             "gone summon: _Advance marks the record done")
@@ -3521,7 +3613,7 @@ function BfBot.Test.SummonCasters()
             "gone summon: run continues for the remaining caster")
 
         -- Idempotent: advancing the already-done caster must not decrement again
-        local advOk2 = pcall(BfBot.Exec._Advance, "s999999999")
+        local advOk2 = pcall(BfBot.Exec._Advance, "s999999999", 1)
         _check(advOk2 and BfBot.Exec._activeCasters == 1,
             "gone summon: repeat _Advance does not double-decrement")
 
@@ -3531,11 +3623,11 @@ function BfBot.Test.SummonCasters()
         -- leave "running" — assert only that it did).
         BfBot.Exec._state = "running"
         BfBot.Exec._casters = {
-            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false,
+            ["s999999999"] = { ref = goneRef, name = "ZZZ", cheatApplied = false, advanceToken = 1,
                                queue = {}, index = 0, done = false, cheatBoundary = 0 },
         }
         BfBot.Exec._activeCasters = 1
-        local advOk3 = pcall(BfBot.Exec._Advance, "s999999999")
+        local advOk3 = pcall(BfBot.Exec._Advance, "s999999999", 1)
         _reopenLog()  -- _Complete closed the suite's log
         _check(advOk3 and BfBot.Exec._state ~= "running",
             "gone summon as last caster completes the run (state="
@@ -4173,8 +4265,11 @@ function BfBot.Test.SummonCasters()
         local ok7, err7 = pcall(function()
             _check(type(BfBot.Persist._ApplyPuppetLockPolicy) == "function",
                 "_ApplyPuppetLockPolicy is a function")
-            local function mk(name, rep) return { caster = 0, spell = "X" .. name,
-                spellName = name, target = "self", pri = 1, rep = rep or 1 } end
+            local function mk(name, rep, isProjectImage)
+                return { caster = 0, spell = "X" .. name, spellName = name,
+                    target = "self", pri = 1, rep = rep or 1,
+                    isProjectImage = isProjectImage or 0 }
+            end
             local caster = { oid = 100, name = "Testmage" }
             local plain = { mk("Stoneskin"), mk("Blur") }
 
@@ -4205,13 +4300,13 @@ function BfBot.Test.SummonCasters()
                 { { cloneType = 3, ownerOid = 100, ownerName = "Testmage" } })
             _check(#kept == 2 and #skips == 0, "rule 3: Simulacrum locks nothing")
 
-            -- Rule 2: trailing entries after a "Project Image" cast drop; the
-            -- PI entry itself and everything before it stay (case-insensitive).
-            local chain = { mk("Stoneskin"), mk("PROJECT IMAGE", 5),
+            -- Rule 2 uses structural scan identity, independent of the TLK
+            -- name. The PI entry itself and everything before it stay.
+            local chain = { mk("Stoneskin"), mk("Abbild", 5, 1),
                 mk("Blur"), mk("Haste") }
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, chain, {})
             _check(#kept == 2 and kept[1].spellName == "Stoneskin"
-                and kept[2].spellName == "PROJECT IMAGE",
+                and kept[2].spellName == "Abbild",
                 "rule 2: entries before + the PI cast retained")
             _check(kept[2] ~= chain[2] and kept[2].rep == 1
                 and chain[2].rep == 5,
@@ -4221,10 +4316,20 @@ function BfBot.Test.SummonCasters()
                 "rule 2: trailing entries dropped with the documented skip line")
 
             -- Rule 2: PI last in chain → nothing dropped.
+            local finalImage = mk("Abbild", 4, 1)
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster,
-                { mk("Stoneskin"), mk("Project Image") }, {})
+                { mk("Stoneskin"), finalImage }, {})
             _check(#kept == 2 and #skips == 0,
                 "rule 2: PI as last entry drops nothing")
+            _check(kept[2] ~= finalImage and kept[2].rep == 1
+                and finalImage.rep == 4,
+                "rule 2: last PI is still copied with rep=1")
+
+            local nameOnly = { mk("Project Image", 3), mk("Blur") }
+            kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, nameOnly, {})
+            _check(#kept == 2 and #skips == 0 and kept[1] == nameOnly[1]
+                and kept[1].rep == 3,
+                "rule 2: display name alone never identifies Project Image")
 
             -- No clones, no PI in chain → untouched.
             kept, skips = BfBot.Persist._ApplyPuppetLockPolicy(caster, plain, {})
@@ -4544,7 +4649,7 @@ function BfBot.Test.SummonCasters()
     -- BuildQueueForSummon must apply rule 2 (trailing-entry drop) to the
     -- summon's own chain; rule 1 does NOT apply (a clone is not a party
     -- owner). Scan is stubbed to a synthetic castable set whose middle
-    -- entry is named "Project Image".
+    -- entry carries structural Project Image identity and a localized name.
     if leader then
         local leaderName = BfBot._GetName(leader)
         local savedScan = BfBot.Scan.GetCastableSpells
@@ -4558,7 +4663,8 @@ function BfBot.Test.SummonCasters()
             BfBot.Scan.GetCastableSpells = function()
                 return {
                     XXTSTA = { count = 1, name = "Armor",         durCat = "long"  },
-                    XXTSTP = { count = 1, name = "Project Image", durCat = "short" },
+                    XXTSTP = { count = 1, name = "Abbild", durCat = "short",
+                        isProjectImage = 1 },
                     XXTSTB = { count = 1, name = "Blur",          durCat = "long"  },
                 }
             end
@@ -5033,7 +5139,15 @@ function BfBot.Test.SummonCasters()
         local savedQc   = BfBot.UI._summonQc
         local savedIdx  = BfBot.UI._presetIdx
         local savedPeek = BfBot.Persist.PeekSummonPreset
+        local savedGetPref = BfBot.Persist.GetPref
         local ok10, err10 = pcall(function()
+            -- This fixture exercises the normal-mode QC cache. Acceleration
+            -- intentionally suspends QC; do not inherit the user's speed
+            -- choice or write it to INI while testing this separate contract.
+            BfBot.Persist.GetPref = function(key, ...)
+                if key == "FastForward" then return 1 end
+                return savedGetPref(key, ...)
+            end
             local preset = BfBot.Persist.GetSummonPreset("test:qccache", 1)
             if not preset then error("no protagonist config for qc-cache checks") end
             preset.qc = 0
@@ -5067,6 +5181,7 @@ function BfBot.Test.SummonCasters()
                 "qc cache: no selection clears the cache")
         end)
         BfBot.Persist.PeekSummonPreset = savedPeek
+        BfBot.Persist.GetPref = savedGetPref
         BfBot.UI._view = savedView
         BfBot.UI._summonList = savedList
         BfBot.UI._summonSel = savedSel
@@ -5077,8 +5192,9 @@ function BfBot.Test.SummonCasters()
         local pcs = pc and type(pc.summons) == "table" and pc.summons or nil
         if pcs then pcs["test:qccache"] = nil end
         _check(pcs ~= nil and pcs["test:qccache"] == nil
-            and BfBot.Persist.PeekSummonPreset("test:qccache", 1) == nil,
-            "cleanup: test:qccache identity purged")
+            and BfBot.Persist.PeekSummonPreset("test:qccache", 1) == nil
+            and BfBot.Persist.GetPref == savedGetPref,
+            "cleanup: test:qccache identity purged and preferences restored")
         if not ok10 then
             _nok("[T10.6] qc-cache block errored: " .. tostring(err10))
         end
@@ -5723,9 +5839,19 @@ function BfBot.Test.SelectionRefresh()
         targetAnchor = BfBot.UI._targetSpellAnchor,
         variantAnchor = BfBot.UI._variantSpellAnchor,
         renumber = BfBot.UI._RenumberPriorities,
+        searchText = buffbot_searchText,
+        visibleSpells = buffbot_visibleSpells,
+        visibleSelectedRow = buffbot_visibleSelectedRow,
+        appliedSearchText = BfBot.UI._appliedSearchText,
+        visibleSpellIndices = BfBot.UI._visibleSpellIndices,
+        visibleSpellContext = BfBot.UI._visibleSpellContext,
     }
 
     local fixtureOk, fixtureError = pcall(function()
+        -- Selection invariants use synthetic rows, independently of live search.
+        buffbot_searchText, buffbot_visibleSpells, buffbot_visibleSelectedRow = "", {}, 0
+        BfBot.UI._appliedSearchText, BfBot.UI._visibleSpellIndices = "", {}
+        BfBot.UI._visibleSpellContext = nil
         BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
         BfBot.UI._presetIdx = 1
@@ -5875,6 +6001,12 @@ function BfBot.Test.SelectionRefresh()
     BfBot.UI._targetSpellAnchor = saved.targetAnchor
     BfBot.UI._variantSpellAnchor = saved.variantAnchor
     BfBot.UI._RenumberPriorities = saved.renumber
+    buffbot_searchText = saved.searchText
+    buffbot_visibleSpells = saved.visibleSpells
+    buffbot_visibleSelectedRow = saved.visibleSelectedRow
+    BfBot.UI._appliedSearchText = saved.appliedSearchText
+    BfBot.UI._visibleSpellIndices = saved.visibleSpellIndices
+    BfBot.UI._visibleSpellContext = saved.visibleSpellContext
 
     if not fixtureOk then
         _nok("SelectionRefresh fixture errored: " .. tostring(fixtureError))
@@ -5963,6 +6095,241 @@ end
 
 -- ============================================================
 -- BfBot.Test.RunAll — Full test suite
+-- ============================================================
+-- Remaining-duration threshold / force re-cast (issue #84)
+-- ============================================================
+
+--- Live check of the active-buff policy: that an applied effect's remaining
+--- lifetime can really be read off this engine, that the threshold resolves
+--- from baldur.ini and the run-scoped toggle, and that the skip decision
+--- follows from the two.
+---
+--- Applies four tagged opcode-142 (portrait icon) effects to the party leader
+--- and removes them again with opcode 321 before returning, so nothing of the
+--- test survives it. A portrait icon carries no gameplay effect either way.
+function BfBot.Test.RefreshThreshold()
+    _reset()
+    P("")
+    P("========================================")
+    P("  Remaining-Duration Threshold")
+    P("========================================")
+    P("")
+
+    if BfBot.Exec.GetState() == "running" then
+        _warning("Skipping: exec currently running")
+        return _summary("RefreshThreshold")
+    end
+
+    -- ---- 1. API surface ----
+    _check(type(BfBot.Exec._EffectRemaining) == "function",
+        "_EffectRemaining is a function")
+    _check(type(BfBot.Exec._ActiveEffectRemaining) == "function",
+        "_ActiveEffectRemaining is a function")
+    _check(type(BfBot.Exec._ActiveStateMarkerRemaining) == "function",
+        "_ActiveStateMarkerRemaining is a function")
+    _check(type(BfBot.Exec._ActiveItemEffectRemaining) == "function",
+        "_ActiveItemEffectRemaining is a function")
+    _check(type(BfBot.Exec._RefreshThreshold) == "function",
+        "_RefreshThreshold is a function")
+    _check(type(BfBot.Exec._ActiveBlocksCast) == "function",
+        "_ActiveBlocksCast is a function")
+    _check(type(BfBot.Exec._ForceAll) == "function",
+        "_ForceAll is a function")
+    _check(type(BfBot.Exec.GetForceMode) == "function"
+            and type(BfBot.Exec.SetForceMode) == "function"
+            and type(BfBot.Exec.CycleForceMode) == "function",
+        "Exec owns the force selection, reachable without the panel")
+    _check(type(BfBot.Persist.GetRefreshBelow) == "function",
+        "Persist.GetRefreshBelow is a function")
+    _check(type(BfBot.UI.CycleForceRecast) == "function",
+        "UI.CycleForceRecast is a function")
+
+    -- ---- 2. Threshold resolution against the real baldur.ini ----
+    --
+    -- From here on the phase writes the player's real baldur.ini and
+    -- applies live effects to the protagonist, including a PERMANENT one.
+    -- This phase runs inside RunAll(), so an error in the middle must not
+    -- be able to leave either behind: a stuck portrait-icon effect and a
+    -- RefreshBelow of 864000 would read as "re-cast everything, always"
+    -- with no visible cause. Everything side-effecting therefore runs in
+    -- a pcall, and the restore below runs unconditionally.
+    local savedPref = BfBot.Persist.GetPref("RefreshBelow")
+    local TAG = "BFBTPRB"
+    local sprite = EEex_Sprite_GetInPortrait(0)
+
+    local guarded, guardErr = pcall(function()
+
+        BfBot.Persist.SetRefreshBelow(0)
+        _check(BfBot.Exec._RefreshThreshold(0) == 0,
+            "option off: threshold 0 - every active buff still skips")
+        _check(BfBot.Exec._RefreshThreshold(1) == BfBot.REFRESH_LOW_SECONDS,
+            "option off + Refresh Low: falls back to "
+                .. tostring(BfBot.REFRESH_LOW_SECONDS) .. "s")
+        -- Force All is a flag, not a threshold value: it must work with the
+        -- option off and leave the configured threshold untouched (#84).
+        _check(BfBot.Exec._RefreshThreshold(2) == 0,
+            "Force All does not pretend the threshold is infinite")
+        _check(BfBot.Exec._ForceAll(2) == true
+                and BfBot.Exec._ForceAll(1) == false
+                and BfBot.Exec._ForceAll(0) == false,
+            "Force All raises its own flag instead")
+
+        BfBot.Persist.SetRefreshBelow(45)
+        _check(BfBot.Persist.GetRefreshBelow() == 45,
+            "RefreshBelow round-trips through baldur.ini")
+        _check(BfBot.Exec._RefreshThreshold(0) == 45,
+            "option 45s reaches the default mode")
+        _check(BfBot.Exec._RefreshThreshold(1) == 45,
+            "Refresh Low prefers the configured option over the fallback")
+
+        -- A hand-edited baldur.ini must not widen the threshold.
+        BfBot.Persist.SetPref("RefreshBelow", -5)
+        _check(BfBot.Persist.GetRefreshBelow() == 0,
+            "a negative stored value validates back to off")
+        BfBot.Persist.SetPref("RefreshBelow", 10 * BfBot.MAX_REFRESH_BELOW)
+        _check(BfBot.Persist.GetRefreshBelow() == BfBot.MAX_REFRESH_BELOW,
+            "an oversized stored value clamps to "
+                .. tostring(BfBot.MAX_REFRESH_BELOW) .. "s")
+
+        -- ---- 3. Reading a LIVE applied effect ----
+        -- `sprite` is the handle the unconditional cleanup below uses; do not
+        -- shadow it here, or a probe could be applied to one sprite and
+        -- cleaned off another.
+        local now = BfBot.Exec._GetGameTime()
+        if not sprite then
+            _warning("No party leader - skipped the live effect reads")
+        elseif type(EEex_GameObject_ApplyEffect) ~= "function" then
+            _warning("EEex_GameObject_ApplyEffect missing - skipped live reads")
+        elseif type(now) ~= "number" then
+            _warning("World time unreadable - skipped the live effect reads")
+        else
+            local probes = {
+                { name = "60s timed",   durationType = 0,  duration = 60 },
+                { name = "150 ticks",   durationType = 10, duration = 150 },
+                { name = "permanent",   durationType = 9,  duration = 0 },
+                { name = "delayed 60s", durationType = 3,  duration = 60 },
+            }
+            local applied = 0
+            for _, probe in ipairs(probes) do
+                local ok = pcall(EEex_GameObject_ApplyEffect, sprite, {
+                    effectID     = 142,   -- Display Portrait Icon: timed, inert
+                    targetType   = 2,
+                    effectAmount = 1,
+                    durationType = probe.durationType,
+                    duration     = probe.duration,
+                    m_sourceRes  = TAG,
+                    sourceID     = sprite.m_id,
+                    sourceTarget = sprite.m_id,
+                })
+                if ok then applied = applied + 1
+                else _nok("could not apply the " .. probe.name .. " probe") end
+            end
+            _check(applied == #probes,
+                "applied " .. applied .. "/" .. #probes .. " probe effects")
+
+            -- Collect what the engine now reports for each of them.
+            local seen = {}
+            local permanent, pending, timed = 0, 0, 0
+            local permLeft, permDetail = nil, nil
+            pcall(function()
+                EEex_Utility_IterateCPtrList(sprite.m_timedEffectList,
+                    function(effect)
+                        if effect.m_sourceRes:get() ~= TAG then return end
+                        local left, detail =
+                            BfBot.Exec._EffectRemaining(effect, now)
+                        seen[#seen + 1] = string.format("dt=%s -> %s",
+                            tostring(effect.m_durationType),
+                            BfBot.Exec._FormatRemaining(left, detail))
+                        if detail == "perm" then
+                            permanent = permanent + 1
+                            permLeft, permDetail = left, detail
+                        elseif detail == "pending" then pending = pending + 1
+                        elseif detail == nil and left < math.huge then
+                            timed = timed + 1
+                        end
+                    end)
+            end)
+            for _, line in ipairs(seen) do P("    " .. line) end
+
+            _check(timed >= 2,
+                "both timed probes report a finite remaining lifetime ("
+                    .. timed .. ")")
+            _check(permanent >= 1, "the permanent probe reports permanent")
+            if pending < 1 then
+                _warning("the delayed probe already fired - timing 6 not seen")
+            else
+                _ok("the delayed probe reports pending, not a remainder")
+            end
+
+            -- The permanent and delayed probes must NOT hide the 60s deadline:
+            -- real spells carry such siblings (live Armor has an op174 in mode 7).
+            local left, detail = BfBot.Exec._ActiveEffectRemaining(sprite, TAG)
+            _check(detail == nil and type(left) == "number" and left < math.huge,
+                "a readable deadline wins over permanent/delayed siblings ("
+                    .. BfBot.Exec._FormatRemaining(left, detail) .. ")")
+            _check(type(left) == "number" and left > 30,
+                "and it is the LONGEST readable one, the 60s probe")
+            _check(BfBot.Exec._ActiveEffectRemaining(sprite, "BFBTNON") == nil,
+                "an unrelated resref reports nothing active")
+
+            -- The skip decision itself, on live data.
+            _check(BfBot.Exec._ActiveBlocksCast(left, 0, false) == true,
+                "an active buff blocks a cast at threshold 0")
+            _check(BfBot.Exec._ActiveBlocksCast(left, 3600, false) == false,
+                "and is cast again once the threshold is above what is left")
+            _check(BfBot.Exec._ActiveBlocksCast(left, 0, true) == false,
+                "Force All casts through regardless, at threshold 0")
+
+            -- The case only the flag can reach: the permanent probe reports no
+            -- remaining lifetime at all, so no threshold can ever refresh it.
+            if permDetail == "perm" then
+                _check(permLeft == math.huge,
+                    "the permanent probe reports no readable lifetime")
+                _check(BfBot.Exec._ActiveBlocksCast(permLeft,
+                        BfBot.MAX_REFRESH_BELOW, false) == true,
+                    "a permanent buff skips even at the largest threshold allowed")
+                _check(BfBot.Exec._ActiveBlocksCast(permLeft, 0, true) == false,
+                    "and Force All casts it again anyway")
+            else
+                _warning("no permanent probe measured - skipping the Force All "
+                    .. "override check on a permanent effect")
+            end
+
+        end
+
+    end)
+
+    -- ---- 4. Unconditional cleanup, whether or not the above finished ----
+    -- Opcode 321 removes effects by source resource. Safe to repeat: if
+    -- the probes were already removed it matches nothing.
+    if sprite and type(EEex_GameObject_ApplyEffect) == "function" then
+        pcall(EEex_GameObject_ApplyEffect, sprite, {
+            effectID     = 321,
+            targetType   = 2,
+            res          = TAG,
+            sourceID     = sprite.m_id,
+            sourceTarget = sprite.m_id,
+        })
+        local leftover = BfBot.Exec._ActiveEffectRemaining(sprite, TAG)
+        if leftover == nil then
+            _ok("probe effects removed again - nothing left on the sprite")
+        else
+            _nok("probe effects SURVIVED cleanup: reload without saving")
+        end
+    end
+
+    BfBot.Persist.SetPref("RefreshBelow", savedPref)
+    _check(BfBot.Persist.GetPref("RefreshBelow") == savedPref,
+        "restored the player's own RefreshBelow setting")
+
+    -- A failure inside the guarded part must fail the phase, not vanish.
+    if not guarded then
+        _nok("the guarded section errored: " .. tostring(guardErr))
+    end
+
+    return _summary("RefreshThreshold")
+end
+
 -- ============================================================
 
 function BfBot.Test.RunAll()
@@ -6083,6 +6450,10 @@ function BfBot.Test.RunAll()
     local mpOk = BfBot.Test.Mp()
     P("")
 
+    -- Phase 19: Remaining-duration threshold / force re-cast (issue #84)
+    local refreshOk = BfBot.Test.RefreshThreshold()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -6111,11 +6482,12 @@ function BfBot.Test.RunAll()
     P("  Items: " .. (itemsOk and "PASS" or "FAIL"))
     P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
+    P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk
 end
 
 -- ============================================================

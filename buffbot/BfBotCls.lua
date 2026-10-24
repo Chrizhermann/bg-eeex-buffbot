@@ -487,6 +487,135 @@ function BfBot.Class.ScoreOpcodes(header, ability, resref)
 end
 
 -- ============================================================
+-- Item Child-Spell Analysis
+-- ============================================================
+
+-- Item powers may deliver their buffs through immediate opcode-146 children.
+-- Adapted from Zach Hopkins' BuffBot Redux (MIT). Targeting remains authoritative
+-- on the item ability: a child does not change who may activate the power.
+-- Breadth-first traversal visits each SPL once at its shortest depth, so
+-- duplicate/case-varied links cannot inflate a buff's score. Two links match
+-- the existing duration/active-effect analysis. Anything beyond that, missing
+-- resources, or recursive delivery stays available for manual inclusion.
+-- An item child spell can have a harmless low-level header and a selection
+-- menu at a higher caster level. Classification is cached across casters, so
+-- inspect every child level for this unattended-casting restriction.
+function BfBot.Class._ItemOpensChoice(header, ability)
+    local pending = {{header = header, ability = ability, depth = 0}}
+    local seen, resourceCount = {}, 0
+    local index = 1
+    while index <= #pending do
+        local node = pending[index]
+        index = index + 1
+        local choice = false
+        BfBot.Class._IterateFeatureBlocks(node.header, node.ability, function(fb)
+            local opcode = fb[BfBot._fields.fb_opcode]
+            if opcode == 214 then choice = true; return true end
+            if opcode ~= 146 or node.depth >= 2 then return end
+            local res = _subSpellRef(fb)
+            local key = res and res:upper()
+            if not key or seen[key] or resourceCount >= 32 then return end
+            seen[key] = true
+            resourceCount = resourceCount + 1
+            local ok, childHeader = pcall(EEex_Resource_Demand, res, "SPL")
+            if not ok or not childHeader then return end
+            for n = 0, math.min(tonumber(childHeader.abilityCount) or 1, 256) - 1 do
+                local loaded, childAbility = pcall(function()
+                    return childHeader:getAbility(n)
+                end)
+                if loaded and childAbility then
+                    pending[#pending + 1] = {header = childHeader,
+                        ability = childAbility, depth = node.depth + 1}
+                end
+            end
+        end)
+        if choice then return true end
+    end
+    return false
+end
+
+function BfBot.Class._ScoreItemOpcodes(header, ability, resref)
+    local queue = { { header = header, ability = ability, resref = resref,
+        depth = 0, path = {} } }
+    local seen, edges = {}, {}
+    local score = 0
+    local extras = { splstates = {}, selfReplace = false, isToggle = false,
+        fbAoE = false, hasSubstantive = false, analysisIncomplete = false,
+        requiresSelection = BfBot.Class._ItemOpensChoice(header, ability) }
+    local index = 1
+    while index <= #queue do
+        local node = queue[index]
+        index = index + 1
+        local ownScore, own = BfBot.Class.ScoreOpcodes(
+            node.header, node.ability, node.resref)
+        score = score + ownScore
+        -- Child states provide classification evidence, but must not become
+        -- item-wide fast-negative markers: they may apply to other targets
+        -- or belong to only one branch. Keep legacy root markers unchanged;
+        -- the existing leaf/source checks handle wrapper active-buff skips.
+        if node.depth == 0 then extras.splstates = own.splstates end
+        extras.selfReplace = extras.selfReplace or own.selfReplace
+        extras.isToggle = extras.isToggle or own.isToggle
+        extras.hasSubstantive = extras.hasSubstantive or own.hasSubstantive
+        if node.depth == 0 then extras.fbAoE = own.fbAoE end
+
+        BfBot.Class._IterateFeatureBlocks(node.header, node.ability, function(fb)
+            if fb[BfBot._fields.fb_opcode] == 214 then extras.requiresSelection = true end
+            if fb[BfBot._fields.fb_opcode] ~= 146 then return end
+            local child = _subSpellRef(fb)
+            local key = child and child:upper()
+            if node.depth > 0 and key then
+                local parent = node.resref:upper()
+                edges[parent] = edges[parent] or {}
+                edges[parent][key] = true
+            end
+            local timing = bit.band(fb[BfBot._fields.fb_timing] or 0, 0xFF)
+            if not key or node.path[key]
+                or (timing ~= 0 and timing ~= 1 and timing ~= 9) then
+                extras.analysisIncomplete = true
+                return
+            end
+            if seen[key] then return end
+            if node.depth >= 2 or #queue >= 32 then
+                extras.analysisIncomplete = true
+                return
+            end
+            seen[key] = true
+            local ok, childHeader, childAbility = pcall(function()
+                local h = EEex_Resource_Demand(child, "SPL")
+                return h, h and h:getAbility(0)
+            end)
+            if not ok or not childHeader or not childAbility then
+                extras.analysisIncomplete = true
+                return
+            end
+            local path = {}
+            for ancestor in pairs(node.path) do path[ancestor] = true end
+            path[key] = true
+            queue[#queue + 1] = { header = childHeader, ability = childAbility,
+                resref = child, depth = node.depth + 1, path = path }
+        end)
+    end
+    -- Shortest-path de-duplication can hide a cycle whose nodes were reached
+    -- independently from the root (A -> B and B -> A). Check the graph too.
+    local visiting, finished = {}, {}
+    local function cyclic(key)
+        if visiting[key] then return true end
+        if finished[key] then return false end
+        visiting[key] = true
+        for child in pairs(edges[key] or {}) do
+            if cyclic(child) then return true end
+        end
+        visiting[key], finished[key] = nil, true
+        return false
+    end
+    for key in pairs(edges) do
+        if cyclic(key) then extras.analysisIncomplete = true; break end
+    end
+    return score, extras
+end
+
+-- ============================================================
 -- Variant Detection (Opcode 214 — Select Spell)
 -- ============================================================
 
@@ -598,7 +727,7 @@ end
 --- hierarchical spells (e.g. Prayer, Chaos of Battle, SR Barkskin)
 --- report the timed durations that live in their children.
 --- Depth-limited (max 2) and cycle-guarded to stay bounded.
-function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
+function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs, casterLevel)
     _depth = _depth or 0
     _visited = _visited or {}
     _leafs = _leafs or {}  -- collected op=146 sub-spell leaf resrefs
@@ -614,19 +743,36 @@ function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs)
         -- whose feature blocks carry the real timed effects. Recurse.
         if opcode == 146 and _depth < 2 then
             local subRes = _subSpellRef(fb)
-            if subRes and not _visited[subRes] then
-                _visited[subRes] = true
-                -- Collect the leaf resref. Dedupe comes from the _visited
-                -- guard above: a resref reaches this line at most once per
-                -- top-level GetDuration call (repeated op=146 to the same
-                -- sub-spell is skipped entirely).
-                table.insert(_leafs, subRes)
+            if not subRes then return end
+            local childLevel = fb[BfBot._fields.fb_param1]
+            if not childLevel or childLevel <= 0 then
+                childLevel = type(casterLevel) == "function"
+                    and casterLevel(subRes) or casterLevel
+            end
+            local key = subRes and subRes:upper()
+            -- A shared child may be cast at different fixed levels, or first
+            -- reached on a longer path. Neither should hide a later duration.
+            local visitKey = key and (key .. ":" .. tostring(childLevel or 0))
+            local seenDepth = visitKey and _visited[visitKey]
+            if key and (seenDepth == nil or _depth < seenDepth) then
+                _visited[visitKey] = _depth
+                local recorded = false
+                for _, leaf in ipairs(_leafs) do
+                    if leaf:upper() == key then recorded = true; break end
+                end
+                if not recorded then table.insert(_leafs, subRes) end
                 local rOk, subHdr = pcall(EEex_Resource_Demand, subRes, "SPL")
                 if rOk and subHdr then
-                    local subAbility = subHdr:getAbility(0)
-                    if subAbility then
+                    local subAbility
+                    local aOk = pcall(function()
+                        if childLevel and subHdr.getAbilityForLevel then
+                            subAbility = subHdr:getAbilityForLevel(childLevel)
+                        end
+                        subAbility = subAbility or subHdr:getAbility(0)
+                    end)
+                    if aOk and subAbility then
                         local subDur, subType = BfBot.Class.GetDuration(
-                            subHdr, subAbility, _depth + 1, _visited, _leafs)
+                            subHdr, subAbility, _depth + 1, _visited, _leafs, childLevel)
                         if subDur and subDur > 0 then
                             if subDur > maxDuration then maxDuration = subDur end
                         elseif subType == "permanent" then
@@ -862,6 +1008,9 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
         result.hasSubstantive = true
         result.noSubstance = false
         result.friendlyFlag = false
+        if sourceKind == "itm" then
+            result.requiresSelection = BfBot.Class._ItemOpensChoice(header, ability)
+        end
 
         -- Duration computed per-sprite in scan entry, not here (classification is resref-level)
         result.isAoE = BfBot.Class.IsAoE(ability, false)
@@ -893,11 +1042,15 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
 
     -- Step 3: Opcode score + extract metadata
     local opcodeExtras
-    result.opcodeScore, opcodeExtras = BfBot.Class.ScoreOpcodes(header, ability, resref)
+    local scoreOpcodes = sourceKind == "itm"
+        and BfBot.Class._ScoreItemOpcodes or BfBot.Class.ScoreOpcodes
+    result.opcodeScore, opcodeExtras = scoreOpcodes(header, ability, resref)
     result.splstates = opcodeExtras.splstates
     result.selfReplace = opcodeExtras.selfReplace
     result.isToggle = opcodeExtras.isToggle
     result.hasSubstantive = opcodeExtras.hasSubstantive
+    result.analysisIncomplete = opcodeExtras.analysisIncomplete or false
+    result.requiresSelection = opcodeExtras.requiresSelection or false
 
     -- Toggle penalty: opcode 318 self-ref = stance/toggle, not prebuff
     -- (opcode 321 self-ref = normal buff refresh, no penalty)
@@ -947,14 +1100,23 @@ function BfBot.Class.Classify(resref, header, ability, sourceKind, catalogKey)
         result.hasVariants = true
         result.variants = variants
         -- Parent spell with only infrastructure opcodes (op214) may score too low.
-        -- Inherit buff status if at least one variant exists.
-        if not result.isBuff then
+        -- Inherit buff status if at least one variant exists. A selector
+        -- cannot override the automatic exclusion of a detected stance;
+        -- keep its choices available for an explicit user include instead.
+        if not result.isBuff and not result.isToggle then
             result.isBuff = true
             result.isAmbiguous = false
         end
     else
         result.hasVariants = false
         result.variants = nil
+    end
+
+    -- An unresolved item graph needs manual inclusion. Discovering a variant
+    -- cannot turn an incomplete automatic classification back into a buff.
+    if result.analysisIncomplete then
+        result.isBuff = false
+        result.isAmbiguous = true
     end
 
     -- Cache and return

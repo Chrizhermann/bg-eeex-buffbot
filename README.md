@@ -20,6 +20,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 - **Quick Cast mode** — per-preset 3-state toggle (Off / Long only / All) for fast casting via Improved Alacrity. Long mode fast-casts only long-duration buffs, then casts short buffs normally. 5E casters still pause while that mod refreshes their spell slots
 - **F12 innate abilities** — each party character gets one innate per preset in their special abilities, triggering party-character buffing directly from gameplay without opening the panel
 - **Skip active buffs** — detects already-active buffs via spell state + effect list checks, including wrapper potion leaf spells. No wasted spell slots, stacks, or charges
+- **Refresh buffs that are nearly over** — a long buff that survived a rest with a tiny remainder is cast again instead of skipped. Set the threshold in EEex options, or force a re-cast for one run from the panel
 - **Manual override** — the Add picker can include spells the classifier missed and recover removed spells or items, grouped into separate sections
 - **Config export/import** — export a character's full setup to a file, import onto any character across saves or between players
 - **Save game persistence** — configuration saved per-character in EEex save games. Survives save/load automatically
@@ -92,6 +93,28 @@ Raw/manual copying is a development-only path from a source checkout, not the no
 - **F11** — keyboard shortcut
 - **F12 innates** — per-preset abilities in each character's special abilities
 
+In the unreleased development version, **right-click the actionbar gear** to
+choose a named party preset directly. This uses the existing preset slot across
+the party; each character keeps its own spells and targets. F12 shortcuts remain.
+
+The panel's **Search** field filters buff names for browsing. It does not change
+the preset's enabled entries, saved priorities, or casting queue. Clear the search
+to see the complete list again.
+
+The new **Speed** control selects Normal (default), 2x or 4x across preset starts.
+At 2x/4x, the whole game simulation advances faster during casting, including
+enemies and buff timers. Spells, selected variants and items retain engine-paced
+casting and resource use. Quick Cast is suspended during these accelerated runs; selecting
+Normal restores use of the saved Quick Cast settings. Rendering/FPS settings are
+unchanged. Acceleration is single-player only and stops on combat or unsafe UI
+transitions. The previous simulation rate is restored when the run ends or stops.
+Native BG2:EE 2.7.3.0 / EEex 1.3.1 tests cover two casters, items, selected variants,
+buff expiry and interruption/rate restoration. A subsequent EET/Spell Revisions/
+SCS/modpack lab also passed this bounded matrix with experimental Scroll component
+430 uninstalled and the published alpha.13 banking fix installed. The 430-inclusive
+configuration remains unaccepted. BG:EE and experimental 5E acceleration are outside
+that test's scope. See [measurements and limits](docs/validation-fork-qol.md).
+
 ### Basic Workflow
 
 1. Open the panel (F11 or actionbar button)
@@ -103,6 +126,7 @@ Raw/manual copying is a development-only path from a source checkout, not the no
 7. Reorder entries with the Up/Down buttons
 8. Click **Cast** to start buffing — or use the F12 innate for that preset
 9. **Quick Cast** button cycles Off → Long → All for fast casting
+10. **Active: Skip** button beside the status line cycles Skip → Refresh Low → Force All for this run
 
 ### Presets
 
@@ -117,6 +141,51 @@ Each spell or item row shows R1–R5. Click its repeat cell to increase the coun
 
 Repeats are target-major. With targets A and B at R2, BuffBot attempts A, A, B, B. A party-wide AoE at R2 is cast twice total, not twice per party member. Every repeat rechecks availability, target state, and active effects. A spell attempt consumes one available use and follows normal aura/casting rules; an item attempt consumes a stack or charge and follows normal item-use rules. Quick Cast applies only to spells. Skipped attempts consume nothing.
 
+### Active Buffs
+
+By default BuffBot skips a buff that is still running, however little of it is left. That is
+why a long buff can survive a rest with a tiny remainder and never get renewed.
+
+**EEex options → BuffBot → Refresh buffs that are nearly over** sets how much has to be left
+before BuffBot casts it again: off, under 1 minute, under 5 minutes, or under 1 hour. The
+threshold applies everywhere, including the F12 preset innates — which is where buffing after
+a rest usually happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`
+if none of the four suits you.
+
+**Under 1 hour is a wide net.** Durations here are the ones the panel's Dur column shows, so a
+vanilla Stoneskin at 1h is *already* below that threshold the moment you cast it, and every run
+will cast it again. Pick it when you want long buffs topped up aggressively; pick 1 or 5 minutes
+when you only want the ones that are genuinely about to run out.
+
+The **Active: Skip** button in the panel overrides that for one run:
+
+| State | What it does |
+|---|---|
+| **Active: Skip** | The default. Skip running buffs, with the option's threshold still applied |
+| **Active: Refresh Low** | Cast a running buff again when it is below the threshold — the option's value, or 5 minutes when the option is off |
+| **Active: Force All** | Cast every configured buff again, whatever is left of it, threshold or no threshold |
+
+The toggle belongs to the run, not to a preset: nothing is written to the save, and a game
+restart returns it to Skip.
+
+**Force All is unconditional.** It does not consult the option at all, so it works with the
+threshold off and ignores whatever value is set. It also casts buffs that never expire, which
+no threshold can reach: permanent effects and effects still inside their casting delay have no
+readable remaining lifetime, so a timer can never decide to refresh them. You will sometimes
+spend a slot on a buff that did not need it — that is the point of the button, and BuffBot will
+not second-guess it or ask you to confirm.
+
+Everything else still applies under Force All: a dead caster or target, a spent spell slot, a
+missing variant, an item that opens a selection menu and a live Project Image all still refuse
+the cast. Force only switches off the "is this already running" question. A row's repeat count
+then applies to buffs as well, and every attempt uses a spell slot or a charge.
+
+You can also set it without the panel, from the console:
+
+```lua
+BfBot.Exec.SetForceMode(2)   -- 0 skip active, 1 refresh low, 2 force all
+```
+
 ### Items and Potions
 
 BuffBot scans identified items in a party character's equipment, quick slots, and backpack. Each supported buff power from **F8 Use Item** gets its own row, including secondary powers on weapons. Powers keep their configuration when the item moves between slots. Exhausted powers remain visible with zero uses; the engine handles normal charges, consumption, and recharge rules.
@@ -128,7 +197,7 @@ In **EEex options → BuffBot → Inventory item use**, choose:
 
 Automatic swapping skips chest armor, gear the character cannot wear, and items with conditional usability restrictions. It also skips ambiguous equipment copies with the same item resource; equip the desired copy manually to use it. Unfinished swaps are recorded in the save for recovery after interruption or loading. If the relevant equipment has changed manually, BuffBot leaves it alone instead of overwriting the change.
 
-Scrolls, wands, and items inside containers or Bags of Holding remain unsupported. The expanded item support has been inspected offline against BG2:EE 2.6.6.0; deployment and in-game acceptance on BG:EE/BG2:EE are still pending.
+Scrolls, wands, and items inside containers or Bags of Holding remain unsupported. Native BG2:EE 2.7.3.0 / EEex 1.3.1 tests now cover potion and amulet consumption, temporary swaps into occupied and empty equipment slots, and restoration after Stop. This is bounded item coverage; BG:EE and the wider mod/item matrix remain unverified. See [the validation record](docs/validation-fork-qol.md).
 
 ### Summons and Clones
 
@@ -174,6 +243,7 @@ The following limitations remain:
 - **Windows only for export/import listing** — the file picker uses Windows `dir /b` for directory listing. The core export/import file I/O works on any platform, but the picker won't list files on macOS/Linux
 - **Clone F12 innates** — clones copy their owner's BuffBot innate icons, but activating those copies does not reliably route the preset to the clone. Use the Summons view or Cast All
 - **Deferred item sources** — scrolls, wands, and items inside containers or Bags of Holding are not scanned yet
+- **Charge-based buffs ignore the refresh threshold** — the threshold measures time. Stoneskin's real resource is its skins, so "timer still running, no skins left" is not detected; use Force All for those
 - **Automatic equipment swaps** — chest armor, unusable or conditionally usable gear, and ambiguous duplicate equipment copies require manual equipping; see [Items and Potions](#items-and-potions)
 - **5E Spellcasting support is experimental** — basic BG2:EE casting has been user-tested; the [limitations and wider testing needs](#5e-spellcasting-experimental) above still apply
 
@@ -261,6 +331,8 @@ bg-eeex-buffbot/
 
 ## Credits
 
+- **[Zach Hopkins](https://github.com/zach-hopkins/bg-eeex-buffbot)** — BuffBot Redux ideas and source contributions for HUD preset access, item discovery, child-spell durations, active-effect matching, temporary simulation acceleration and the themed control artwork
+- **[Pecca](https://www.gibberlings3.net/mods/ui/infinity-ui/)** — Infinity UI++, the artwork BuffBot's themed controls derive from, used with permission (see [ATTRIBUTION](ATTRIBUTION.md))
 - **[EEex](https://github.com/Bubb13/EEex)** by Bubb — makes this entire mod possible
 - **[Bubble Buffs](https://github.com/factubsio/BubbleBuffs)** by factubsio — original inspiration (Pathfinder: WotR)
 - **[5E Spellcasting](https://github.com/UnearthedArcana/5E_spellcasting)** by subtledoctor — the casting system used by BuffBot's experimental 5E compatibility
@@ -272,4 +344,6 @@ bg-eeex-buffbot/
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) for BuffBot's own code. The themed control artwork under
+`buffbot/visual/` is used with permission and is not covered by it — see
+[ATTRIBUTION](ATTRIBUTION.md) before redistributing it.

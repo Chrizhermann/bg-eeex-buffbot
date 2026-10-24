@@ -3,6 +3,19 @@
 BfBot = BfBot or {}
 
 local _registry = {
+    ["ui.search"] = { id = 454, fallback = [=[Search]=] },
+    ["ui.search.no_matches"] = { id = 455, fallback = [=[No matching spells or items]=] },
+    ["ui.quick_presets"] = { id = 456, fallback = [=[Cast party preset]=] },
+    ["ui.tooltip.hud_shortcuts"] = { id = 457, fallback = [=[BuffBot: left-click to configure; right-click to cast a party preset]=] },
+    ["ui.manual_only"] = { id = 458, fallback = [=[Manual]=] },
+    ["ui.speed.normal"] = { id = 460, fallback = [=[Speed: Normal]=] },
+    ["ui.speed.2x"] = { id = 461, fallback = [=[Speed: 2x]=] },
+    ["ui.speed.4x"] = { id = 462, fallback = [=[Speed: 4x]=] },
+    ["ui.speed.tooltip"] = { id = 463, fallback = [=[Applies to all preset starts. 2x and 4x temporarily accelerate the whole game with normal casting rules. Normal uses the saved Quick Cast setting. Click to cycle.]=] },
+    ["ui.quick_cast.suspended"] = { id = 464, fallback = [=[Quick Cast: Suspended]=] },
+    ["ui.quick_cast.tooltip_suspended"] = { id = 465, fallback = [=[Fast-forward uses normal casting rules. Your Quick Cast setting is saved and applies again at Normal speed.]=] },
+    ["reason.item.manual_selection"] = { id = 552, fallback = [=[This item opens a selection menu. Use it manually; BuffBot skips it.]=] },
+    ["reason.exec.fast_unavailable"] = { id = 553, fallback = [=[Fast-forward is unavailable here. Select Normal speed and try again.]=] },
     ["common.buffbot"] = { id = 300, fallback = [=[BuffBot]=] },
     ["common.party"] = { id = 301, fallback = [=[Party]=] },
     ["common.summons"] = { id = 302, fallback = [=[Summons]=] },
@@ -90,6 +103,18 @@ local _registry = {
     ["ui.category.unknown"] = { id = 451, fallback = [=[unknown]=] },
     ["ui.repeat.compact"] = { id = 452, fallback = [=[R{count}]=] },
     ["ui.lock.compact"] = { id = 453, fallback = [=[[L]]=] },
+    ["ui.header.spell"] = { id = 466, fallback = [=[Spell / Item]=] },
+    ["ui.header.duration"] = { id = 467, fallback = [=[Duration]=] },
+    ["ui.header.uses"] = { id = 468, fallback = [=[Uses]=] },
+    ["ui.header.repeats"] = { id = 469, fallback = [=[Rep.]=] },
+    ["ui.header.target"] = { id = 470, fallback = [=[Target]=] },
+    ["ui.header.lock"] = { id = 471, fallback = [=[Lock]=] },
+    ["ui.force_recast.off"] = { id = 472, fallback = [=[Active: Skip]=] },
+    ["ui.force_recast.low"] = { id = 473, fallback = [=[Active: Refresh Low]=] },
+    ["ui.force_recast.all"] = { id = 474, fallback = [=[Active: Force All]=] },
+    ["ui.force_recast.tooltip_off"] = { id = 475, fallback = [=[Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.]=] },
+    ["ui.force_recast.tooltip_low"] = { id = 476, fallback = [=[Cast a running buff again when less than {seconds}s of it are left. Click to cycle.]=] },
+    ["ui.force_recast.tooltip_all"] = { id = 477, fallback = [=[Cast every configured buff again, whatever is left of it - including buffs that never expire. Ignores the refresh threshold completely. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.]=] },
     ["feedback.no_luajit"] = { id = 500, fallback = [=[BuffBot: LuaJIT not detected. F12 innates, Quick Cast, Export/Import, and logging are disabled. Install EEex LuaJIT component for full functionality.]=] },
     ["feedback.combat_stopped"] = { id = 501, fallback = [=[BuffBot: Combat detected - casting stopped]=] },
     ["feedback.cast_timeout"] = { id = 502, fallback = [=[BuffBot: casting timed out - stopped]=] },
@@ -162,6 +187,12 @@ local _registry = {
     ["options.item_use_mode_description"] = { id = 714, fallback = [=[Choose how BuffBot uses items carried by this character. Equip mode temporarily equips wearable gear, uses it, then restores the previous equipment. Chest armor and unusable items are not automatically swapped.]=] },
     ["options.item_use_inventory"] = { id = 715, fallback = [=[Use from inventory]=] },
     ["options.item_use_swap"] = { id = 716, fallback = [=[Equip, use, and restore]=] },
+    ["options.refresh_below"] = { id = 717, fallback = [=[Refresh buffs that are nearly over]=] },
+    ["options.refresh_below_description"] = { id = 718, fallback = [=[Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. Under 1 hour is a wide net, not a small top-up: a freshly cast 1h buff such as vanilla Stoneskin is already below it and will be re-cast on every run. The panel's "Active: Force All" overrides this and casts everything again regardless. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.]=] },
+    ["options.refresh_below_off"] = { id = 719, fallback = [=[Off]=] },
+    ["options.refresh_below_1m"] = { id = 720, fallback = [=[Under 1 minute left]=] },
+    ["options.refresh_below_5m"] = { id = 721, fallback = [=[Under 5 minutes left]=] },
+    ["options.refresh_below_1h"] = { id = 722, fallback = [=[Under 1 hour left]=] },
 }
 
 local _registryById = {}
@@ -246,6 +277,8 @@ end
 -- caller-facing reason localization separate from arbitrary localization keys,
 -- and preserves prose returned by older hot-reloaded modules.
 local _reasonKeys = {
+    ["reason.item.manual_selection"] = "reason.item.manual_selection",
+    ["reason.exec.fast_unavailable"] = "reason.exec.fast_unavailable",
     ["reason.exec.empty_queue"] = "reason.exec.empty_queue",
     ["reason.exec.no_valid_entries"] = "reason.exec.no_valid_entries",
     ["reason.exec.already_running"] = "reason.exec.already_running",

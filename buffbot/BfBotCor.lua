@@ -6,9 +6,20 @@
 
 -- Root namespace
 BfBot = BfBot or {}
-BfBot.VERSION = "1.10.1"
+BfBot.VERSION = "1.12.0"
 BfBot.MAX_PRESETS = 8
 BfBot.MAX_SPELL_REPEATS = 5
+
+-- Remaining-duration threshold for the active-buff skip (issue #84). A buff
+-- whose remaining lifetime is BELOW the threshold is cast again instead of
+-- skipped, so a long buff that survived a rest with a tiny remainder gets a
+-- fresh timer. 0 keeps the historical behavior: every active buff skips.
+BfBot.MAX_REFRESH_BELOW = 86400  -- one game day; upper bound for RefreshBelow
+-- Threshold the panel's "Refresh low" state uses when RefreshBelow is off:
+-- five minutes. Same value as the LongThreshold default in BfBotPer.lua,
+-- which is what divides "long" from "short" — so "low" means "less of this
+-- buff is left than it takes to count as long at all".
+BfBot.REFRESH_LOW_SECONDS = 300
 
 -- ============================================================
 -- Logging

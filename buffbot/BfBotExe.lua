@@ -5,10 +5,21 @@
 
 BfBot.Exec = {}
 
--- Never reset this between runs, including _HardReset: queued callbacks
--- from an earlier run must not match a newly scheduled 5E refresh wait.
-local _next5eWaitToken = 0
-local _nextItemToken = 0
+-- Never reset callback counters between runs or module reloads: old native
+-- callbacks can remain queued while a replacement execution starts.
+local function _nextCallbackToken(name)
+    BfBot[name] = (BfBot[name] or 0) + 1
+    return BfBot[name]
+end
+
+-- A stopped run can leave native actions queued. Each advance belongs to one
+-- exact step, so a late callback can never advance a replacement run. Keep the
+-- counter on the root namespace: module reloads must not recycle old tokens.
+local function _advanceAction(key, caster)
+    caster.advanceToken = _nextCallbackToken("_nextExecAdvanceToken")
+    return string.format(
+        'EEex_LuaAction("BfBot.Exec._Advance([[%s]],%d)")', key, caster.advanceToken)
+end
 
 -- State
 BfBot.Exec._state = "idle"       -- "idle" | "running" | "done" | "stopped"
@@ -22,6 +33,8 @@ BfBot.Exec._skipCount = 0        -- entries skipped across all casters
 BfBot.Exec._totalEntries = 0     -- total entries across all casters
 BfBot.Exec._logFile = "buffbot_exec.log"
 BfBot.Exec._qcMode = 0              -- quick cast mode (0=off, 1=long, 2=all)
+BfBot.Exec._forceMode = 0           -- active-buff policy for the current run
+                                    -- (0=skip active, 1=refresh low, 2=force all; issue #84)
 BfBot.Exec._lastSafetyTick = 0  -- clock ticks of last safety check
 BfBot.Exec._lastProgressGameTime = nil  -- game-time of last forward progress (watchdog; nil until armed)
 BfBot.Exec._runPresetIdx = nil   -- preset driving the current run (late-join summon lookups, issue #19);
@@ -174,40 +187,260 @@ function BfBot.Exec._IsAlive(sprite)
     return EEex_BAnd(state, 0xFC0) == 0
 end
 
---- Check if a sprite has an active timed effect from a given spell resref.
-function BfBot.Exec._HasActiveEffect(sprite, resref)
-    if not sprite or not resref then return false end
-    local found = false
+-- ---- Remaining lifetime of an applied effect (issue #84) ----
+
+BfBot.Exec._TICKS_PER_SECOND = 15
+
+-- What a LIVE CGameEffect's m_durationType means. Measured in a BG2:EE
+-- 2.7.3.0 + EEex v1.3.1 lab on 2026-10-24 (issue #84) by applying one effect
+-- per encoded timing mode and reading the field back:
+--
+--   encoded 0 (seconds) -> 4096, m_duration = absolute deadline in ticks
+--   encoded 10 (ticks)  -> 4096, same
+--   encoded 4096        -> 4096, deadline kept as given
+--   encoded 1           -> 1, m_duration = 0
+--   encoded 9           -> 9, m_duration = 0
+--   encoded 3 (delayed) -> 6, m_duration = when the DELAY ends
+--   encoded 4 (delayed) -> 7 while delayed, then 1 once it fires
+--
+-- So only mode 4096 carries a readable remaining lifetime.
+--
+-- Do NOT mask a live m_durationType with 0xFF. That rule belongs to feature
+-- blocks read out of a SPL or ITM; here it would turn 4096 into 0.
+--
+-- Mode 2 (while equipped) is precaution, not a measured case: the probe never
+-- saw it reach m_timedEffectList. An equipped item's effect lives and dies
+-- with the item, never on a timer BuffBot could refresh.
+local _PERMANENT_TIMING = { [1] = true, [2] = true, [4] = true, [9] = true }
+
+-- Delayed effects that have not fired yet. m_duration is the end of the
+-- DELAY, not of the buff, so it must never be read as a remaining lifetime.
+-- 6 goes on to a 4096 deadline, 7 to permanent.
+local _PENDING_TIMING = { [6] = true, [7] = true }
+
+--- Remaining lifetime of ONE applied effect, in gameplay seconds.
+--- @return number: seconds left, or math.huge for permanent/pending/unreadable
+--- @return string|nil: "perm", "pending", "unknown", or nil for a real deadline
+function BfBot.Exec._EffectRemaining(effect, nowTicks)
+    local ok, timing, deadline = pcall(function()
+        return effect.m_durationType, effect.m_duration
+    end)
+    if not ok or type(timing) ~= "number" then return math.huge, "unknown" end
+    if _PERMANENT_TIMING[timing] then return math.huge, "perm" end
+    if _PENDING_TIMING[timing] then return math.huge, "pending" end
+    if timing ~= 4096 or type(deadline) ~= "number"
+        or type(nowTicks) ~= "number" then
+        return math.huge, "unknown"
+    end
+    local seconds = (deadline - nowTicks) / BfBot.Exec._TICKS_PER_SECOND
+    if seconds ~= seconds then return math.huge, "unknown" end  -- NaN
+    -- The engine sweeps expired effects only once per second per actor, so an
+    -- effect can sit up to 14 ticks past its deadline. Clamping at 0 keeps the
+    -- default threshold (0) behaving exactly like the old boolean check.
+    if seconds < 0 then return 0 end
+    return seconds
+end
+
+--- Human-readable remaining lifetime for a log line. Deliberately English and
+--- unlocalized: the exec log is a diagnostic file, not player-facing text.
+---
+--- Uses the SAME h/m/s staircase as BfBot.UI._FormatDuration, on purpose.
+--- Both format the same engine duration seconds, and a log line is read right
+--- beside the panel's Dur column and the option's label — when this printed
+--- flat minutes, "threshold 60m 0s" next to an option saying "Under 1 hour
+--- left" read like two different numbers and misled a reviewer into filing it
+--- as a units bug. Sub-minute values keep a decimal, which _FormatDuration
+--- has no use for but a near-expiry decision does.
+function BfBot.Exec._FormatRemaining(seconds, detail)
+    if detail == "perm" then return "permanent" end
+    if detail == "pending" then return "delayed, not started" end
+    if detail == "unknown" then return "unknown duration" end
+    if type(seconds) ~= "number" then return "unknown duration" end
+    if seconds == math.huge then return "permanent" end
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    if h > 0 then
+        if m > 0 then return string.format("%dh %dm left", h, m) end
+        return string.format("%dh left", h)
+    end
+    if m > 0 then
+        return string.format("%dm %ds left", m, math.floor(seconds % 60))
+    end
+    return string.format("%.1fs left", seconds)
+end
+
+--- Clamp a caller-supplied force mode to 0, 1 or 2. Anything else — a string
+--- from a console call, a stale value from a hot-reloaded module — falls back
+--- to 0, the conservative mode.
+function BfBot.Exec._NormalizeForceMode(value)
+    if value == 1 or value == 2 then return value end
+    return 0
+end
+
+--- Remaining-duration threshold for the current run, in gameplay seconds.
+--- A buff with at least this much left is skipped; anything below is cast
+--- again. Always a finite number of seconds; 0 is the historical behavior.
+--- @param forceMode number|nil: 0 skip active (default), 1 refresh low,
+---        2 force all. Defaults to the run-scoped mode set by Exec.Start.
+function BfBot.Exec._RefreshThreshold(forceMode)
+    if forceMode == nil then forceMode = BfBot.Exec._forceMode or 0 end
+
+    local configured = 0
+    if BfBot.Persist and BfBot.Persist.GetRefreshBelow then
+        local ok, value = pcall(BfBot.Persist.GetRefreshBelow)
+        if ok and type(value) == "number" then configured = value end
+    end
+    -- Refresh Low is the panel's "use a sensible value even though the option
+    -- is off" mode. It never overrides a configured threshold.
+    if forceMode == 1 and configured <= 0 then
+        return BfBot.REFRESH_LOW_SECONDS
+    end
+    return configured
+end
+
+--- Is the active-buff check off entirely for this run?
+---
+--- Force All is a hard override and deliberately NOT a threshold value
+--- (Christopher, 2026-10-24, issue #84: "einfach force als Überschreibung").
+--- Three things follow from that, and each is the reason it is its own flag:
+---   * it is independent of `RefreshBelow` and works with the option off,
+---   * it casts through PERMANENT effects (timing 1/2/4/9), which report no
+---     remaining lifetime at all and which no finite threshold can reach,
+---   * it needs no sentinel comparison, so the threshold stays a plain number
+---     everywhere and a stray math.huge cannot silently re-enable skipping.
+--- Wasted spell slots are accepted here by decision: a vanilla Stoneskin runs
+--- twelve hours, long buffs routinely survive a rest, and re-casting one or
+--- two of them unnecessarily is cheaper than guessing wrong. Do not add a
+--- heuristic that weakens this, and do not ask the player to confirm it.
+function BfBot.Exec._ForceAll(forceMode)
+    if forceMode == nil then forceMode = BfBot.Exec._forceMode or 0 end
+    return BfBot.Exec._NormalizeForceMode(forceMode) == 2
+end
+
+-- ---- The pending active-buff policy (what the NEXT run will use) ----
+--
+-- This lives here, not in BfBotUI, because the panel is being rebuilt (#81)
+-- and the rebuild should only have to re-place a button, never carry logic or
+-- state across. It also makes the policy reachable without a panel at all:
+--   BfBot.Exec.SetForceMode(2)   -- from the console or another module
+--
+-- Not persisted, by design: a game restart returns to Skip, so nobody finds
+-- their slots being spent by a setting they forgot they left on.
+BfBot.Exec._forceSelection = 0
+
+function BfBot.Exec.GetForceMode()
+    return BfBot.Exec._NormalizeForceMode(BfBot.Exec._forceSelection)
+end
+
+function BfBot.Exec.SetForceMode(value)
+    BfBot.Exec._forceSelection = BfBot.Exec._NormalizeForceMode(value)
+    return BfBot.Exec._forceSelection
+end
+
+--- Skip active → refresh low → force all → skip active.
+function BfBot.Exec.CycleForceMode()
+    return BfBot.Exec.SetForceMode((BfBot.Exec.GetForceMode() + 1) % 3)
+end
+
+--- Does an active buff with `remaining` seconds left block a cast?
+--- @param forceAll boolean|nil: when true nothing blocks, whatever is left.
+function BfBot.Exec._ActiveBlocksCast(remaining, threshold, forceAll)
+    if forceAll then return false end
+    if remaining == nil then return false end
+    -- Without a usable threshold, keep the conservative skip.
+    if type(remaining) ~= "number" or type(threshold) ~= "number" then
+        return true
+    end
+    return remaining >= threshold
+end
+
+--- Fold one more matched effect into a running result for the whole spell.
+---
+--- Effects with a readable deadline decide, and the LONGEST of them wins: a
+--- spell counts as active until its longest-lived real effect is nearly gone,
+--- so a short administrative marker never refreshes a buff that is still up.
+---
+--- Effects WITHOUT a readable deadline are not folded into that maximum, they
+--- are only remembered as a fallback. Real spells routinely carry one: live
+--- vanilla Armor (`SPWI102`, BG2:EE 2.7.3.0) applies op0/op142/op282 in mode
+--- 4096 with a 45-minute deadline plus an op174 stuck in mode 7. Letting that
+--- one effect win would report the whole buff as "never refresh" and the
+--- threshold would do nothing on real spells. If NO effect has a readable
+--- deadline the fallback is returned, which is math.huge and keeps the skip.
+local function _foldRemaining(best, seconds, detail)
+    local readable = (detail == nil and seconds < math.huge)
+    if readable then
+        if not best or not best.readable or seconds > best.remaining then
+            return { remaining = seconds, detail = nil, readable = true }
+        end
+        return best
+    end
+    if best then return best end
+    return { remaining = seconds, detail = detail, readable = false }
+end
+
+--- Remaining lifetime of a sprite's timed effects from a given spell resref.
+--- @return number|nil: seconds left (math.huge = permanent/unreadable), or
+---         nil when no effect from that resref is on the sprite
+--- @return string|nil: "perm", "pending", "unknown", or nil
+function BfBot.Exec._ActiveEffectRemaining(sprite, resref)
+    if not sprite or type(resref) ~= "string" or resref == "" then return nil end
+    -- Resource identity is case-insensitive, including modded child spells.
+    resref = resref:upper()
+    local now = BfBot.Exec._GetGameTime()
+    local best
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
             local effectRes = effect.m_sourceRes:get()
-            if effectRes and effectRes == resref then
-                found = true
-                return true -- stop iteration
+            if type(effectRes) == "string" and effectRes:upper() == resref then
+                local seconds, detail = BfBot.Exec._EffectRemaining(effect, now)
+                best = _foldRemaining(best, seconds, detail)
             end
         end)
     end)
-    return ok and found
+    if not ok or not best then return nil end
+    return best.remaining, best.detail
 end
 
-function BfBot.Exec._HasActiveItemEffect(sprite, resref, signatures)
-    if not signatures or #signatures == 0 then return false end
-    local matched, remaining = {}, #signatures
+--- Boolean form, for callers that only ask "is anything from this resref on
+--- the sprite" — the BFBTCH cheat-buff sweep, not the skip decision.
+function BfBot.Exec._HasActiveEffect(sprite, resref)
+    return BfBot.Exec._ActiveEffectRemaining(sprite, resref) ~= nil
+end
+
+--- Remaining lifetime of an item ability's effects, identified by the full
+--- signature set (opcode/amount/flags) the ability applies. All signatures
+--- must be present, exactly as the legacy boolean check required.
+function BfBot.Exec._ActiveItemEffectRemaining(sprite, resref, signatures)
+    if not sprite or type(resref) ~= "string" or resref == "" then return nil end
+    if not signatures or #signatures == 0 then return nil end
+    resref = resref:upper()
+    local now = BfBot.Exec._GetGameTime()
+    local matched, missing, best = {}, #signatures, nil
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
-            if effect.m_sourceRes:get() ~= resref then return end
+            local effectRes = effect.m_sourceRes:get()
+            if type(effectRes) ~= "string" or effectRes:upper() ~= resref then return end
             for i, sig in ipairs(signatures) do
                 if not matched[i] and effect.m_effectId == sig.opcode
                     and effect.m_effectAmount == sig.amount
                     and effect.m_dWFlags == sig.flags then
                     matched[i] = true
-                    remaining = remaining - 1
+                    missing = missing - 1
+                    local seconds, detail =
+                        BfBot.Exec._EffectRemaining(effect, now)
+                    best = _foldRemaining(best, seconds, detail)
                 end
             end
-            if remaining == 0 then return true end
         end)
     end)
-    return ok and remaining == 0
+    if not ok or missing ~= 0 or not best then return nil end
+    return best.remaining, best.detail
+end
+
+function BfBot.Exec._HasActiveItemEffect(sprite, resref, signatures)
+    return BfBot.Exec._ActiveItemEffectRemaining(sprite, resref, signatures)
+        ~= nil
 end
 
 --- Check whether any of the supplied SPLSTATE IDs is active on a sprite.
@@ -223,38 +456,49 @@ function BfBot.Exec._HasAnySpellState(sprite, stateIDs)
     return false
 end
 
---- Confirm that a spell's own active SPLSTATE marker is on the target.
+--- Remaining lifetime of a spell's own active SPLSTATE marker on the target.
 --- Matching source resref alone is deliberately insufficient: other permanent
 --- administrative effects from the same spell may outlive the real buff.
-function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
-    if not sprite or not resref or not stateIDs or #stateIDs == 0 then
-        return false
+--- @return number|nil: seconds left (math.huge = permanent/unreadable), or nil
+--- @return string|nil: "perm", "pending", "unknown", or nil
+function BfBot.Exec._ActiveStateMarkerRemaining(sprite, resref, stateIDs)
+    if not sprite or type(resref) ~= "string" or resref == ""
+        or not stateIDs or #stateIDs == 0 then
+        return nil
     end
+    resref = resref:upper()
 
     local wanted = {}
     for _, stateID in ipairs(stateIDs) do wanted[stateID] = true end
 
-    local found = false
+    local now = BfBot.Exec._GetGameTime()
+    local best
     local ok = pcall(function()
         EEex_Utility_IterateCPtrList(sprite.m_timedEffectList, function(effect)
             local effectRes = effect.m_sourceRes:get()
             local opcode = effect.m_effectId
             local stateID = effect.m_dWFlags
-            if effectRes == resref
+            if type(effectRes) == "string" and effectRes:upper() == resref
                 and (opcode == 282 or opcode == 328)
                 and wanted[stateID] then
-                found = true
-                return true -- stop iteration
+                local seconds, detail = BfBot.Exec._EffectRemaining(effect, now)
+                best = _foldRemaining(best, seconds, detail)
             end
         end)
     end)
-    return ok and found
+    if not ok or not best then return nil end
+    return best.remaining, best.detail
+end
+
+function BfBot.Exec._HasActiveStateMarker(sprite, resref, stateIDs)
+    return BfBot.Exec._ActiveStateMarkerRemaining(sprite, resref, stateIDs)
+        ~= nil
 end
 
 --- Programmatically consume one spell slot for a given spell resref.
---- Sets m_flags = 0 on the first available memorized entry matching the resref.
+--- Clears the memorized bit on the first available entry matching the resref.
 --- Used by the variant spell path to consume the parent spell slot before
---- casting the variant directly via ReallyForceSpellRES.
+--- casting the unmemorized variant via SpellNoDecRES.
 --- @param sprite userdata: the casting sprite
 --- @param resref string: the parent spell resref to consume
 --- @return boolean: true if slot consumed, false if no available slot found
@@ -291,8 +535,8 @@ function BfBot.Exec._ConsumeSpellSlot(sprite, resref)
         EEex_Utility_IterateCPtrList(levelList, function(spell)
             if consumed then return true end
             local sid = spell.m_spellId:get()
-            if sid == resref and spell.m_flags == 1 then
-                spell.m_flags = 0
+            if sid:upper() == resref:upper() and bit.band(spell.m_flags, 1) ~= 0 then
+                spell.m_flags = bit.band(spell.m_flags, bit.bnot(1))
                 consumed = true
                 return true
             end
@@ -542,8 +786,10 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
             local durCat = entry.durCat or "short"
             isCheat = (durCat == "permanent" or durCat == "long")
         end
-        if kind == "itm" then
-            isCheat = false  -- Quick Cast / IA wrapper doesn't apply to UseItem
+        if kind == "itm" or (BfBot.Fast and BfBot.Fast.run) then
+            -- Items and accelerated native runs never use the IA helper.
+            -- This also covers summons joining after Fast.Start's queue copy.
+            isCheat = false
         end
 
         for _, tgt in ipairs(targets) do
@@ -635,6 +881,16 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
         return false
     end
 
+    -- Interactive item powers require a player choice. Refuse before any
+    -- equip/use action is queued, including manually added classifier misses.
+    if entry.kind == "itm" and spellData.requiresChoice == 1 then
+        local reason = BfBot.L10N and BfBot.L10N.Get("reason.item.manual_selection")
+            or "This item requires manual selection"
+        BfBot.Exec._LogEntry("SKIP", label .. " (" .. reason .. ")")
+        BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+        return false
+    end
+
     -- Target alive (skip for "Myself")
     if entry.targetObj ~= "Myself" then
         if not BfBot.Exec._IsAlive(entry.targetSprite) then
@@ -677,7 +933,17 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
         end
     end
 
-    local foundActive = nil
+    -- Active-buff policy for this run (issue #84). The threshold is seconds;
+    -- 0 is the historical behavior, where every active buff skips whatever is
+    -- left of it. forceAll is the hard override and outranks the threshold.
+    -- Every other precondition above and below stays in force.
+    local threshold = BfBot.Exec._RefreshThreshold()
+    local forceAll = BfBot.Exec._ForceAll()
+
+    local foundActive = nil       -- resref whose buff blocks the cast
+    local foundRemaining = nil    -- its remaining lifetime, for the log line
+    local foundDetail = nil
+    local refreshing = nil        -- resref/remaining of a below-threshold buff
     local splstatePositive = false
 
     -- Items deliberately retain their legacy fast-negative + source-resref
@@ -700,38 +966,72 @@ function BfBot.Exec._CheckEntry(entry, casterSprite)
             markerStates = entry.splstates
         end
 
-        local active = false
+        local remaining, detail = nil, nil
         if markerStates and #markerStates > 0 then
             local stateActive = BfBot.Exec._HasAnySpellState(
                 targetSprite, markerStates)
             if stateActive then
                 splstatePositive = true
-                active = BfBot.Exec._HasActiveStateMarker(
+                remaining, detail = BfBot.Exec._ActiveStateMarkerRemaining(
                     targetSprite, r, markerStates)
             end
             -- No declared state active is a fast negative for this resref.
         elseif entry.kind == "itm" and entry.itemMultiAbility == 1
             and r == entry.itemResref then
-            active = BfBot.Exec._HasActiveItemEffect(
+            remaining, detail = BfBot.Exec._ActiveItemEffectRemaining(
                 targetSprite, r, entry.itemEffects)
         else
-            active = BfBot.Exec._HasActiveEffect(targetSprite, r)
+            remaining, detail =
+                BfBot.Exec._ActiveEffectRemaining(targetSprite, r)
         end
 
-        if active then
-            foundActive = r
-            break
+        -- A hot-reloaded older module (or a test stub) can still answer with
+        -- a boolean. Fold any non-number answer: truthy means "active, but
+        -- its lifetime is unknown", which keeps the conservative skip, and
+        -- falsy means not active. `false ~= nil` in Lua, so the falsy case
+        -- has to be spelled out.
+        if remaining ~= nil and type(remaining) ~= "number" then
+            if remaining then
+                remaining, detail = math.huge, "unknown"
+            else
+                remaining, detail = nil, nil
+            end
+        end
+
+        if remaining ~= nil then
+            if BfBot.Exec._ActiveBlocksCast(remaining, threshold, forceAll) then
+                -- Longest-lived blocker wins, so the log names the buff that
+                -- actually keeps this entry from casting.
+                if not foundActive or remaining > foundRemaining then
+                    foundActive, foundRemaining, foundDetail = r, remaining, detail
+                end
+            elseif not refreshing or remaining < refreshing.remaining then
+                refreshing = { resref = r, remaining = remaining }
+            end
         end
     end
 
     if foundActive then
-        BfBot.Exec._LogEntry("SKIP", label .. " (already active: " .. foundActive .. ")")
+        BfBot.Exec._LogEntry("SKIP", label .. " (already active: " .. foundActive
+            .. ", " .. BfBot.Exec._FormatRemaining(foundRemaining, foundDetail)
+            .. ")")
         BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
         return false
     end
 
-    -- SPLSTATE said active but effect list disagrees — old logic would have falsely skipped
-    if splstatePositive then
+    if refreshing then
+        local why = forceAll and "force all"
+            or ("threshold "
+                .. (BfBot.Exec._FormatRemaining(threshold):gsub(" left", "")))
+        BfBot.Exec._LogEntry("INFO", label .. " (refreshing: " .. refreshing.resref
+            .. ", " .. BfBot.Exec._FormatRemaining(refreshing.remaining)
+            .. ", " .. why .. ")")
+    end
+
+    -- SPLSTATE said active but effect list disagrees — old logic would have falsely skipped.
+    -- `refreshing` means the effect list AGREED and the threshold is what let the
+    -- cast through, so claiming a false positive there would be wrong (issue #84).
+    if splstatePositive and not refreshing then
         BfBot.Exec._LogEntry("INFO", label .. " (splstate false positive caught, checked " .. table.concat(checkResrefs, ",") .. ")")
     end
 
@@ -740,7 +1040,8 @@ end
 
 -- Item actions use live slots, never stored slots from a preset. XEquipItem
 -- EQUIP swaps its source and destination; UNEQUIP only removes effects and
--- must NOT be used to move gear back. Confirmed in BG2EE 2.6.6 action code.
+-- must NOT be used to move gear back. Never target backpack slot 18: BG2EE
+-- 2.7.3 writes past its quick-item array there and corrupts the sprite's name.
 local function _itemAt(sprite, slot)
     local item = sprite.m_equipment.m_items:get(slot)
     return item, item and item.pRes.resref:get() or ""
@@ -807,8 +1108,7 @@ function BfBot.Exec._ItemRestored(slot, token)
         caster.itemToken = nil
         if BfBot.Exec._state == "running" and not caster.done then
             -- Put the next step after weapon-selection restoration.
-            EEex_Action_QueueResponseStringOnAIBase(string.format(
-                'EEex_LuaAction("BfBot.Exec._Advance([[%s]])")', key), sprite)
+            EEex_Action_QueueResponseStringOnAIBase(_advanceAction(key, caster), sprite)
         end
     end
 end
@@ -833,11 +1133,20 @@ function BfBot.Exec._RestoreItemAtSlot(slot, token)
     end
     local _, equip = _itemAt(sprite, journal.equip)
     local move, destination
-    if equip == journal.item then
-        if not _uniqueItem(sprite, journal.item) then return end
-        move, destination = journal.item, journal.pack
-    elseif journal.previous ~= "" then
+    if equip == journal.item and not _uniqueItem(sprite, journal.item) then return end
+    if journal.previous ~= "" then
+        -- Reverse the exchange by equipping the displaced item. This restores
+        -- both exact slots without targeting the unsafe first backpack slot.
         move, destination = journal.previous, journal.equip
+    elseif equip == journal.item then
+        if journal.pack == 18 then
+            -- Native XEquipItem's empty-resref form selects the first empty
+            -- backpack slot. _swapMatches proved slot 18 empty, so the source
+            -- is unambiguous and exchanging it with equip restores both slots.
+            move, destination = "", journal.equip
+        else
+            move, destination = journal.item, journal.pack
+        end
     end
     journal.phase = "restoring"
     journal.restoreAttempt = (journal.restoreAttempt or 0) + 1
@@ -916,8 +1225,7 @@ function BfBot.Exec._RecoverItemSwaps()
                 and caster.itemToken == journal.token and journal.token ~= nil
             if not active then
                 if not journal.token then
-                    _nextItemToken = _nextItemToken + 1
-                    journal.token = _nextItemToken
+                    journal.token = _nextCallbackToken("_nextExecItemToken")
                 end
                 -- Run the check behind any already queued forward exchange.
                 -- Stop can happen before XEquipItem itself has executed.
@@ -943,8 +1251,7 @@ function BfBot.Exec._QueueItem(key, caster, entry, row, sprite, advanceAction)
             BfBot.Exec._LogEntry("SKIP", entry.spellName .. " (" .. tostring(reason) .. ")")
             return false
         end
-        _nextItemToken = _nextItemToken + 1
-        journal.token, journal.phase = _nextItemToken, "equipping"
+        journal.token, journal.phase = _nextCallbackToken("_nextExecItemToken"), "equipping"
         caster.itemToken = journal.token
         BfBot.Persist.SetItemSwap(sprite, journal)
         EEex_Action_QueueResponseStringOnAIBase(string.format(
@@ -1054,8 +1361,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
             end
             -- Each scheduled wait has its own token, even when an earlier
             -- run stopped at the same caster and queue index.
-            _next5eWaitToken = _next5eWaitToken + 1
-            caster.d5WaitToken = _next5eWaitToken
+            caster.d5WaitToken = _nextCallbackToken("_nextExec5eWaitToken")
             caster.d5WaitIndex = index
             EEex_Action_QueueResponseStringOnAIBase(
                 string.format("SmallWait(%d)", waitTicks), sprite)
@@ -1127,14 +1433,13 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     -- Cast the spell or use the item. The advance callback embeds the caster
     -- key as a Lua
     -- LONG-BRACKET string literal:
-    --   EEex_LuaAction("BfBot.Exec._Advance([[p0]])")
+    --   EEex_LuaAction("BfBot.Exec._Advance([[p0]],123)")
     -- NOT single quotes: the BCS tokenizer strips single quotes inside a
     -- double-quoted action argument (verified live 2026-07-11 — 'p0' arrives
     -- as the nil global p0). Caster keys are alphanumeric by construction
     -- ("^p%d$" / "^s%d+$"), so "]]" can never appear in a key; long brackets
     -- are therefore always safe here.
-    local advanceAction = string.format(
-        "EEex_LuaAction(\"BfBot.Exec._Advance([[%s]])\")", key)
+    local advanceAction = _advanceAction(key, caster)
 
     if entry.kind == "itm" then
         if not BfBot.Exec._QueueItem(key, caster, entry, spellScan, sprite, advanceAction) then
@@ -1156,8 +1461,9 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
         BfBot.Exec._castCount = BfBot.Exec._castCount + 1
 
     elseif entry.var then
-        -- Variant spell path: consume parent spell slot, then cast the variant
-        -- directly via ReallyForceSpellRES (variant SPL is not in the spellbook)
+        -- Consume the parent slot, then cast its unmemorized child through the
+        -- normal, interruptible casting/aura path without debiting the child.
+        -- ReallyForceSpellRES would bypass both casting time and aura.
         if not BfBot.Exec._ConsumeSpellSlot(sprite, entry.resref) then
             BfBot.Exec._LogEntry("SKIP",
                 entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName
@@ -1165,7 +1471,7 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
             return BfBot.Exec._ProcessCasterEntry(key, index + 1)
         end
-        local varAction = string.format('ReallyForceSpellRES("%s",%s)', entry.var, entry.targetObj)
+        local varAction = string.format('SpellNoDecRES("%s",%s)', entry.var, entry.targetObj)
         EEex_Action_QueueResponseStringOnAIBase(varAction, sprite)
         EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
         BfBot.Exec._LogEntry("CAST",
@@ -1240,10 +1546,12 @@ end
 
 --- Called by the engine via EEex_LuaAction after a caster's spell completes.
 -- @param key string: caster key ("p<slot>" / "s<oid>") into _casters
-function BfBot.Exec._Advance(key)
+function BfBot.Exec._Advance(key, token)
     if BfBot.Exec._state ~= "running" then return end
     local caster = BfBot.Exec._casters[key]
     if not caster or caster.done then return end
+    if token == nil or token ~= caster.advanceToken then return end
+    caster.advanceToken = nil
 
     -- 5E Spellcasting: the wrapper's delayed refresh counts from the moment
     -- its cast finished, which is now.
@@ -1255,14 +1563,14 @@ function BfBot.Exec._Advance(key)
     BfBot.Exec._ProcessCasterEntry(key, caster.index + 1)
 end
 
---- Reset all execution state without touching engine memory.
+--- Reset execution state without dereferencing cached sprites.
 --- Used to recover from save-reload mid-cast (issue #38). Caster records
 --- hold plain refs (never sprite userdata), so clearing the table is pure
---- Lua — no engine pointer is ever dereferenced here. Caller is responsible
---- for closing the exec log (see Stop / _Complete recovery branches); this
---- keeps the function side-effect free so the in-game test suite can capture
---- its own output to the log around each subtest.
+--- Lua. Fast.Reset independently restores the owned global simulation rate.
+--- The caller closes the exec log (see Stop / _Complete recovery branches),
+--- allowing the in-game test suite to capture its output around each subtest.
 function BfBot.Exec._HardReset()
+    if BfBot.Fast then BfBot.Fast.Reset("execution reset") end
     BfBot.Exec._state         = "idle"
     BfBot.Exec._casters       = {}
     BfBot.Exec._activeCasters = 0
@@ -1270,6 +1578,7 @@ function BfBot.Exec._HardReset()
     BfBot.Exec._skipCount     = 0
     BfBot.Exec._totalEntries  = 0
     BfBot.Exec._qcMode        = 0
+    BfBot.Exec._forceMode     = 0
     BfBot.Exec._lastProgressGameTime = nil
     BfBot.Exec._runPresetIdx  = nil
     BfBot.Exec._pendingLateJoin = {}
@@ -1353,6 +1662,7 @@ function BfBot.Exec._Complete()
     BfBot.Exec._StripCheatBuffs()
 
     BfBot.Exec._state = "done"
+    if BfBot.Fast then BfBot.Fast.CheckDone() end
     local cast = BfBot.Exec._castCount
     local skip = BfBot.Exec._skipCount
     local total = cast + skip
@@ -1377,6 +1687,7 @@ end
 --- unconditional safety net so the UI can never lock regardless of cause.
 --- @param reason string: logged WARN explaining why the run was force-completed
 function BfBot.Exec._ForceComplete(reason)
+    if BfBot.Fast then BfBot.Fast.Reset("execution timeout") end
     -- Clean up lingering cheat buffs (see _Complete/Stop for the re-resolve rationale).
     BfBot.Exec._StripCheatBuffs()
 
@@ -1598,8 +1909,21 @@ end
 --     preset (late-join listener, issue #19). Raw/console queues pass
 --     nothing → nil → late-join stays inert for that run (correct: there
 --     is no preset to look a summon's config up under).
+-- @param forceMode OPTIONAL run-scoped active-buff policy (issue #84):
+--     0/nil = skip active buffs (the RefreshBelow option still applies),
+--     1 = refresh buffs below the threshold, 2 = cast everything. Deliberately
+--     per RUN, not per preset: nothing about it is written to the save.
+--     Every player-facing entry point passes the selection, the F12 innates
+--     included. Only a raw console queue passes nothing and therefore runs
+--     with the RefreshBelow option alone.
 -- @return true + nil + nil if started; false + reasonCode + detail if not
-function BfBot.Exec.Start(queue, qcMode, presetIdx)
+function BfBot.Exec.Start(queue, qcMode, presetIdx, forceMode)
+    -- Do not start a Normal/Quick Cast run at a rate whose restoration is
+    -- still pending. Fast.Start's initial delegation has no releaseReason.
+    if BfBot.Fast and BfBot.Fast.run and BfBot.Fast.run.releaseReason then
+        return false, "reason.exec.fast_unavailable",
+            { reason = "simulation speed restoration pending" }
+    end
     if BfBot.Exec._state == "running" then
         BfBot._Print("[BuffBot] Already running. Call BfBot.Exec.Stop() first.")
         return false, "reason.exec.already_running", {}
@@ -1617,6 +1941,7 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
     BfBot.Exec._skipCount = 0
     BfBot.Exec._totalEntries = 0
     BfBot.Exec._qcMode = qcMode or 0
+    BfBot.Exec._forceMode = BfBot.Exec._NormalizeForceMode(forceMode)
     BfBot.Exec._lastProgressGameTime = nil
     BfBot.Exec._runPresetIdx = (type(presetIdx) == "number") and presetIdx or nil
     BfBot.Exec._pendingLateJoin = {}
@@ -1636,7 +1961,18 @@ function BfBot.Exec.Start(queue, qcMode, presetIdx)
     local casterCount = 0
     local qcLabel = BfBot.Exec._qcMode == 2 and " (Quick Cast: All)"
         or BfBot.Exec._qcMode == 1 and " (Quick Cast: Long)" or ""
-    BfBot._Print("[BuffBot] === Starting Execution: " .. totalEntries .. " entries" .. qcLabel .. " ===")
+    -- Force All outranks the threshold, so the banner names it alone: under
+    -- the override the configured threshold has no bearing on the run.
+    local forceLabel = ""
+    local threshold = BfBot.Exec._RefreshThreshold()
+    if BfBot.Exec._ForceAll() then
+        forceLabel = " (Force all: active buffs cast again)"
+    elseif threshold > 0 then
+        forceLabel = " (Refresh below "
+            .. (BfBot.Exec._FormatRemaining(threshold):gsub(" left", "")) .. ")"
+    end
+    BfBot._Print("[BuffBot] === Starting Execution: " .. totalEntries .. " entries"
+        .. qcLabel .. forceLabel .. " ===")
 
     -- Sort caster keys for deterministic display order ("p0".."p5" sort
     -- ahead of "s<oid>" lexicographically — party first, then summons)
@@ -1690,6 +2026,7 @@ end
 
 --- Stop execution mid-queue.
 function BfBot.Exec.Stop()
+    if BfBot.Fast then BfBot.Fast.Reset("stopped") end
     -- Fast-path recovery from save-reload mid-cast with party composition
     -- change (issue #38): hard-reset to idle without entering the cleanup
     -- loop — there's nothing to clean up because the buffs were applied to
@@ -1728,6 +2065,9 @@ end
 -- Called every frame by .menu enabled tick, rate-limited to ~2 seconds.
 -- NOT toggleable — this is the hard safety guarantee.
 function BfBot.Exec._SafetyTick()
+    -- Fast-forward guards use wall time and must run before the normal
+    -- two-second maintenance throttle, including while the world is paused.
+    if BfBot.Fast then BfBot.Fast.Tick() end
     -- Rate-limit: ~2 seconds between checks
     local now = Infinity_GetClockTicks()
     if now - BfBot.Exec._lastSafetyTick < 2000 then return end

@@ -288,6 +288,7 @@ BfBot.Theme._OWNED_MENUS = {
     "BUFFBOT_SPELLPICKER",
     "BUFFBOT_IMPORT",
     "BUFFBOT_VARIANTS",
+    "BUFFBOT_QUICK_PRESETS",
 }
 
 --- Compute the correct point size for a uiItem by looking up its font name
@@ -497,6 +498,38 @@ function BfBot.Theme._GetAccentIndex()
     return ({bg2=1, sod=2, bg1=3})[accent] or 1
 end
 
+-- ============================================================
+-- Themed control art (buffbot/visual)
+-- ============================================================
+-- The control BAMs are BAM V2: their pixels live in the numbered PVRZ pages
+-- shipped beside them. Each skin has its own look, carried either by the file
+-- name (BFBCHK<skin>) or by the cycle. The art carries a separate usage
+-- permission — see ATTRIBUTION.md — so an install can legitimately be without
+-- it. Every caller must degrade to the text markers rather than render blank.
+
+--- Skin index into the control art: 0 SoD, 1 IWD, 2 BG1, 3 BG2.
+-- BuffBot has no IWD palette; its accents map onto the other three.
+function BfBot.Theme.ControlSkin()
+    return ({ sod = 0, bg1 = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
+end
+
+--- True once the control art is confirmed present. Cached: a missing resource
+--- cannot appear while the game runs, and this is read per rendered row.
+function BfBot.Theme.HasControlArt()
+    if BfBot.Theme._controlArt ~= nil then return BfBot.Theme._controlArt end
+    if type(EEex_Resource_Fetch) ~= "function" then return false end
+    for _, resref in ipairs({ "BFBCHK0", "BFBCHK1", "BFBCHK2", "BFBCHK3", "BFBGLYPH" }) do
+        local ok, found = pcall(EEex_Resource_Fetch, resref, "BAM")
+        if not ok then return false end
+        if not found then
+            BfBot.Theme._controlArt = false
+            return false
+        end
+    end
+    BfBot.Theme._controlArt = true
+    return true
+end
+
 --- Set the accent by index (1=BG2, 2=SOD, 3=BG1) preserving dark/light.
 -- Out-of-range / non-numeric input falls back to BG2.
 function BfBot.Theme._SetAccent(idx)
@@ -544,6 +577,30 @@ local function _populateUiStrings()
     uiStrings.BuffBot_ItemUseMode_Desc = BfBot.L10N.Get("options.item_use_mode_description")
     uiStrings.BuffBot_ItemUseMode_Inventory = BfBot.L10N.Get("options.item_use_inventory")
     uiStrings.BuffBot_ItemUseMode_Swap = BfBot.L10N.Get("options.item_use_swap")
+    uiStrings.BuffBot_RefreshBelow = BfBot.L10N.Get("options.refresh_below")
+    uiStrings.BuffBot_RefreshBelow_Desc = BfBot.L10N.Get("options.refresh_below_description")
+    uiStrings.BuffBot_RefreshBelow_Off = BfBot.L10N.Get("options.refresh_below_off")
+    uiStrings.BuffBot_RefreshBelow_1m = BfBot.L10N.Get("options.refresh_below_1m")
+    uiStrings.BuffBot_RefreshBelow_5m = BfBot.L10N.Get("options.refresh_below_5m")
+    uiStrings.BuffBot_RefreshBelow_1h = BfBot.L10N.Get("options.refresh_below_1h")
+end
+
+-- Radio presets for the RefreshBelow threshold, in seconds (issue #84). The
+-- INI value itself is a free number (BfBot.Persist.GetRefreshBelow validates
+-- it), so this list is a convenience, not the range of legal values.
+BfBot.Theme.REFRESH_BELOW_CHOICES = { 0, 60, 300, 3600 }
+
+--- Radio index for a stored RefreshBelow threshold. A hand-edited value that
+--- is not one of the presets shows the largest preset at or below it, so the
+--- panel never claims the threshold is off while it is actually on. Reading
+--- never writes, so a custom value survives until the user clicks a choice.
+function BfBot.Theme._RefreshBelowIndex(seconds)
+    if type(seconds) ~= "number" or seconds <= 0 then return 1 end
+    local index = 2  -- any positive threshold is at least the smallest preset
+    for i, value in ipairs(BfBot.Theme.REFRESH_BELOW_CHOICES) do
+        if value > 0 and value <= seconds then index = i end
+    end
+    return index
 end
 
 --- Build a custom storage class that bridges between an EEex option's
@@ -641,6 +698,25 @@ function BfBot.Theme._RegisterOptionsTab()
         ["storage"]  = ItemUseBridge.new(),
     }))
 
+    -- Refresh nearly-over buffs (4-way radio over REFRESH_BELOW_CHOICES)
+    local RefreshBelowBridge = _makeBridgeStorage(
+        function()
+            return BfBot.Theme._RefreshBelowIndex(
+                BfBot.Persist.GetRefreshBelow())
+        end,
+        function(v)
+            local seconds = BfBot.Theme.REFRESH_BELOW_CHOICES[v] or 0
+            BfBot.Persist.SetRefreshBelow(seconds)
+        end
+    )
+    EEex_Options_Register("BuffBot_RefreshBelow", EEex_Options_Option.new({
+        ["default"]  = 1,
+        ["type"]     = EEex_Options_ToggleType.new(),
+        ["accessor"] = EEex_Options_ClampedAccessor.new({
+            ["min"] = 1, ["max"] = #BfBot.Theme.REFRESH_BELOW_CHOICES }),
+        ["storage"]  = RefreshBelowBridge.new(),
+    }))
+
     -- Build the radio-group DisplayEntries up front so we can capture them
     -- in module-local tables. EEex's toggleAction only updates the clicked
     -- widget's `toggleState`; sibling widgets sharing an optionID only
@@ -726,6 +802,25 @@ function BfBot.Theme._RegisterOptionsTab()
         }),
     }
 
+    local refreshBelowEntries = {}
+    local refreshBelowLabels = {
+        "BuffBot_RefreshBelow_Off",
+        "BuffBot_RefreshBelow_1m",
+        "BuffBot_RefreshBelow_5m",
+        "BuffBot_RefreshBelow_1h",
+    }
+    for i, label in ipairs(refreshBelowLabels) do
+        refreshBelowEntries[i] = EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_RefreshBelow",
+            ["label"]       = label,
+            ["description"] = "BuffBot_RefreshBelow_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = i,
+                ["disallowToggleOff"] = true,
+            }),
+        })
+    end
+
     -- Outer groups are columns. Keep inventory controls in the first
     -- column to avoid widening the tab with a fourth column.
     EEex_Options_AddTab("BuffBot_Tab", function() return {
@@ -744,6 +839,14 @@ function BfBot.Theme._RegisterOptionsTab()
                 -- The base widget has no layout: this entry is a heading.
                 ["widget"]      = setmetatable({}, EEex_Options_Widget),
                 ["subOptions"]  = itemUseEntries,
+            }),
+            EEex_Options_DisplayEntry.new({
+                ["optionID"]    = "BuffBot_RefreshBelow",
+                ["label"]       = "BuffBot_RefreshBelow",
+                ["description"] = "BuffBot_RefreshBelow_Desc",
+                -- The base widget has no layout: this entry is a heading.
+                ["widget"]      = setmetatable({}, EEex_Options_Widget),
+                ["subOptions"]  = refreshBelowEntries,
             }),
         },
         -- Column 2: Color Scheme (3 toggles sharing BuffBot_Accent option)
@@ -767,6 +870,7 @@ function BfBot.Theme._RegisterOptionsTab()
     _seed("BuffBot_Accent")
     _seed("BuffBot_TextSize")
     _seed("BuffBot_ItemUseMode")
+    _seed("BuffBot_RefreshBelow")
 
     -- Patch _setWorkingValue on the radio-group options to keep all
     -- sibling widgets' visual state in sync per-click. EEex's toggleAction
@@ -787,6 +891,7 @@ function BfBot.Theme._RegisterOptionsTab()
     _patchRadio("BuffBot_Accent", accentEntries)
     _patchRadio("BuffBot_TextSize", sizeEntries)
     _patchRadio("BuffBot_ItemUseMode", itemUseEntries)
+    _patchRadio("BuffBot_RefreshBelow", refreshBelowEntries)
 
     BfBot.Theme._registered = true
 end
