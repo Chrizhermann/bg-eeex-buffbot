@@ -188,7 +188,7 @@ local _registry = {
     ["options.item_use_inventory"] = { id = 715, fallback = [=[Use from inventory]=] },
     ["options.item_use_swap"] = { id = 716, fallback = [=[Equip, use, and restore]=] },
     ["options.refresh_below"] = { id = 717, fallback = [=[Refresh buffs that are nearly over]=] },
-    ["options.refresh_below_description"] = { id = 718, fallback = [=[Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. The panel's "Active: Force All" overrides this and casts everything again regardless. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.]=] },
+    ["options.refresh_below_description"] = { id = 718, fallback = [=[Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. Under 1 hour is a wide net, not a small top-up: a freshly cast 1h buff such as vanilla Stoneskin is already below it and will be re-cast on every run. The panel's "Active: Force All" overrides this and casts everything again regardless. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.]=] },
     ["options.refresh_below_off"] = { id = 719, fallback = [=[Off]=] },
     ["options.refresh_below_1m"] = { id = 720, fallback = [=[Under 1 minute left]=] },
     ["options.refresh_below_5m"] = { id = 721, fallback = [=[Under 5 minutes left]=] },

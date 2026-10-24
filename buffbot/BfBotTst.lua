@@ -6137,145 +6137,164 @@ function BfBot.Test.RefreshThreshold()
         "UI.CycleForceRecast is a function")
 
     -- ---- 2. Threshold resolution against the real baldur.ini ----
+    --
+    -- From here on the phase writes the player's real baldur.ini and
+    -- applies live effects to the protagonist, including a PERMANENT one.
+    -- This phase runs inside RunAll(), so an error in the middle must not
+    -- be able to leave either behind: a stuck portrait-icon effect and a
+    -- RefreshBelow of 864000 would read as "re-cast everything, always"
+    -- with no visible cause. Everything side-effecting therefore runs in
+    -- a pcall, and the restore below runs unconditionally.
     local savedPref = BfBot.Persist.GetPref("RefreshBelow")
-    local savedForce = BfBot.Exec._forceMode
-
-    BfBot.Persist.SetRefreshBelow(0)
-    _check(BfBot.Exec._RefreshThreshold(0) == 0,
-        "option off: threshold 0 - every active buff still skips")
-    _check(BfBot.Exec._RefreshThreshold(1) == BfBot.REFRESH_LOW_SECONDS,
-        "option off + Refresh Low: falls back to "
-            .. tostring(BfBot.REFRESH_LOW_SECONDS) .. "s")
-    -- Force All is a flag, not a threshold value: it must work with the
-    -- option off and leave the configured threshold untouched (#84).
-    _check(BfBot.Exec._RefreshThreshold(2) == 0,
-        "Force All does not pretend the threshold is infinite")
-    _check(BfBot.Exec._ForceAll(2) == true
-            and BfBot.Exec._ForceAll(1) == false
-            and BfBot.Exec._ForceAll(0) == false,
-        "Force All raises its own flag instead")
-
-    BfBot.Persist.SetRefreshBelow(45)
-    _check(BfBot.Persist.GetRefreshBelow() == 45,
-        "RefreshBelow round-trips through baldur.ini")
-    _check(BfBot.Exec._RefreshThreshold(0) == 45,
-        "option 45s reaches the default mode")
-    _check(BfBot.Exec._RefreshThreshold(1) == 45,
-        "Refresh Low prefers the configured option over the fallback")
-
-    -- A hand-edited baldur.ini must not widen the threshold.
-    BfBot.Persist.SetPref("RefreshBelow", -5)
-    _check(BfBot.Persist.GetRefreshBelow() == 0,
-        "a negative stored value validates back to off")
-    BfBot.Persist.SetPref("RefreshBelow", 10 * BfBot.MAX_REFRESH_BELOW)
-    _check(BfBot.Persist.GetRefreshBelow() == BfBot.MAX_REFRESH_BELOW,
-        "an oversized stored value clamps to "
-            .. tostring(BfBot.MAX_REFRESH_BELOW) .. "s")
-
-    -- ---- 3. Reading a LIVE applied effect ----
+    local TAG = "BFBTPRB"
     local sprite = EEex_Sprite_GetInPortrait(0)
-    local now = BfBot.Exec._GetGameTime()
-    if not sprite then
-        _warning("No party leader - skipped the live effect reads")
-    elseif type(EEex_GameObject_ApplyEffect) ~= "function" then
-        _warning("EEex_GameObject_ApplyEffect missing - skipped live reads")
-    elseif type(now) ~= "number" then
-        _warning("World time unreadable - skipped the live effect reads")
-    else
-        local TAG = "BFBTPRB"
-        local probes = {
-            { name = "60s timed",   durationType = 0,  duration = 60 },
-            { name = "150 ticks",   durationType = 10, duration = 150 },
-            { name = "permanent",   durationType = 9,  duration = 0 },
-            { name = "delayed 60s", durationType = 3,  duration = 60 },
-        }
-        local applied = 0
-        for _, probe in ipairs(probes) do
-            local ok = pcall(EEex_GameObject_ApplyEffect, sprite, {
-                effectID     = 142,   -- Display Portrait Icon: timed, inert
-                targetType   = 2,
-                effectAmount = 1,
-                durationType = probe.durationType,
-                duration     = probe.duration,
-                m_sourceRes  = TAG,
-                sourceID     = sprite.m_id,
-                sourceTarget = sprite.m_id,
-            })
-            if ok then applied = applied + 1
-            else _nok("could not apply the " .. probe.name .. " probe") end
-        end
-        _check(applied == #probes,
-            "applied " .. applied .. "/" .. #probes .. " probe effects")
 
-        -- Collect what the engine now reports for each of them.
-        local seen = {}
-        local permanent, pending, timed = 0, 0, 0
-        local permLeft, permDetail = nil, nil
-        pcall(function()
-            EEex_Utility_IterateCPtrList(sprite.m_timedEffectList,
-                function(effect)
-                    if effect.m_sourceRes:get() ~= TAG then return end
-                    local left, detail =
-                        BfBot.Exec._EffectRemaining(effect, now)
-                    seen[#seen + 1] = string.format("dt=%s -> %s",
-                        tostring(effect.m_durationType),
-                        BfBot.Exec._FormatRemaining(left, detail))
-                    if detail == "perm" then
-                        permanent = permanent + 1
-                        permLeft, permDetail = left, detail
-                    elseif detail == "pending" then pending = pending + 1
-                    elseif detail == nil and left < math.huge then
-                        timed = timed + 1
-                    end
-                end)
-        end)
-        for _, line in ipairs(seen) do P("    " .. line) end
+    local guarded, guardErr = pcall(function()
 
-        _check(timed >= 2,
-            "both timed probes report a finite remaining lifetime ("
-                .. timed .. ")")
-        _check(permanent >= 1, "the permanent probe reports permanent")
-        if pending < 1 then
-            _warning("the delayed probe already fired - timing 6 not seen")
+        BfBot.Persist.SetRefreshBelow(0)
+        _check(BfBot.Exec._RefreshThreshold(0) == 0,
+            "option off: threshold 0 - every active buff still skips")
+        _check(BfBot.Exec._RefreshThreshold(1) == BfBot.REFRESH_LOW_SECONDS,
+            "option off + Refresh Low: falls back to "
+                .. tostring(BfBot.REFRESH_LOW_SECONDS) .. "s")
+        -- Force All is a flag, not a threshold value: it must work with the
+        -- option off and leave the configured threshold untouched (#84).
+        _check(BfBot.Exec._RefreshThreshold(2) == 0,
+            "Force All does not pretend the threshold is infinite")
+        _check(BfBot.Exec._ForceAll(2) == true
+                and BfBot.Exec._ForceAll(1) == false
+                and BfBot.Exec._ForceAll(0) == false,
+            "Force All raises its own flag instead")
+
+        BfBot.Persist.SetRefreshBelow(45)
+        _check(BfBot.Persist.GetRefreshBelow() == 45,
+            "RefreshBelow round-trips through baldur.ini")
+        _check(BfBot.Exec._RefreshThreshold(0) == 45,
+            "option 45s reaches the default mode")
+        _check(BfBot.Exec._RefreshThreshold(1) == 45,
+            "Refresh Low prefers the configured option over the fallback")
+
+        -- A hand-edited baldur.ini must not widen the threshold.
+        BfBot.Persist.SetPref("RefreshBelow", -5)
+        _check(BfBot.Persist.GetRefreshBelow() == 0,
+            "a negative stored value validates back to off")
+        BfBot.Persist.SetPref("RefreshBelow", 10 * BfBot.MAX_REFRESH_BELOW)
+        _check(BfBot.Persist.GetRefreshBelow() == BfBot.MAX_REFRESH_BELOW,
+            "an oversized stored value clamps to "
+                .. tostring(BfBot.MAX_REFRESH_BELOW) .. "s")
+
+        -- ---- 3. Reading a LIVE applied effect ----
+        -- `sprite` is the handle the unconditional cleanup below uses; do not
+        -- shadow it here, or a probe could be applied to one sprite and
+        -- cleaned off another.
+        local now = BfBot.Exec._GetGameTime()
+        if not sprite then
+            _warning("No party leader - skipped the live effect reads")
+        elseif type(EEex_GameObject_ApplyEffect) ~= "function" then
+            _warning("EEex_GameObject_ApplyEffect missing - skipped live reads")
+        elseif type(now) ~= "number" then
+            _warning("World time unreadable - skipped the live effect reads")
         else
-            _ok("the delayed probe reports pending, not a remainder")
+            local probes = {
+                { name = "60s timed",   durationType = 0,  duration = 60 },
+                { name = "150 ticks",   durationType = 10, duration = 150 },
+                { name = "permanent",   durationType = 9,  duration = 0 },
+                { name = "delayed 60s", durationType = 3,  duration = 60 },
+            }
+            local applied = 0
+            for _, probe in ipairs(probes) do
+                local ok = pcall(EEex_GameObject_ApplyEffect, sprite, {
+                    effectID     = 142,   -- Display Portrait Icon: timed, inert
+                    targetType   = 2,
+                    effectAmount = 1,
+                    durationType = probe.durationType,
+                    duration     = probe.duration,
+                    m_sourceRes  = TAG,
+                    sourceID     = sprite.m_id,
+                    sourceTarget = sprite.m_id,
+                })
+                if ok then applied = applied + 1
+                else _nok("could not apply the " .. probe.name .. " probe") end
+            end
+            _check(applied == #probes,
+                "applied " .. applied .. "/" .. #probes .. " probe effects")
+
+            -- Collect what the engine now reports for each of them.
+            local seen = {}
+            local permanent, pending, timed = 0, 0, 0
+            local permLeft, permDetail = nil, nil
+            pcall(function()
+                EEex_Utility_IterateCPtrList(sprite.m_timedEffectList,
+                    function(effect)
+                        if effect.m_sourceRes:get() ~= TAG then return end
+                        local left, detail =
+                            BfBot.Exec._EffectRemaining(effect, now)
+                        seen[#seen + 1] = string.format("dt=%s -> %s",
+                            tostring(effect.m_durationType),
+                            BfBot.Exec._FormatRemaining(left, detail))
+                        if detail == "perm" then
+                            permanent = permanent + 1
+                            permLeft, permDetail = left, detail
+                        elseif detail == "pending" then pending = pending + 1
+                        elseif detail == nil and left < math.huge then
+                            timed = timed + 1
+                        end
+                    end)
+            end)
+            for _, line in ipairs(seen) do P("    " .. line) end
+
+            _check(timed >= 2,
+                "both timed probes report a finite remaining lifetime ("
+                    .. timed .. ")")
+            _check(permanent >= 1, "the permanent probe reports permanent")
+            if pending < 1 then
+                _warning("the delayed probe already fired - timing 6 not seen")
+            else
+                _ok("the delayed probe reports pending, not a remainder")
+            end
+
+            -- The permanent and delayed probes must NOT hide the 60s deadline:
+            -- real spells carry such siblings (live Armor has an op174 in mode 7).
+            local left, detail = BfBot.Exec._ActiveEffectRemaining(sprite, TAG)
+            _check(detail == nil and type(left) == "number" and left < math.huge,
+                "a readable deadline wins over permanent/delayed siblings ("
+                    .. BfBot.Exec._FormatRemaining(left, detail) .. ")")
+            _check(type(left) == "number" and left > 30,
+                "and it is the LONGEST readable one, the 60s probe")
+            _check(BfBot.Exec._ActiveEffectRemaining(sprite, "BFBTNON") == nil,
+                "an unrelated resref reports nothing active")
+
+            -- The skip decision itself, on live data.
+            _check(BfBot.Exec._ActiveBlocksCast(left, 0, false) == true,
+                "an active buff blocks a cast at threshold 0")
+            _check(BfBot.Exec._ActiveBlocksCast(left, 3600, false) == false,
+                "and is cast again once the threshold is above what is left")
+            _check(BfBot.Exec._ActiveBlocksCast(left, 0, true) == false,
+                "Force All casts through regardless, at threshold 0")
+
+            -- The case only the flag can reach: the permanent probe reports no
+            -- remaining lifetime at all, so no threshold can ever refresh it.
+            if permDetail == "perm" then
+                _check(permLeft == math.huge,
+                    "the permanent probe reports no readable lifetime")
+                _check(BfBot.Exec._ActiveBlocksCast(permLeft,
+                        BfBot.MAX_REFRESH_BELOW, false) == true,
+                    "a permanent buff skips even at the largest threshold allowed")
+                _check(BfBot.Exec._ActiveBlocksCast(permLeft, 0, true) == false,
+                    "and Force All casts it again anyway")
+            else
+                _warning("no permanent probe measured - skipping the Force All "
+                    .. "override check on a permanent effect")
+            end
+
         end
 
-        -- The permanent and delayed probes must NOT hide the 60s deadline:
-        -- real spells carry such siblings (live Armor has an op174 in mode 7).
-        local left, detail = BfBot.Exec._ActiveEffectRemaining(sprite, TAG)
-        _check(detail == nil and type(left) == "number" and left < math.huge,
-            "a readable deadline wins over permanent/delayed siblings ("
-                .. BfBot.Exec._FormatRemaining(left, detail) .. ")")
-        _check(type(left) == "number" and left > 30,
-            "and it is the LONGEST readable one, the 60s probe")
-        _check(BfBot.Exec._ActiveEffectRemaining(sprite, "BFBTNON") == nil,
-            "an unrelated resref reports nothing active")
+    end)
 
-        -- The skip decision itself, on live data.
-        _check(BfBot.Exec._ActiveBlocksCast(left, 0, false) == true,
-            "an active buff blocks a cast at threshold 0")
-        _check(BfBot.Exec._ActiveBlocksCast(left, 3600, false) == false,
-            "and is cast again once the threshold is above what is left")
-        _check(BfBot.Exec._ActiveBlocksCast(left, 0, true) == false,
-            "Force All casts through regardless, at threshold 0")
-
-        -- The case only the flag can reach: the permanent probe reports no
-        -- remaining lifetime at all, so no threshold can ever refresh it.
-        if permDetail == "perm" then
-            _check(permLeft == math.huge,
-                "the permanent probe reports no readable lifetime")
-            _check(BfBot.Exec._ActiveBlocksCast(permLeft,
-                    BfBot.MAX_REFRESH_BELOW, false) == true,
-                "a permanent buff skips even at the largest threshold allowed")
-            _check(BfBot.Exec._ActiveBlocksCast(permLeft, 0, true) == false,
-                "and Force All casts it again anyway")
-        else
-            _warning("no permanent probe measured - skipping the Force All "
-                .. "override check on a permanent effect")
-        end
-
-        -- ---- Clean up: opcode 321 removes effects by source resource ----
+    -- ---- 4. Unconditional cleanup, whether or not the above finished ----
+    -- Opcode 321 removes effects by source resource. Safe to repeat: if
+    -- the probes were already removed it matches nothing.
+    if sprite and type(EEex_GameObject_ApplyEffect) == "function" then
         pcall(EEex_GameObject_ApplyEffect, sprite, {
             effectID     = 321,
             targetType   = 2,
@@ -6283,18 +6302,22 @@ function BfBot.Test.RefreshThreshold()
             sourceID     = sprite.m_id,
             sourceTarget = sprite.m_id,
         })
-        if BfBot.Exec._ActiveEffectRemaining(sprite, TAG) == nil then
+        local leftover = BfBot.Exec._ActiveEffectRemaining(sprite, TAG)
+        if leftover == nil then
             _ok("probe effects removed again - nothing left on the sprite")
         else
             _nok("probe effects SURVIVED cleanup: reload without saving")
         end
     end
 
-    -- ---- 4. Restore the player's own setting ----
     BfBot.Persist.SetPref("RefreshBelow", savedPref)
-    BfBot.Exec._forceMode = savedForce
     _check(BfBot.Persist.GetPref("RefreshBelow") == savedPref,
         "restored the player's own RefreshBelow setting")
+
+    -- A failure inside the guarded part must fail the phase, not vanish.
+    if not guarded then
+        _nok("the guarded section errored: " .. tostring(guardErr))
+    end
 
     return _summary("RefreshThreshold")
 end

@@ -796,17 +796,31 @@ function BFBOTGO(param1, param2, special)
         _InnateLog(string.format("Starting: %d entries, qcMode=%d", #queue, qcMode or 0))
         -- presetIdx tags the run for the late-join listener (issue #19)
         local speed = BfBot.Persist.GetPref("FastForward")
+        -- The active-buff policy follows the F12 innates too (issue #84).
+        -- Pressing F12 after a rest IS the case the feature was reported for,
+        -- and the panel goes on showing "Active: Force All" while it is set,
+        -- so a keypress made with the panel shut must mean the same thing the
+        -- panel says. Guarded like BfBot.UI._StartRun: this module can be
+        -- force-reloaded against an older BfBotExe, and the fallback is the
+        -- conservative mode, never force.
+        local forceMode = 0
+        if BfBot.Exec.GetForceMode then
+            local read, mode = pcall(BfBot.Exec.GetForceMode)
+            if read and type(mode) == "number" then forceMode = mode end
+        end
         local started, reason, detail
         if speed == 2 or speed == 4 then
             if BfBot.Fast and type(BfBot.Fast.Start) == "function" then
-                started, reason, detail = BfBot.Fast.Start(queue, speed, presetIdx)
+                started, reason, detail = BfBot.Fast.Start(queue, speed,
+                    presetIdx, forceMode)
             else
                 -- Never substitute a saved Quick Cast mode for the player's
                 -- explicitly selected native-speed run.
                 started, reason = false, "reason.exec.fast_unavailable"
             end
         else
-            started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx)
+            started, reason, detail = BfBot.Exec.Start(queue, qcMode,
+                presetIdx, forceMode)
         end
         if not started and reason then
             BfBot._Display(BfBot.L10N.Reason(reason, detail))

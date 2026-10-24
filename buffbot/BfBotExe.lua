@@ -243,15 +243,28 @@ end
 
 --- Human-readable remaining lifetime for a log line. Deliberately English and
 --- unlocalized: the exec log is a diagnostic file, not player-facing text.
+---
+--- Uses the SAME h/m/s staircase as BfBot.UI._FormatDuration, on purpose.
+--- Both format the same engine duration seconds, and a log line is read right
+--- beside the panel's Dur column and the option's label — when this printed
+--- flat minutes, "threshold 60m 0s" next to an option saying "Under 1 hour
+--- left" read like two different numbers and misled a reviewer into filing it
+--- as a units bug. Sub-minute values keep a decimal, which _FormatDuration
+--- has no use for but a near-expiry decision does.
 function BfBot.Exec._FormatRemaining(seconds, detail)
     if detail == "perm" then return "permanent" end
     if detail == "pending" then return "delayed, not started" end
     if detail == "unknown" then return "unknown duration" end
     if type(seconds) ~= "number" then return "unknown duration" end
     if seconds == math.huge then return "permanent" end
-    if seconds >= 60 then
-        return string.format("%dm %ds left",
-            math.floor(seconds / 60), math.floor(seconds % 60))
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    if h > 0 then
+        if m > 0 then return string.format("%dh %dm left", h, m) end
+        return string.format("%dh left", h)
+    end
+    if m > 0 then
+        return string.format("%dm %ds left", m, math.floor(seconds % 60))
     end
     return string.format("%.1fs left", seconds)
 end
@@ -1890,8 +1903,10 @@ end
 -- @param forceMode OPTIONAL run-scoped active-buff policy (issue #84):
 --     0/nil = skip active buffs (the RefreshBelow option still applies),
 --     1 = refresh buffs below the threshold, 2 = cast everything. Deliberately
---     per RUN, not per preset: nothing about it is written to the save. Paths
---     that pass nothing (F12 innates, console queues) keep the global option.
+--     per RUN, not per preset: nothing about it is written to the save.
+--     Every player-facing entry point passes the selection, the F12 innates
+--     included. Only a raw console queue passes nothing and therefore runs
+--     with the RefreshBelow option alone.
 -- @return true + nil + nil if started; false + reasonCode + detail if not
 function BfBot.Exec.Start(queue, qcMode, presetIdx, forceMode)
     -- Do not start a Normal/Quick Cast run at a rate whose restoration is

@@ -785,7 +785,7 @@ def test_a_long_lived_buff_is_still_skipped_and_the_log_names_what_is_left(
     assert facts["casts"] is False
     assert facts["skips"] == 1
     assert "already active: SPWI518" in facts["log"]
-    assert "66m 40s left" in facts["log"]
+    assert "1h 6m left" in facts["log"]
 
 
 def test_a_nearly_expired_buff_is_cast_again_and_the_log_says_why(
@@ -1036,12 +1036,19 @@ def test_module_level_force_mode_starts_at_skip_active() -> None:
     assert "BfBot.Exec._forceMode = 0" in source
 
 
-def test_innate_path_passes_no_force_mode_and_keeps_the_global_option() -> None:
-    # F12 is where a rest is followed by a buff run, so the global RefreshBelow
-    # must reach it — but the panel toggle must not leak into it.
-    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
-    assert "BfBot.Exec.Start(queue, qcMode, presetIdx)" in source
-    assert "_forceMode" not in source
+def test_a_bare_console_queue_runs_on_the_option_alone() -> None:
+    # Superseded an earlier reading of #84 that kept the panel toggle out of
+    # F12. The selection is sticky and the panel keeps showing it, so a
+    # keypress made with the panel shut must mean what the panel says, and
+    # F12-after-rest is the reported case. Only a caller that passes nothing
+    # at all — a raw console queue — falls back to the option alone.
+    source = EXEC_SOURCE
+    start = source.index("function BfBot.Exec.Start(")
+    body = source[start:source.index("\nfunction ", start + 1)]
+    assert "BfBot.Exec._NormalizeForceMode(forceMode)" in body
+    # Nothing in Start consults the pending selection.
+    assert "GetForceMode" not in body
+    assert "_forceSelection" not in body
 
 
 def test_every_panel_cast_path_carries_the_toggle_through_start_run() -> None:
@@ -1406,3 +1413,85 @@ def test_a_panel_reloaded_against_an_older_exec_falls_back_to_skip(
         """
     )
     assert mode == 0
+
+
+# --------------------------------------------------------------------------
+# Review follow-ups (PR #86)
+# --------------------------------------------------------------------------
+
+
+def test_the_f12_innate_path_passes_the_selected_policy_through() -> None:
+    # Pressing F12 after a rest is the case #84 was reported for, so an innate
+    # run must mean what the panel says. Both start paths carry the mode.
+    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
+    assert "if BfBot.Exec.GetForceMode then" in source
+    assert "pcall(BfBot.Exec.GetForceMode)" in source
+    assert "local forceMode = 0" in source
+    assert "BfBot.Fast.Start(queue, speed,\n                    presetIdx, forceMode)" in source
+    assert "BfBot.Exec.Start(queue, qcMode,\n                presetIdx, forceMode)" in source
+
+
+def test_the_innate_path_never_starts_a_run_without_the_mode() -> None:
+    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
+    for call in ("BfBot.Exec.Start(queue, qcMode, presetIdx)",
+                 "BfBot.Fast.Start(queue, speed, presetIdx)"):
+        assert call not in source, call
+
+
+def test_both_duration_formatters_agree_on_the_same_staircase(
+    exec_lua: LuaRuntime,
+) -> None:
+    # A log line is read beside the panel's Dur column and the option label.
+    # When this printed flat minutes, "threshold 60m 0s" next to "Under 1 hour
+    # left" read as two different numbers.
+    cases = {
+        3600: "1h left",
+        5400: "1h 30m left",
+        3660: "1h 1m left",
+        300: "5m 0s left",
+        102: "1m 42s left",
+        45: "45.0s left",
+        0: "0.0s left",
+    }
+    for seconds, expected in cases.items():
+        assert exec_lua.eval(
+            f"BfBot.Exec._FormatRemaining({seconds})"
+        ) == expected, seconds
+
+
+def test_the_low_threshold_constant_is_documented_as_five_minutes() -> None:
+    source = (ROOT / "buffbot/BfBotCor.lua").read_text(encoding="utf-8")
+    start = source.index("-- Threshold the panel's \"Refresh low\"")
+    block = source[start:source.index("BfBot.REFRESH_LOW_SECONDS = 300") + 40]
+    assert "five minutes" in block
+    # 300 seconds is five minutes on the engine's own scale, not an hour.
+    assert "game hour" not in block
+    # The LongThreshold rationale is accurate and worth keeping.
+    assert "LongThreshold" in block
+    persist = PERSIST_SOURCE
+    assert "LongThreshold = 300" in persist
+
+
+def test_the_in_game_phase_guarantees_cleanup_after_a_failure() -> None:
+    # The phase writes the real baldur.ini and applies a PERMANENT effect to
+    # the protagonist, and it runs inside RunAll(). Neither may survive an
+    # error in the middle.
+    source = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
+    start = source.index("function BfBot.Test.RefreshThreshold()")
+    body = source[start:source.index("\nfunction ", start + 1)]
+
+    assert "local guarded, guardErr = pcall(function()" in body
+    # The restore sits after the guarded block, not inside it.
+    guard_end = body.index("    end)")
+    after = body[guard_end:]
+    assert "effectID     = 321," in after
+    assert 'BfBot.Persist.SetPref("RefreshBelow", savedPref)' in after
+    # A swallowed error must fail the phase.
+    assert '_nok("the guarded section errored: " .. tostring(guardErr))' in after
+    # One cleanup only, and it is the unconditional one.
+    assert body.count("effectID     = 321,") == 1
+    assert body.count('SetPref("RefreshBelow", savedPref)') == 1
+    # The dead force-mode save/restore pair is gone.
+    assert "savedForce" not in body
+    # The cleanup's sprite handle must not be shadowed inside the guard.
+    assert body.count("local sprite = EEex_Sprite_GetInPortrait(0)") == 1

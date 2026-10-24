@@ -1009,7 +1009,7 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     # config.opts.skip field is named rather than quietly left behind.
     assert "stoneskin's real resource is its skins (opcode 218)" in current_normalized
     assert "`config.opts.skip` in the save schema is still unused" in current_normalized
-    assert "full automated suite passes **1295 tests**" in current_normalized
+    assert "full automated suite passes **1300 tests**" in current_normalized
     # Force All is a hard override, not a threshold value (#84).
     assert "force all is an unconditional override" in current_normalized
     assert "wasted spell slots are accepted deliberately" in current_normalized

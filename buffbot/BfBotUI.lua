@@ -2398,8 +2398,8 @@ end
 --- The selected active-buff policy (BfBot.Exec.GetForceMode) rides along on
 --- every run started here, which is why Cast All, Cast Character, the HUD
 --- preset picker and the summons cast all honor the toggle without each path
---- repeating it. Paths outside the panel (F12 innates, console queues) pass
---- nothing and keep the global RefreshBelow option.
+--- repeating it. The F12 innates read the same selection in BfBotInn; only a
+--- raw console queue runs with the RefreshBelow option alone.
 function BfBot.UI._StartRun(queue, qcMode, presetIdx)
     local rate = BfBot.UI._FastForwardRate()
     -- Guarded like the tooltip's threshold read: this module can be

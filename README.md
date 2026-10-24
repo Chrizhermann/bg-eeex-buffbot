@@ -152,6 +152,11 @@ threshold applies everywhere, including the F12 preset innates — which is wher
 a rest usually happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`
 if none of the four suits you.
 
+**Under 1 hour is a wide net.** Durations here are the ones the panel's Dur column shows, so a
+vanilla Stoneskin at 1h is *already* below that threshold the moment you cast it, and every run
+will cast it again. Pick it when you want long buffs topped up aggressively; pick 1 or 5 minutes
+when you only want the ones that are genuinely about to run out.
+
 The **Active: Skip** button in the panel overrides that for one run:
 
 | State | What it does |
