@@ -142,7 +142,9 @@ end
 --- Start at an explicit 2x or 4x; choosing normal mode uses Exec.Start directly.
 --- No render-rate change: whether a cap helps is installation-specific and must
 --- be established in the current-engine lab before changing players' visuals.
-function F.Start(queue, multiplier, presetIdx)
+--- forceMode is the caller's active-buff policy (issue #84) and is passed
+--- straight on: simulation speed must not change what a run skips.
+function F.Start(queue, multiplier, presetIdx, forceMode)
     if type(queue) ~= "table" or #queue == 0 then
         return false, "reason.exec.empty_queue", {}
     end
@@ -187,7 +189,8 @@ function F.Start(queue, multiplier, presetIdx)
         F.Reset("start failed")
         return unavailable("simulation rate could not be changed")
     end
-    local started, accepted, code, detail = pcall(BfBot.Exec.Start, copy, 0, presetIdx)
+    local started, accepted, code, detail = pcall(BfBot.Exec.Start, copy, 0,
+        presetIdx, forceMode)
     if not started or not accepted then
         F.Reset("start failed")
         -- If native startup failed after scheduling actions, stop that partial

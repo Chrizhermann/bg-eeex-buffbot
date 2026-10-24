@@ -400,7 +400,31 @@
 @470 = ~Bersaglio~
 // ui.header.lock
 @471 = ~Blocco~
+// ui.force_recast.off
+@472 = ~Active: Skip~
+// ui.force_recast.low
+@473 = ~Active: Refresh Low~
+// ui.force_recast.all
+@474 = ~Active: Force All~
+// ui.force_recast.tooltip_off
+@475 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
+// ui.force_recast.tooltip_low
+@476 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
+// ui.force_recast.tooltip_all
+@477 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
 // reason.item.manual_selection
 @552 = ~Questo oggetto apre un menu di selezione. Usalo manualmente; BuffBot lo salta.~
 // reason.exec.fast_unavailable
 @553 = ~L'accelerazione non è disponibile qui. Seleziona la velocità normale e riprova.~
+// options.refresh_below
+@717 = ~Refresh buffs that are nearly over~
+// options.refresh_below_description
+@718 = ~Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.~
+// options.refresh_below_off
+@719 = ~Off~
+// options.refresh_below_1m
+@720 = ~Under 1 minute left~
+// options.refresh_below_5m
+@721 = ~Under 5 minutes left~
+// options.refresh_below_1h
+@722 = ~Under 1 hour left~
