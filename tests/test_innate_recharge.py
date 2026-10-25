@@ -237,6 +237,139 @@ def test_refresh_purges_foreign_slot_innates_before_regranting_current_slot(
     assert facts["third"] == 'AddSpecialAbility("BFBT21")'
 
 
+# A party whose portrait lookups return a fresh wrapper per call, like EEex,
+# and whose action queue never runs (a paused game): a queued grant stays
+# invisible to the next plan.
+PARTY_HARNESS = """
+    party = {}
+    queued = {}
+    EEex_Sprite_GetInPortrait = function(slot)
+        local member = party[slot]
+        if not member then return nil end
+        return { m_id = member.id, name = member.name }
+    end
+    EEex_Sprite_GetKnownInnateSpellsIterator = function(_)
+        return function() return nil end
+    end
+    function recordAction(action, sprite)
+        queued[#queued + 1] = sprite.name .. ":" .. action
+    end
+    EEex_Action_QueueResponseStringOnAIBase = recordAction
+    BfBot.Persist = {
+        GetConfig = function(_) return { presets = { [1] = {} } } end,
+    }
+    function takeQueued()
+        local list = queued
+        queued = {}
+        return table.concat(list, "|")
+    end
+"""
+
+
+def test_reconcile_joined_grants_a_member_without_a_load_event_once(
+    innate_lua: LuaRuntime,
+) -> None:
+    innate_lua.execute(PARTY_HARNESS)
+    facts = innate_lua.execute(
+        """
+        party[0] = { id = 101, name = "Ilauna" }
+        BfBot.Innate.Refresh(0)
+        local loaded = takeQueued()
+
+        party[1] = { id = 102, name = "Baern" }
+        BfBot.Innate._ReconcileJoined()
+        local joined = takeQueued()
+
+        BfBot.Innate._ReconcileJoined()
+        return { loaded = loaded, joined = joined, again = takeQueued() }
+        """
+    )
+
+    assert facts["loaded"] == 'Ilauna:AddSpecialAbility("BFBT01")'
+    assert facts["joined"] == 'Baern:AddSpecialAbility("BFBT11")'
+    assert facts["again"] == ""
+
+
+def test_reconcile_joined_reconciles_a_member_again_after_rejoining(
+    innate_lua: LuaRuntime,
+) -> None:
+    innate_lua.execute(PARTY_HARNESS)
+    facts = innate_lua.execute(
+        """
+        party[1] = { id = 102, name = "Baern" }
+        BfBot.Innate._ReconcileJoined()
+        takeQueued()
+
+        party[1] = nil
+        BfBot.Innate._ReconcileJoined()
+        local away = takeQueued()
+
+        party[3] = { id = 102, name = "Baern" }
+        BfBot.Innate._ReconcileJoined()
+        return { away = away, rejoined = takeQueued() }
+        """
+    )
+
+    assert facts["away"] == ""
+    assert facts["rejoined"] == 'Baern:AddSpecialAbility("BFBT31")'
+
+
+def test_reconcile_joined_never_regrants_after_a_failed_queue(
+    innate_lua: LuaRuntime,
+) -> None:
+    innate_lua.execute(PARTY_HARNESS)
+    facts = innate_lua.execute(
+        """
+        EEex_Action_QueueResponseStringOnAIBase = function()
+            error("synthetic queue failure")
+        end
+        party[2] = { id = 103, name = "Kerrick" }
+        local ok, err = pcall(BfBot.Innate._ReconcileJoined)
+
+        EEex_Action_QueueResponseStringOnAIBase = recordAction
+        BfBot.Innate._ReconcileJoined()
+        return { ok = ok, err = tostring(err), retried = takeQueued() }
+        """
+    )
+
+    assert not facts["ok"]
+    assert "synthetic queue failure" in facts["err"]
+    assert facts["retried"] == ""
+
+
+def test_reconcile_joined_skips_members_without_an_object_id(
+    innate_lua: LuaRuntime,
+) -> None:
+    # Without an id the member cannot be recorded, so a tick-driven grant
+    # would repeat every tick while the game is paused.
+    innate_lua.execute(PARTY_HARNESS)
+    queued = innate_lua.execute(
+        """
+        party[0] = { name = "Ilauna" }
+        BfBot.Innate._ReconcileJoined()
+        return takeQueued()
+        """
+    )
+
+    assert queued == ""
+
+
+def test_reconcile_joined_does_nothing_without_luajit_io(
+    innate_lua: LuaRuntime,
+) -> None:
+    innate_lua.execute(PARTY_HARNESS)
+    queued = innate_lua.execute(
+        """
+        BfBot._noIO = 1
+        party[0] = { id = 101, name = "Ilauna" }
+        BfBot.Innate._ReconcileJoined()
+        return takeQueued()
+        """
+    )
+
+    assert queued == ""
+
+
 def test_in_game_innate_diagnostic_reports_recharge_storage_details() -> None:
     diagnostic = TEST_SOURCE.split(
         "function BfBot.Test.Innate()", maxsplit=1
@@ -541,8 +674,10 @@ def test_innate_listeners_register_once_and_late_bind_across_reload() -> None:
         """
         local loadedCount = 0
         local quickCount = 0
+        local destroyedCount = 0
         local loadedCallback = nil
         local quickCallback = nil
+        local destroyedCallback = nil
 
         EEex_Sprite_AddLoadedListener = function(callback)
             loadedCount = loadedCount + 1
@@ -552,12 +687,18 @@ def test_innate_listeners_register_once_and_late_bind_across_reload() -> None:
             quickCount = quickCount + 1
             quickCallback = callback
         end
+        EEex_GameState_AddDestroyedListener = function(callback)
+            destroyedCount = destroyedCount + 1
+            destroyedCallback = callback
+        end
 
         testListenerState = {
             loadedCount = function() return loadedCount end,
             quickCount = function() return quickCount end,
+            destroyedCount = function() return destroyedCount end,
             loadedCallback = function() return loadedCallback end,
             quickCallback = function() return quickCallback end,
+            destroyedCallback = function() return destroyedCallback end,
         }
         """
     )
@@ -583,19 +724,31 @@ def test_innate_listeners_register_once_and_late_bind_across_reload() -> None:
         local quickPresent = type(firstQuickCallback) == "function"
         if quickPresent then firstQuickCallback({}, "BFBT01", -1) end
 
+        -- The reloaded module's record is the one a destroyed game clears.
+        BfBot.Innate._reconciled[42] = true
+        local destroyedCallback = testListenerState.destroyedCallback()
+        local destroyedPresent = type(destroyedCallback) == "function"
+        if destroyedPresent then destroyedCallback() end
+
         return {
             loadedCount = testListenerState.loadedCount(),
             quickCount = testListenerState.quickCount(),
+            destroyedCount = testListenerState.destroyedCount(),
             quickPresent = quickPresent,
             reboundCalls = reboundCalls,
+            destroyedPresent = destroyedPresent,
+            reconciledCleared = next(BfBot.Innate._reconciled) == nil,
         }
         """
     )
 
     assert facts["loadedCount"] == 1
     assert facts["quickCount"] == 1
+    assert facts["destroyedCount"] == 1
     assert facts["quickPresent"]
     assert facts["reboundCalls"] == 1
+    assert facts["destroyedPresent"]
+    assert facts["reconciledCleared"]
 
 
 def test_force_reload_migrates_the_legacy_loaded_listener_guard() -> None:
@@ -612,6 +765,7 @@ def test_force_reload_migrates_the_legacy_loaded_listener_guard() -> None:
         """
         local loadedCount = 1 -- listener already registered by v1.6.1
         local quickCount = 0
+        local destroyedCount = 0
         BfBot.Innate = { _initDone = true }
 
         EEex_Sprite_AddLoadedListener = function(_)
@@ -620,10 +774,14 @@ def test_force_reload_migrates_the_legacy_loaded_listener_guard() -> None:
         EEex_Sprite_AddQuickListsCheckedListener = function(_)
             quickCount = quickCount + 1
         end
+        EEex_GameState_AddDestroyedListener = function(_)
+            destroyedCount = destroyedCount + 1
+        end
 
         legacyReloadState = {
             loadedCount = function() return loadedCount end,
             quickCount = function() return quickCount end,
+            destroyedCount = function() return destroyedCount end,
         }
         """
     )
@@ -635,16 +793,20 @@ def test_force_reload_migrates_the_legacy_loaded_listener_guard() -> None:
         return {
             loadedCount = legacyReloadState.loadedCount(),
             quickCount = legacyReloadState.quickCount(),
+            destroyedCount = legacyReloadState.destroyedCount(),
             loadedGuard = BfBot._innateLoadedListenerRegistered == true,
             quickGuard = BfBot._innateQuickListsListenerRegistered == true,
+            destroyedGuard = BfBot._innateDestroyedListenerRegistered == true,
         }
         """
     )
 
     assert facts["loadedCount"] == 1
     assert facts["quickCount"] == 1
+    assert facts["destroyedCount"] == 1
     assert facts["loadedGuard"]
     assert facts["quickGuard"]
+    assert facts["destroyedGuard"]
 
 
 def test_bfbotgo_has_no_direct_per_use_action_queue_or_special_ability_grant() -> None:

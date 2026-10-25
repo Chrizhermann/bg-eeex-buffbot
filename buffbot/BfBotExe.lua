@@ -2104,6 +2104,22 @@ function BfBot.Exec._SafetyTick()
         end
     end
 
+    -- Party members who joined without a sprite-load event have no F12
+    -- innates yet (BfBot.Innate._ReconcileJoined). Same settle rule as the
+    -- drain above. A failure repeats every tick, so it is logged once.
+    if BfBot.Exec._state ~= "running" and BfBot.Innate
+            and BfBot.Innate._ReconcileJoined then
+        local ok, err = pcall(BfBot.Innate._ReconcileJoined)
+        if not ok then
+            local message = "[Innate] Joined-member reconciliation failed: "
+                .. tostring(err)
+            if BfBot.Exec._joinedWarning ~= message then
+                BfBot.Exec._joinedWarning = message
+                BfBot._Warn(message)
+            end
+        end
+    end
+
     -- Watchdog: force-complete a run that has stopped making progress. Known
     -- causes: multiplayer casters controlled by another player (their queued
     -- SpellRES + EEex_LuaAction live only in this machine's local action list

@@ -529,6 +529,21 @@ function BfBot.Innate._PlanReconciliation(sprite, slot, config)
     return plan
 end
 
+-- Object ids of the party members Refresh has reconciled. The sprite-loaded
+-- listener can only reconcile a sprite that already holds a portrait slot when
+-- it loads. On 2.7.3.0 with EEex v1.3.1 the party loads before its members take
+-- their portrait slots (lab-verified for BG2:EE save loads and for IWD:EE new
+-- games and save loads), and no further load event follows once they hold one;
+-- a companion who joins without a load is the same case. _ReconcileJoined picks
+-- up every party member missing from here.
+BfBot.Innate._reconciled = {}
+
+local function _spriteId(sprite)
+    local ok, id = pcall(function() return sprite.m_id end)
+    if ok and type(id) == "number" then return id end
+    return nil
+end
+
 --- Reconcile sprite's BFBT innates with config in a single planner+apply pass.
 -- Plan via _PlanReconciliation, then queue actions:
 --   mismatch → (maxCount + 1) BFBTRM passes (revoke ALL BFBT) + grant every
@@ -544,6 +559,12 @@ function BfBot.Innate.Refresh(slot)
     if not config then return end
 
     local plan = BfBot.Innate._PlanReconciliation(sprite, slot, config)
+
+    -- Recorded before queueing: the next plan cannot see grants still waiting
+    -- in the action queue, so a partial failure below must not send this
+    -- member back through _ReconcileJoined to be granted twice.
+    local id = _spriteId(sprite)
+    if id then BfBot.Innate._reconciled[id] = true end
 
     if plan.hasMismatch then
         local passes = math.min(plan.maxCount + 1, 50)
@@ -570,6 +591,31 @@ function BfBot.Innate.RefreshAll()
     if BfBot._noIO then return end
     for slot = 0, 5 do
         BfBot.Innate.Refresh(slot)
+    end
+end
+
+--- Reconcile the party members no Refresh has seen yet (see _reconciled).
+--- Driven by the exec safety tick while no run is active, so its actions never
+--- interleave with casting chains. Refresh records a member as soon as it has
+--- planned their grants, so grants still waiting in the action queue are never
+--- planned a second time. A member counts once until they leave the party;
+--- one who rejoins is reconciled again. Object ids are only unique within one
+--- game, so Init clears the record when the game is destroyed (load or exit).
+function BfBot.Innate._ReconcileJoined()
+    if BfBot._noIO then return end
+    local present = {}
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        local id = sprite and _spriteId(sprite)
+        if id then
+            present[id] = true
+            if not BfBot.Innate._reconciled[id] then
+                BfBot.Innate.Refresh(slot)
+            end
+        end
+    end
+    for id in pairs(BfBot.Innate._reconciled) do
+        if not present[id] then BfBot.Innate._reconciled[id] = nil end
     end
 end
 
@@ -642,7 +688,9 @@ end
 -- party members are loaded (new game, save load, area transition, party join).
 -- The listener fires from EEex_Sprite_LuaHook_OnAfterEffectListUnmarshalled,
 -- i.e. AFTER marshal restoration — so EEex_GetUDAux has the user's saved
--- config by the time Refresh queries it.
+-- config by the time Refresh queries it. A sprite without a portrait slot when
+-- it loads (the whole party on 2.7.3.0, see BfBot.Innate._reconciled) is left
+-- to _ReconcileJoined.
 function BfBot.Innate._OnSpriteLoaded(sprite)
     if not sprite then return end
     local slot = EEex_Sprite_GetPortraitIndex(sprite)
@@ -673,6 +721,14 @@ function BfBot.Innate.Init()
                 if callback then return callback(...) end
             end))
         BfBot._innateQuickListsListenerRegistered = true
+    end
+
+    if not BfBot._innateDestroyedListenerRegistered then
+        EEex_GameState_AddDestroyedListener(BfBot._SafeCallback(
+            "innate.game_destroyed", function()
+                if BfBot.Innate then BfBot.Innate._reconciled = {} end
+            end))
+        BfBot._innateDestroyedListenerRegistered = true
     end
 end
 

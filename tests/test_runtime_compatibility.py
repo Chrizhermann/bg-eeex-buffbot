@@ -3703,6 +3703,58 @@ def test_safety_tick_retries_pending_innate_refresh_after_execution(
     assert "synthetic refresh failure" in facts["warning"]
 
 
+def test_safety_tick_reconciles_joined_members_between_runs_and_warns_once(
+    exec_lua: LuaRuntime,
+) -> None:
+    script = """
+        local now = 3000
+        local reconcileCalls = 0
+        local warnings = {}
+
+        Infinity_GetClockTicks = function() return now end
+        EEex_Sprite_GetInPortrait = function(_) return nil end
+        BfBot.Exec._IsStateStale = function() return false end
+        BfBot.Exec._ProcessLateJoins = function() end
+        BfBot.Exec._GetGameTime = function() return nil end
+        BfBot.Exec._state = "running"
+        BfBot.Exec._casters = {}
+        BfBot.Exec._lastSafetyTick = 0
+        BfBot._Warn = function(message) warnings[#warnings + 1] = message end
+        BfBot.Innate._ReconcileJoined = function()
+            reconcileCalls = reconcileCalls + 1
+            error("synthetic reconciliation failure")
+        end
+
+        BfBot.Exec._SafetyTick()
+        local callsWhileRunning = reconcileCalls
+
+        BfBot.Exec._state = "done"
+        now = 6000
+        BfBot.Exec._SafetyTick()
+        now = 9000
+        BfBot.Exec._SafetyTick()
+        return {
+            callsWhileRunning = callsWhileRunning,
+            reconcileCalls = reconcileCalls,
+            warningCount = #warnings,
+            warning = warnings[1] or "",
+        }
+        """
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        facts = exec_lua.execute(script)
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    assert facts["callsWhileRunning"] == 0
+    assert facts["reconcileCalls"] == 2
+    assert facts["warningCount"] == 1
+    assert "synthetic reconciliation failure" in facts["warning"]
+
+
 def test_in_game_spell_picker_sort_phase(ui_test_lua: LuaRuntime) -> None:
     assert ui_test_lua.eval("BfBot.Test.SpellPickerSort()")
 
@@ -3888,6 +3940,11 @@ def test_innate_sprite_loaded_registration_is_wrapped_without_silent_pcall() -> 
         INNATE_SOURCE,
         "EEex_Sprite_AddQuickListsCheckedListener",
         "innate.quick_lists_checked",
+    )
+    _assert_registration_is_wrapped(
+        INNATE_SOURCE,
+        "EEex_GameState_AddDestroyedListener",
+        "innate.game_destroyed",
     )
     assert "pcall(BfBot.Innate.Refresh" not in INNATE_SOURCE
 
