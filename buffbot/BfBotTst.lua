@@ -2454,10 +2454,11 @@ function BfBot.Test.LegacyInnateCleanup()
     _check(type(counts) == "table", "known-innate walk works on " .. name)
     if type(counts) ~= "table" then return _summary("LegacyInnateCleanup") end
 
-    -- A leftover innate as earlier versions granted it. AddSpecialAbility is in
-    -- INSTANT.IDS, so the grant lands synchronously. It never adds a second
-    -- copy (v1.3.9's stacks came from opcode 171), so duplicate counts are
-    -- covered by the offline tests.
+    -- A leftover innate as earlier versions granted it. INSTANT.IDS does not
+    -- list AddSpecialAbility, yet the instant call grants it synchronously on
+    -- 2.7.3.0; the phase skips where it does not. It never adds a second copy
+    -- (v1.3.9's stacks came from opcode 171), so duplicate counts are covered
+    -- by the offline tests.
     local legacyResref = string.format("BFBT%d1", slotIdx)
     local function _grant()
         EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
@@ -2467,7 +2468,7 @@ function BfBot.Test.LegacyInnateCleanup()
     _grant()
     local granted = _knownCount(legacyResref)
     if granted <= before then
-        _warning("INSTANT.IDS AddSpecialAbility didn't take effect — skipping")
+        _warning("instant AddSpecialAbility didn't take effect — skipping")
         return _summary("LegacyInnateCleanup")
     end
     P(string.format("  the grant left %d known cop%s of %s",
