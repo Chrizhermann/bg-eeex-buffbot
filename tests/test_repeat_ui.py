@@ -77,13 +77,14 @@ def test_spell_rows_normalize_repeat_text_and_use_theme_colors(
 ) -> None:
     facts = repeat_ui_lua.execute(
         """
+        -- _T hands back the engine's packed color: blue<<16 | green<<8 | red.
         BfBot.UI._T = function(key)
             local colors = {
-                text = "{7, 8, 9}",
-                textMuted = "{4, 5, 6}",
-                textAccent = "{1, 2, 3}",
+                text = (9 * 0x10000) + (8 * 0x100) + 7,
+                textMuted = (6 * 0x10000) + (5 * 0x100) + 4,
+                textAccent = (3 * 0x10000) + (2 * 0x100) + 1,
             }
-            return colors[key] or "{0, 0, 0}"
+            return colors[key] or 0
         end
         local preset = {
             spells = {
@@ -118,9 +119,9 @@ def test_spell_rows_normalize_repeat_text_and_use_theme_colors(
             validText = rows[2].repeatText,
             malformedRep = rows[3].rep,
             malformedText = rows[3].repeatText,
-            normalR = normal[1],
-            accentR = accent[1],
-            mutedR = muted[1],
+            normalR = normal,
+            accentR = accent,
+            mutedR = muted,
         }
         """
     )
@@ -131,9 +132,9 @@ def test_spell_rows_normalize_repeat_text_and_use_theme_colors(
     assert facts["validText"] == "R5"
     assert facts["malformedRep"] == 1
     assert facts["malformedText"] == "R1"
-    assert facts["normalR"] == 7
-    assert facts["accentR"] == 1
-    assert facts["mutedR"] == 4
+    assert facts["normalR"] == (9 * 0x10000) + (8 * 0x100) + 7
+    assert facts["accentR"] == (3 * 0x10000) + (2 * 0x100) + 1
+    assert facts["mutedR"] == (6 * 0x10000) + (5 * 0x100) + 4
 
 
 def test_selected_repeat_routes_party_and_summon_writes_without_refresh(
@@ -1133,3 +1134,17 @@ def test_the_border_atlas_matches_the_registered_nine_patch() -> None:
 
     for resref in ("BFBOTFR", "BFBOTFR2", "BFBOTFR3"):
         assert pvrz_size(ROOT / f"buffbot/{resref}.PVRZ") == (width, height), resref
+
+
+def test_dark_mode_veils_use_the_neutral_rectangle_style() -> None:
+    # `rectangle N` selects a style, not a color. Style 5 tints warm, so dark
+    # mode laid a warm film over the parchment instead of darkening it; style 1
+    # is what the full-screen click-to-close dimmer uses and reads as neutral.
+    # The sub-menu backdrops that are not palette-driven keep their own style.
+    veils = re.findall(
+        r'name\s+"(bb(?:Quick|Dark)Overlay\w*)"\n(?:[^\n]*\n)*?\s*rectangle (\d+)'
+        r'\n(?:[^\n]*\n)*?\s*rectangle opacity lua "BfBot\.Theme\._active\.overlay"',
+        MENU_SOURCE,
+    )
+    assert len(veils) == 8, [name for name, _ in veils]
+    assert all(style == "1" for _, style in veils), veils

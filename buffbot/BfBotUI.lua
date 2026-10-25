@@ -8,13 +8,6 @@
 -- so we don't wipe _T (which the .menu evaluates per-frame for theme colors).
 BfBot.UI = BfBot.UI or {}
 
--- Convert "{R, G, B}" string → {R, G, B} table. Used by color functions
--- that consume _T() (string) and hand tables back to the engine.
-local function _parseColor(s)
-    local r, g, b = s:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
-    return { tonumber(r) or 0, tonumber(g) or 0, tonumber(b) or 0 }
-end
-
 -- ============================================================
 -- Internal State
 -- ============================================================
@@ -3281,14 +3274,14 @@ end
 --- bronze tint for item rows, gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
-    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
-    if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if not entry then return BfBot.UI._T("text") end
+    if entry.castable == 0 then return BfBot.UI._T("textMuted") end
+    if entry.ovr == 1 then return BfBot.UI._T("textAccent") end
     if entry.kind == "itm" and entry.lock ~= 1 then
-        return _parseColor(BfBot.UI._T("itemColor"))
+        return BfBot.UI._T("itemColor")
     end
-    if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if entry.lock == 1 then return BfBot.UI._T("spellLocked") end
+    return BfBot.UI._T("text")
 end
 
 function BfBot.UI._SpellRowTooltip(row)
@@ -3302,21 +3295,21 @@ end
 --- item rows, normal text tint for spell rows.
 function BfBot.UI._PickerNameColor(row)
     local entry = buffbot_pickerSpells[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
-    if entry.isHeader then return _parseColor(BfBot.UI._T("headerSub")) end
-    if entry.kind == "itm" then return _parseColor(BfBot.UI._T("itemColor")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if not entry then return BfBot.UI._T("text") end
+    if entry.isHeader then return BfBot.UI._T("headerSub") end
+    if entry.kind == "itm" then return BfBot.UI._T("itemColor") end
+    return BfBot.UI._T("text")
 end
 
 --- Repeat column color: repeated casts use the theme accent. A single cast
 --- follows the normal spell-row color, including muted unavailable rows.
 function BfBot.UI._RepeatColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if not entry then return BfBot.UI._T("text") end
     local rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
-    if rep > 1 then return _parseColor(BfBot.UI._T("textAccent")) end
-    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if rep > 1 then return BfBot.UI._T("textAccent") end
+    if entry.castable == 0 then return BfBot.UI._T("textMuted") end
+    return BfBot.UI._T("text")
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
@@ -3370,8 +3363,8 @@ end
 --- Lock column color: gold when locked, muted otherwise.
 function BfBot.UI._LockColor(row)
     local entry = buffbot_spellTable[row]
-    if entry and entry.lock == 1 then return _parseColor(BfBot.UI._T("lockActive")) end
-    return _parseColor(BfBot.UI._T("lockInactive"))
+    if entry and entry.lock == 1 then return BfBot.UI._T("lockActive") end
+    return BfBot.UI._T("lockInactive")
 end
 
 --- Toggle the lock state on a spell row. Party view only (see _LockText).
@@ -3509,11 +3502,11 @@ function BfBot.UI._QuickCastLabel()
 end
 
 function BfBot.UI._QuickCastColor()
-    if BfBot.UI._FastForwardRate() > 1 then return _parseColor(BfBot.UI._T("textMuted")) end
+    if BfBot.UI._FastForwardRate() > 1 then return BfBot.UI._T("textMuted") end
     local qc = BfBot.UI._ViewQuickCast()
-    if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
-    if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
-    return _parseColor(BfBot.UI._T("qcOff"))
+    if qc == 1 then return BfBot.UI._T("qcLong") end
+    if qc == 2 then return BfBot.UI._T("qcAll") end
+    return BfBot.UI._T("qcOff")
 end
 
 function BfBot.UI._QuickCastTooltip()
@@ -3615,9 +3608,9 @@ end
 --- "how much is BuffBot allowed to do here", so off/warn/cheat read the same.
 function BfBot.UI._ForceRecastColor()
     local mode = _forceMode()
-    if mode == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
-    if mode == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
-    return _parseColor(BfBot.UI._T("qcOff"))
+    if mode == 1 then return BfBot.UI._T("qcLong") end
+    if mode == 2 then return BfBot.UI._T("qcAll") end
+    return BfBot.UI._T("qcOff")
 end
 
 function BfBot.UI._ForceRecastTooltip()

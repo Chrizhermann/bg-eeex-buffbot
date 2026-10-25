@@ -240,3 +240,59 @@ def test_refresh_below_radio_stages_selection_and_persists_each_choice(options_l
 def test_refresh_below_choices_are_ascending_and_start_at_off():
     source = (ROOT / "buffbot/BfBotThm.lua").read_text(encoding="utf-8")
     assert "BfBot.Theme.REFRESH_BELOW_CHOICES = { 0, 60, 300, 3600 }" in source
+
+
+def test_theme_colors_reach_the_engine_as_packed_numbers(options_lua):
+    # The engine reads one number per color and unpacks it as
+    # alpha<<24 | blue<<16 | green<<8 | red -- blue and red the other way round
+    # from the usual 0xAARRGGBB. EEex's own EEex_Options_Private_UnpackColor
+    # does it that way. Until v1.12.1 _T returned the palette's "{R, G, B}"
+    # string, which no engine path could read, so every label fell back to its
+    # style's default and all six palettes rendered the same near-black text.
+    facts = options_lua.execute(
+        """
+        BfBot.Theme._active = BfBot.Theme._palettes["bg2_light"]
+        local title = BfBot.UI._T("title")
+        local raw = BfBot.UI._TRaw("title")
+        BfBot.Theme._active = BfBot.Theme._palettes["bg1_dark"]
+        return {
+            titleType = type(title),
+            title = title,
+            raw = raw,
+            missing = BfBot.UI._T("no_such_key"),
+            switched = BfBot.UI._T("title"),
+        }
+        """
+    )
+    assert facts["titleType"] == "number"
+    assert facts["raw"] == "{50, 30, 10}"
+    assert facts["title"] == (10 << 16) | (30 << 8) | 50
+    assert facts["missing"] == 0xFF00FF
+    # Switching the palette must change what the engine is handed; that it did
+    # not is exactly how the six themes rendered identically.
+    assert facts["switched"] != facts["title"]
+
+
+def test_every_palette_color_survives_packing(options_lua):
+    # A typo in any palette entry would pack to the red error value and show up
+    # as a red label in game rather than as a failure anywhere else.
+    bad = options_lua.execute(
+        """
+        local bad = {}
+        for name, palette in pairs(BfBot.Theme._palettes) do
+            BfBot.Theme._active = palette
+            for key, value in pairs(palette) do
+                if type(value) == "string" and value:sub(1, 1) == "{" then
+                    local packed = BfBot.UI._T(key)
+                    local r, g, b = value:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
+                    if not r or packed ~= (tonumber(b) * 0x10000)
+                                          + (tonumber(g) * 0x100) + tonumber(r) then
+                        bad[#bad + 1] = name .. "." .. key .. " = " .. value
+                    end
+                end
+            end
+        end
+        return table.concat(bad, "; ")
+        """
+    )
+    assert bad == ""

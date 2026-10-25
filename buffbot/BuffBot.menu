@@ -75,7 +75,7 @@ menu
 	label
 	{
 		name "bbQuickOverlay"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 0 0 0 0
 	}
@@ -237,12 +237,16 @@ menu
 		mosaic "BFBOTBG3"
 	}
 
-	-- Dark mode overlay (theme-driven opacity, position synced via _Layout)
+	-- Dark mode overlay (theme-driven opacity, position synced via _Layout).
+	-- `rectangle N` picks a style, not a color. Style 5 tints warm, which made
+	-- "dark mode" lay a warm film over the parchment instead of darkening it.
+	-- Style 1 is the one the full-screen click-to-close dimmer above uses, and
+	-- that one reads as neutral dark. All eight veils use it.
 	label
 	{
 		name    "bbDarkOverlay"
 		enabled "buffbot_isOpen"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 340 50 540 510
 	}
@@ -1365,7 +1369,7 @@ menu
 	label
 	{
 		name    "bbDarkOverlayTgt"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 474 144 212 402
 	}
@@ -1672,7 +1676,7 @@ menu
 	label
 	{
 		name    "bbDarkOverlayRen"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 450 280 260 90
 	}
@@ -1773,7 +1777,7 @@ menu
 	label
 	{
 		name    "bbDarkOverlayConf"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 450 280 260 90
 	}
@@ -1864,7 +1868,7 @@ menu
 	label
 	{
 		name    "bbDarkOverlayPick"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 380 100 400 380
 	}
@@ -2015,7 +2019,7 @@ menu
 	label
 	{
 		name    "bbDarkOverlayImp"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 420 150 320 300
 	}
@@ -2130,7 +2134,7 @@ menu
 	label
 	{
 		name    "bbDarkOverlayVar"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 420 180 320 220
 	}
