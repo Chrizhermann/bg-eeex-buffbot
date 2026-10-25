@@ -6,7 +6,15 @@ from collections.abc import Iterable
 from pathlib import Path
 
 
-RESOURCE_TYPES = {"ARE": 1010}
+RESOURCE_TYPES = {"ARE": 1010, "2DA": 1012}
+# WeiDU's GAME_IS names a game by one marker resource (src/tppe.ml, WeiDU 249):
+# IWD:EE is HOWPARTY.2DA, BG2:EE is OH6000.ARE without EET's flag, and PST:EE
+# (which neither EEex nor BuffBot supports) is PSTCHAR.2DA.
+GAME_MARKERS = {
+    "bg2ee": ("OH6000", "ARE"),
+    "iwdee": ("HOWPARTY", "2DA"),
+    "pstee": ("PSTCHAR", "2DA"),
+}
 ONE_EMPTY_STRING_TLK = (
     struct.pack("<8sHII", b"TLK V1  ", 0, 1, 0x2C)
     + struct.pack("<H8siiII", 0, b"\0" * 8, 0, 0, 0, 0)
@@ -18,11 +26,11 @@ def write_minimal_tlk(path: Path) -> None:
     path.write_bytes(ONE_EMPTY_STRING_TLK)
 
 
-def write_minimal_bg2ee_key_biff(root: Path) -> Path:
-    """Write OH6000.ARE in one uncompressed BIFF and index it in chitin.key."""
-    resref = "OH6000"
-    payload = b"synthetic BG2EE marker"
-    resource_type = RESOURCE_TYPES["ARE"]
+def write_minimal_game_key_biff(root: Path, game: str = "bg2ee") -> Path:
+    """Write the game's GAME_IS marker in one uncompressed BIFF and index it in chitin.key."""
+    resref, extension = GAME_MARKERS[game]
+    payload = f"synthetic {game} marker".encode("ascii")
+    resource_type = RESOURCE_TYPES[extension]
     bif_relative = Path("DATA/BFBOTST.BIF")
     bif_path = root / bif_relative
     bif_path.parent.mkdir(parents=True, exist_ok=True)

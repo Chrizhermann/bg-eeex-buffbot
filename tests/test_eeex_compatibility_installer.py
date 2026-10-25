@@ -12,7 +12,7 @@ import pytest
 
 from tests.ie_formats import (
     visual_art_names,
-    write_minimal_bg2ee_key_biff,
+    write_minimal_game_key_biff,
     write_minimal_tlk,
 )
 from tests.test_localization import parse_tra
@@ -54,6 +54,7 @@ GAME_TLK_ATTRIBUTES = {
     "pt_BR": "brazilian_portuguese_tlk",
 }
 ENGLISH_CATALOG, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+GAME_REQUIREMENT_TEXT = ENGLISH_CATALOG[101]
 INNATE_CATALOG_IDS = set(range(200, 208))
 
 MAIN_OUTPUT_FILES = {
@@ -386,12 +387,14 @@ def _state_tlk(state: ProductState, game_language: str) -> bytes:
 
 
 class BuffBotGame:
-    def __init__(self, root: Path, layout: str, *, with_log: bool = True) -> None:
+    def __init__(
+        self, root: Path, layout: str, *, with_log: bool = True, game: str = "bg2ee"
+    ) -> None:
         self.root = root
         self.root.mkdir()
         self.override = root / "override"
         self.override.mkdir()
-        self.bif = write_minimal_bg2ee_key_biff(root)
+        self.bif = write_minimal_game_key_biff(root, game)
         self.root_tlk = root / "dialog.tlk"
         self.lang_tlk = root / "lang/en_US/dialog.tlk"
         self.schinese_tlk = root / "lang/zh_CN/dialog.tlk"
@@ -696,10 +699,12 @@ class BuffBotGame:
 def game_factory(tmp_path: Path):
     count = 0
 
-    def make(layout: str, *, with_log: bool = True) -> BuffBotGame:
+    def make(layout: str, *, with_log: bool = True, game: str = "bg2ee") -> BuffBotGame:
         nonlocal count
         count += 1
-        return BuffBotGame(tmp_path / f"game-{count}", layout, with_log=with_log)
+        return BuffBotGame(
+            tmp_path / f"game-{count}", layout, with_log=with_log, game=game
+        )
 
     return make
 
@@ -754,6 +759,70 @@ def test_components_require_eeex_v011_capabilities(
         _assert_installed(game, process)
         game.assert_luajit_state(game.expected_version)
         assert game.snapshot() == before
+
+
+@pytest.mark.parametrize("component", (0, 1))
+def test_components_install_on_iwdee(game_factory, component: int) -> None:
+    game = game_factory("v1", game="iwdee")
+    before = game.snapshot()
+
+    process = game.install(component)
+
+    _assert_installed(game, process)
+    if component == 0:
+        game.assert_main_installed(before)
+    else:
+        game.assert_luajit_state(game.expected_version)
+        assert game.snapshot() == before
+
+
+def test_iwdee_helper_activates_luajit_from_eeex_internal_lua_before_main(
+    game_factory,
+) -> None:
+    # The [General] Lua lines EEex v1.3.1 leaves on IWD:EE when its own LuaJIT
+    # component is not installed: the game's internal Lua 5.2, no external one.
+    game = game_factory("v1", game="iwdee")
+    game.configure_loader(
+        _official_loader_ini(
+            (
+                "LuaLibrary=",
+                "LuaPatchMode=INTERNAL",
+                "LuaVersionExternal=",
+                "LuaVersionInternal=5.2",
+            )
+        )
+    )
+    before = game.snapshot()
+
+    process = game.install_many(1, 0)
+    transcript = _assert_installed(game, process)
+
+    assert "BuffBot: EEex LuaJIT Support" in transcript, transcript
+    assert "BuffBot: In-Game Buff Automation" in transcript, transcript
+    game.assert_luajit_state(game.expected_version)
+    ini = (game.root / "InfinityLoader.ini").read_text(encoding="ascii")
+    assert ini.count("LuaVersionInternal=5.2") == 1, ini
+    after = game.snapshot()
+    assert after.override.keys() == before.override.keys() | MAIN_OUTPUT_FILES
+    _assert_english_innate_catalog_in_tlk(game.lang_tlk)
+
+
+@pytest.mark.parametrize("component", (0, 1))
+def test_components_reject_a_game_outside_the_supported_set(
+    game_factory, component: int
+) -> None:
+    game = game_factory("v1", game="pstee")
+    before = game.snapshot()
+
+    process = game.install(component)
+    transcript = game.transcript(process)
+
+    assert "SUCCESSFULLY INSTALLED" not in transcript, transcript
+    assert "SKIPPING" in transcript, transcript
+    assert GAME_REQUIREMENT_TEXT in transcript, transcript
+    assert "IWD:EE" in GAME_REQUIREMENT_TEXT
+    assert game.snapshot() == before
+    game.assert_no_main_payload()
 
 
 @pytest.mark.parametrize("component", (0, 1))

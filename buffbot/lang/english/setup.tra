@@ -1,7 +1,7 @@
 // installer.component.luajit
 @100 = ~BuffBot: EEex LuaJIT Support (auto-detected)~
 // installer.require.game
-@101 = ~BuffBot requires BG:EE, BG2:EE, or EET.~
+@101 = ~BuffBot requires BG:EE, BG2:EE, EET, or IWD:EE.~
 // installer.require.eeex
 @102 = ~BuffBot requires EEex v0.11.0-alpha or later. Install EEex first: https://github.com/Bubb13/EEex/releases~
 // installer.luajit.already_active

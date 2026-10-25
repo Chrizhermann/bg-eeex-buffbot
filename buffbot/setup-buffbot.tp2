@@ -164,7 +164,7 @@ BEGIN @100
 DESIGNATED 1
 LABEL ~BuffBot-LuaJIT~
 
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet iwdee~)
   @101
 
 REQUIRE_PREDICATE (
@@ -290,7 +290,7 @@ DESIGNATED 0
 LABEL ~BuffBot-Main~
 
 // ---- Prerequisites ----
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet iwdee~)
   @101
 
 // EEex component numbers changed in v1.0.0. Detect the runtime capability
