@@ -3878,6 +3878,8 @@ function BfBot.Test.SummonCasters()
         ["e:f"] = { presets = {
             [1] = { qc = 7, spells = {
                 T1 = { on = 1, tgt = { 42, "Imoen" }, pri = "z", var = 9 },
+                T2 = { on = 1, tgt = "Imoen", pri = 1, tgtUnlock = 1 },
+                T3 = { on = 1, tgt = "s", pri = 2, tgtUnlock = "yes" },
             } },
             [99] = { qc = 0, spells = {} },
         } },
@@ -3895,6 +3897,12 @@ function BfBot.Test.SummonCasters()
         and #ef.spells.T1.tgt == 1 and ef.spells.T1.tgt[1] == "Imoen"
         and vc.summons["e:f"].presets[99] == nil,
         "validator: qc range, pri/var/tgt scrub, out-of-range preset index dropped")
+    -- tgtUnlock is optional in summon entries too (#82): a valid 1 survives,
+    -- garbage normalizes to 0, and an untouched entry stays field-free.
+    _check(ef ~= nil and ef.spells.T2.tgtUnlock == 1
+        and ef.spells.T3.tgtUnlock == 0
+        and ef.spells.T1.tgtUnlock == nil,
+        "validator: summon tgtUnlock kept, normalized, and optional")
 
     -- Read-path repair warns (external corruption must be diagnosable, never
     -- silently discarded) + out-of-range qc clamped on read too.
@@ -7087,7 +7095,7 @@ function BfBot.Test.Persist()
     P("  [11] Schema v10 migration (kind field)")
 
     -- v9→v10: kind field added to party entries only. Summon presets remain
-    -- spell-only under their v9 whitelist and do not gain a kind field.
+    -- spell-only under their own whitelist and do not gain a kind field.
     local v9 = {
         v = 9, ap = 1,
         presets = {

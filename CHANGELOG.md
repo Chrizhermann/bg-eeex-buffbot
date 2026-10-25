@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Variant spells (opcode 214 "spell menu" spells such as Protection from Elemental Energy) no longer refuse every target but Self. Their targeting was read from the selection wrapper the engine casts on the caster, while BuffBot actually casts the chosen variant directly — so the target picker locked the row to "(Self-only)" even when the variant targets a single creature. The picker, and the AoE decision during execution, now follow the selected variant. (#82)
+- The Summons view can unlock targeting. A spell the classifier reports as self-only or party-wide disables every control in the target picker, and the Unlock button existed only in the party view, so such a row was a permanent dead end — which hit every variant spell. Summon spell entries now carry the same optional `tgtUnlock` field as party entries, and a clone seeded from its owner inherits the owner's unlock along with the copied targets.
+- Closing the target picker with "Done" while the row is still locked no longer replaces the stored target with the classifier's default. Nothing in a locked picker can express a target, so there is no intent to save.
+
+### Known limitations
+- A genuine area buff cast by a summon covers whatever stands near the *summon*, not the party, because the engine centers it on the caster. The picker still labels that case "(Party-wide)". Unlock the row and pick party members individually when the summon is not standing with the party.
+
+### Testing
+- The full automated suite passes **1315 tests** after merging v1.12.0, 15 of them new here, including the variant target shape read from the sub-spell, the parent verdict kept when a variant SPL cannot be read, the Summons-view unlock-and-save path, the locked-Done no-write guard, summon-schema validation of `tgtUnlock`, clone seeding, and `all` expansion for a party-wide variant.
+- Offline evidence from the reference install: 247 of its 249 opcode-214 abilities have ability target type 5 or 7 (caster), while the variants they select are single-creature or party-wide spells. `SPWI422` → `DVWI426` → `SPWI319`/`SPWI320`/`SPWI512`/`SPWI517`, all single-creature.
+- **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (quiet lab `BuffBot-Summons`, guards clean, 335 s run, on v1.10.1 plus this branch — before the v1.12.0 merge below): a real allied Djinni summoned in game offered exactly one buff row, Ghost Armor, which the classifier reports as self-only — the dead end as reported. The picker opened locked "(Self-only)", Unlock then cleared the lock and wrote `tgtUnlock = 1` into the **summon** preset, the chosen party member was stored as `{Zorl}` and survived a view refresh, and the resulting queue read `Ghost Armor -> Player3 (Zorl)` from caster ref `summon/139462735`. For the variant half, read from real resources through the mod's own code: a real opcode-214 parent (`SPWI510` Spell Immunity, ability target type 7) reports self-only and stays locked, all eight of its variants are genuinely self-only and stay locked, while the real variant sub-spells of the reported spell (`SPWI319`/`SPWI320`/`SPWI512`/`SPWI517`) report target type 1 and unlock the row, after which confirming the picker stored the picked party members and resolved them into per-member queue entries.
+- Not verified in game: the reported spell's own menu form (`SPWI422` as an opcode-214 parent does not exist in a clean install — only in a modded one), and an actual cast landing on the target. **The merged state has not been checked in game**: the lab run predates the v1.12.0 merge, the lab still holds the pre-merge build, and it was deliberately not re-run — the behaviour under test is covered by the automated suite, and the reported spell's menu form does not exist in a clean lab, so a repeat run could not have shown anything new.
+
 ## v1.12.0 (2026-10-24)
 
 ### Added
