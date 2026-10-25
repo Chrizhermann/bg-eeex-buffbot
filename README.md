@@ -30,7 +30,7 @@ Cast all your pre-battle buffs with one click. BuffBot scans each character's sp
 
 ## Requirements
 
-- **BG:EE**, **BG2:EE**, or **EET**
+- **BG:EE**, **BG2:EE**, **EET**, or **IWD:EE** (new; see [Icewind Dale: Enhanced Edition](#icewind-dale-enhanced-edition) for what has been tested)
 - **[EEex](https://github.com/Bubb13/EEex)** v0.11.0-alpha or later, with LuaJIT active (v1 recommended)
 
 EEex v0.11 and v1 have full BuffBot feature parity. LuaJIT must be active before BuffBot's main component installs. You can enable it through EEex's LuaJIT / Experimental option, or install BuffBot's **EEex LuaJIT Support** helper first. The main component validates the actual loader configuration and DLLs, so LuaJIT activated externally by EEex is accepted without requiring ownership by BuffBot.
@@ -78,6 +78,8 @@ For **Project Infinity**, explicitly select both BuffBot components and place **
 **Updating an existing BuffBot install:** select or reinstall both BuffBot components together. Older releases recorded the main component before the helper, so updating only main makes WeiDU temporarily remove LuaJIT support and the safety check rejects that pass. The helper is restored safely, but the main component is left uninstalled; if this already happened, run setup again to install main.
 
 For **EET**, BuffBot can be installed after `EET_end`; EEex and LuaJIT must be ready first. With EEex v0.11, keep EEex and BuffBot after generalized biffing or later file-replacement steps as noted above.
+
+For **IWD:EE**, the order is the same as for BG2:EE: EEex first, then **EEex LuaJIT Support**, then **In-Game Buff Automation**. If EEex's own LuaJIT component is already installed, the helper detects it and changes nothing.
 
 **Uninstall:** remove **In-Game Buff Automation** first, then remove **EEex LuaJIT Support** if BuffBot installed it. The helper restores the exact loader files that preceded its installation. LuaJIT owned by EEex is left unchanged when BuffBot's helper made no changes.
 
@@ -219,6 +221,14 @@ Project Image locks its owner while active. BuffBot limits the Project Image cas
 - Spells the target character doesn't have are silently skipped
 - Files are saved in `override/bfbot_presets/` — share them with other players or use across playthroughs
 
+## Icewind Dale: Enhanced Edition
+
+BuffBot runs on IWD:EE 2.7.3.0 with EEex v1.3.1. The panel, presets, targets, F12 innates, skipping active buffs and save-game persistence work as they do in Baldur's Gate. Panel buttons use IWD:EE's own button art, and the text size option knows IWD:EE's fonts.
+
+**Tested** on two fresh IWD:EE 2.7.3.0 installs with EEex v1.3.1 and Bubb's Spell Menu Extended v5.2: one where BuffBot's helper activated LuaJIT, one where EEex's own LuaJIT component had done it. Across the two, a new six-character party with a priest and a mage received its F12 innates without a reload, presets were configured in the panel and cast from it and with F12, an already active Armor was skipped, and the configuration survived saving and reloading, from the main menu and from inside the game. The full in-game test suite passed on both. Removing **In-Game Buff Automation** was tested as well.
+
+**Not tested yet:** IWD:EE UI mods (LeUI-IWDEE, Infinity UI++), SCS for IWD:EE, IWD NPC mods, Heart of Winter and Trials of the Luremaster areas, multiplayer, EEex versions other than v1.3.1, and removing **EEex LuaJIT Support**. Reports from IWD:EE players are especially welcome.
+
 ## 5E Spellcasting (experimental)
 
 Starting with **v1.9.0-alpha**, BuffBot can work with the existing [5E Spellcasting mod](https://github.com/UnearthedArcana/5E_spellcasting). Install 5E Spellcasting before BuffBot, prepare spells through 5E's own interface, then rest. BuffBot detects the mod automatically; there is no separate compatibility component. This adds compatibility with that mod, not a separate implementation of 5e casting in EEex.
@@ -262,7 +272,7 @@ Log files are written to the game directory: `buffbot_test.log`, `buffbot_exec.l
 For 5E Spellcasting reports, also run `BfBot.FiveE.Diagnose()` in the console and include `buffbot_5e.log` and `WeiDU.log`. See the [5E tester guide](docs/5e-spellcasting.md#reporting-a-problem).
 
 **Reporting bugs:** please open an issue at [GitHub Issues](https://github.com/Chrizhermann/bg-eeex-buffbot/issues) with:
-- Game version (BG:EE / BG2:EE / EET) and EEex version
+- Game version (BG:EE / BG2:EE / EET / IWD:EE) and EEex version
 - Steps to reproduce
 - Mod list (especially SCS, Spell Revisions, kit mods)
 - Output from `BfBot.Test.RunAll()` if relevant
