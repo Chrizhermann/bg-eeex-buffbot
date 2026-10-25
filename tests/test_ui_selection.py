@@ -1372,3 +1372,53 @@ def test_status_label_tracks_executor_without_refresh(ui_lua: LuaRuntime) -> Non
     assert ui_lua.eval(binding.group(1)) == "Done"
     ui_lua.globals().nativeState = "stopped"
     assert ui_lua.eval(binding.group(1)) == "Stopped"
+
+def _targets_menu() -> str:
+    start = MENU_SOURCE.index('name    "BUFFBOT_TARGETS"')
+    end = MENU_SOURCE.index('name    "BUFFBOT_RENAME"')
+    return MENU_SOURCE[start:end]
+
+
+def _dialog_item(name: str) -> str:
+    menu = _targets_menu()
+    at = menu.index('name    "' + name + '"')
+    return menu[menu.rindex("{", 0, at) : menu.index("}", at) + 1]
+
+
+def test_the_targets_dialog_greys_its_party_while_targeting_is_locked() -> None:
+    """Locked is the default for every entry, so hiding the rows left the
+    dialog holding a header and two buttons in 400px of parchment. The party
+    is shown unavailable instead, which is also what "Unlock Targeting"
+    then refers to."""
+    menu = _targets_menu()
+
+    # No control disappears for being locked any more. The reverse gate
+    # stays: the "(Self-only)" line exists only while it is locked.
+    for line in menu.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("enabled "):
+            assert "buffbot_targetLocked == 0" not in stripped, stripped
+
+    # Every control the lock governs is greyed by it instead.
+    for name in ["bbTgSelf", "bbTgParty"] + [f"bbTgChk{n}" for n in range(1, 7)]:
+        block = _dialog_item(name)
+        assert 'clickable lua "buffbot_targetLocked == 0"' in block, name
+        caption = _dialog_item(name + "_t")
+        assert (
+            'text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"'
+            in caption
+        ), name
+
+    # The member rows are text items, which take no `clickable`: their own
+    # entry point and their colour carry the lock.
+    assert menu.count('action  "BfBot.UI.PickerSelect(') == 6
+    for helper in ("PickerSelf", "PickerAllParty", "PickerToggle", "PickerSelect"):
+        body = re.search(
+            r"function BfBot\.UI\." + helper + r"\(.*?^end$", UI_SOURCE, re.S | re.M
+        ).group(0)
+        assert "if buffbot_targetLocked == 1 then return end" in body, helper
+    row_color = re.search(
+        r"function BfBot\.UI\._PickerRowColor\(.*?^end$", UI_SOURCE, re.S | re.M
+    ).group(0)
+    assert "buffbot_targetLocked == 1" in row_color
+

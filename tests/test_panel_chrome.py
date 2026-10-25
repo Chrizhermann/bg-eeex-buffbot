@@ -201,15 +201,43 @@ def test_each_helper_names_the_themed_art_and_falls_back_to_the_engine(
     assert lua.eval(f"BfBot.UI.{helper}()") == ENGINE_BUTTON
 
 
+# The art's own order, read off the rendered BAMs: skin 0 is BG:EE's red
+# marble with gold filigree and a round socket, 1 is IWD's plain wood, 2 is
+# SoD's cold steel with a square socket, 3 is BG2's dark stone. A mapping
+# that drifts from it is not a style choice -- it dresses SoD's panel in
+# BG:EE's red and BG:EE's in SoD's steel, which is how this was first
+# shipped.
+CONTROL_SKINS = {"bg1": 0, "sod": 2, "bg2": 3}
+
+
+def test_the_skin_index_follows_the_art_and_every_mapped_skin_ships() -> None:
+    body = re.search(
+        r"function BfBot\.Theme\.ControlSkin\(\).*?^end$", THEME_SOURCE, re.S | re.M
+    ).group(0)
+    mapped = {
+        accent: int(index)
+        for accent, index in re.findall(r"(\w+)\s*=\s*(\d+)", body)
+    }
+    assert mapped == CONTROL_SKINS
+
+    # The default is BG2's skin: the accent name is the palette's, and an
+    # unknown one must still render a plate rather than nothing.
+    assert re.search(r"\bor\s+3\b", body)
+
+    visual = ROOT / "buffbot" / "visual"
+    for skin in CONTROL_SKINS.values():
+        assert (visual / f"BFBCHK{skin}.BAM").exists(), skin
+
+
 def test_the_cycle_follows_the_skin_but_stays_at_zero_on_the_engine_art(lua):
     """The stone button has exactly one cycle, so asking for cycle 3 there
     would draw nothing."""
     with_art(lua, True)
-    assert lua.eval("BfBot.UI._ChromeSeq()") == 3
-    lua.execute('BfBot.Theme._GetAccentName = function() return "sod" end')
-    assert lua.eval("BfBot.UI._ChromeSeq()") == 0
-    lua.execute('BfBot.Theme._GetAccentName = function() return "bg1" end')
-    assert lua.eval("BfBot.UI._ChromeSeq()") == 2
+    for accent, skin in CONTROL_SKINS.items():
+        lua.execute(
+            'BfBot.Theme._GetAccentName = function() return "' + accent + '" end'
+        )
+        assert lua.eval("BfBot.UI._ChromeSeq()") == skin, accent
 
     with_art(lua, False)
     assert lua.eval("BfBot.UI._ChromeSeq()") == 0

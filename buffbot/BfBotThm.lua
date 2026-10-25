@@ -20,7 +20,6 @@ BfBot.Theme = BfBot.Theme or {}
 --
 -- Menu-region specific:
 --   grip         — resize grip in bottom-right corner
---   reset        — "Reset Layout" button text
 --   headerSub    — target picker / column headers
 --   lockText     — "Lock" label text next to the lock column
 --   spellLocked  — spell name tint when that row is locked
@@ -44,6 +43,10 @@ BfBot.Theme = BfBot.Theme or {}
 -- Each palette is flat; _T(key) reads from the active palette.
 BfBot.Theme._palettes = {
     bg2_light = {
+        -- Caption on a chrome plate. Pecca's art is dark in every
+        -- skin, so this follows the plate, not the parchment.
+        btnText      = "{235, 222, 196}",
+        btnTextOff   = "{142, 128, 104}",
         overlay      = 0,
         borderResref = "BFBOTFR",
         bgResref     = "BFBOTBG",
@@ -54,7 +57,6 @@ BfBot.Theme._palettes = {
         textAccent   = "{40, 80, 160}",
         -- Specific menu regions
         grip         = "{120, 100, 70}",
-        reset        = "{180, 160, 130}",
         headerSub    = "{120, 90, 20}",
         lockText     = "{150, 120, 80}",
         spellLocked  = "{100, 70, 20}",
@@ -63,7 +65,7 @@ BfBot.Theme._palettes = {
         pickerOn     = "{220, 220, 220}",
         pickerOff    = "{140, 140, 140}",
         -- QuickCast
-        qcOff        = "{80, 60, 40}",
+        qcOff        = "{176, 164, 142}",
         qcLong       = "{160, 120, 20}",
         qcAll        = "{180, 60, 30}",
         -- Lock column
@@ -72,6 +74,10 @@ BfBot.Theme._palettes = {
         itemColor    = "{205, 127, 50}",
     },
     bg2_dark = {
+        -- Caption on a chrome plate. Pecca's art is dark in every
+        -- skin, so this follows the plate, not the parchment.
+        btnText      = "{235, 222, 196}",
+        btnTextOff   = "{142, 128, 104}",
         overlay      = 160,
         borderResref = "BFBOTFR",
         bgResref     = "BFBOTBG",
@@ -80,7 +86,6 @@ BfBot.Theme._palettes = {
         textMuted    = "{130, 120, 105}",
         textAccent   = "{130, 180, 240}",
         grip         = "{180, 150, 110}",
-        reset        = "{200, 180, 150}",
         headerSub    = "{220, 180, 100}",
         lockText     = "{180, 160, 120}",
         spellLocked  = "{230, 190, 110}",
@@ -95,6 +100,10 @@ BfBot.Theme._palettes = {
         itemColor    = "{217, 160, 99}",
     },
     sod_light = {
+        -- Caption on a chrome plate. Pecca's art is dark in every
+        -- skin, so this follows the plate, not the parchment.
+        btnText      = "{226, 226, 232}",
+        btnTextOff   = "{132, 134, 146}",
         overlay      = 60,
         borderResref = "BFBOTFR2",
         bgResref     = "BFBOTBG2",
@@ -103,7 +112,6 @@ BfBot.Theme._palettes = {
         textMuted    = "{150, 160, 170}",
         textAccent   = "{140, 200, 240}",
         grip         = "{180, 190, 210}",
-        reset        = "{200, 210, 225}",
         headerSub    = "{170, 200, 220}",
         lockText     = "{170, 180, 200}",
         spellLocked  = "{200, 220, 240}",
@@ -115,9 +123,13 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 130, 80}",
         lockActive   = "{240, 220, 110}",
         lockInactive = "{130, 140, 160}",
-        itemColor    = "{184, 115, 51}",
+        itemColor    = "{206, 142, 78}",
     },
     sod_dark = {
+        -- Caption on a chrome plate. Pecca's art is dark in every
+        -- skin, so this follows the plate, not the parchment.
+        btnText      = "{226, 226, 232}",
+        btnTextOff   = "{132, 134, 146}",
         overlay      = 180,
         borderResref = "BFBOTFR2",
         bgResref     = "BFBOTBG2",
@@ -126,7 +138,6 @@ BfBot.Theme._palettes = {
         textMuted    = "{130, 145, 155}",
         textAccent   = "{120, 190, 240}",
         grip         = "{160, 180, 200}",
-        reset        = "{180, 200, 220}",
         headerSub    = "{160, 200, 230}",
         lockText     = "{160, 170, 190}",
         spellLocked  = "{180, 210, 235}",
@@ -141,6 +152,10 @@ BfBot.Theme._palettes = {
         itemColor    = "{204, 140, 73}",
     },
     bg1_light = {
+        -- Caption on a chrome plate. Pecca's art is dark in every
+        -- skin, so this follows the plate, not the parchment.
+        btnText      = "{236, 224, 190}",
+        btnTextOff   = "{176, 154, 124}",
         overlay      = 60,
         borderResref = "BFBOTFR3",
         bgResref     = "BFBOTBG3",
@@ -149,7 +164,6 @@ BfBot.Theme._palettes = {
         textMuted    = "{160, 140, 120}",
         textAccent   = "{240, 180, 100}",
         grip         = "{200, 170, 130}",
-        reset        = "{220, 195, 170}",
         headerSub    = "{230, 180, 90}",
         lockText     = "{190, 160, 120}",
         spellLocked  = "{240, 190, 100}",
@@ -161,9 +175,13 @@ BfBot.Theme._palettes = {
         qcAll        = "{240, 130, 80}",
         lockActive   = "{250, 220, 100}",
         lockInactive = "{160, 140, 120}",
-        itemColor    = "{160, 82, 45}",
+        itemColor    = "{214, 138, 84}",
     },
     bg1_dark = {
+        -- Caption on a chrome plate. Pecca's art is dark in every
+        -- skin, so this follows the plate, not the parchment.
+        btnText      = "{236, 224, 190}",
+        btnTextOff   = "{176, 154, 124}",
         overlay      = 180,
         borderResref = "BFBOTFR3",
         bgResref     = "BFBOTBG3",
@@ -172,7 +190,6 @@ BfBot.Theme._palettes = {
         textMuted    = "{150, 130, 110}",
         textAccent   = "{240, 170, 90}",
         grip         = "{190, 165, 125}",
-        reset        = "{220, 190, 150}",
         headerSub    = "{230, 175, 80}",
         lockText     = "{180, 150, 115}",
         spellLocked  = "{240, 180, 90}",
@@ -252,6 +269,13 @@ BfBot.Theme._BASE_POINTS = {
     bb_title            = 18,
     bb_normal_parchment = 12,
     bb_edit             = 12,
+    -- Button captions, in their own labels rather than on the buttons.
+    -- Two reasons: ITEM_BUTTON ignores a caption's point size, and the
+    -- engine's button face (STONESML) is an ALL-CAPS typeface, so
+    -- "Add Spell/Item" came out as a fixed-size "ADD SPELL/ITEM" that
+    -- overflowed its plate. As a label in the body face it keeps its own
+    -- case, fits, and follows the font-size preference.
+    bb_caption          = 12,
 }
 -- Parent style each bb_* deep-copies from. ITEM_BUTTON renders its
 -- caption through a code path that ignores `text.point` — no Lua
@@ -266,6 +290,7 @@ BfBot.Theme._STYLE_PARENTS = {
     bb_title            = "title",
     bb_normal_parchment = "normal_parchment",
     bb_edit             = "edit",
+    bb_caption          = "normal",
 }
 -- Font size multiplier: 1=small, 2=medium (default), 3=large
 BfBot.Theme._SIZE_MULT = { [1] = 0.85, [2] = 1.0, [3] = 1.20 }
@@ -307,8 +332,8 @@ end
 -- to our owned menus. ITEM_BUTTON ignores the point update, but retaining its
 -- mapping keeps this traversal harmless and makes that limitation explicit.
 BfBot.Theme._FONT_TO_BASE_POINT = {
-    NORMAL   = 12,  -- bb_normal, bb_normal_parchment, bb_edit
-    STONESML = 14,  -- bb_button (point ignored by ITEM_BUTTON renderer)
+    NORMAL   = 12,  -- bb_normal, bb_normal_parchment, bb_edit, bb_caption
+    STONESML = 14,  -- (no BuffBot style uses it; kept for engine items)
     REALMS   = 18,  -- bb_title
 }
 
@@ -540,10 +565,14 @@ end
 -- permission — see ATTRIBUTION.md — so an install can legitimately be without
 -- it. Every caller must degrade to the text markers rather than render blank.
 
---- Skin index into the control art: 0 SoD, 1 IWD, 2 BG1, 3 BG2.
--- BuffBot has no IWD palette; its accents map onto the other three.
+--- Skin index into the control art: 0 BG:EE, 1 IWD, 2 SoD, 3 BG2.
+-- Read off the art, not assumed: skin 0 is BG:EE's red marble with gold
+-- filigree and a round socket, 1 is IWD's plain wood, 2 is SoD's cold steel
+-- with a square socket, 3 is BG2's dark stone. The plate cycles and the
+-- BFBCHK<skin> files use the same order. BuffBot has no IWD palette; its
+-- accents map onto the other three.
 function BfBot.Theme.ControlSkin()
-    return ({ sod = 0, bg1 = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
+    return ({ bg1 = 0, sod = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
 end
 
 --- True once the control art is confirmed present. Cached: a missing resource
