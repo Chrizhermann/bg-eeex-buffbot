@@ -286,10 +286,11 @@ was found in an IWD:EE 2.7.3.0 + EEex v1.3.1 lab:
   running game's styles instead of a fixed table.
 - **Party load events.** IWD:EE loads the party before the members take their
   portrait slots, both on a new game and on a save load, so EEex's sprite-loaded
-  listener sees portrait index -1 and the F12 innates are granted by
-  `BfBot.Innate._ReconcileJoined` from the exec safety tick instead. This turned
-  out not to be IWD-specific: BG2:EE 2.7.3.0 with EEex v1.3.1 does the same on a
-  save load, where main's build left a save without BuffBot innates without them.
+  listener sees portrait index -1. This turned out not to be IWD-specific: BG2:EE
+  2.7.3.0 with EEex v1.3.1 does the same on a save load. Per-member work therefore
+  runs from the exec safety tick, not from a load listener. BuffBot has since
+  dropped its F12 preset innates; the tick now only removes the copies that saves
+  from earlier versions still carry (`BfBot.Innate._RemoveLegacy`).
 
 ### 4.2 What Differs Between Games **[INF]**
 
