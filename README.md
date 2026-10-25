@@ -98,6 +98,10 @@ To buff without opening the panel, **right-click the actionbar gear** and
 choose a named party preset. This casts the existing preset slot across the
 party; each character keeps its own spells and targets.
 
+Earlier versions also gave every character one F12 special ability per preset.
+BuffBot no longer does, and removes those abilities from older saves a moment
+after loading.
+
 The panel's **Search** field filters buff names for browsing. It does not change
 the preset's enabled entries, saved priorities, or casting queue. Clear the search
 to see the complete list again.
@@ -224,7 +228,7 @@ Project Image locks its owner while active. BuffBot limits the Project Image cas
 
 BuffBot runs on IWD:EE 2.7.3.0 with EEex v1.3.1. The panel, presets, targets, skipping active buffs and save-game persistence work as they do in Baldur's Gate. Panel buttons use IWD:EE's own button art, and the text size option knows IWD:EE's fonts.
 
-**Tested** on two fresh IWD:EE 2.7.3.0 installs with EEex v1.3.1 and Bubb's Spell Menu Extended v5.2: one where BuffBot's helper activated LuaJIT, one where EEex's own LuaJIT component had done it. Across the two, with a new six-character party including a priest and a mage, presets were configured in the panel and cast, an already active Armor was skipped, and the configuration survived saving and reloading, from the main menu and from inside the game. The full in-game test suite passed on both. Removing **In-Game Buff Automation** was tested as well.
+**Tested** on two fresh IWD:EE 2.7.3.0 installs with EEex v1.3.1 and Bubb's Spell Menu Extended v5.2: one where BuffBot's helper activated LuaJIT, one where EEex's own LuaJIT component had done it. Across the two, with a new six-character party including a priest and a mage, presets were configured in the panel and cast, an already active Armor was skipped, and the configuration survived saving and reloading, from the main menu and from inside the game. The full in-game test suite passed on both. Removing **In-Game Buff Automation** was tested as well, and so was upgrading from a version with F12 preset abilities: a save that carried them lost them on loading.
 
 **Not tested yet:** IWD:EE UI mods (LeUI-IWDEE, Infinity UI++), SCS for IWD:EE, IWD NPC mods, Heart of Winter and Trials of the Luremaster areas, multiplayer, EEex versions other than v1.3.1, and removing **EEex LuaJIT Support**. Reports from IWD:EE players are especially welcome.
 
