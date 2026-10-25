@@ -63,6 +63,269 @@ local function _tryField(ud, names, expectedType)
 end
 
 -- ============================================================
+-- Player state guard
+-- Players run the suite on their own saves, and it drives the real
+-- persistence API on the loaded party. A phase that writes player state
+-- runs inside _GuardPhase, and RunAll() runs inside _WithPlayerState as a
+-- whole: every party member's config and item-swap journal and the
+-- classifier overrides are swapped for deep copies first, and the player's
+-- own tables go back by reference afterwards -- outside the pcall around
+-- the phase, so neither a failed check nor a raise can skip it. BuffBot's
+-- baldur.ini keys, the font size and the panel geometry return to their
+-- exact earlier values, an absent key included. Innate reconciliation is
+-- held off meanwhile: it queues actions that would apply a scratch config
+-- to the sprite only after the restore.
+-- ============================================================
+
+local _INI_SECTION = "BuffBot"
+local _INI_ABSENT = "\1BuffBot-absent\1"
+-- [BuffBot] keys outside _INI_DEFAULTS: the suite's own probe key and the
+-- debug-log toggle.
+local _EXTRA_INI_KEYS = { "BB_TestKey", "Debug" }
+
+--- Copy a value; subtables shared in the source stay shared in the copy.
+local function _DeepCopy(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for k, v in pairs(value) do
+        copy[_DeepCopy(k, seen)] = _DeepCopy(v, seen)
+    end
+    return copy
+end
+
+--- Raw stored text of a [BuffBot] key, or false when it is absent.
+local function _ReadPref(key)
+    local raw = Infinity_GetINIString(_INI_SECTION, key, _INI_ABSENT)
+    if raw == _INI_ABSENT then return false end
+    return tostring(raw)
+end
+
+--- Every [BuffBot] key as stored. Without Infinity_GetINIString an absent
+--- key cannot be told from its default, so the values go through GetPref.
+local function _SavePrefs()
+    local saved = { exact = type(Infinity_GetINIString) == "function", values = {} }
+    local keys = {}
+    for key in pairs(BfBot.Persist._INI_DEFAULTS) do keys[#keys + 1] = key end
+    for _, key in ipairs(_EXTRA_INI_KEYS) do keys[#keys + 1] = key end
+    for _, key in ipairs(keys) do
+        if saved.exact then
+            saved.values[key] = _ReadPref(key)
+        else
+            saved.values[key] = BfBot.Persist.GetPref(key)
+        end
+    end
+    return saved
+end
+
+--- Write back every key that changed, removing keys that were absent.
+local function _RestorePrefs(saved, problems)
+    for key, value in pairs(saved.values) do
+        if saved.exact then
+            if _ReadPref(key) ~= value then
+                if value == false then
+                    if type(Infinity_RemoveINIEntry) == "function" then
+                        Infinity_RemoveINIEntry(_INI_SECTION, key)
+                    end
+                else
+                    BfBot.Persist.SetPref(key, value)
+                end
+                if _ReadPref(key) ~= value then
+                    problems[#problems + 1] = "baldur.ini [BuffBot] " .. key
+                        .. " (was " .. (value or "absent") .. ")"
+                end
+            end
+        elseif BfBot.Persist.GetPref(key) ~= value then
+            BfBot.Persist.SetPref(key, value)
+        end
+    end
+end
+
+local function _HoldInnateRefresh() end
+
+--- Snapshot the player's state together with the scratch copies to use.
+--- Reads only, so a raise here leaves nothing swapped.
+local function _TakePlayerState()
+    local saved = { members = {}, prefs = _SavePrefs() }
+    if type(EEex_GetUDAux) == "function" then
+        for slot = 0, 5 do
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite then
+                local aux = EEex_GetUDAux(sprite)
+                local config, itemSwap = aux[BfBot.Persist._KEY], aux.BBItemSwap
+                saved.members[#saved.members + 1] = {
+                    aux = aux, config = config, itemSwap = itemSwap,
+                    scratchConfig = _DeepCopy(config),
+                    scratchItemSwap = _DeepCopy(itemSwap),
+                }
+            end
+        end
+    end
+    saved.overrides = BfBot._overrides
+    saved.scratchOverrides = _DeepCopy(saved.overrides)
+    saved.innate = BfBot.Innate
+    saved.refresh = saved.innate and saved.innate.Refresh
+    saved.refreshPending = BfBot._innateRefreshPending
+    saved.theme = BfBot.Theme
+    saved.fontSize = saved.theme and saved.theme._fontSize
+    saved.ui = BfBot.UI
+    if saved.ui then
+        saved.panel = { x = saved.ui._panelX, y = saved.ui._panelY,
+            w = saved.ui._panelW, h = saved.ui._panelH }
+    end
+    return saved
+end
+
+local function _UseScratchState(saved)
+    for _, member in ipairs(saved.members) do
+        member.aux[BfBot.Persist._KEY] = member.scratchConfig
+        member.aux.BBItemSwap = member.scratchItemSwap
+    end
+    BfBot._overrides = saved.scratchOverrides
+    if saved.refresh then saved.innate.Refresh = _HoldInnateRefresh end
+end
+
+--- Put the player's own state back. Returns what could not be restored.
+local function _RestorePlayerState(saved)
+    -- The assignments come first: they cannot fail and they are what counts.
+    for _, member in ipairs(saved.members) do
+        member.aux[BfBot.Persist._KEY] = member.config
+        member.aux.BBItemSwap = member.itemSwap
+    end
+    local scratchOverrides = BfBot._overrides
+    BfBot._overrides = saved.overrides
+    if saved.refresh then saved.innate.Refresh = saved.refresh end
+    BfBot._innateRefreshPending = saved.refreshPending
+
+    local problems = {}
+    local function step(what, fn)
+        local ok, err = pcall(fn)
+        if not ok then problems[#problems + 1] = what .. ": " .. tostring(err) end
+    end
+    step("the classifier caches", function()
+        -- A classification made under a scratch override must not outlive it.
+        local before = type(saved.overrides) == "table" and saved.overrides or {}
+        local after = type(scratchOverrides) == "table" and scratchOverrides or {}
+        for _, set in ipairs({ before, after }) do
+            for identity in pairs(set) do
+                if before[identity] ~= after[identity] then
+                    BfBot._cache.class[identity] = nil
+                    BfBot._cache.class["itm:" .. tostring(identity)] = nil
+                end
+            end
+        end
+        BfBot.Scan.InvalidateAll()
+        BfBot.Scan.InvalidateSummons()
+    end)
+    step("baldur.ini", function() _RestorePrefs(saved.prefs, problems) end)
+    step("the font size", function()
+        local theme = saved.theme
+        if theme and theme._fontSize ~= saved.fontSize then
+            if type(saved.fontSize) == "number" then
+                theme._SetFontSize(saved.fontSize)
+            else
+                theme._fontSize = saved.fontSize
+            end
+        end
+    end)
+    step("the panel geometry", function()
+        local ui, panel = saved.ui, saved.panel
+        if ui and (ui._panelX ~= panel.x or ui._panelY ~= panel.y
+            or ui._panelW ~= panel.w or ui._panelH ~= panel.h) then
+            ui._panelX, ui._panelY = panel.x, panel.y
+            ui._panelW, ui._panelH = panel.w, panel.h
+            ui._Layout()
+        end
+    end)
+    step("the open panel", function()
+        -- An open panel may show rows built from a scratch config.
+        if buffbot_isOpen and saved.ui then saved.ui._Refresh() end
+    end)
+    return problems
+end
+
+--- Run body() against scratch player state, then restore the player's own.
+-- @return ok, result or error, list of restore problems
+local function _WithPlayerState(body)
+    local tookOk, saved = pcall(_TakePlayerState)
+    if not tookOk then
+        return false, "could not isolate the player's state, nothing was run: "
+            .. tostring(saved), {}
+    end
+    _UseScratchState(saved)
+    local ok, result = pcall(body)
+    return ok, result, _RestorePlayerState(saved)
+end
+
+--- A phase that writes player state. A raise fails it once the state is
+--- back, and so does any state that could not be put back.
+local function _GuardPhase(section, body)
+    _reset()
+    local ok, result, problems = _WithPlayerState(body)
+    for _, problem in ipairs(problems) do
+        _nok(section .. ": could not restore " .. problem)
+    end
+    if not ok then
+        _nok(section .. " raised: " .. tostring(result))
+        return _summary(section)
+    end
+    return result and #problems == 0
+end
+
+--- What each path holds: its bytes, or false when there is no such file.
+-- @return list, or nil + the path that exists but cannot be read
+local function _SaveFiles(paths)
+    local saved = {}
+    if type(io) ~= "table" then return saved end  -- no io: nothing is written
+    for _, path in ipairs(paths) do
+        local f, err, code = io.open(path, "rb")
+        if f then
+            saved[#saved + 1] = { path = path, bytes = f:read("*a") }
+            f:close()
+        elseif code == 2 then  -- ENOENT
+            saved[#saved + 1] = { path = path, bytes = false }
+        else
+            return nil, path .. " (" .. tostring(err) .. ")"
+        end
+    end
+    return saved
+end
+
+local function _ReadBytes(path)
+    local f = io.open(path, "rb")
+    if not f then return false end
+    local bytes = f:read("*a")
+    f:close()
+    return bytes
+end
+
+--- Put every path back as _SaveFiles found it. Returns what failed.
+local function _RestoreFiles(saved)
+    local problems = {}
+    for _, file in ipairs(saved) do
+        if _ReadBytes(file.path) ~= file.bytes then
+            local err
+            if file.bytes then
+                local out
+                out, err = io.open(file.path, "wb")
+                if out then
+                    out:write(file.bytes)
+                    out:close()
+                end
+            else
+                err = select(2, os.remove(file.path))
+            end
+            if _ReadBytes(file.path) ~= file.bytes then
+                problems[#problems + 1] = file.path .. " (" .. tostring(err) .. ")"
+            end
+        end
+    end
+    return problems
+end
+
+-- ============================================================
 -- BfBot.Test.CheckFields — Field Name Verification
 -- MUST run first. Verifies all assumed field names.
 -- ============================================================
@@ -652,6 +915,7 @@ end
 -- ============================================================
 
 function BfBot.Test.Override()
+    return _GuardPhase("Override", function()
     P("=== Override: Manual spell include/exclude ===")
     _reset()
 
@@ -745,6 +1009,7 @@ function BfBot.Test.Override()
     BfBot.Persist.SetOverride(sprite, "TESTSPELL", nil)
 
     return _summary("Override")
+    end)
 end
 
 -- ============================================================
@@ -752,6 +1017,7 @@ end
 -- ============================================================
 
 function BfBot.Test.SpellLockPersist()
+    return _GuardPhase("SpellLockPersist", function()
     P("=== SpellLockPersist: persistence layer ===")
     _reset()
 
@@ -854,6 +1120,7 @@ function BfBot.Test.SpellLockPersist()
            "Migration preserves 'pri' field")
 
     return _summary("SpellLockPersist")
+    end)
 end
 
 -- ============================================================
@@ -1131,6 +1398,7 @@ end
 -- ============================================================
 
 function BfBot.Test.ExportImport()
+    return _GuardPhase("ExportImport", function()
     P("=== ExportImport: Config file export/import ===")
     _reset()
 
@@ -1165,14 +1433,31 @@ function BfBot.Test.ExportImport()
         _nok("Serialized output doesn't parse")
     end
 
+    -- Tests 2-6 write into the player's own presets folder: the export
+    -- lands on the leader's export name, and the kind filter adds a file of
+    -- its own. Keep what both paths hold and put it back afterwards,
+    -- whether the tests pass, fail or raise.
+    local fakeName = "BFBT_TEST_KIND"
+    local fakePath = BfBot.Persist._PRESETS_DIR .. "/" .. fakeName .. ".lua"
+    local leaderExport = BfBot.Persist._ExportFileName(sprite0)
+    local savedFiles, unreadable = _SaveFiles({
+        BfBot.Persist._PRESETS_DIR .. "/" .. leaderExport .. ".lua", fakePath })
+    if not savedFiles then
+        _nok("Cannot keep " .. unreadable .. " for its restore; file tests not run")
+        return _summary("ExportImport")
+    end
+
+    local filesOk, filesErr = pcall(function()
     -- Test 2: Export writes a file
     local exportOk, exportName = BfBot.Persist.ExportConfig(sprite0)
     if exportOk then
         _ok("ExportConfig succeeded: " .. tostring(exportName))
     else
         _nok("ExportConfig failed: " .. tostring(exportName))
-        return _summary("ExportImport")
+        return
     end
+    _check(exportName == leaderExport,
+        "Export wrote the file kept for restore (" .. tostring(exportName) .. ")")
 
     -- Test 3: ListExports finds the file
     local exports = BfBot.Persist.ListExports()
@@ -1227,8 +1512,6 @@ function BfBot.Test.ExportImport()
     end
 
     -- Test 6: Items kept even if not in inventory; spells stripped if not castable
-    local fakeName = "BFBT_TEST_KIND"
-    local fakePath = BfBot.Persist._PRESETS_DIR .. "/" .. fakeName .. ".lua"
     local fakeConfig = {
         v = 10, ap = 1,
         presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
@@ -1275,16 +1558,18 @@ function BfBot.Test.ExportImport()
     else
         _nok("Could not write kind-filter test file: " .. tostring(fakePath))
     end
-
-    -- Cleanup: remove kind-filter test file
-    pcall(function() os.remove(fakePath) end)
-
-    -- Cleanup: remove test export file
-    pcall(function()
-        os.remove(BfBot.Persist._PRESETS_DIR .. "/" .. exportName .. ".lua")
     end)
 
+    -- Cleanup: both files exactly as they were, or gone if they did not exist.
+    for _, problem in ipairs(_RestoreFiles(savedFiles)) do
+        _nok("Could not restore " .. problem)
+    end
+    if not filesOk then
+        _nok("ExportImport file tests raised: " .. tostring(filesErr))
+    end
+
     return _summary("ExportImport")
+    end)
 end
 
 -- ============================================================
@@ -1377,6 +1662,7 @@ end
 
 --- Test: Target picker redesign — name resolution, dual-format, lock gating.
 function BfBot.Test.TargetPicker()
+    return _GuardPhase("TargetPicker", function()
     _reset()
     P("")
     P("========================================")
@@ -1587,6 +1873,7 @@ function BfBot.Test.TargetPicker()
     end
 
     return _summary("TargetPicker")
+    end)
 end
 
 -- ============================================================
@@ -1594,6 +1881,7 @@ end
 -- ============================================================
 
 function BfBot.Test.CombatSafety()
+    return _GuardPhase("Combat Safety", function()
     _reset()
     P("")
     P("========================================")
@@ -1749,6 +2037,7 @@ function BfBot.Test.CombatSafety()
     -- ---- Summary ----
     P("")
     return _summary("Combat Safety")
+    end)
 end
 
 -- ============================================================
@@ -1756,6 +2045,7 @@ end
 -- ============================================================
 
 function BfBot.Test.SubwindowDetection()
+    return _GuardPhase("Subwindow Detection", function()
     _reset()
     P("")
     P("========================================")
@@ -2181,6 +2471,7 @@ function BfBot.Test.SubwindowDetection()
     -- ---- Summary ----
     P("")
     return _summary("Subwindow Detection")
+    end)
 end
 
 -- ============================================================
@@ -2477,6 +2768,10 @@ function BfBot.Test.PlanReconciliation()
         return _summary("PlanReconciliation")
     end
 
+    -- From here the sprite carries the synthetic innate. The cases run in a
+    -- pcall so the cleanup after them runs whether they pass, fail or raise.
+    local casesOk, casesErr = pcall(function()
+
     -- Case 1: nil config → empty plan, no mismatch.
     local p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, nil)
     _check(p.hasMismatch == false and next(p.desired) == nil,
@@ -2564,9 +2859,28 @@ function BfBot.Test.PlanReconciliation()
     _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
         { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == nil,
         "post-revoke: opcode 172 removed " .. syntheticResref .. " end-to-end (issue #47 fix verified)")
+    end)
 
-    -- No cleanup needed: opcode 172 only removed the synthetic entry; the
-    -- sprite's legitimately-configured BFBT innates (if any) are untouched.
+    -- Opcode 172 in Case 8 removes only the synthetic entry; the sprite's
+    -- legitimately-configured BFBT innates (if any) are untouched. When a
+    -- case raised before it, the synthetic entry is removed here instead.
+    local function syntheticPresent()
+        return BfBot.Innate._PlanReconciliation(sprite, slotIdx,
+            { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] ~= nil
+    end
+    if syntheticPresent() then
+        local removeOk, removeErr = pcall(EEex_GameObject_ApplyEffect, sprite, {
+            effectID = 172,         -- Remove Innate
+            targetType = 1,         -- self
+            res = syntheticResref,
+        })
+        _check(removeOk and not syntheticPresent(),
+            "cleanup: synthetic " .. syntheticResref .. " removed after an interrupted case"
+            .. (removeOk and "" or (" (" .. tostring(removeErr) .. ")")))
+    end
+    if not casesOk then
+        _nok("PlanReconciliation cases raised: " .. tostring(casesErr))
+    end
 
     return _summary("PlanReconciliation")
 end
@@ -2576,6 +2890,7 @@ end
 -- ============================================================
 
 function BfBot.Test.MovablePanel()
+    return _GuardPhase("MovablePanel", function()
     _reset()
     P("== MovablePanel ==")
 
@@ -2673,18 +2988,21 @@ function BfBot.Test.MovablePanel()
     _check(BfBot.UI._panelY >= 0,
         "drag clamps Y >= 0 (" .. tostring(BfBot.UI._panelY) .. ")")
 
-    -- Clean up: restore defaults
+    -- Clean up: _GuardPhase then puts the player's own layout back, in
+    -- memory and in baldur.ini.
     motionX = nil
     motionY = nil
     BfBot.UI._ResetLayout()
 
     return _summary("MovablePanel")
+    end)
 end
 
 -- ============================================================
 -- BfBot.Test.Theming — Theme module unit tests (issue #32)
 -- ============================================================
 function BfBot.Test.Theming()
+    return _GuardPhase("Theming", function()
     P("==== Test: Theming ====")
     local pass = 0
     local fail = 0
@@ -2712,7 +3030,8 @@ function BfBot.Test.Theming()
         end
     end
 
-    -- Font size setter/getter round-trip with clamping
+    -- Font size setter/getter round-trip with clamping. _GuardPhase puts
+    -- the player's own size back afterwards.
     BfBot.Theme._SetFontSize(1)
     check("SetFontSize(1) stores small", BfBot.Theme._GetFontSize() == 1)
     BfBot.Theme._SetFontSize(3)
@@ -2735,12 +3054,16 @@ function BfBot.Test.Theming()
 
     P(string.format("  %d pass / %d fail", pass, fail))
     return fail == 0
+    end)
 end
 
 -- ============================================================
 -- BfBot.Test.StaleState — Save-reload mid-cast recovery (issue #38)
 -- ============================================================
 function BfBot.Test.StaleState()
+    -- Stop() and _SafetyTick recover item swaps: they tag each party
+    -- member's unfinished swap journal, which the save stores.
+    return _GuardPhase("Stale State", function()
     _reset()
     P("")
     P("========================================")
@@ -2952,6 +3275,7 @@ function BfBot.Test.StaleState()
 
     P("")
     return _summary("Stale State")
+    end)
 end
 
 -- ============================================================
@@ -3203,6 +3527,9 @@ end
 -- verify the watchdog trips on a stall, leaves a healthy run alone, and never
 -- dereferences cached sprite userdata (records hold plain caster refs only).
 function BfBot.Test.Watchdog()
+    -- A force-complete recovers item swaps: it tags each party member's
+    -- unfinished swap journal, which the save stores.
+    return _GuardPhase("Watchdog", function()
     _reset()
     P("")
     P("========================================")
@@ -3349,6 +3676,7 @@ function BfBot.Test.Watchdog()
     _restore()
     P("")
     return _summary("Watchdog")
+    end)
 end
 
 -- ============================================================
@@ -3360,6 +3688,7 @@ end
 -- the contract (boolean, nil-safe), the SP/host live result, the control-mode
 -- switch, and that the queue builder actually drops filtered casters.
 function BfBot.Test.Mp()
+    return _GuardPhase("Multiplayer", function()
     _reset()
     P("")
     P("========================================")
@@ -3415,6 +3744,7 @@ function BfBot.Test.Mp()
 
     P("")
     return _summary("Multiplayer")
+    end)
 end
 
 -- ============================================================
@@ -3422,6 +3752,7 @@ end
 -- ============================================================
 
 function BfBot.Test.SummonCasters()
+    return _GuardPhase("SummonCasters", function()
     P("=== SummonCasters: caster keys + live-sprite resolver ===")
     _reset()
 
@@ -5816,6 +6147,7 @@ function BfBot.Test.SummonCasters()
     end
 
     return _summary("SummonCasters")
+    end)
 end
 
 -- ============================================================
@@ -6108,6 +6440,7 @@ end
 --- and removes them again with opcode 321 before returning, so nothing of the
 --- test survives it. A portrait icon carries no gameplay effect either way.
 function BfBot.Test.RefreshThreshold()
+    return _GuardPhase("RefreshThreshold", function()
     _reset()
     P("")
     P("========================================")
@@ -6318,6 +6651,8 @@ function BfBot.Test.RefreshThreshold()
         end
     end
 
+    -- _GuardPhase afterwards also removes the key again when the player's
+    -- baldur.ini never had it.
     BfBot.Persist.SetPref("RefreshBelow", savedPref)
     _check(BfBot.Persist.GetPref("RefreshBelow") == savedPref,
         "restored the player's own RefreshBelow setting")
@@ -6328,6 +6663,7 @@ function BfBot.Test.RefreshThreshold()
     end
 
     return _summary("RefreshThreshold")
+    end)
 end
 
 -- ============================================================
@@ -6336,6 +6672,10 @@ function BfBot.Test.RunAll()
     -- Open log file so output is captured
     BfBot._OpenLog()
 
+    -- The whole suite runs against scratch player state as well, so a phase
+    -- that reaches it only indirectly (GetConfig creates a missing config)
+    -- leaves nothing behind either, and a raise ends the run cleanly.
+    local ran, allOk, problems = _WithPlayerState(function()
     P("========================================")
     P("  BuffBot Test Suite v" .. (BfBot.VERSION or "?"))
     P("========================================")
@@ -6346,7 +6686,6 @@ function BfBot.Test.RunAll()
     if not fieldsOk then
         P("CRITICAL: Field verification failed.")
         P("Run BfBot.Test.DumpFeatureBlocks('SPWI305') to investigate.")
-        BfBot._CloseLog()
         return false
     end
 
@@ -6486,8 +6825,17 @@ function BfBot.Test.RunAll()
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
-    BfBot._CloseLog()
     return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk
+    end)
+
+    for _, problem in ipairs(problems) do
+        P("CRITICAL: could not restore " .. problem)
+    end
+    if not ran then
+        P("CRITICAL: the suite stopped: " .. tostring(allOk))
+    end
+    BfBot._CloseLog()
+    return ran and allOk and #problems == 0
 end
 
 -- ============================================================
@@ -6596,6 +6944,7 @@ end
 --- Test the persistence module.
 -- Usage from console: BfBot.Test.Persist()
 function BfBot.Test.Persist()
+    return _GuardPhase("Persistence", function()
     _reset()
     P("")
     P("========================================")
@@ -7226,6 +7575,7 @@ function BfBot.Test.Persist()
     P("")
 
     return result
+    end)
 end
 
 -- ============================================================
@@ -7425,6 +7775,7 @@ end
 -- ============================================================
 
 function BfBot.Test.QuickCast()
+    return _GuardPhase("Quick Cast", function()
     _reset()
     P("")
     P("========================================")
@@ -7584,6 +7935,7 @@ function BfBot.Test.QuickCast()
     -- ---- Summary ----
     P("")
     return _summary("Quick Cast")
+    end)
 end
 
 -- ============================================================
