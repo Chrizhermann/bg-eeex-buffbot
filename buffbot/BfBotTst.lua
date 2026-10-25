@@ -6094,6 +6094,197 @@ function BfBot.Test.EEexCompatibility()
 end
 
 -- ============================================================
+-- BfBot.Test.PlanModel — Shared plan model against the live party
+-- ============================================================
+
+--- The offline suite covers the allocator with synthetic snapshots. This phase
+--- covers what it cannot reach: that `Snapshot` reads the REAL party, that the
+--- pool keys it produces match the uses the engine reports, that radial
+--- delivery is recognized on real spells, and that the live per-character
+--- config migrates into a plan without losing a configured cast.
+---
+--- Read-only. It plans and discards; nothing is cast and nothing is saved.
+function BfBot.Test.PlanModel()
+    _reset()
+    P("=== Phase: Shared Plan Model (issue #81) ===")
+
+    if not BfBot.Plan then
+        _nok("BfBot.Plan is not loaded")
+        return _summary("Plan Model")
+    end
+
+    local okSnap, snap = pcall(BfBot.Plan.Snapshot)
+    if not okSnap or type(snap) ~= "table" then
+        _nok("Snapshot failed: " .. tostring(snap))
+        return _summary("Plan Model")
+    end
+
+    -- A party exists, so the snapshot has to see it.
+    local partyCount = 0
+    for _ in pairs(snap.actors) do partyCount = partyCount + 1 end
+    _check(partyCount > 0, "snapshot found " .. partyCount .. " party member(s)")
+    _check(#snap.order == partyCount, "order list matches the actor table")
+
+    -- Every actor is addressable, and the protagonist is keyed by join order.
+    local sawProtagonist = false
+    for key, actor in pairs(snap.actors) do
+        if key == "protagonist" then sawProtagonist = true end
+        if type(actor.name) ~= "string" or actor.name == "" then
+            _nok("actor " .. tostring(key) .. " has no name")
+        end
+        if actor.slot == nil or actor.slot < 0 or actor.slot > 5 then
+            _nok("actor " .. tostring(key) .. " has an impossible slot")
+        end
+    end
+    _check(sawProtagonist, "the protagonist is keyed by join order")
+
+    -- Casters are party members plus any allied spellcasting summons.
+    _check(#snap.casters >= partyCount,
+        "caster list covers the party (" .. #snap.casters .. " caster(s))")
+
+    -- Groups and pools. A party with spellcasters must produce both; a party of
+    -- pure fighters legitimately produces neither, so that is a WARN.
+    local groupCount, sourceCount, radial = 0, 0, 0
+    for _, group in pairs(snap.groups) do
+        groupCount = groupCount + 1
+        sourceCount = sourceCount + #group.sources
+        for _, source in ipairs(group.sources) do
+            if type(source.pool) ~= "string" then
+                _nok(group.key .. ": source has no pool key")
+            end
+            if source.id == nil then _nok(group.key .. ": source has no id") end
+            if source.row and source.row.radialParty == 1 then radial = radial + 1 end
+        end
+    end
+    if groupCount == 0 then
+        _warning("no buff groups — a party without castable buffs?")
+    else
+        _ok(groupCount .. " buff group(s), " .. sourceCount .. " source(s)")
+    end
+    P("  INFO: " .. radial .. " radial party source(s) detected")
+
+    -- Pool capacity must never exceed what the engine reports for that spell.
+    -- A pool that claims more uses than exist is the one failure mode that
+    -- silently promises casts the run cannot make.
+    local overclaimed = 0
+    for _, group in pairs(snap.groups) do
+        for _, source in ipairs(group.sources) do
+            local capacity = snap.pools[source.pool]
+            if capacity and source.row and source.row.kind ~= "itm"
+                and source.row.count and capacity > source.row.count then
+                overclaimed = overclaimed + 1
+                P("  FAIL: " .. source.pool .. " claims " .. capacity
+                    .. " uses, the scan reports " .. source.row.count)
+            end
+        end
+    end
+    _check(overclaimed == 0, "no pool claims more uses than the scan reports")
+
+    -- Allocation on the live snapshot. Every group gets one request for its
+    -- own caster (or the party, when the delivery is area), which must be
+    -- servable: the source exists and its pool has at least one use.
+    local requests, expected = {}, 0
+    for key, group in pairs(snap.groups) do
+        local source = group.sources[1]
+        if source and not source.reason and (snap.pools[source.pool] or 0) > 0 then
+            -- An area source only accepts "party"; everything else is served
+            -- on its own caster, which is legal for self-only sources too.
+            local target = source.aoe and "party" or source.actor
+            requests[#requests + 1] = { group = key, target = target, on = 1 }
+            expected = expected + 1
+        end
+    end
+    if expected == 0 then
+        _warning("nothing castable to allocate — no memorized buffs?")
+    else
+        local okPlan, plan = pcall(BfBot.Plan.Assign, snap, requests)
+        if not okPlan then
+            _nok("Assign failed: " .. tostring(plan))
+        else
+            local served = 0
+            for _, decision in ipairs(plan.decisions) do
+                if decision.source then served = served + 1
+                else
+                    P("  INFO: " .. decision.request.group
+                        .. " unserved: " .. tostring(decision.reason))
+                end
+            end
+            _check(served == expected,
+                "allocated " .. served .. " of " .. expected .. " request(s)")
+            -- No pool may be spent beyond its capacity.
+            local overspent = 0
+            for pool, used in pairs(plan.used) do
+                if used > (snap.pools[pool] or 0) then overspent = overspent + 1 end
+            end
+            _check(overspent == 0, "no pool was spent past its capacity")
+        end
+    end
+
+    -- Repeat expansion against the live repeat ceiling.
+    local flat = BfBot.Plan.ExpandRequests({
+        { group = "x", target = "protagonist", on = 1, rep = BfBot.MAX_SPELL_REPEATS } })
+    _check(#flat == BfBot.MAX_SPELL_REPEATS,
+        "a repeat of " .. BfBot.MAX_SPELL_REPEATS .. " reserves that many uses")
+    _check(#BfBot.Plan.ExpandRequests({
+        { group = "x", target = "protagonist", on = 1 } }) == 1,
+        "a missing repeat count reserves one use")
+
+    -- Migration of the live configuration. A preset the player actually has
+    -- must either migrate completely or name what is missing.
+    local protagonist = BfBot.Persist._GetProtagonist and BfBot.Persist._GetProtagonist()
+    local config = protagonist and BfBot.Persist.GetConfig(protagonist)
+    local active = config and config.ap or 1
+    -- Counted BEFORE the migration runs, so the comparison below is real.
+    local entriesBefore = 0
+    if config and config.presets and config.presets[active] then
+        for _ in pairs(config.presets[active].spells or {}) do
+            entriesBefore = entriesBefore + 1
+        end
+    end
+    if not config then
+        _warning("no protagonist config — load a save before this phase")
+    else
+        local okImport, migrated, reason, detail = pcall(
+            BfBot.Plan.ImportLegacy, snap, active)
+        if not okImport then
+            _nok("ImportLegacy failed: " .. tostring(migrated))
+        elseif migrated then
+            _ok("preset " .. active .. " migrated to " .. #migrated .. " request(s)")
+            -- Every migrated request has to be addressable in this snapshot.
+            local bad = 0
+            for _, request in ipairs(migrated) do
+                if not snap.groups[request.group] then bad = bad + 1 end
+                if request.target ~= "party" and not snap.actors[request.target] then
+                    bad = bad + 1
+                end
+                if request.manual == nil then bad = bad + 1 end
+            end
+            _check(bad == 0, "every migrated request names a live group and target")
+        else
+            -- A refusal is a correct outcome, not a failure: it means a
+            -- configured spell or recipient is genuinely gone.
+            _ok("migration refused with a reason: " .. tostring(reason)
+                .. " (" .. tostring(detail) .. ")")
+        end
+    end
+
+    -- The per-character config must come out of the migration unchanged:
+    -- migration READS the old presets, it does not consume them, so a
+    -- half-finished schema move loses nothing.
+    if config and config.presets and config.presets[active] then
+        local preset = config.presets[active]
+        _check(type(preset.spells) == "table",
+            "the migrated preset still holds its own spell table")
+        local entries = 0
+        for _ in pairs(preset.spells or {}) do entries = entries + 1 end
+        _check(entries == entriesBefore,
+            "the preset still holds all " .. entriesBefore .. " of its entries")
+    end
+
+    return _summary("Plan Model")
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 -- Remaining-duration threshold / force re-cast (issue #84)
@@ -6454,6 +6645,10 @@ function BfBot.Test.RunAll()
     local refreshOk = BfBot.Test.RefreshThreshold()
     P("")
 
+    -- Phase: Shared plan model against the live party (issue #81)
+    local planOk = BfBot.Test.PlanModel()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -6483,11 +6678,12 @@ function BfBot.Test.RunAll()
     P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
+    P("  Plan Model:         " .. (planOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk
 end
 
 -- ============================================================

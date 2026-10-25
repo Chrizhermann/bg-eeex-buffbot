@@ -851,6 +851,44 @@ function BfBot.Class.IsSelfOnly(ability)
     return (targetType == 5 or targetType == 7)
 end
 
+--- Is this a radial party cast — a SELF-only ability whose projectile covers
+--- an area around the caster, so one cast reaches the whole party? Chant,
+--- Protection from Evil 10' and the other "10-foot radius" prayers are these:
+--- the ability's target type says caster, but the delivery is party-wide.
+---
+--- Read from PROJECTL.IDS → the PRO file: an area projectile (file type 3)
+--- with a non-zero radius and both area flags set. Cached per projectile
+--- index, because a party's spellbooks name the same handful of projectiles
+--- hundreds of times and each miss costs a resource load.
+---
+--- The shared plan model uses this to keep a radial cast ONE party request
+--- instead of one request per recipient. It deliberately does not change
+--- `isSelfOnly` / `isAoE`, which the per-caster view's targeting depends on.
+function BfBot.Class.IsRadialParty(ability)
+    if not BfBot.Class.IsSelfOnly(ability) then return false end
+    local missile = ability.missileType
+    if type(missile) ~= "number" or missile <= 1 then return false end
+    local C = BfBot.Class
+    C._radialProjectiles = C._radialProjectiles or {}
+    if C._radialProjectiles[missile] ~= nil then return C._radialProjectiles[missile] end
+    local ok, party = pcall(function()
+        C._projectileIDs = C._projectileIDs or EEex_Resource_LoadIDS("PROJECTL", true)
+        -- missileType is 1-based over an IDS that starts at 0.
+        local name = C._projectileIDs:getLine(missile - 1)
+        local resource = type(name) == "string" and name:match("(%S+)$")
+        local pro = resource and EEex_Resource_Demand(resource, "PRO")
+        if not pro or pro.m_wFileType ~= 3 then return false end
+        -- EEex's typed PRO header starts after the eight-byte file signature,
+        -- so these are the area-extension flags and radius at 0x1F0/0x1F4.
+        local ptr = EEex_UDToPtr(pro)
+        local flags = EEex_ReadU16(ptr + 0x1F8)
+        local radius = EEex_ReadU16(ptr + 0x1FC)
+        return radius > 0 and bit.band(flags, 0xC0) == 0xC0
+    end)
+    C._radialProjectiles[missile] = ok and party == true
+    return C._radialProjectiles[missile]
+end
+
 --- Determine the smart default target for a spell.
 function BfBot.Class.GetDefaultTarget(ability, isAoE)
     local targetType = ability.actionType

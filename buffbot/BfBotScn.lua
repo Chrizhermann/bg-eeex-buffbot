@@ -201,6 +201,12 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
     local isProjectImage = (classResult and classResult.isProjectImage)
         and 1 or 0
 
+    -- Radial party delivery: a self-cast whose projectile covers the party.
+    -- Additive — the targeting flags above are unchanged, so the per-caster
+    -- view keeps its behaviour and only the shared plan model reads this.
+    local radialParty = BfBot.Class.IsRadialParty
+        and BfBot.Class.IsRadialParty(ability) and 1 or 0
+
     return {
         resref = resref,
         kind = "spl",
@@ -209,6 +215,10 @@ local function _buildCatalogEntry(sprite, resref, header, ability, casterLevel)
         count = 0,          -- filled in by count overlay
         level = header.spellLevel or 0,
         spellType = spellType,
+        -- The level this sprite casts at. The shared plan model prefers the
+        -- stronger caster when several party members know the same buff.
+        casterLevel = casterLevel,
+        radialParty = radialParty,
         duration = duration,
         durCat = durCat,
         isAoE = isAoE,
