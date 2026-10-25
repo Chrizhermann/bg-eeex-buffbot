@@ -62,6 +62,49 @@ local function _tryField(ud, names, expectedType)
     return nil, nil
 end
 
+--- Resolve a SPELL.IDS symbol to its spell resref (1xxx SPPR, 2xxx SPWI,
+--- 3xxx SPIN, 4xxx SPCL). The symbol is a spell's identity across games and
+--- mod layouts, where one resref can name different spells: Prayer is SPPR316
+--- in IWD:EE, whose SPPR327 is Storm Shell. Nil when the symbol is absent.
+local function _spellResrefForSymbol(symbol)
+    local found
+    local ok = pcall(function()
+        local list = EEex_Resource_LoadIDS("SPELL")
+        EEex_Resource_IterateUnpackedIDSEntries(list, function(id, line, start)
+            local name = type(start) == "string" and start or line
+            if type(id) == "number" and type(name) == "string"
+                and name:match("^%s*(.-)%s*$"):upper() == symbol then
+                found = id
+                return true
+            end
+        end)
+    end)
+    if not ok or not found then return nil end
+    local prefix = ({ "SPPR", "SPWI", "SPIN", "SPCL" })[math.floor(found / 1000)]
+    return prefix and string.format("%s%03d", prefix, found % 1000) or nil
+end
+
+--- True when the SPL's ability 0 carries an opcode-214 (variant selection)
+--- feature block that names a variant 2DA, the form _DetectVariants reads.
+--- Read directly, so the result does not depend on the code under test.
+local function _hasVariantTable(hdr)
+    local ability = hdr and hdr:getAbility(0)
+    if not ability then return false end
+    local found = false
+    BfBot.Class._IterateFeatureBlocks(hdr, ability, function(fb)
+        if fb[BfBot._fields.fb_opcode] ~= 214 then return end
+        local value = fb[BfBot._fields.fb_res]
+        local ok, res = pcall(function()
+            return type(value) == "string" and value or value:get()
+        end)
+        if ok and type(res) == "string" and res ~= "" then
+            found = true
+            return true
+        end
+    end)
+    return found
+end
+
 -- ============================================================
 -- BfBot.Test.CheckFields — Field Name Verification
 -- MUST run first. Verifies all assumed field names.
@@ -1796,17 +1839,28 @@ function BfBot.Test.SubwindowDetection()
         _warning("Cannot load SPWI305 — skipping normal spell test")
     end
 
-    -- ---- Test 3: Variant spell (SPWI422 Protection from Energy) ----
+    -- ---- Test 3: Variant spell ----
+    -- The reference layout's SPWI422 (Protection from Energy) names other
+    -- spells elsewhere (IWD:EE: Beltyn's Burning Blood), so the subject is the
+    -- first candidate with a variant table. Spell Immunity has one in BG:EE,
+    -- BG2:EE and IWD:EE alike.
     P("")
-    P("  [3] Variant spell (SPWI422 Protection from Energy)")
+    local varRef, varHdrOk, varHdr = nil, false, nil
+    for _, candidate in ipairs({ "SPWI422", _spellResrefForSymbol("WIZARD_SPELL_IMMUNITY") }) do
+        local ok, hdr = pcall(EEex_Resource_Demand, candidate, "SPL")
+        if ok and hdr and _hasVariantTable(hdr) then
+            varRef, varHdrOk, varHdr = candidate, true, hdr
+            break
+        end
+    end
+    P("  [3] Variant spell (" .. tostring(varRef) .. ")")
 
-    local varHdrOk, varHdr = pcall(EEex_Resource_Demand, "SPWI422", "SPL")
     if varHdrOk and varHdr then
         local varAbil = varHdr:getAbility(0)
         if varAbil then
             local ok, variants = pcall(BfBot.Class._DetectVariants, varHdr, varAbil)
             if ok and variants and type(variants) == "table" and #variants > 0 then
-                _ok("SPWI422 returned " .. #variants .. " variant(s)")
+                _ok(varRef .. " returned " .. #variants .. " variant(s)")
 
                 -- ---- Test 3a: Each entry has required fields ----
                 P("")
@@ -1850,17 +1904,17 @@ function BfBot.Test.SubwindowDetection()
                         .. " icon=" .. v.icon .. ")")
                 end
             elseif ok and variants == nil then
-                _warning("SPWI422 returned nil — spell may not have opcode 214 in this install")
+                _nok(varRef .. " has a variant table but _DetectVariants returned nil")
             elseif ok then
-                _nok("SPWI422 returned unexpected: " .. type(variants))
+                _nok(varRef .. " returned unexpected: " .. type(variants))
             else
-                _nok("_DetectVariants threw on SPWI422: " .. tostring(variants))
+                _nok("_DetectVariants threw on " .. varRef .. ": " .. tostring(variants))
             end
         else
-            _warning("Cannot get ability 0 for SPWI422")
+            _warning("Cannot get ability 0 for " .. varRef)
         end
     else
-        _warning("Cannot load SPWI422 — not available in this install")
+        _warning("No variant spell with a variant table in this install")
     end
 
     -- ---- Test 4: Classify result includes hasVariants ----
@@ -1890,35 +1944,35 @@ function BfBot.Test.SubwindowDetection()
     end
 
     -- Test 4b: Classify variant spell
-    BfBot._cache.class["SPWI422"] = nil
     if varHdrOk and varHdr then
+        BfBot._cache.class[varRef] = nil
         local varAbil = varHdr:getAbility(0)
         if varAbil then
-            local ok, classResult = pcall(BfBot.Class.Classify, "SPWI422", varHdr, varAbil)
+            local ok, classResult = pcall(BfBot.Class.Classify, varRef, varHdr, varAbil)
             if ok and classResult then
                 if classResult.hasVariants == true then
-                    _ok("SPWI422 classify: hasVariants = true")
+                    _ok(varRef .. " classify: hasVariants = true")
                     if classResult.variants and #classResult.variants > 0 then
-                        _ok("SPWI422 classify: variants array has "
+                        _ok(varRef .. " classify: variants array has "
                             .. #classResult.variants .. " entries")
                     else
-                        _nok("SPWI422 classify: variants array missing or empty")
+                        _nok(varRef .. " classify: variants array missing or empty")
                     end
                     -- Variant spells should be classified as buffs
                     if classResult.isBuff then
-                        _ok("SPWI422 classify: isBuff = true (inherited from variants)")
+                        _ok(varRef .. " classify: isBuff = true (inherited from variants)")
                     else
-                        _nok("SPWI422 classify: isBuff should be true, got false")
+                        _nok(varRef .. " classify: isBuff should be true, got false")
                     end
                 else
-                    _warning("SPWI422 classify: hasVariants = false — may not have op214 in this install")
+                    _nok(varRef .. " classify: hasVariants = false despite its variant table")
                 end
             else
-                _nok("Classify SPWI422 failed: " .. tostring(classResult))
+                _nok("Classify " .. varRef .. " failed: " .. tostring(classResult))
             end
         end
     else
-        _warning("Skipping SPWI422 classify test — not loaded")
+        _warning("Skipping variant classify test — no variant spell in this install")
     end
 
     -- ---- Test 5: Scan entry propagates hasVariants ----
@@ -2274,7 +2328,11 @@ function BfBot.Test.DurationRecursion()
     -- Main fix: hierarchical spells that deliver effects via op=146 sub-spells.
     -- Parent SPLs contain only op=146 "Cast Spell" references; real timed
     -- effects live in the sub-spells. Classifier must recurse.
-    testSpell("SPPR327", 30, "Prayer (op=146 -> #PRAYERG 30s)")
+    -- Prayer is found by its SPELL.IDS symbol (IWD:EE: SPPR316, while its
+    -- SPPR327 is Storm Shell); a SPELL.IDS without the symbol keeps the
+    -- reference layout's SPPR327.
+    local prayer = _spellResrefForSymbol("CLERIC_PRAYER") or "SPPR327"
+    testSpell(prayer, 30, "Prayer (op=146 -> #PRAYERG 30s)")
     testLinkedSpell("OHTMPS2", "Chaos of Battle")
 
     -- Regression: Chant's parent SPL has a direct op=176 sibling at 60s.
@@ -2307,25 +2365,25 @@ function BfBot.Test.DurationRecursion()
     -- Wrapper spell: Prayer delivers via op=146 -> #PRAYERG/#PRAYERB.
     -- Leafs must be a non-empty table and must not contain the parent.
     do
-        local hdr, ability = loadSpell("SPPR327", "Prayer leafs")
+        local hdr, ability = loadSpell(prayer, "Prayer leafs")
         if hdr then
             local _, _, leafs = BfBot.Class.GetDuration(hdr, ability)
             if type(leafs) ~= "table" then
-                _nok("Prayer (SPPR327): third return is " .. type(leafs)
+                _nok("Prayer (" .. prayer .. "): third return is " .. type(leafs)
                     .. " (want table)")
             else
                 _check(#leafs >= 1, string.format(
-                    "Prayer (SPPR327): %d leaf resref(s) collected [%s] (want >=1)",
-                    #leafs, table.concat(leafs, ",")))
+                    "Prayer (%s): %d leaf resref(s) collected [%s] (want >=1)",
+                    prayer, #leafs, table.concat(leafs, ",")))
                 local hasParent = false
                 for _, r in ipairs(leafs) do
-                    if r == "SPPR327" then
+                    if r:upper() == prayer:upper() then
                         hasParent = true
                         break
                     end
                 end
                 _check(not hasParent,
-                    "Prayer (SPPR327): leafs exclude the parent resref")
+                    "Prayer (" .. prayer .. "): leafs exclude the parent resref")
             end
         end
     end
@@ -2348,15 +2406,15 @@ function BfBot.Test.DurationRecursion()
     -- so a stale pre-upgrade cached result (hot-reload of BfBotCls only —
     -- the cache lives in BfBotCor) cannot mask the new field.
     do
-        local hdr, ability = loadSpell("SPPR327", "Classify leafResrefs")
+        local hdr, ability = loadSpell(prayer, "Classify leafResrefs")
         if hdr then
-            BfBot._cache.class["SPPR327"] = nil
-            local cls = BfBot.Class.Classify("SPPR327", hdr, ability)
+            BfBot._cache.class[prayer] = nil
+            local cls = BfBot.Class.Classify(prayer, hdr, ability)
             if type(cls.leafResrefs) == "table" then
-                _ok("Classify(SPPR327).leafResrefs is a table (len="
+                _ok("Classify(" .. prayer .. ").leafResrefs is a table (len="
                     .. #cls.leafResrefs .. ")")
             else
-                _nok("Classify(SPPR327).leafResrefs is "
+                _nok("Classify(" .. prayer .. ").leafResrefs is "
                     .. type(cls.leafResrefs) .. " (want table)")
             end
         end
@@ -2733,6 +2791,31 @@ function BfBot.Test.Theming()
         BfBot.Theme._SetFontSize(2)  -- restore default
     end
 
+    -- Live items rescale by font, which differs per game (IWD:EE: POSTANTI,
+    -- SHERWOOD). Each bb_* style's font must map to its base point unless
+    -- two styles share that font at different sizes.
+    if styles then
+        local _, ambiguous = BfBot.Theme._DeriveFontBasePoints()
+        local shared = {}
+        for _, font in ipairs(ambiguous) do shared[font] = true end
+        for bbName, basePt in pairs(BfBot.Theme._BASE_POINTS) do
+            local style = styles[bbName]
+            if type(style) == "table" and type(style.font) == "string" then
+                local font = style.font:upper()
+                check(bbName .. " font " .. font .. " rescales from " .. basePt
+                        .. (shared[font] and " (shared: keeps load size)" or ""),
+                    shared[font] or BfBot.Theme._FONT_TO_BASE_POINT[font] == basePt)
+            end
+        end
+    end
+
+    -- Plain panel buttons draw the running game's own button BAM.
+    if type(EEex_Resource_Fetch) == "function" then
+        local resref = BfBot.Theme.ButtonBam()
+        local ok, found = pcall(EEex_Resource_Fetch, resref, "BAM")
+        check("engine button BAM " .. resref .. " exists", ok and found ~= nil)
+    end
+
     P(string.format("  %d pass / %d fail", pass, fail))
     return fail == 0
 end
@@ -2983,29 +3066,31 @@ function BfBot.Test.Items()
     -- ---- [2] _GetItemAbility manual stride ----
     -- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header
     -- sizeof, garbage for i >= 1); _GetItemAbility walks pointers manually.
-    -- STAF11 (Staff of Curing, BG2EE) is multi-ability: a0 melee, buff at a2.
+    -- Multi-ability staves: BG2:EE's STAF11 and IWD:EE's STAFHMG (Staff of
+    -- the Hanged Man). The first one present with >= 2 abilities is used.
     P("")
-    P("  [2] _GetItemAbility on a multi-ability ITM (STAF11)")
-    local hdrOk, itmHdr = pcall(EEex_Resource_Demand, "STAF11", "ITM")
-    if not hdrOk or not itmHdr then
-        _warning("STAF11.ITM not demandable on this install - skipping")
+    P("  [2] _GetItemAbility on a multi-ability ITM")
+    local itmRef, itmHdr, nAbil = nil, nil, 0
+    for _, candidate in ipairs({ "STAF11", "STAFHMG" }) do
+        local ok, hdr = pcall(EEex_Resource_Demand, candidate, "ITM")
+        if ok and hdr and (hdr.abilityCount or 0) >= 2 then
+            itmRef, itmHdr, nAbil = candidate, hdr, hdr.abilityCount
+            break
+        end
+    end
+    if not itmHdr then
+        _warning("No multi-ability staff (STAF11, STAFHMG) on this install - skipping")
     else
-        local nAbil = itmHdr.abilityCount or 0
-        if nAbil < 2 then
-            _warning("STAF11 has " .. nAbil
-                .. " abilities on this install (want >= 2) - skipping")
-        else
-            local aOk, a0 = pcall(BfBot.Scan._GetItemAbility, itmHdr, 0)
-            local bOk, aN = pcall(BfBot.Scan._GetItemAbility, itmHdr, nAbil - 1)
-            _check(aOk and a0 ~= nil and bOk and aN ~= nil, string.format(
-                "_GetItemAbility returns abilities 0 and %d (of %d)",
-                nAbil - 1, nAbil))
-            if aOk and a0 and bOk and aN then
-                local stride = EEex_UDToPtr(aN) - EEex_UDToPtr(a0)
-                _check(stride == Item_ability_st.sizeof * (nAbil - 1),
-                    "ability stride uses Item_ability_st.sizeof"
-                    .. " (EEex getAbility bug workaround)")
-            end
+        local aOk, a0 = pcall(BfBot.Scan._GetItemAbility, itmHdr, 0)
+        local bOk, aN = pcall(BfBot.Scan._GetItemAbility, itmHdr, nAbil - 1)
+        _check(aOk and a0 ~= nil and bOk and aN ~= nil, string.format(
+            "_GetItemAbility returns %s abilities 0 and %d (of %d)",
+            itmRef, nAbil - 1, nAbil))
+        if aOk and a0 and bOk and aN then
+            local stride = EEex_UDToPtr(aN) - EEex_UDToPtr(a0)
+            _check(stride == Item_ability_st.sizeof * (nAbil - 1),
+                "ability stride uses Item_ability_st.sizeof"
+                .. " (EEex getAbility bug workaround)")
         end
     end
 
@@ -6147,7 +6232,7 @@ function BfBot.Test.RefreshThreshold()
     -- ---- 2. Threshold resolution against the real baldur.ini ----
     --
     -- From here on the phase writes the player's real baldur.ini and
-    -- applies live effects to the protagonist, including a PERMANENT one.
+    -- applies live effects to a party member, including a PERMANENT one.
     -- This phase runs inside RunAll(), so an error in the middle must not
     -- be able to leave either behind: a stuck portrait-icon effect and a
     -- RefreshBelow of 864000 would read as "re-cast everything, always"
@@ -6155,7 +6240,36 @@ function BfBot.Test.RefreshThreshold()
     -- a pcall, and the restore below runs unconditionally.
     local savedPref = BfBot.Persist.GetPref("RefreshBelow")
     local TAG = "BFBTPRB"
-    local sprite = EEex_Sprite_GetInPortrait(0)
+
+    -- The probes are inert portrait-icon effects (op142, icon PROBE_ICON).
+    -- A creature that prevents that icon (op169; IWD:EE's Enrage does for
+    -- icon 0) or is immune to op142 (op101) never holds them, so the live
+    -- reads use the first party member without such a blocker.
+    local PROBE_ICON = 0
+    local function _blocksProbe(member)
+        local blocked = false
+        for _, list in ipairs({ member.m_timedEffectList, member.m_equipedEffectList }) do
+            pcall(EEex_Utility_IterateCPtrList, list, function(effect)
+                if (effect.m_effectId == 169 and effect.m_dWFlags == PROBE_ICON)
+                        or (effect.m_effectId == 101 and effect.m_dWFlags == 142) then
+                    blocked = true
+                    return true
+                end
+            end)
+        end
+        return blocked
+    end
+    local sprite, blockedMembers = nil, 0
+    for slot = 0, 5 do
+        local member = EEex_Sprite_GetInPortrait(slot)
+        if member then
+            if not _blocksProbe(member) then
+                sprite = member
+                break
+            end
+            blockedMembers = blockedMembers + 1
+        end
+    end
 
     local guarded, guardErr = pcall(function()
 
@@ -6196,8 +6310,11 @@ function BfBot.Test.RefreshThreshold()
         -- shadow it here, or a probe could be applied to one sprite and
         -- cleaned off another.
         local now = BfBot.Exec._GetGameTime()
-        if not sprite then
-            _warning("No party leader - skipped the live effect reads")
+        if not sprite and blockedMembers > 0 then
+            _warning("Every party member prevents the probe icon or is immune"
+                .. " to op142 - skipped the live effect reads")
+        elseif not sprite then
+            _warning("No party member - skipped the live effect reads")
         elseif type(EEex_GameObject_ApplyEffect) ~= "function" then
             _warning("EEex_GameObject_ApplyEffect missing - skipped live reads")
         elseif type(now) ~= "number" then
@@ -6215,6 +6332,7 @@ function BfBot.Test.RefreshThreshold()
                     effectID     = 142,   -- Display Portrait Icon: timed, inert
                     targetType   = 2,
                     effectAmount = 1,
+                    dwFlags      = PROBE_ICON,
                     durationType = probe.durationType,
                     duration     = probe.duration,
                     m_sourceRes  = TAG,
