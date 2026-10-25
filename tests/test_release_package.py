@@ -11,7 +11,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from tests.ie_formats import visual_art_names, write_minimal_tlk
+from tests.ie_formats import visual_art_names
 from tests.test_eeex_compatibility_installer import (
     BuffBotGame,
     GAME_TLK_ATTRIBUTES,
@@ -19,8 +19,6 @@ from tests.test_eeex_compatibility_installer import (
     _game_tlk,
     _assert_installed,
     _assert_weidu_249,
-    _read_innate_strrefs,
-    _read_tlk_strings,
     _state_tlk,
     _write_tlk_strings,
     _weidu,
@@ -44,7 +42,6 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/BFBOTFR.PVRZ",
     "buffbot/BFBOTFR2.PVRZ",
     "buffbot/BFBOTFR3.PVRZ",
-    "buffbot/BFBOTIB.BAM",
     "buffbot/BfBot5e.lua",
     "buffbot/BfBotCls.lua",
     "buffbot/BfBotCor.lua",
@@ -145,15 +142,26 @@ def _write_deploy_sentinel_tlk(path: Path, label: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_tlk_strings(
         path,
-        (f"{label} sentinel", *(f"{label} existing innate {i}" for i in range(1, 9))),
+        (f"{label} sentinel", *(f"{label} existing string {i}" for i in range(1, 9))),
     )
 
 
-def _read_deploy_strrefs(override: Path) -> list[int]:
-    rows = (override / "bfbot_strrefs.txt").read_text(encoding="ascii").splitlines()
-    assert len(rows) == 8
-    assert all(re.fullmatch(r"\d+", row) for row in rows)
-    return [int(row) for row in rows]
+def _write_game_tlks(game: Path, label: str) -> dict[Path, bytes]:
+    tlks = (
+        game / "lang/en_US/dialog.tlk",
+        game / "lang/zh_CN/dialog.tlk",
+        game / "dialog.tlk",
+    )
+    for path in tlks:
+        _write_deploy_sentinel_tlk(path, f"{label} {path.parent.name}")
+    return {path: path.read_bytes() for path in tlks}
+
+
+def _assert_tlks_untouched(before: dict[Path, bytes]) -> None:
+    assert all(path.read_bytes() == data for path, data in before.items())
+    assert not any(
+        path.with_name(path.name + ".bfbot_backup").exists() for path in before
+    )
 
 
 def _write_command_shim(directory: Path, name: str, command: str) -> Path:
@@ -450,26 +458,31 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "selected UTF-8 catalog".casefold() in normalized
     assert "`override/bfbot_l10n.tra`" in source
     assert "reads directly" in normalized
-    assert "no BuffBot-owned UI string is fetched from the game TLK".casefold() in normalized
+    assert (
+        "fetches none of its own strings from the game TLK and adds none to it"
+        in source
+    )
     assert "raw development deploy" in normalized
     assert "English fallback".casefold() in normalized
-    assert "preserves an existing `override/bfbot_l10n.tra`" in source
-    assert "`override/bfbot_strrefs.txt`" in source
-    assert "preserves both files byte-for-byte" in normalized
-    assert "skips TLK patching".casefold() in normalized
-    assert "stops before copying runtime files" in normalized
-    assert "reinstall BuffBot with WeiDU".casefold() in normalized
-    assert "patches only `lang/en_US/dialog.tlk`".casefold() in normalized
-    assert "other language TLKs untouched".casefold() in normalized
-    assert "requires Python 3 and an existing `lang/en_US/dialog.tlk`" in source
-    assert "refuses the fallback before copying files" in normalized
+    assert (
+        "keeps an existing WeiDU-selected `override/bfbot_l10n.tra` byte-for-byte"
+        in source
+    )
+    assert "The deploy never touches a TLK" in source
+    assert (
+        "stops before copying anything when `override/bfbot_l10n.tra` exists but"
+        " is not a regular file"
+    ) in source
     assert "source checkout" in normalized
     assert "development-only" in normalized
-    assert "f12 innate" in normalized
-    assert "innate references" in normalized
-    assert "only the eight generated F12 innate names".casefold() in normalized
-    assert "`@200` through `@207`" in source
-    assert "`bfbot_strrefs.txt`" in source
+    # The F12 preset innates and their TLK names are gone; only what an
+    # earlier version left behind is still mentioned.
+    assert "TLK patching".casefold() not in normalized
+    assert "`@200` through `@207`" not in source
+    assert (
+        "Leftover `bfbot_strrefs.txt` and obsolete `bfbot_l10n.txt` files are left"
+        " alone and unused."
+    ) in source
     assert "Copy Copy" in source
     assert "readable CJK labels" in source
     assert "tested resolution/font" in source
@@ -497,10 +510,6 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     assert "robovoid" in normalized
     assert "[robovoid](https://github.com/robvoid)" in source
     assert "#50" in source
-    assert (
-        "An obsolete `bfbot_l10n.txt` alone is preserved but does not select "
-        "localized deployment."
-    ) in source
 
 
 def test_raw_deploy_leaves_runtime_catalog_absent_and_reports_english_fallback(
@@ -509,15 +518,7 @@ def test_raw_deploy_leaves_runtime_catalog_absent_and_reports_english_fallback(
     game = tmp_path / "synthetic-game"
     override = game / "override"
     override.mkdir(parents=True)
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    chinese_tlk = game / "lang/zh_CN/dialog.tlk"
-    root_tlk = game / "dialog.tlk"
-    _write_deploy_sentinel_tlk(english_tlk, "English")
-    _write_deploy_sentinel_tlk(chinese_tlk, "Chinese")
-    _write_deploy_sentinel_tlk(root_tlk, "Root")
-    english_before = english_tlk.read_bytes()
-    chinese_before = chinese_tlk.read_bytes()
-    root_before = root_tlk.read_bytes()
+    tlks = _write_game_tlks(game, "English fallback")
 
     result = _run_raw_deploy(game)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -528,17 +529,8 @@ def test_raw_deploy_leaves_runtime_catalog_absent_and_reports_english_fallback(
     ).read_bytes()
     assert not (override / "bfbot_l10n.tra").exists()
     assert not (override / "bfbot_l10n.txt").exists()
-    assert english_tlk.read_bytes() != english_before
-    assert chinese_tlk.read_bytes() == chinese_before
-    assert root_tlk.read_bytes() == root_before
-
-    english_catalog, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
-    english_strings = _read_tlk_strings(english_tlk)
-    refs = _read_deploy_strrefs(override)
-    assert all(0 <= ref < len(english_strings) for ref in refs)
-    assert [english_strings[ref] for ref in refs] == [
-        english_catalog[catalog_id] for catalog_id in range(200, 208)
-    ]
+    assert not (override / "bfbot_strrefs.txt").exists()
+    _assert_tlks_untouched(tlks)
 
     runtime = localization_runtime()
     assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
@@ -551,12 +543,7 @@ def test_raw_deploy_preserves_selected_chinese_catalog_and_obsolete_map(
     game = tmp_path / "synthetic localized game"
     override = game / "override"
     override.mkdir(parents=True)
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    chinese_tlk = game / "lang/zh_CN/dialog.tlk"
-    root_tlk = game / "dialog.tlk"
-    _write_deploy_sentinel_tlk(english_tlk, "English localized")
-    _write_deploy_sentinel_tlk(chinese_tlk, "Chinese localized")
-    _write_deploy_sentinel_tlk(root_tlk, "Root localized")
+    tlks = _write_game_tlks(game, "Localized")
     source_catalog = ROOT / "buffbot/lang/schinese/setup.tra"
     catalog_path = override / "bfbot_l10n.tra"
     selected_reset = "部署保留测试重置"
@@ -573,89 +560,53 @@ def test_raw_deploy_preserves_selected_chinese_catalog_and_obsolete_map(
     assert selected_catalog != source_catalog.read_bytes()
     catalog_path.write_bytes(selected_catalog)
     selected_entries, _ = parse_tra(catalog_path)
-    _write_tlk_strings(
-        chinese_tlk,
-        (
-            "Chinese localized sentinel",
-            *(selected_entries[catalog_id] for catalog_id in range(200, 208)),
-        ),
-    )
     obsolete_map_path = override / "bfbot_l10n.txt"
     obsolete_map = b"300=12345\n"
     obsolete_map_path.write_bytes(obsolete_map)
+    # An earlier version's installer wrote this beside the catalog.
     strrefs_path = override / "bfbot_strrefs.txt"
-    selected_strrefs = b"1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n"
-    strrefs_path.write_bytes(selected_strrefs)
-    preserved_tlks = {
-        english_tlk: english_tlk.read_bytes(),
-        chinese_tlk: chinese_tlk.read_bytes(),
-        root_tlk: root_tlk.read_bytes(),
-    }
+    leftover_strrefs = b"1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n"
+    strrefs_path.write_bytes(leftover_strrefs)
 
     result = _run_raw_deploy(game)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (
-        "preserving existing WeiDU-selected runtime catalog and innate references"
-        in result.stdout
-    )
-    assert "skipping TLK patching" in result.stdout
-    assert "Patching dialog.tlk" not in result.stdout
+    assert "preserving existing WeiDU-selected runtime catalog" in result.stdout
     assert "English fallback" not in result.stdout
     assert catalog_path.read_bytes() == selected_catalog
-    assert strrefs_path.read_bytes() == selected_strrefs
+    assert strrefs_path.read_bytes() == leftover_strrefs
     assert obsolete_map_path.read_bytes() == obsolete_map
-    assert all(path.read_bytes() == before for path, before in preserved_tlks.items())
-    assert not any(path.with_name(path.name + ".bfbot_backup").exists() for path in preserved_tlks)
+    _assert_tlks_untouched(tlks)
 
-    preserved_chinese_strings = _read_tlk_strings(chinese_tlk)
-    preserved_refs = _read_deploy_strrefs(override)
-    assert [preserved_chinese_strings[ref] for ref in preserved_refs] == [
-        selected_entries[catalog_id] for catalog_id in range(200, 208)
-    ]
     assert selected_entries[305] == selected_reset
     assert list(selected_entries.values()).count(selected_reset) == 1
     runtime = localization_runtime(catalog_path.read_text(encoding="utf-8"))
     assert runtime.eval('BfBot.L10N.Get("common.reset")') == selected_reset
 
 
-def test_raw_deploy_rejects_selected_catalog_without_innate_references_before_writes(
+def test_raw_deploy_keeps_a_selected_catalog_that_has_no_strrefs_file(
     tmp_path: Path,
 ) -> None:
-    game = tmp_path / "synthetic inconsistent localized game"
+    # A current installer writes the catalog alone; earlier ones also wrote
+    # bfbot_strrefs.txt, and its absence is no longer an inconsistency.
+    game = tmp_path / "synthetic current localized game"
     override = game / "override"
     override.mkdir(parents=True)
     catalog_path = override / "bfbot_l10n.tra"
     selected_catalog = (ROOT / "buffbot/lang/schinese/setup.tra").read_bytes()
     catalog_path.write_bytes(selected_catalog)
-    existing_runtime = override / "BfBotLoc.lua"
-    runtime_sentinel = b"installer-owned runtime sentinel\r\n"
-    existing_runtime.write_bytes(runtime_sentinel)
-
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    chinese_tlk = game / "lang/zh_CN/dialog.tlk"
-    root_tlk = game / "dialog.tlk"
-    _write_deploy_sentinel_tlk(english_tlk, "English inconsistent")
-    _write_deploy_sentinel_tlk(chinese_tlk, "Chinese inconsistent")
-    _write_deploy_sentinel_tlk(root_tlk, "Root inconsistent")
-    preserved_tlks = {
-        english_tlk: english_tlk.read_bytes(),
-        chinese_tlk: chinese_tlk.read_bytes(),
-        root_tlk: root_tlk.read_bytes(),
-    }
+    tlks = _write_game_tlks(game, "Current")
 
     result = _run_raw_deploy(game)
 
-    transcript = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "bfbot_strrefs.txt" in transcript
-    assert "Reinstall BuffBot with WeiDU" in transcript
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "preserving existing WeiDU-selected runtime catalog" in result.stdout
     assert catalog_path.read_bytes() == selected_catalog
-    assert existing_runtime.read_bytes() == runtime_sentinel
-    assert not (override / "M_BfBot.lua").exists()
-    assert not (override / "bfbot_presets").exists()
-    assert all(path.read_bytes() == before for path, before in preserved_tlks.items())
-    assert not any(path.with_name(path.name + ".bfbot_backup").exists() for path in preserved_tlks)
+    assert (override / "M_BfBot.lua").read_bytes() == (
+        ROOT / "buffbot/M_BfBot.lua"
+    ).read_bytes()
+    assert not (override / "bfbot_strrefs.txt").exists()
+    _assert_tlks_untouched(tlks)
 
 
 def test_raw_deploy_does_not_treat_obsolete_map_as_selected_localization(
@@ -664,7 +615,6 @@ def test_raw_deploy_does_not_treat_obsolete_map_as_selected_localization(
     game = tmp_path / "synthetic-obsolete-map-game"
     override = game / "override"
     override.mkdir(parents=True)
-    write_minimal_tlk(game / "lang/en_US/dialog.tlk")
     obsolete_map_path = override / "bfbot_l10n.txt"
     obsolete_map = b"305=12345\n"
     obsolete_map_path.write_bytes(obsolete_map)
@@ -681,91 +631,12 @@ def test_raw_deploy_does_not_treat_obsolete_map_as_selected_localization(
     assert runtime.eval('BfBot.L10N.Get("common.reset")') == "Reset"
 
 
-def test_raw_deploy_propagates_english_tlk_patcher_failure(tmp_path: Path) -> None:
-    game = tmp_path / "synthetic invalid tlk game"
+def test_raw_deploy_needs_neither_python_nor_a_tlk(tmp_path: Path) -> None:
+    # Nothing in the deploy writes a TLK any more, so a game without one and a
+    # machine without a working Python both deploy.
+    game = tmp_path / "synthetic game without TLK"
     override = game / "override"
     override.mkdir(parents=True)
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    english_tlk.parent.mkdir(parents=True)
-    invalid_tlk = b"not a TLK V1 file\r\n"
-    english_tlk.write_bytes(invalid_tlk)
-
-    result = _run_raw_deploy(game)
-
-    transcript = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "Failed to patch English fallback TLK" in transcript
-    assert "Done. Files deployed:" not in transcript
-    assert english_tlk.read_bytes() == invalid_tlk
-
-
-def test_raw_deploy_rejects_missing_english_tlk_before_copying_payload(
-    tmp_path: Path,
-) -> None:
-    game = tmp_path / "synthetic missing English TLK game"
-    override = game / "override"
-    override.mkdir(parents=True)
-    existing_runtime = override / "BfBotLoc.lua"
-    runtime_sentinel = b"preflight runtime sentinel\r\n"
-    existing_runtime.write_bytes(runtime_sentinel)
-
-    result = _run_raw_deploy(game)
-
-    transcript = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "English fallback requires" in transcript
-    assert "lang/en_US/dialog.tlk" in transcript
-    assert existing_runtime.read_bytes() == runtime_sentinel
-    assert not (override / "M_BfBot.lua").exists()
-    assert not (override / "bfbot_presets").exists()
-    assert not (override / "bfbot_strrefs.txt").exists()
-    assert "Done. Files deployed:" not in transcript
-
-
-def test_raw_deploy_rejects_symlinked_english_tlk_before_writes(
-    tmp_path: Path,
-) -> None:
-    game = tmp_path / "synthetic symlinked English TLK game"
-    override = game / "override"
-    override.mkdir(parents=True)
-    existing_runtime = override / "BfBotLoc.lua"
-    runtime_sentinel = b"symlinked TLK runtime sentinel\r\n"
-    existing_runtime.write_bytes(runtime_sentinel)
-
-    victim = tmp_path / "outside dialog.tlk"
-    _write_deploy_sentinel_tlk(victim, "Outside victim")
-    victim_before = victim.read_bytes()
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    english_tlk.parent.mkdir(parents=True)
-    english_tlk.symlink_to(victim)
-
-    result = _run_raw_deploy(game)
-
-    transcript = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "lang/en_US/dialog.tlk" in transcript
-    assert "regular non-symlink file" in transcript
-    assert existing_runtime.read_bytes() == runtime_sentinel
-    assert not (override / "M_BfBot.lua").exists()
-    assert not (override / "bfbot_presets").exists()
-    assert not (override / "bfbot_strrefs.txt").exists()
-    assert english_tlk.is_symlink()
-    assert victim.read_bytes() == victim_before
-    assert "Done. Files deployed:" not in transcript
-
-
-def test_raw_deploy_rejects_missing_python_before_copying_payload(
-    tmp_path: Path,
-) -> None:
-    game = tmp_path / "synthetic missing Python game"
-    override = game / "override"
-    override.mkdir(parents=True)
-    existing_runtime = override / "BfBotLoc.lua"
-    runtime_sentinel = b"python preflight runtime sentinel\r\n"
-    existing_runtime.write_bytes(runtime_sentinel)
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    _write_deploy_sentinel_tlk(english_tlk, "Missing Python")
-    tlk_before = english_tlk.read_bytes()
     shims = tmp_path / "failing Python shims"
     _write_command_shim(shims, "python3", "exit 37")
     _write_command_shim(shims, "python", "exit 38")
@@ -774,41 +645,19 @@ def test_raw_deploy_rejects_missing_python_before_copying_payload(
 
     result = _run_raw_deploy(game, env=env)
 
-    transcript = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "English fallback requires Python 3" in transcript
-    assert existing_runtime.read_bytes() == runtime_sentinel
-    assert not (override / "M_BfBot.lua").exists()
-    assert not (override / "bfbot_presets").exists()
-    assert not (override / "bfbot_strrefs.txt").exists()
-    assert english_tlk.read_bytes() == tlk_before
-    assert "Done. Files deployed:" not in transcript
-
-
-def test_raw_deploy_falls_back_to_valid_python_when_python3_is_unusable(
-    tmp_path: Path,
-) -> None:
-    game = tmp_path / "synthetic broken python3 game"
-    override = game / "override"
-    override.mkdir(parents=True)
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    _write_deploy_sentinel_tlk(english_tlk, "Broken python3")
-    shims = tmp_path / "mixed Python shims"
-    _write_command_shim(shims, "python3", "exit 39")
-    _write_command_shim(shims, "python", _python_forward_command())
-    env = os.environ.copy()
-    env["PATH"] = _shim_path(shims)
-
-    result = _run_raw_deploy(game, env=env)
-
     assert result.returncode == 0, result.stdout + result.stderr
     assert "English fallback" in result.stdout
-    refs = _read_deploy_strrefs(override)
-    strings = _read_tlk_strings(english_tlk)
-    assert [strings[ref] for ref in refs] == [f"BuffBot {i}" for i in range(1, 9)]
+    assert "Done. Files deployed:" in result.stdout
+    assert (override / "M_BfBot.lua").read_bytes() == (
+        ROOT / "buffbot/M_BfBot.lua"
+    ).read_bytes()
+    assert (override / "bfbot_presets").is_dir()
+    assert not (override / "bfbot_strrefs.txt").exists()
+    assert not (game / "lang").exists()
+    assert not (game / "dialog.tlk").exists()
 
 
-def test_raw_deploy_stops_on_payload_copy_failure_before_tlk_mutation(
+def test_raw_deploy_stops_on_payload_copy_failure(
     tmp_path: Path,
 ) -> None:
     game = tmp_path / "synthetic copy failure game"
@@ -833,48 +682,6 @@ def test_raw_deploy_stops_on_payload_copy_failure_before_tlk_mutation(
     assert not (override / "bfbot_presets").exists()
     assert not (override / "bfbot_strrefs.txt").exists()
     assert english_tlk.read_bytes() == tlk_before
-    assert "Patching dialog.tlk" not in transcript
-    assert "Done. Files deployed:" not in transcript
-
-
-@pytest.mark.parametrize("path_kind", ["symlink", "directory"])
-def test_raw_deploy_rejects_unsafe_fallback_strrefs_path_before_writes(
-    tmp_path: Path,
-    path_kind: str,
-) -> None:
-    game = tmp_path / f"synthetic unsafe strrefs {path_kind} game"
-    override = game / "override"
-    override.mkdir(parents=True)
-    existing_runtime = override / "BfBotLoc.lua"
-    runtime_sentinel = b"unsafe strrefs runtime sentinel\r\n"
-    existing_runtime.write_bytes(runtime_sentinel)
-    english_tlk = game / "lang/en_US/dialog.tlk"
-    _write_deploy_sentinel_tlk(english_tlk, f"Unsafe strrefs {path_kind}")
-    tlk_before = english_tlk.read_bytes()
-    strrefs_path = override / "bfbot_strrefs.txt"
-    victim = tmp_path / f"strrefs {path_kind} victim.txt"
-    victim_bytes = b"must not be overwritten\r\n"
-    if path_kind == "symlink":
-        victim.write_bytes(victim_bytes)
-        strrefs_path.symlink_to(victim)
-    else:
-        strrefs_path.mkdir()
-
-    result = _run_raw_deploy(game)
-
-    transcript = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "bfbot_strrefs.txt" in transcript
-    assert "regular non-symlink file" in transcript
-    assert existing_runtime.read_bytes() == runtime_sentinel
-    assert not (override / "M_BfBot.lua").exists()
-    assert not (override / "bfbot_presets").exists()
-    assert english_tlk.read_bytes() == tlk_before
-    if path_kind == "symlink":
-        assert strrefs_path.is_symlink()
-        assert victim.read_bytes() == victim_bytes
-    else:
-        assert strrefs_path.is_dir()
     assert "Done. Files deployed:" not in transcript
 
 
@@ -967,33 +774,17 @@ def test_built_archive_installs_selected_translation_with_weidu_249(
     )
     _assert_installed(game, process)
 
+    # BuffBot adds no string to any TLK, the selected language's included.
     assert game.root_tlk.read_bytes() == before.root_tlk
-    active_tlk = _game_tlk(game, game_language)
     for installed_game_language in GAME_TLK_ATTRIBUTES:
         installed_tlk = _game_tlk(game, installed_game_language).read_bytes()
-        before_tlk = _state_tlk(before, installed_game_language)
-        if installed_game_language == game_language:
-            assert installed_tlk != before_tlk
-        else:
-            assert installed_tlk == before_tlk
+        assert installed_tlk == _state_tlk(before, installed_game_language)
     packaged_catalog = (
         game.root / "buffbot" / "lang" / catalog_directory / "setup.tra"
     )
-    catalog, _ = parse_tra(packaged_catalog)
     assert (game.override / "bfbot_l10n.tra").read_bytes() == (
         packaged_catalog.read_bytes()
     )
     assert not (game.override / "bfbot_l10n.txt").exists()
-
-    strings = _read_tlk_strings(active_tlk)
-    refs = _read_innate_strrefs(game)
-    assert all(0 <= strref < len(strings) for strref in refs)
-    assert [strings[strref] for strref in refs] == [
-        catalog[catalog_id] for catalog_id in range(200, 208)
-    ]
-    assert strings[0] == ""
-    expected_innate_strings = {
-        catalog[catalog_id] for catalog_id in range(200, 208)
-    }
-    assert len(strings) == 1 + len(expected_innate_strings)
-    assert set(strings[1:]) == expected_innate_strings
+    assert not (game.override / "bfbot_strrefs.txt").exists()
+    assert not (game.override / "BFBOTIB.BAM").exists()

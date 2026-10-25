@@ -2367,7 +2367,6 @@ function BfBot.UI.CreateNewPreset()
     if idx then
         BfBot.UI._ClearSpellSelection()
         BfBot.UI._presetIdx = idx
-        BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
     end
 end
@@ -2393,7 +2392,6 @@ function BfBot.UI.DeleteCurrentPreset()
                 local config = BfBot.Persist.GetConfig(sprite)
                 BfBot.UI._ClampPresetIdx(config)
             end
-            BfBot.Innate.RefreshAll()
             BfBot.UI._Refresh()
         end
     end)
@@ -2430,8 +2428,8 @@ end
 --- The selected active-buff policy (BfBot.Exec.GetForceMode) rides along on
 --- every run started here, which is why Cast All, Cast Character, the HUD
 --- preset picker and the summons cast all honor the toggle without each path
---- repeating it. The F12 innates read the same selection in BfBotInn; only a
---- raw console queue runs with the RefreshBelow option alone.
+--- repeating it. Only a raw console queue runs with the RefreshBelow option
+--- alone.
 function BfBot.UI._StartRun(queue, qcMode, presetIdx)
     local rate = BfBot.UI._FastForwardRate()
     -- Guarded like the tooltip's threshold read: this module can be

@@ -25,7 +25,8 @@ menu
 	}
 
 	-- Safety net tick: runs every frame, rate-limited internally to ~2s.
-	-- Removes orphaned BFBTCH cheat buffs when exec engine not running.
+	-- Removes orphaned BFBTCH cheat buffs and leftover F12 preset innates
+	-- when exec engine not running.
 	label
 	{
 		enabled "BfBot.Exec._SafetyTick()"

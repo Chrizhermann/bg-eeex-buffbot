@@ -27,23 +27,6 @@
 // installer.catalog_directory
 @113 = ~german~
 
-// innate.preset_1
-@200 = ~BuffBot 1~
-// innate.preset_2
-@201 = ~BuffBot 2~
-// innate.preset_3
-@202 = ~BuffBot 3~
-// innate.preset_4
-@203 = ~BuffBot 4~
-// innate.preset_5
-@204 = ~BuffBot 5~
-// innate.preset_6
-@205 = ~BuffBot 6~
-// innate.preset_7
-@206 = ~BuffBot 7~
-// innate.preset_8
-@207 = ~BuffBot 8~
-
 // common.buffbot
 @300 = ~BuffBot~
 // common.party
@@ -221,19 +204,11 @@
 @453 = ~[S]~
 
 // feedback.no_luajit
-@500 = ~BuffBot: LuaJIT nicht erkannt. F12-Spezialfähigkeiten, Schnellwirken, Export/Import und Protokollierung sind nicht verfügbar. Installiere die EEex-LuaJIT-Komponente für alle Funktionen.~
+@500 = ~BuffBot: LuaJIT nicht erkannt. Schnellwirken, Export/Import und Protokollierung sind nicht verfügbar. Installiere die EEex-LuaJIT-Komponente für alle Funktionen.~
 // feedback.combat_stopped
 @501 = ~BuffBot: Kampf erkannt — Zaubern abgebrochen~
 // feedback.cast_timeout
 @502 = ~BuffBot: Zeitüberschreitung beim Zaubern — abgebrochen~
-// feedback.party_changed_after_run
-@503 = ~BuffBot: Die Gruppe hat sich geändert — nach dem aktuellen Durchlauf erneut versuchen~
-// feedback.party_changed_refreshing
-@504 = ~BuffBot: Die Gruppe hat sich geändert — Spezialfähigkeiten werden aktualisiert, bitte erneut versuchen~
-// feedback.no_spells_with_reason
-@505 = ~BuffBot: Keine verfügbaren Zauber oder verwendbaren Gegenstände ({reason})~
-// feedback.innate_error
-@506 = ~BuffBot-Fehler bei Spezialfähigkeit: {error}~
 // feedback.no_spells_preset
 @507 = ~BuffBot: Keine verfügbaren Zauber oder verwendbaren Gegenstände in diesem Preset~
 // feedback.character_remote_control

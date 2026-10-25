@@ -91,15 +91,6 @@ CATALOG_SCHEMA = {
     111: "installer.component.main",
     112: "installer.main.luajit_required",
     113: "installer.catalog_directory",
-    # Independently resolved innate names (200-207)
-    200: "innate.preset_1",
-    201: "innate.preset_2",
-    202: "innate.preset_3",
-    203: "innate.preset_4",
-    204: "innate.preset_5",
-    205: "innate.preset_6",
-    206: "innate.preset_7",
-    207: "innate.preset_8",
     # Common and static menu labels (300-399)
     300: "common.buffbot",
     301: "common.party",
@@ -199,10 +190,6 @@ CATALOG_SCHEMA = {
     500: "feedback.no_luajit",
     501: "feedback.combat_stopped",
     502: "feedback.cast_timeout",
-    503: "feedback.party_changed_after_run",
-    504: "feedback.party_changed_refreshing",
-    505: "feedback.no_spells_with_reason",
-    506: "feedback.innate_error",
     507: "feedback.no_spells_preset",
     508: "feedback.character_remote_control",
     509: "feedback.character_project_image_locked",
@@ -361,7 +348,7 @@ def runtime_catalog_contract() -> dict[int, tuple[str, str]]:
     return {
         tra_id: (semantics[tra_id], english[tra_id])
         for tra_id in english
-        if not semantics[tra_id].startswith(("installer.", "innate."))
+        if not semantics[tra_id].startswith("installer.")
     }
 
 
@@ -513,7 +500,11 @@ def test_reviewed_english_and_chinese_ui_wording_is_exact():
     assert english[416] == "Add Spell or Item to Buff List"
     assert english[452] == "R{count}"
     assert english[453] == "[L]"
-    for tra_id in (505, 507, 510, 514, 543, 551):
+    assert english[500] == (
+        "BuffBot: LuaJIT not detected. Quick Cast, Export/Import, and logging"
+        " are disabled. Install EEex LuaJIT component for full functionality."
+    )
+    for tra_id in (507, 510, 514, 543, 551):
         assert "spell" in english[tra_id].lower()
         assert "item" in english[tra_id].lower()
 
@@ -532,14 +523,27 @@ def test_reviewed_english_and_chinese_ui_wording_is_exact():
     assert chinese[446] == "{seconds}秒"
     assert chinese[452] == "{count}次"
     assert chinese[453] == "[锁]"
-    for tra_id in (500, 504, 506):
-        assert "特殊能力" in chinese[tra_id]
-        assert "天生能力" not in chinese[tra_id]
+    assert chinese[500] == (
+        "BuffBot：未检测到 LuaJIT。快速施法、导入/导出和日志记录已禁用。"
+        "请安装 EEex LuaJIT 组件以启用完整功能。"
+    )
     for tra_id in (509, 550):
         assert "本体受投影术限制" in chinese[tra_id]
-    for tra_id in (505, 507, 510, 514, 543, 551):
+    for tra_id in (507, 510, 514, 543, 551):
         assert "法术" in chinese[tra_id]
         assert "物品" in chinese[tra_id]
+
+
+def test_no_shipped_catalog_offers_the_retired_f12_presets():
+    # BuffBot no longer grants F12 preset innates: their names (@200-@207) and
+    # their feedback (@503-@506) are gone from every catalog.
+    retired = {*range(200, 208), *range(503, 507)}
+    for catalog_path in shipped_catalogs():
+        catalog, _ = parse_tra(catalog_path)
+        assert retired.isdisjoint(catalog), catalog_path.parent.name
+        assert not any("F12" in value for value in catalog.values()), (
+            catalog_path.parent.name
+        )
 
 
 @pytest.mark.parametrize(
@@ -606,7 +610,9 @@ def test_runtime_registry_exactly_matches_runtime_only_catalog_contract():
     assert actual == runtime_catalog_contract()
 
 
-def test_innate_only_catalog_rows_are_not_registered_or_runtime_addressable():
+def test_retired_catalog_rows_are_not_registered_or_runtime_addressable():
+    # A catalog an earlier version installed still carries the F12 innate
+    # names; a development deploy keeps that catalog in place.
     runtime = localization_runtime(
         "@200 = ~poisoned runtime innate name~\n@305 = ~Selected Reset~\n"
     )
@@ -872,11 +878,14 @@ def test_deploy_verifies_and_copies_runtime_localization_module():
     assert "preserving existing WeiDU-selected runtime catalog" in source
     assert "English fallback" in source
     assert "setup.tra" not in source
-    assert 'PATCH_TLK_SCRIPT="$SCRIPT_DIR/patch_tlk.py"' in source
-    assert '[ ! -f "$PATCH_TLK_SCRIPT" ]' in source
+    assert "exists but is not a regular file" in source
+    # BuffBot writes no TLK, so neither does the development deploy.
+    assert "patch_tlk" not in source
+    assert "dialog.tlk" not in source
+    assert "bfbot_strrefs" not in source
 
 
-def test_installer_localization_contract_copies_selected_catalog_and_resolves_only_innates():
+def test_installer_localization_contract_copies_selected_catalog_and_writes_no_tlk_string():
     source = TP2_PATH.read_text(encoding="utf-8")
     language_pos = source.index("LANGUAGE")
     helper_label_pos = source.index("LABEL ~BuffBot-LuaJIT~")
@@ -903,8 +912,9 @@ def test_installer_localization_contract_copies_selected_catalog_and_resolves_on
 
     assert source.count("@113") == 1
     assert "OUTER_SPRINT bfbot_selected_language @113" in source
-    resolved_ids = re.findall(r"RESOLVE_STR_REF\(@(\d+)\)", source)
-    assert resolved_ids == [str(catalog_id) for catalog_id in range(200, 208)]
+    assert "RESOLVE_STR_REF" not in source
+    assert "bfbot_strrefs" not in source
+    assert "BFBOTIB" not in source
     selected_copy = re.search(
         r"COPY\s+~buffbot/lang/%bfbot_selected_language%/setup\.tra~\s+"
         r"~override/bfbot_l10n\.tra~",
@@ -968,8 +978,11 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     languages = readme.split("## Languages", 1)[1].split("## Installation", 1)[0]
     assert "`override/bfbot_l10n.tra`" in languages
-    assert "no BuffBot-owned UI string is fetched from the game TLK" in languages
-    assert "Only the eight generated F12 innate names remain TLK-backed" in languages
+    assert (
+        "It fetches none of its own strings from the game TLK and adds none to it."
+        in languages
+    )
+    assert "Earlier versions wrote the eight F12 preset innate names" in languages
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
     localization_release = changelog.split("\n## v1.8.0-alpha", 1)[1].split(
@@ -990,6 +1003,13 @@ def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     summary = plan.split("---", 1)[0]
     assert "selected UTF-8 runtime catalog" in summary
     assert "retaining TLK ownership only for generated innate SPL names" in summary
+
+    # The TLK-backed innate names left with the F12 preset innates; both
+    # documents say so up front instead of being rewritten.
+    for source in (design, plan):
+        opening = "\n".join(source.splitlines()[:8])
+        assert "BuffBot no longer generates F12 preset innates" in opening
+        assert "now writes nothing to the TLK" in opening
 
 
 def test_release_changelog_records_final_automated_and_live_boundaries():
@@ -1165,9 +1185,7 @@ def test_all_literal_runtime_localization_keys_exist_and_dynamic_calls_are_expli
         semantic_key
         for semantic_key, _ in runtime_catalog_contract().values()
     }
-    assert not any(
-        key.startswith(("installer.", "innate.")) for key in runtime_keys
-    )
+    assert not any(key.startswith("installer.") for key in runtime_keys)
     sources = {
         path: path.read_text(encoding="utf-8")
         for path in (

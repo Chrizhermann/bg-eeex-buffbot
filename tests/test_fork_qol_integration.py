@@ -3,7 +3,6 @@
 import pytest
 from lupa.luajit21 import LuaRuntime
 
-from test_innate_recharge import innate_lua
 from test_runtime_compatibility import exec_lua
 
 
@@ -172,80 +171,3 @@ def test_stale_completion_uses_hard_reset_and_releases_acceleration(
     assert facts["state"] == "idle"
     assert facts["reason"] == "execution reset"
     assert facts["released"]
-
-
-@pytest.mark.parametrize("speed", [0, 2, 4])
-@pytest.mark.parametrize("quick_cast", [0, 1, 2])
-def test_f12_uses_global_speed_or_preserves_its_original_quick_cast_mode(
-    innate_lua: LuaRuntime, speed: int, quick_cast: int,
-) -> None:
-    innate_lua.globals().speed = speed
-    innate_lua.globals().quick_cast = quick_cast
-    facts = innate_lua.execute(
-        """
-        local queue={{tag='first'},{tag='second'}}
-        local sprite={}
-        local path,mode,preset,received,drains,displays=nil,nil,nil,nil,0,0
-        EEex_Sprite_GetInPortrait=function(slot) if slot==0 then return sprite end end
-        BfBot._Display=function() displays=displays+1 end
-        BfBot.Exec={
-            GetState=function() return 'idle' end,
-            Start=function(q,m,p) path,received,mode,preset='normal',q,m,p end,
-        }
-        BfBot.Fast={Start=function(q,m,p)
-            path,received,mode,preset='fast',q,m,p
-            return true
-        end}
-        BfBot.Persist={
-            BuildQueueForCharacter=function(slot,index)
-                assert(slot==0 and index==2)
-                return queue
-            end,
-            DrainBuildSkips=function() drains=drains+1 end,
-            GetQuickCast=function(who,index)
-                assert(who==sprite and index==2)
-                return quick_cast
-            end,
-            GetPref=function(name) assert(name=='FastForward');return speed end,
-        }
-        BFBOTGO({m_effectAmount=0,m_dWFlags=2},nil,nil)
-        return {path=path,mode=mode,preset=preset,sameQueue=received==queue,
-            drains=drains,displays=displays}
-        """
-    )
-    assert facts["path"] == ("fast" if speed else "normal")
-    assert facts["mode"] == (speed if speed else quick_cast)
-    assert facts["preset"] == 2
-    assert facts["sameQueue"]
-    assert facts["drains"] == 1
-    assert facts["displays"] == 0
-
-
-def test_f12_refused_fast_forward_reports_failure_without_quick_cast_fallback(
-    innate_lua: LuaRuntime,
-) -> None:
-    facts = innate_lua.execute(
-        """
-        local normalStarts,fastStarts,displays=0,0,{}
-        EEex_Sprite_GetInPortrait=function() return {} end
-        BfBot._Display=function(message) displays[#displays+1]=message end
-        BfBot.Exec={
-            GetState=function() return 'idle' end,
-            Start=function() normalStarts=normalStarts+1 end,
-        }
-        BfBot.Fast={Start=function()
-            fastStarts=fastStarts+1
-            return false,'reason.exec.empty_queue',{}
-        end}
-        BfBot.Persist={
-            BuildQueueForCharacter=function() return {{spell='BUFF'}} end,
-            GetQuickCast=function() return 2 end,
-            GetPref=function() return 4 end,
-        }
-        BFBOTGO({m_effectAmount=0,m_dWFlags=1},nil,nil)
-        return {normal=normalStarts,fast=fastStarts,displayCount=#displays}
-        """
-    )
-    assert facts["normal"] == 0
-    assert facts["fast"] == 1
-    assert facts["displayCount"] == 1

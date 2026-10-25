@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers-extended-cc:executing-plans to implement this plan task-by-task.
 
+**Update (2026-10-25):** BuffBot no longer generates F12 preset innates. The TLK-backed innate names this plan kept went with them, so BuffBot now writes nothing to the TLK. The file-backed catalog stands.
+
 **Goal:** Replace BuffBot's startup-unsafe native TLK lookups with a selected UTF-8 runtime catalog while retaining TLK ownership only for generated innate SPL names.
 
 **Architecture:** Every catalog carries its exact, non-translatable directory in `@113`. After the selected TRA table is active, WeiDU captures that marker with `OUTER_SPRINT bfbot_selected_language @113` and copies `buffbot/lang/%bfbot_selected_language%/setup.tra` byte-for-byte to `override/bfbot_l10n.tra`. This avoids WeiDU 249's stale raw `%LANGUAGE%` value during a same-process uninstall/reinstall switch. `BfBotLoc.lua` parses registered one-line `@ID = ~text~` entries through LuaJIT I/O and serves them through the existing semantic-key API, falling back per key to checked-in English without ever calling `Infinity_FetchString`.

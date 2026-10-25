@@ -27,23 +27,6 @@
 // installer.catalog_directory
 @113 = ~polish~
 
-// innate.preset_1
-@200 = ~BuffBot 1~
-// innate.preset_2
-@201 = ~BuffBot 2~
-// innate.preset_3
-@202 = ~BuffBot 3~
-// innate.preset_4
-@203 = ~BuffBot 4~
-// innate.preset_5
-@204 = ~BuffBot 5~
-// innate.preset_6
-@205 = ~BuffBot 6~
-// innate.preset_7
-@206 = ~BuffBot 7~
-// innate.preset_8
-@207 = ~BuffBot 8~
-
 // common.buffbot
 @300 = ~BuffBot~
 // common.party
@@ -221,19 +204,11 @@
 @453 = ~[B]~
 
 // feedback.no_luajit
-@500 = ~BuffBot: nie wykryto LuaJIT. Zdolności wrodzone F12, szybkie rzucanie, eksport/import i rejestrowanie są wyłączone. Zainstaluj komponent EEex LuaJIT, aby uzyskać pełną funkcjonalność.~
+@500 = ~BuffBot: nie wykryto LuaJIT. Szybkie rzucanie, eksport/import i rejestrowanie są wyłączone. Zainstaluj komponent EEex LuaJIT, aby uzyskać pełną funkcjonalność.~
 // feedback.combat_stopped
 @501 = ~BuffBot: wykryto walkę — rzucanie zatrzymane~
 // feedback.cast_timeout
 @502 = ~BuffBot: przekroczono czas rzucania — zatrzymano~
-// feedback.party_changed_after_run
-@503 = ~BuffBot: skład drużyny się zmienił — spróbuj po zakończeniu bieżącej kolejki~
-// feedback.party_changed_refreshing
-@504 = ~BuffBot: skład drużyny się zmienił — odświeżanie zdolności wrodzonych, spróbuj ponownie~
-// feedback.no_spells_with_reason
-@505 = ~BuffBot: brak czarów lub przedmiotów do użycia ({reason})~
-// feedback.innate_error
-@506 = ~Błąd zdolności wrodzonej BuffBot: {error}~
 // feedback.no_spells_preset
 @507 = ~BuffBot: brak czarów lub przedmiotów do użycia w tym zestawie~
 // feedback.character_remote_control

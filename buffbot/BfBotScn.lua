@@ -722,7 +722,8 @@ function BfBot.Scan.GetCastableSpells(sprite)
         local iterOk, iterErr = pcall(function()
             for lvl, idx, resref, ability in iterFn(sprite) do
                 if resref and resref ~= "" and not seen[resref] then
-                    -- Skip BuffBot's own generated innates
+                    -- Skip BuffBot's own resources (and the F12 preset
+                    -- innates earlier versions granted)
                     if resref:sub(1, 4) ~= "BFBT" then
                         seen[resref] = true
 

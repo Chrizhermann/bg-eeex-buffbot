@@ -1913,9 +1913,9 @@ end
 --     0/nil = skip active buffs (the RefreshBelow option still applies),
 --     1 = refresh buffs below the threshold, 2 = cast everything. Deliberately
 --     per RUN, not per preset: nothing about it is written to the save.
---     Every player-facing entry point passes the selection, the F12 innates
---     included. Only a raw console queue passes nothing and therefore runs
---     with the RefreshBelow option alone.
+--     Every player-facing entry point passes the selection, the actionbar
+--     preset picker included. Only a raw console queue passes nothing and
+--     therefore runs with the RefreshBelow option alone.
 -- @return true + nil + nil if started; false + reasonCode + detail if not
 function BfBot.Exec.Start(queue, qcMode, presetIdx, forceMode)
     -- Do not start a Normal/Quick Cast run at a rate whose restoration is
@@ -2084,37 +2084,17 @@ function BfBot.Exec._SafetyTick()
         BfBot.Exec._HardReset()
     end
 
-    -- A stale slot-bound F12 click during an active run cannot reconcile
-    -- immediately: BFBTRM/AddSpecialAbility actions would interleave with the
-    -- casting chains. Drain the root-level request once execution has settled.
-    -- Keep it pending after a Lua failure so the next safety tick retries.
-    if BfBot.Exec._state ~= "running" and BfBot._innateRefreshPending then
-        BfBot._innateRefreshPending = nil
-        local ok, err = pcall(function()
-            local refresh = BfBot.Innate and BfBot.Innate.RefreshAll
-            if type(refresh) ~= "function" then
-                error("BfBot.Innate.RefreshAll is unavailable")
-            end
-            refresh()
-        end)
+    -- Remove the F12 preset innates earlier versions granted to party members
+    -- (BfBot.Innate._RemoveLegacy). It applies its effects directly and queues
+    -- no action, so a run in progress is unaffected. A failure repeats every
+    -- tick, so it is logged once.
+    if BfBot.Innate and BfBot.Innate._RemoveLegacy then
+        local ok, err = pcall(BfBot.Innate._RemoveLegacy)
         if not ok then
-            BfBot._innateRefreshPending = true
-            BfBot._Warn("[Innate] Deferred stale-slot refresh failed; will retry: "
-                .. tostring(err))
-        end
-    end
-
-    -- Party members who joined without a sprite-load event have no F12
-    -- innates yet (BfBot.Innate._ReconcileJoined). Same settle rule as the
-    -- drain above. A failure repeats every tick, so it is logged once.
-    if BfBot.Exec._state ~= "running" and BfBot.Innate
-            and BfBot.Innate._ReconcileJoined then
-        local ok, err = pcall(BfBot.Innate._ReconcileJoined)
-        if not ok then
-            local message = "[Innate] Joined-member reconciliation failed: "
+            local message = "[Innate] Leftover F12 innate removal failed: "
                 .. tostring(err)
-            if BfBot.Exec._joinedWarning ~= message then
-                BfBot.Exec._joinedWarning = message
+            if BfBot.Exec._legacyInnateWarning ~= message then
+                BfBot.Exec._legacyInnateWarning = message
                 BfBot._Warn(message)
             end
         end

@@ -1040,10 +1040,10 @@ def test_module_level_force_mode_starts_at_skip_active() -> None:
 
 def test_a_bare_console_queue_runs_on_the_option_alone() -> None:
     # Superseded an earlier reading of #84 that kept the panel toggle out of
-    # F12. The selection is sticky and the panel keeps showing it, so a
-    # keypress made with the panel shut must mean what the panel says, and
-    # F12-after-rest is the reported case. Only a caller that passes nothing
-    # at all — a raw console queue — falls back to the option alone.
+    # the shortcuts. The selection is sticky and the panel keeps showing it,
+    # so a run started with the panel shut, from the actionbar preset picker,
+    # must mean what the panel says. Only a caller that passes nothing at all
+    # — a raw console queue — falls back to the option alone.
     source = EXEC_SOURCE
     start = source.index("function BfBot.Exec.Start(")
     body = source[start:source.index("\nfunction ", start + 1)]
@@ -1380,7 +1380,8 @@ def test_the_force_state_is_reachable_without_the_panel(
 
 def test_the_selection_and_the_running_mode_are_separate() -> None:
     # Exec.Start takes the mode as an argument and must not read the pending
-    # selection itself, or F12 would inherit whatever the panel last showed.
+    # selection itself, or a raw console queue would inherit whatever the
+    # panel last showed.
     source = EXEC_SOURCE
     start = source.index("function BfBot.Exec.Start(")
     end = source.index("\nfunction ", start + 1)
@@ -1420,24 +1421,6 @@ def test_a_panel_reloaded_against_an_older_exec_falls_back_to_skip(
 # --------------------------------------------------------------------------
 # Review follow-ups (PR #86)
 # --------------------------------------------------------------------------
-
-
-def test_the_f12_innate_path_passes_the_selected_policy_through() -> None:
-    # Pressing F12 after a rest is the case #84 was reported for, so an innate
-    # run must mean what the panel says. Both start paths carry the mode.
-    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
-    assert "if BfBot.Exec.GetForceMode then" in source
-    assert "pcall(BfBot.Exec.GetForceMode)" in source
-    assert "local forceMode = 0" in source
-    assert "BfBot.Fast.Start(queue, speed,\n                    presetIdx, forceMode)" in source
-    assert "BfBot.Exec.Start(queue, qcMode,\n                presetIdx, forceMode)" in source
-
-
-def test_the_innate_path_never_starts_a_run_without_the_mode() -> None:
-    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
-    for call in ("BfBot.Exec.Start(queue, qcMode, presetIdx)",
-                 "BfBot.Fast.Start(queue, speed, presetIdx)"):
-        assert call not in source, call
 
 
 def test_both_duration_formatters_agree_on_the_same_staircase(
@@ -1500,7 +1483,6 @@ def test_the_in_game_phase_guarantees_cleanup_after_a_failure() -> None:
     # probe target is declared once, before it.
     assert len(re.findall(r"\blocal sprite\b", body)) == 1
     assert body.index("local sprite") < guard_start
-
 
 
 def _run_in_game_probe_phase(exec_lua: LuaRuntime, carried: dict[int, str]) -> dict:

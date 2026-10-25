@@ -78,7 +78,6 @@ buffbot_files = (
     "BfBotTst.lua",
     "BuffBot.menu",
     "BFBOTAB.BAM",
-    "BFBOTIB.BAM",
     "BFBOTBG.MOS",
     "BFBOTFR.PVRZ",
     "BFBOTFR2.PVRZ",

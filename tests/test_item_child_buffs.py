@@ -251,7 +251,7 @@ def test_unrecognized_item_candidate_does_not_seed_default_presets():
     result = lua.execute(
         """
         BfBot.MAX_PRESETS = 8
-        BfBot.Innate = {Refresh=function() end}
+        BfBot.Innate = {}
         EEex_Sprite_GetInPortrait = function() return sprite end
         BfBot.Persist._GetInheritedPresetStructure = function() return nil end
         local aux = {}

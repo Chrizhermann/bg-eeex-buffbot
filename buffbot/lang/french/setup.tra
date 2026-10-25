@@ -27,23 +27,6 @@
 // installer.catalog_directory
 @113 = ~french~
 
-// innate.preset_1
-@200 = ~BuffBot 1~
-// innate.preset_2
-@201 = ~BuffBot 2~
-// innate.preset_3
-@202 = ~BuffBot 3~
-// innate.preset_4
-@203 = ~BuffBot 4~
-// innate.preset_5
-@204 = ~BuffBot 5~
-// innate.preset_6
-@205 = ~BuffBot 6~
-// innate.preset_7
-@206 = ~BuffBot 7~
-// innate.preset_8
-@207 = ~BuffBot 8~
-
 // common.buffbot
 @300 = ~BuffBot~
 // common.party
@@ -221,19 +204,11 @@
 @453 = ~[V]~
 
 // feedback.no_luajit
-@500 = ~BuffBot : LuaJIT non détecté. Les capacités spéciales F12, l’incantation rapide, l’export/import et la journalisation sont indisponibles. Installez le composant EEex LuaJIT pour disposer de toutes les fonctionnalités.~
+@500 = ~BuffBot : LuaJIT non détecté. L’incantation rapide, l’export/import et la journalisation sont indisponibles. Installez le composant EEex LuaJIT pour disposer de toutes les fonctionnalités.~
 // feedback.combat_stopped
 @501 = ~BuffBot : combat détecté — incantation interrompue~
 // feedback.cast_timeout
 @502 = ~BuffBot : délai d’incantation dépassé — arrêt~
-// feedback.party_changed_after_run
-@503 = ~BuffBot : le groupe a changé — réessayez après l’exécution en cours~
-// feedback.party_changed_refreshing
-@504 = ~BuffBot : le groupe a changé — actualisation des capacités spéciales, veuillez réessayer~
-// feedback.no_spells_with_reason
-@505 = ~BuffBot : aucun sort ou objet à utiliser ({reason})~
-// feedback.innate_error
-@506 = ~Erreur de capacité spéciale BuffBot : {error}~
 // feedback.no_spells_preset
 @507 = ~BuffBot : aucun sort ou objet à utiliser dans ce préréglage~
 // feedback.character_remote_control

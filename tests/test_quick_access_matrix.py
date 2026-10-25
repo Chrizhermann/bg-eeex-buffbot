@@ -1,4 +1,4 @@
-"""Cross-entrypoint tests with real UI, persistence, innates and speed control.
+"""Cross-entrypoint tests with real UI, persistence and speed control.
 
 The engine and final execution action are mocked. These tests establish queue
 and dispatch contracts, not native casting time, visuals or resource use.
@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def shortcut_lua(ui_lua):
-    for filename in ("BfBotPer.lua", "BfBotInn.lua", "BfBotFst.lua"):
+    for filename in ("BfBotPer.lua", "BfBotFst.lua"):
         ui_lua.execute((ROOT / "buffbot" / filename).read_text(encoding="utf-8"))
     ui_lua.execute("""
         bit=require('bit')
@@ -109,15 +109,13 @@ def shortcut_lua(ui_lua):
                 BfBot.UI._ToggleQuickMenu()
                 assert(BfBot.UI._QuickPresetName(2)=='Travel 1')
                 BfBot.UI._CastQuickPreset(2)
-            elseif route=='f12' then
-                BFBOTGO({m_effectAmount=BfBot.UI._charSlot,m_dWFlags=8},nil,nil)
             else error('Unknown test route') end
         end
     """)
     return ui_lua
 
 
-@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud", "f12"])
+@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud"])
 @pytest.mark.parametrize("speed", [1, 2, 4])
 @pytest.mark.parametrize("quick_cast", [0, 1, 2])
 @pytest.mark.parametrize("party_size", [1, 6])
@@ -164,7 +162,7 @@ def test_all_routes_preserve_real_preset_queue_despite_empty_search(
         assert sprite["book"]["LONG"]["count"] == 4
 
 
-@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud", "f12"])
+@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud"])
 @pytest.mark.parametrize("speed", [2, 4])
 def test_fast_failure_never_dispatches_saved_quick_cast(shortcut_lua, route, speed):
     shortcut_lua.globals().speed = speed
@@ -179,7 +177,7 @@ def test_fast_failure_never_dispatches_saved_quick_cast(shortcut_lua, route, spe
     """)
 
 
-@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud", "f12"])
+@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud"])
 def test_mixed_saved_quick_cast_uses_entrypoint_owner(shortcut_lua, route):
     shortcut_lua.globals().route = route
     shortcut_lua.execute("""
@@ -193,7 +191,7 @@ def test_mixed_saved_quick_cast_uses_entrypoint_owner(shortcut_lua, route):
     assert shortcut_lua.eval("party[6].config.presets[8].qc") == 2
 
 
-@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud", "f12"])
+@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud"])
 @pytest.mark.parametrize("speed", [1, 2, 4])
 def test_busy_dispatch_cannot_replace_active_queue_or_rate(shortcut_lua, route, speed):
     shortcut_lua.globals().speed = speed
@@ -210,7 +208,7 @@ def test_busy_dispatch_cannot_replace_active_queue_or_rate(shortcut_lua, route, 
     """)
 
 
-@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud", "f12"])
+@pytest.mark.parametrize("route", ["panel_all", "panel_character", "hud"])
 @pytest.mark.parametrize("speed", [1, 2, 4])
 @pytest.mark.parametrize("module", ["nil", "{}"])
 def test_missing_speed_module_refuses_acceleration_without_quick_cast_fallback(

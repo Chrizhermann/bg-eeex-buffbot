@@ -540,99 +540,6 @@ def test_non_party_sprite_does_not_inherit_party_preset_structure(
     assert not inherited
 
 
-def test_loaded_listener_plans_inherited_innate_with_fresh_sprite_wrappers(
-    lua: LuaRuntime,
-) -> None:
-    lua.execute(INNATE_SOURCE)
-    facts = lua.execute(
-        """
-        local callbackRecruit = { identity = "recruit" }
-        local portraitRecruit = { identity = "recruit" }
-        local protagonist = { identity = "protagonist" }
-        local template = BfBot.Persist.GetDefaultConfig()
-        template.presets[1] = nil
-        template.presets[2] = nil
-        template.presets[3] = {
-            name = "Boss Fight", cat = "custom", qc = 2, spells = {},
-        }
-        local auxByIdentity = {
-            protagonist = { BB = template },
-            recruit = {},
-        }
-        EEex_GetUDAux = function(sprite)
-            return assert(auxByIdentity[sprite.identity])
-        end
-        EEex_Sprite_GetCharacterIndex = function(sprite)
-            return sprite.identity == "protagonist" and 0 or 2
-        end
-        EEex_Sprite_GetPortraitIndex = function(sprite)
-            assert(sprite == callbackRecruit)
-            return 3
-        end
-        local recruitPortraitReads = 0
-        EEex_Sprite_GetInPortrait = function(slot)
-            if slot == 2 then return protagonist end
-            if slot == 3 then
-                recruitPortraitReads = recruitPortraitReads + 1
-                if recruitPortraitReads == 1 then return portraitRecruit end
-                return { identity = "recruit" }
-            end
-            return nil
-        end
-        BfBot.Scan.GetCastableSpells = function(sprite)
-            assert(sprite == portraitRecruit)
-            return {
-                LONG = {
-                    kind = "spl", count = 1, duration = 600, durCat = "long",
-                    class = { isBuff = true, defaultTarget = "p" },
-                },
-            }, 1
-        end
-
-        EEex_Sprite_GetKnownInnateSpellsIterator = function(sprite)
-            assert(sprite.identity == "recruit")
-            return function() return nil end
-        end
-        local planCalls = 0
-        local inheritedDesired = false
-        local activePreset = nil
-        local realPlan = BfBot.Innate._PlanReconciliation
-        BfBot.Innate._PlanReconciliation = function(sprite, slot, config)
-            planCalls = planCalls + 1
-            activePreset = config.ap
-            local plan = realPlan(sprite, slot, config)
-            inheritedDesired = plan.desired.BFBT33 == true
-            return plan
-        end
-        local queued = {}
-        EEex_Action_QueueResponseStringOnAIBase = function(action, sprite)
-            assert(sprite.identity == "recruit")
-            queued[#queued + 1] = action
-        end
-
-        BfBot.Innate._OnSpriteLoaded(callbackRecruit)
-        return {
-            wrappersDiffer = callbackRecruit ~= portraitRecruit,
-            stored = auxByIdentity.recruit.BB ~= nil,
-            planCalls = planCalls,
-            activePreset = activePreset,
-            inheritedDesired = inheritedDesired,
-            queuedCount = #queued,
-            inheritedQueued = table.concat(queued, ""):find(
-                'AddSpecialAbility("BFBT33")', 1, true) ~= nil,
-        }
-        """
-    )
-
-    assert facts["wrappersDiffer"]
-    assert facts["stored"]
-    assert facts["planCalls"] == 1
-    assert facts["activePreset"] == 3
-    assert facts["inheritedDesired"]
-    assert facts["queuedCount"] == 1
-    assert facts["inheritedQueued"]
-
-
 def test_spell_repeat_normalizer_is_strict_and_bounded(lua: LuaRuntime) -> None:
     facts = lua.execute(
         """
@@ -3643,72 +3550,14 @@ def test_repeat_attempts_preserve_stop_gone_summon_and_watchdog_boundaries(
     assert facts["errorCount"] == 0
 
 
-def test_safety_tick_retries_pending_innate_refresh_after_execution(
+def test_safety_tick_removes_leftover_innates_during_and_between_runs_and_warns_once(
     exec_lua: LuaRuntime,
 ) -> None:
+    # The removal applies its effects directly and queues no action, so a run
+    # in progress does not hold it back.
     script = """
         local now = 3000
-        local refreshAttempts = 0
-        local warning = nil
-
-        Infinity_GetClockTicks = function() return now end
-        EEex_Sprite_GetInPortrait = function(_) return nil end
-        BfBot.Exec._IsStateStale = function() return false end
-        BfBot.Exec._ProcessLateJoins = function() end
-        BfBot.Exec._GetGameTime = function() return nil end
-        BfBot.Exec._state = "running"
-        BfBot.Exec._casters = {}
-        BfBot.Exec._lastSafetyTick = 0
-        BfBot._innateRefreshPending = true
-        BfBot._Warn = function(message) warning = message end
-        BfBot.Innate.RefreshAll = function()
-            refreshAttempts = refreshAttempts + 1
-            if refreshAttempts == 1 then error("synthetic refresh failure") end
-        end
-
-        BfBot.Exec._SafetyTick()
-        local attemptsWhileRunning = refreshAttempts
-        local pendingWhileRunning = BfBot._innateRefreshPending == true
-
-        BfBot.Exec._state = "done"
-        now = 6000
-        BfBot.Exec._SafetyTick()
-        local pendingAfterFailure = BfBot._innateRefreshPending == true
-
-        now = 9000
-        BfBot.Exec._SafetyTick()
-        return {
-            refreshAttempts = refreshAttempts,
-            attemptsWhileRunning = attemptsWhileRunning,
-            pendingWhileRunning = pendingWhileRunning,
-            pendingAfterFailure = pendingAfterFailure,
-            pendingAfterSuccess = BfBot._innateRefreshPending == true,
-            warning = warning or "",
-        }
-        """
-    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
-    if suppress_fault_handler:
-        faulthandler.disable()
-    try:
-        facts = exec_lua.execute(script)
-    finally:
-        if suppress_fault_handler:
-            faulthandler.enable()
-
-    assert facts["refreshAttempts"] == 2
-    assert facts["attemptsWhileRunning"] == 0
-    assert facts["pendingWhileRunning"]
-    assert facts["pendingAfterFailure"]
-    assert not facts["pendingAfterSuccess"]
-    assert "synthetic refresh failure" in facts["warning"]
-
-
-def test_safety_tick_reconciles_joined_members_between_runs_and_warns_once(
-    exec_lua: LuaRuntime,
-) -> None:
-    script = """
-        local now = 3000
-        local reconcileCalls = 0
+        local removeCalls = 0
         local warnings = {}
 
         Infinity_GetClockTicks = function() return now end
@@ -3720,13 +3569,13 @@ def test_safety_tick_reconciles_joined_members_between_runs_and_warns_once(
         BfBot.Exec._casters = {}
         BfBot.Exec._lastSafetyTick = 0
         BfBot._Warn = function(message) warnings[#warnings + 1] = message end
-        BfBot.Innate._ReconcileJoined = function()
-            reconcileCalls = reconcileCalls + 1
-            error("synthetic reconciliation failure")
+        BfBot.Innate._RemoveLegacy = function()
+            removeCalls = removeCalls + 1
+            error("synthetic removal failure")
         end
 
         BfBot.Exec._SafetyTick()
-        local callsWhileRunning = reconcileCalls
+        local callsWhileRunning = removeCalls
 
         BfBot.Exec._state = "done"
         now = 6000
@@ -3735,7 +3584,7 @@ def test_safety_tick_reconciles_joined_members_between_runs_and_warns_once(
         BfBot.Exec._SafetyTick()
         return {
             callsWhileRunning = callsWhileRunning,
-            reconcileCalls = reconcileCalls,
+            removeCalls = removeCalls,
             warningCount = #warnings,
             warning = warnings[1] or "",
         }
@@ -3749,10 +3598,10 @@ def test_safety_tick_reconciles_joined_members_between_runs_and_warns_once(
         if suppress_fault_handler:
             faulthandler.enable()
 
-    assert facts["callsWhileRunning"] == 0
-    assert facts["reconcileCalls"] == 2
+    assert facts["callsWhileRunning"] == 1
+    assert facts["removeCalls"] == 3
     assert facts["warningCount"] == 1
-    assert "synthetic reconciliation failure" in facts["warning"]
+    assert "synthetic removal failure" in facts["warning"]
 
 
 def test_in_game_spell_picker_sort_phase(ui_test_lua: LuaRuntime) -> None:
@@ -3930,23 +3779,15 @@ def test_main_callback_registrations_are_wrapped_after_core_load() -> None:
     )
 
 
-def test_innate_sprite_loaded_registration_is_wrapped_without_silent_pcall() -> None:
-    _assert_registration_is_wrapped(
-        INNATE_SOURCE,
-        "EEex_Sprite_AddLoadedListener",
-        "innate.sprite_loaded",
-    )
-    _assert_registration_is_wrapped(
-        INNATE_SOURCE,
-        "EEex_Sprite_AddQuickListsCheckedListener",
-        "innate.quick_lists_checked",
-    )
+def test_innate_game_destroyed_registration_is_wrapped() -> None:
     _assert_registration_is_wrapped(
         INNATE_SOURCE,
         "EEex_GameState_AddDestroyedListener",
         "innate.game_destroyed",
     )
-    assert "pcall(BfBot.Innate.Refresh" not in INNATE_SOURCE
+    # The F12 preset innates are gone: nothing grants or recharges them on load.
+    assert "EEex_Sprite_AddLoadedListener" not in INNATE_SOURCE
+    assert "EEex_Sprite_AddQuickListsCheckedListener" not in INNATE_SOURCE
 
 
 @pytest.mark.parametrize(
