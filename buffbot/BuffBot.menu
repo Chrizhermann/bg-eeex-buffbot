@@ -101,7 +101,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(1)"
 		text lua "BfBot.UI._QuickPresetName(1)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -113,7 +113,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(2)"
 		text lua "BfBot.UI._QuickPresetName(2)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -125,7 +125,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(3)"
 		text lua "BfBot.UI._QuickPresetName(3)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -137,7 +137,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(4)"
 		text lua "BfBot.UI._QuickPresetName(4)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -149,7 +149,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(5)"
 		text lua "BfBot.UI._QuickPresetName(5)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -161,7 +161,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(6)"
 		text lua "BfBot.UI._QuickPresetName(6)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -173,7 +173,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(7)"
 		text lua "BfBot.UI._QuickPresetName(7)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -185,7 +185,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(8)"
 		text lua "BfBot.UI._QuickPresetName(8)"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -319,7 +319,7 @@ menu
 		action  "BfBot.UI.SetChar(0)"
 		text lua "buffbot_charNames[1]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsCharSelected(0) and 1 or 0"
 		scaleToClip
 		area 350 90 80 24
@@ -332,7 +332,7 @@ menu
 		action  "BfBot.UI.SetChar(1)"
 		text lua "buffbot_charNames[2]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsCharSelected(1) and 1 or 0"
 		scaleToClip
 		area 432 90 80 24
@@ -345,7 +345,7 @@ menu
 		action  "BfBot.UI.SetChar(2)"
 		text lua "buffbot_charNames[3]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsCharSelected(2) and 1 or 0"
 		scaleToClip
 		area 514 90 80 24
@@ -358,7 +358,7 @@ menu
 		action  "BfBot.UI.SetChar(3)"
 		text lua "buffbot_charNames[4]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsCharSelected(3) and 1 or 0"
 		scaleToClip
 		area 596 90 80 24
@@ -371,7 +371,7 @@ menu
 		action  "BfBot.UI.SetChar(4)"
 		text lua "buffbot_charNames[5]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsCharSelected(4) and 1 or 0"
 		scaleToClip
 		area 678 90 80 24
@@ -384,7 +384,7 @@ menu
 		action  "BfBot.UI.SetChar(5)"
 		text lua "buffbot_charNames[6]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsCharSelected(5) and 1 or 0"
 		scaleToClip
 		area 760 90 80 24
@@ -404,7 +404,7 @@ menu
 		action  "BfBot.UI.ToggleView()"
 		text lua "BfBot.UI._ViewBtnLabel()"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPartyView() and 0 or 1"
 		scaleToClip
 		area 760 90 80 24
@@ -417,7 +417,7 @@ menu
 		action  "BfBot.UI.SetSummon(1)"
 		text lua "buffbot_summonTabNames[1]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsSummonSelected(1) and 1 or 0"
 		scaleToClip
 		area 350 90 80 24
@@ -430,7 +430,7 @@ menu
 		action  "BfBot.UI.SetSummon(2)"
 		text lua "buffbot_summonTabNames[2]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsSummonSelected(2) and 1 or 0"
 		scaleToClip
 		area 432 90 80 24
@@ -443,7 +443,7 @@ menu
 		action  "BfBot.UI.SetSummon(3)"
 		text lua "buffbot_summonTabNames[3]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsSummonSelected(3) and 1 or 0"
 		scaleToClip
 		area 514 90 80 24
@@ -456,7 +456,7 @@ menu
 		action  "BfBot.UI.SetSummon(4)"
 		text lua "buffbot_summonTabNames[4]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsSummonSelected(4) and 1 or 0"
 		scaleToClip
 		area 596 90 80 24
@@ -469,7 +469,7 @@ menu
 		action  "BfBot.UI.SetSummon(5)"
 		text lua "buffbot_summonTabNames[5]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsSummonSelected(5) and 1 or 0"
 		scaleToClip
 		area 678 90 80 24
@@ -482,7 +482,7 @@ menu
 		action  "BfBot.UI.SetSummon(6)"
 		text lua "buffbot_summonTabNames[6]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsSummonSelected(6) and 1 or 0"
 		scaleToClip
 		area 760 90 80 24
@@ -496,7 +496,7 @@ menu
 		action  "BfBot.UI.SummonPage(-1)"
 		text    "<"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 700 90 24 24
 	}
@@ -518,7 +518,7 @@ menu
 		action  "BfBot.UI.SummonPage(1)"
 		text    ">"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 772 90 24 24
 	}
@@ -545,7 +545,7 @@ menu
 		action  "BfBot.UI.SetPreset(1)"
 		text lua "buffbot_presetNames[1]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(1) and 1 or 0"
 		scaleToClip
 		area 350 118 78 24
@@ -558,7 +558,7 @@ menu
 		action  "BfBot.UI.SetPreset(2)"
 		text lua "buffbot_presetNames[2]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(2) and 1 or 0"
 		scaleToClip
 		area 431 118 78 24
@@ -571,7 +571,7 @@ menu
 		action  "BfBot.UI.SetPreset(3)"
 		text lua "buffbot_presetNames[3]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(3) and 1 or 0"
 		scaleToClip
 		area 512 118 78 24
@@ -584,7 +584,7 @@ menu
 		action  "BfBot.UI.SetPreset(4)"
 		text lua "buffbot_presetNames[4]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(4) and 1 or 0"
 		scaleToClip
 		area 593 118 78 24
@@ -597,7 +597,7 @@ menu
 		action  "BfBot.UI.SetPreset(5)"
 		text lua "buffbot_presetNames[5]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(5) and 1 or 0"
 		scaleToClip
 		area 674 118 78 24
@@ -610,7 +610,7 @@ menu
 		action  "BfBot.UI.SetPreset(6)"
 		text lua "buffbot_presetNames[6]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(6) and 1 or 0"
 		scaleToClip
 		area 674 118 78 24
@@ -623,7 +623,7 @@ menu
 		action  "BfBot.UI.SetPreset(7)"
 		text lua "buffbot_presetNames[7]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(7) and 1 or 0"
 		scaleToClip
 		area 674 118 78 24
@@ -636,7 +636,7 @@ menu
 		action  "BfBot.UI.SetPreset(8)"
 		text lua "buffbot_presetNames[8]"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		frame lua "BfBot.UI._IsPresetSelected(8) and 1 or 0"
 		scaleToClip
 		area 674 118 78 24
@@ -650,7 +650,7 @@ menu
 		action  "BfBot.UI.OpenRename()"
 		text lua "BfBot.L10N.Get('common.rename')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 758 118 56 24
 	}
@@ -663,7 +663,7 @@ menu
 		action  "BfBot.UI.CreateNewPreset()"
 		text lua "BfBot.L10N.Get('common.new')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 818 118 50 24
 	}
@@ -703,7 +703,7 @@ menu
 		action "BfBot.UI.ClearSearch()"
 		text lua "BfBot.L10N.Get('common.clear')"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 60 26
 	}
@@ -715,7 +715,7 @@ menu
 		text lua "BfBot.UI._FastForwardLabel()"
 		tooltip lua "BfBot.UI._FastForwardTooltip()"
 		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 0 0 130 26
 	}
@@ -973,7 +973,7 @@ menu
 		action  "BfBot.UI.OpenSpellPicker()"
 		text lua "BfBot.L10N.Get('common.add_spell')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 350 402 110 28
 	}
@@ -986,7 +986,7 @@ menu
 		action  "BfBot.UI.ExcludeSelected()"
 		text lua "BfBot.L10N.Get('common.remove')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 466 402 100 28
 	}
@@ -1002,7 +1002,7 @@ menu
 		text lua "BfBot.UI._RepeatButtonText()"
 		text style "bb_button"
 		tooltip lua "BfBot.UI._RepeatTooltip()"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 572 402 90 28
 	}
@@ -1015,7 +1015,7 @@ menu
 		action  "BfBot.UI.ExportConfig()"
 		text lua "BfBot.L10N.Get('common.export')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 704 402 80 28
 	}
@@ -1028,7 +1028,7 @@ menu
 		action  "BfBot.UI.OpenImportPicker()"
 		text lua "BfBot.L10N.Get('common.import')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 790 402 80 28
 	}
@@ -1046,7 +1046,7 @@ menu
 		action  "BfBot.UI.ToggleSelected()"
 		text lua "BfBot.UI._ToggleBtnText()"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 350 434 100 28
 	}
@@ -1059,7 +1059,7 @@ menu
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		text lua "BfBot.UI._TargetBtnText()"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 455 434 130 28
 	}
@@ -1072,7 +1072,7 @@ menu
 		action  "BfBot.UI.MoveSpellUp()"
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 590 434 44 28
 	}
@@ -1085,7 +1085,7 @@ menu
 		action  "BfBot.UI.MoveSpellDown()"
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 638 434 44 28
 	}
@@ -1098,7 +1098,7 @@ menu
 		action  "BfBot.UI.SortByDuration()"
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 686 434 44 28
 	}
@@ -1111,7 +1111,7 @@ menu
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text lua "BfBot.L10N.Get('common.delete_preset')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 760 434 110 28
 	}
@@ -1129,7 +1129,7 @@ menu
 		action  "BfBot.UI.ToggleSelected()"
 		text lua "BfBot.UI._ToggleBtnText()"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 350 434 80 28
 	}
@@ -1142,7 +1142,7 @@ menu
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		text lua "BfBot.UI._TargetBtnText()"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 434 434 100 28
 	}
@@ -1155,7 +1155,7 @@ menu
 		action  "BfBot.UI.OpenVariantsForSelected()"
 		text lua "BfBot.UI._VariantBtnText()"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 538 434 100 28
 	}
@@ -1168,7 +1168,7 @@ menu
 		action  "BfBot.UI.MoveSpellUp()"
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 642 434 40 28
 	}
@@ -1181,7 +1181,7 @@ menu
 		action  "BfBot.UI.MoveSpellDown()"
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 686 434 40 28
 	}
@@ -1194,7 +1194,7 @@ menu
 		action  "BfBot.UI.SortByDuration()"
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 730 434 40 28
 	}
@@ -1207,7 +1207,7 @@ menu
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		text lua "BfBot.L10N.Get('common.delete_preset_compact')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 780 434 90 28
 	}
@@ -1225,7 +1225,7 @@ menu
 		action  "BfBot.UI.Cast()"
 		text lua "buffbot_castLabel"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 350 468 85 28
 	}
@@ -1239,7 +1239,7 @@ menu
 		action  "BfBot.UI.CastCharacter()"
 		text lua "buffbot_castCharLabel"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 439 468 115 28
 	}
@@ -1252,7 +1252,7 @@ menu
 		action  "BfBot.UI.Stop()"
 		text lua "BfBot.L10N.Get('common.stop')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 558 468 55 28
 	}
@@ -1282,7 +1282,7 @@ menu
 		action  "BfBot.UI.Close()"
 		text lua "BfBot.L10N.Get('common.close')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 800 468 70 28
 	}
@@ -1401,7 +1401,7 @@ menu
 		action  "BfBot.UI.PickerSelf()"
 		text lua "BfBot.L10N.Get('common.self')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 199 95 26
 	}
@@ -1413,7 +1413,7 @@ menu
 		action  "BfBot.UI.PickerAllParty()"
 		text lua "BfBot.L10N.Get('common.all_party')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 581 199 95 26
 	}
@@ -1425,7 +1425,7 @@ menu
 		action  "BfBot.UI.PickerToggle(1)"
 		text lua "BfBot.UI._PickerCheckText(1)"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 231 36 26
 	}
@@ -1449,7 +1449,7 @@ menu
 		action  "BfBot.UI.PickerToggle(2)"
 		text lua "BfBot.UI._PickerCheckText(2)"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 259 36 26
 	}
@@ -1473,7 +1473,7 @@ menu
 		action  "BfBot.UI.PickerToggle(3)"
 		text lua "BfBot.UI._PickerCheckText(3)"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 287 36 26
 	}
@@ -1497,7 +1497,7 @@ menu
 		action  "BfBot.UI.PickerToggle(4)"
 		text lua "BfBot.UI._PickerCheckText(4)"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 315 36 26
 	}
@@ -1521,7 +1521,7 @@ menu
 		action  "BfBot.UI.PickerToggle(5)"
 		text lua "BfBot.UI._PickerCheckText(5)"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 343 36 26
 	}
@@ -1545,7 +1545,7 @@ menu
 		action  "BfBot.UI.PickerToggle(6)"
 		text lua "BfBot.UI._PickerCheckText(6)"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 371 36 26
 	}
@@ -1569,7 +1569,7 @@ menu
 		action  "BfBot.UI.PickerMoveUp()"
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 403 95 26
 	}
@@ -1581,7 +1581,7 @@ menu
 		action  "BfBot.UI.PickerMoveDown()"
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 581 403 95 26
 	}
@@ -1593,7 +1593,7 @@ menu
 		action  "BfBot.UI.PickerClear()"
 		text lua "BfBot.L10N.Get('common.clear')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 435 95 26
 	}
@@ -1604,7 +1604,7 @@ menu
 		action  "BfBot.UI.PickerDone()"
 		text lua "BfBot.L10N.Get('common.done')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 581 435 95 26
 	}
@@ -1617,7 +1617,7 @@ menu
 		action  "BfBot.UI.PickerUnlock()"
 		text lua "BfBot.L10N.Get('common.unlock_targeting')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 479 467 197 26
 	}
@@ -1707,7 +1707,7 @@ menu
 		action  "BfBot.UI.ConfirmRename(); Infinity_PopMenu('BUFFBOT_RENAME')"
 		text lua "BfBot.L10N.Get('common.ok')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 460 338 80 24
 	}
@@ -1718,7 +1718,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
 		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 550 338 80 24
 	}
@@ -1797,7 +1797,7 @@ menu
 		action  "BfBot.UI.RunConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
 		text lua "BfBot.L10N.Get('common.delete')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 460 338 80 24
 	}
@@ -1808,7 +1808,7 @@ menu
 		action  "BfBot.UI.CancelConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
 		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 550 338 80 24
 	}
@@ -1948,7 +1948,7 @@ menu
 		action  "BfBot.UI.AddPickedSpell()"
 		text lua "BfBot.L10N.Get('ui.add_to_buff_list')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 390 430 180 28
 	}
@@ -1959,7 +1959,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
 		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 580 430 100 28
 	}
@@ -2063,7 +2063,7 @@ menu
 		action  "BfBot.UI.ImportSelected()"
 		text lua "BfBot.L10N.Get('common.import')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 430 390 140 28
 	}
@@ -2074,7 +2074,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
 		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 580 390 120 28
 	}
@@ -2189,7 +2189,7 @@ menu
 		action  "BfBot.UI.SelectVariant(buffbot_variantSelected)"
 		text lua "BfBot.L10N.Get('common.select')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 430 355 140 28
 	}
@@ -2200,7 +2200,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
 		text lua "BfBot.L10N.Get('common.cancel')"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.Theme.ButtonBam()"
 		scaleToClip
 		area 580 355 140 28
 	}
