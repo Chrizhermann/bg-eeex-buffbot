@@ -2,7 +2,65 @@
 
 ## Unreleased
 
+### Changed
 - Draw the panel frame with Pecca's thin rail and corner bosses instead of the generated leather border. The frame is the same 9-slice: corner at its native size, a slice of the rail stretched along each edge, so it still fits any panel size and resolution. It now draws on top of the parchment rather than behind it, because a thin frame with a transparent middle no longer needs to hide under it, and that keeps the whole corner visible. All eight panels follow, including the quick-preset menu.
+
+### Fixed
+- Variant spells (opcode 214 "spell menu" spells such as Protection from Elemental Energy) no longer refuse every target but Self. Their targeting was read from the selection wrapper the engine casts on the caster, while BuffBot actually casts the chosen variant directly — so the target picker locked the row to "(Self-only)" even when the variant targets a single creature. The picker, and the AoE decision during execution, now follow the selected variant. (#82)
+- The Summons view can unlock targeting. A spell the classifier reports as self-only or party-wide disables every control in the target picker, and the Unlock button existed only in the party view, so such a row was a permanent dead end — which hit every variant spell. Summon spell entries now carry the same optional `tgtUnlock` field as party entries, and a clone seeded from its owner inherits the owner's unlock along with the copied targets.
+- Closing the target picker with "Done" while the row is still locked no longer replaces the stored target with the classifier's default. Nothing in a locked picker can express a target, so there is no intent to save.
+
+### Known limitations
+- A genuine area buff cast by a summon covers whatever stands near the *summon*, not the party, because the engine centers it on the caster. The picker still labels that case "(Party-wide)". Unlock the row and pick party members individually when the summon is not standing with the party.
+
+### Testing
+- The full automated suite passes **1315 tests** after merging v1.12.0, 15 of them new here, including the variant target shape read from the sub-spell, the parent verdict kept when a variant SPL cannot be read, the Summons-view unlock-and-save path, the locked-Done no-write guard, summon-schema validation of `tgtUnlock`, clone seeding, and `all` expansion for a party-wide variant.
+- Offline evidence from the reference install: 247 of its 249 opcode-214 abilities have ability target type 5 or 7 (caster), while the variants they select are single-creature or party-wide spells. `SPWI422` → `DVWI426` → `SPWI319`/`SPWI320`/`SPWI512`/`SPWI517`, all single-creature.
+- **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (quiet lab `BuffBot-Summons`, guards clean, 335 s run, on v1.10.1 plus this branch — before the v1.12.0 merge below): a real allied Djinni summoned in game offered exactly one buff row, Ghost Armor, which the classifier reports as self-only — the dead end as reported. The picker opened locked "(Self-only)", Unlock then cleared the lock and wrote `tgtUnlock = 1` into the **summon** preset, the chosen party member was stored as `{Zorl}` and survived a view refresh, and the resulting queue read `Ghost Armor -> Player3 (Zorl)` from caster ref `summon/139462735`. For the variant half, read from real resources through the mod's own code: a real opcode-214 parent (`SPWI510` Spell Immunity, ability target type 7) reports self-only and stays locked, all eight of its variants are genuinely self-only and stay locked, while the real variant sub-spells of the reported spell (`SPWI319`/`SPWI320`/`SPWI512`/`SPWI517`) report target type 1 and unlock the row, after which confirming the picker stored the picked party members and resolved them into per-member queue entries.
+- Not verified in game: the reported spell's own menu form (`SPWI422` as an opcode-214 parent does not exist in a clean install — only in a modded one), and an actual cast landing on the target. **The merged state has not been checked in game**: the lab run predates the v1.12.0 merge, the lab still holds the pre-merge build, and it was deliberately not re-run — the behaviour under test is covered by the automated suite, and the reported spell's menu form does not exist in a clean lab, so a repeat run could not have shown anything new.
+
+## v1.12.0 (2026-10-24)
+
+### Added
+- **Re-cast buffs that are nearly over instead of skipping them.** A long buff that survives a rest with a tiny remainder was treated as "already active" and never renewed. BuffBot now reads how much of a running buff is actually left and casts it again when that is below a threshold. (#84)
+- **"Refresh buffs that are nearly over"** in EEex options: off by default, or under 1 minute, 5 minutes, or 1 hour left. The threshold applies to every path, including the F12 preset innates, which is where buffing after a rest happens. `baldur.ini` takes any value in seconds under `[BuffBot] RefreshBelow`; the list offers the common ones.
+- **An active-buff toggle in the panel**, beside the status line: *Active: Skip* (default), *Active: Refresh Low*, *Active: Force All*. It belongs to the run, not to a preset: nothing is written to the save, and a game restart returns to Skip.
+- **Force All is an unconditional override.** It is independent of the threshold — it works with the option off, ignores whatever value is configured, and also re-casts buffs that never expire, which no time threshold can reach. Wasted spell slots are accepted deliberately: a vanilla Stoneskin runs twelve hours, long buffs routinely survive a rest, and re-casting one or two unnecessarily beats guessing wrong. There is no confirmation prompt and no heuristic that softens it. Every other precondition stays in force: a dead caster or target, a spent slot, a missing variant, an interactive item and a live Project Image still refuse the cast.
+- Skip and refresh decisions now name the remaining lifetime in `buffbot_exec.log`, so "why was this skipped" is answerable from the log.
+- The toggle also applies to the 2x/4x fast-forward runs added in v1.11.0: simulation speed changes how long a run takes, never which buffs it skips.
+- The policy lives in `BfBot.Exec`, not in the panel, so `BfBot.Exec.SetForceMode(2)` works from the console without opening BuffBot — and the panel rebuild in #81 only has to re-place one button.
+- **The F12 preset innates follow the toggle too.** Pressing F12 after a rest is the case this was reported for, and the panel keeps showing *Active: Force All* while it is set, so a keypress made with the panel shut now means what the panel says. Only a raw console queue runs on the `RefreshBelow` option alone.
+- `buffbot_exec.log` now uses the same `1h 6m` / `5m 0s` scale as the panel's Dur column. It used to print flat minutes, so a log line reading `threshold 60m 0s` sat next to an option labelled *Under 1 hour left* and looked like a different number.
+
+### Changed
+- **Repeat counts now repeat buffs under Force All.** Every repeat attempt goes through the active-buff check, so before this a `Repeat: 2` buff cast once and skipped the rest. With Force All the active check is off and the configured count is used in full. Each attempt still consumes a spell slot or charge. Skip and Refresh Low are unaffected.
+- No save-schema change. Existing presets, including repeat counts and summon presets, remain compatible.
+
+### Limitations
+
+- **Under 1 hour is a wide net, not a small top-up.** Durations are the ones the panel's Dur column shows, so a vanilla Stoneskin at 1h is already below that threshold the moment it is cast, and every run will cast it again. The option description and the README say so.
+- The threshold is a *time* threshold. Stoneskin's real resource is its skins (opcode 218), so "timer still running, no skins left" is not covered; a charge-aware check needs its own work.
+- A buff whose remaining lifetime cannot be read — a permanent effect, or one still inside its delay — keeps the old behaviour and is skipped. Only Force All reaches it; no threshold value can.
+- `config.opts.skip` in the save schema is still unused. This release carries the threshold in `baldur.ini` instead of reviving that field; removing it needs a migration decision and is tracked in #84.
+
+### Testing
+- The full automated suite passes **1300 tests**, including 116 new checks covering the per-timing-mode duration reader, the longest-readable-deadline fold, threshold resolution and validation, Force All as a flag that outranks every threshold and reaches permanent effects, the preconditions Force must *not* weaken, `_CheckEntry` for spells, state markers and multi-ability items, the plumbing through both the normal and the accelerated start path, and the panel toggle.
+- A new in-game phase `BfBot.Test.RefreshThreshold()` applies one tagged effect per timing mode to the party leader, reads each one back, exercises the threshold, the force flag and the skip decision, and removes the probes again. It runs inside `BfBot.Test.RunAll()` and passes 34/34.
+- **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (disposable clone, own save profile): the in-game phase passed 28/28. End to end on Protection From Normal Weapons, with 1m 42s left: with the option off the log read `SKIP ... (already active: SPWI511, 1m 42s left)`, and with the threshold at one hour `INFO ... (refreshing: SPWI511, 1m 36s left, threshold 1h)` followed by the cast. Force All cast a fully active Shield again. Live vanilla Armor was measured too, and it is why the fold prefers readable deadlines: its `op174` sits in timing mode 7 forever beside three mode-4096 effects with the real 45-minute deadline.
+- **Engine measurements** behind the reader, recorded in the knowledge base: on an applied effect, encoded timing modes 0, 10 and 4096 all become mode 4096 with an absolute deadline in game ticks; 1 and 9 stay permanent; 3 becomes 6 and 4 becomes 7 while the delay runs, where the stored value is the end of the *delay*, not of the buff. A live `m_durationType` must not be masked with `0xFF` — that would turn 4096 into 0.
+- **Re-checked after merging v1.11.0**, same lab: the full `BfBot.Test.RunAll()` passes all 27 phases, the refresh phase 34/34. Force All was confirmed to survive the accelerated start path live — with the rate at 2x, `Exec.Start` received force mode 2 — so simulation speed does not change what a run skips.
+- **Force All verified live as an override, with the option off** (`RefreshBelow=0`) on a permanent effect, the case no threshold can reach:
+
+  ```
+  # Active: Skip          SKIP: Zyntris -> Summon Djinni (already active: SPWI718, permanent)
+  # Active: Refresh Low   SKIP: Zyntris -> Summon Djinni (already active: SPWI718, permanent)
+  # Active: Force All     INFO: Zyntris -> Summon Djinni (refreshing: SPWI718, permanent, force all)
+  ```
+
+  The lab's `[BuffBot]` settings and the force selection were restored afterwards.
+- The in-game phase now wraps everything that writes `baldur.ini` or applies a live effect in a `pcall`, and removes the probe effects and restores `RefreshBelow` unconditionally. Verified in the lab by injecting a failure mid-phase: `RefreshBelow` came back as the player's own 45, no probe effect was left on the protagonist, and the phase reported a failure instead of a pass. F12 was driven through its real opcode-402 handler with the selection at 0, 1 and 2 and carried each one into `Exec.Start`, and into `Fast.Start` at 2x. It runs inside `RunAll()`, so an error in the middle could previously have left a permanent portrait-icon effect on the protagonist and `RefreshBelow` at a clamped maximum — "re-cast everything, always" with no visible cause. A failure inside the guarded part now fails the phase instead of being counted as a pass.
+- Also fixed while here: the Target Picker phase required a second party member to exist but not to have a *different* display name. On a save with two members called the same thing, a name-based target legitimately resolves both to the first slot, and the phase failed on correct behaviour. It now picks a member with a distinct name and warns when there is none. Unrelated to this feature; the underlying ambiguity — two party members sharing a display name cannot both be targeted by name — is filed as #87.
+- Not checked in game: the EEex options entry and the panel toggle clicked by hand, BG:EE, EET, the Force All interaction with Quick Cast, summon casters, and item powers with a measured remaining duration. Two log-only corrections — the threshold's wording and suppressing the SPLSTATE false-positive notice on a refresh — have automated coverage but were not re-run in the lab.
 
 ## v1.11.0 (2026-10-24) — selective BuffBot Redux improvements
 

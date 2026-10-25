@@ -24,6 +24,7 @@ def repeat_ui_lua() -> LuaRuntime:
         BfBot = {
             MAX_PRESETS = 8,
             MAX_SPELL_REPEATS = 5,
+            REFRESH_LOW_SECONDS = 300,
             Scan = {}, Class = {}, Innate = {}, Mp = {}, Exec = {}, Persist = {},
             -- Control art off by default, so rows render their text markers.
             Theme = {

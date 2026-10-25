@@ -189,6 +189,12 @@ CATALOG_SCHEMA = {
     451: "ui.category.unknown",
     452: "ui.repeat.compact",
     453: "ui.lock.compact",
+    472: "ui.force_recast.off",
+    473: "ui.force_recast.low",
+    474: "ui.force_recast.all",
+    475: "ui.force_recast.tooltip_off",
+    476: "ui.force_recast.tooltip_low",
+    477: "ui.force_recast.tooltip_all",
     # Player feedback and stable reason text (500-599)
     500: "feedback.no_luajit",
     501: "feedback.combat_stopped",
@@ -246,7 +252,7 @@ CATALOG_SCHEMA = {
     600: "default.preset.long",
     601: "default.preset.short",
     602: "default.preset.indexed",
-    # EEex Options strings (700-716)
+    # EEex Options strings (700-722)
     700: "options.tab",
     701: "options.dark_mode",
     702: "options.dark_mode_description",
@@ -264,6 +270,12 @@ CATALOG_SCHEMA = {
     714: "options.item_use_mode_description",
     715: "options.item_use_inventory",
     716: "options.item_use_swap",
+    717: "options.refresh_below",
+    718: "options.refresh_below_description",
+    719: "options.refresh_below_off",
+    720: "options.refresh_below_1m",
+    721: "options.refresh_below_5m",
+    722: "options.refresh_below_1h",
 }
 
 
@@ -988,12 +1000,31 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.11.0 (2026-10-24)")
-    assert "optional 2x/4x temporary simulation speed" in current_normalized
-    assert "derives from pecca's infinity ui++, used with permission" in current_normalized
-    assert "**1166 automated tests pass**" in current_normalized
-    assert "hidden native bg2:ee 2.7.3.0 / eeex 1.3.1 labs" in current_normalized
-    assert "not checked in game: the column headers and the control artwork" in current_normalized
+    assert current_release.startswith("v1.12.0 (2026-10-24)")
+    assert "refresh buffs that are nearly over" in current_normalized
+    assert "[buffbot] refreshbelow" in current_normalized
+    assert "repeat counts now repeat buffs under force all" in current_normalized
+    assert "no save-schema change" in current_normalized
+    # The time threshold does not cover Stoneskin's skins, and the dead
+    # config.opts.skip field is named rather than quietly left behind.
+    assert "stoneskin's real resource is its skins (opcode 218)" in current_normalized
+    assert "`config.opts.skip` in the save schema is still unused" in current_normalized
+    assert "full automated suite passes **1300 tests**" in current_normalized
+    # Force All is a hard override, not a threshold value (#84).
+    assert "force all is an unconditional override" in current_normalized
+    assert "wasted spell slots are accepted deliberately" in current_normalized
+    assert "lab check, bg2:ee 2.7.3.0 with eeex v1.3.1" in current_normalized
+    assert "34/34" in current_normalized
+    assert "not checked in game: the eeex options entry" in current_normalized
+
+    fork_release = source.split("\n## v1.11.0 (2026-10-24)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
+    assert "optional 2x/4x temporary simulation speed" in fork_release
+    assert "derives from pecca's infinity ui++, used with permission" in fork_release
+    assert "**1166 automated tests pass**" in fork_release
+    assert "hidden native bg2:ee 2.7.3.0 / eeex 1.3.1 labs" in fork_release
+    assert "not checked in game: the column headers and the control artwork" in fork_release
 
     notice_release = source.split("\n## v1.10.1 (2026-10-20)", 1)[1].split(
         "\n## ", 1
@@ -1308,7 +1339,7 @@ def test_known_player_display_sinks_use_localization_not_raw_reason_codes():
 def test_all_eeex_options_strings_come_from_runtime_localization():
     source = THEME_PATH.read_text(encoding="utf-8")
     expected = {
-        CATALOG_SCHEMA[catalog_id] for catalog_id in range(700, 717)
+        CATALOG_SCHEMA[catalog_id] for catalog_id in range(700, 723)
     }
     assignments = re.findall(
         r"uiStrings\.[A-Za-z0-9_]+\s*=\s*"
@@ -1327,6 +1358,7 @@ def test_per_frame_menu_text_helpers_use_precomputed_or_cached_templates():
         "_TargetBtnText",
         "_RepeatButtonText",
         "_RepeatTooltip",
+        "_ForceRecastTooltip",
     ):
         start = source.index(f"function BfBot.UI.{helper}(")
         end = source.find("\nfunction BfBot.UI.", start + 1)

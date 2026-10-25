@@ -37,6 +37,12 @@ BfBot.UI._summonPage = 1         -- 1-based page into _summonList
 BfBot.UI._summonSel = nil        -- selection descriptor {identity, oid, name, cloneType} — NEVER a row index
 BfBot.UI._summonQc = nil         -- cached summons-view Quick Cast value (see _UpdateSummonQc)
 
+-- The active-buff policy for the next run (issue #84) is NOT panel state:
+-- BfBot.Exec owns it (BfBot.Exec.GetForceMode / SetForceMode / CycleForceMode)
+-- so the panel rebuild in #81 only has to re-place a button, and so the policy
+-- can be set from the console without a panel. The functions below are the
+-- panel's thin view of it: one cycle, one label, one color, one tooltip.
+
 -- Confirm dialog state (BUFFBOT_CONFIRM). _confirmMsg is read every frame
 -- by the dialog's message label; _confirmFn holds the pending action and
 -- runs only via RunConfirm. Runtime-only — never reaches the marshal layer.
@@ -1273,8 +1279,13 @@ function BfBot.UI._Layout()
     setArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
     setArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
 
-    -- Status line
-    setArea("bbStatus", cx, r7Y, cw, 24)
+    -- Status line, with the active-buff toggle right-aligned beside it.
+    -- Row 6 is full at the 550px minimum panel width (Cast All / Cast Char /
+    -- Stop meet Quick Cast / Close there), so the second run-policy toggle
+    -- sits under Quick Cast instead of next to it.
+    local forceW = 160
+    setArea("bbStatus", cx, r7Y, cw - forceW - 6, 24)
+    setArea("bbForce", cx + cw - forceW, r7Y, forceW, btnH)
 
     -- Drag handle covers title bar area
     setArea("bbDragHandle", px, py, pw, 35)
@@ -1424,6 +1435,7 @@ end
 -- Tab switches do NOT invalidate scan cache — reads cached data.
 function BfBot.UI._Refresh()
     BfBot.UI._spellListRefreshPending = nil
+    BfBot.UI._RefreshForceRecastCache()
     -- Keep identity canonical across automatic table replacement. The numeric
     -- row is only the list widget's projection and is rebuilt below.
     BfBot.UI._PrepareSpellSelectionForRebuild()
@@ -1604,7 +1616,8 @@ _EnsureRepeatDisplayCache()
 --- Build the spell-list rows for one caster's preset, cross-referenced with
 --- scan data. Shared by the party view (ovr = config.ovr) and the summons
 --- view (ovr = nil — no per-summon classification overrides; absent
---- lock/tgtUnlock fields read as 0, which the v9 summon schema guarantees).
+--- absent lock reads as 0, which the summon schema guarantees; tgtUnlock is
+--- optional in both views).
 -- @param sprite    caster sprite (party member or freshly-resolved summon)
 -- @param preset    preset table { spells = { [resref] = entry } }
 -- @param castable  BfBot.Scan.GetCastableSpells(sprite) result
@@ -1674,12 +1687,20 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
         local variants = scan and scan.variants or nil
         local varResref = spellCfg.var or nil
         local variantName = nil
+        -- Targeting follows the EFFECTIVE spell: a selected variant is cast
+        -- directly at the resolved target, while the opcode-214 parent is
+        -- only the engine's self-cast selection wrapper and would otherwise
+        -- lock every variant row to "Self only" (#82).
+        local effIsAoE = scan and scan.isAoE or 0
+        local effIsSelfOnly = scan and scan.isSelfOnly or 0
         if varResref and variants then
-            for _, v in ipairs(variants) do
-                if v.resref:upper() == varResref:upper() then
-                    variantName = v.name
-                    break
+            local variant = BfBot.Class.FindVariant(variants, varResref)
+            if variant then
+                variantName = variant.name
+                if variant.isSelfOnly ~= nil then
+                    effIsSelfOnly = variant.isSelfOnly
                 end
+                if variant.isAoE ~= nil then effIsAoE = variant.isAoE end
             end
         end
 
@@ -1709,8 +1730,8 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
             castable = isCastable,
             pri      = spellCfg.pri or 999,
             ovr      = (ovr and ovr[resref]) or 0,
-            isAoE    = scan and scan.isAoE or 0,
-            isSelfOnly = scan and scan.isSelfOnly or 0,
+            isAoE    = effIsAoE,
+            isSelfOnly = effIsSelfOnly,
             tgtUnlock = spellCfg.tgtUnlock or 0,
             lock      = spellCfg.lock or 0,
             hasVariants = hasVariants,
@@ -1731,8 +1752,8 @@ end
 --- Summons-view refresh: summon tab labels, preset tabs (names come from the
 --- protagonist's config — the preset axis is shared across views), and the
 --- selected summon's preset spell table. All config reads/writes go to the
---- summon preset on the protagonist (schema v9: {qc, spells={[res]={on,tgt,
---- pri,rep,var}}}); the summon SPRITE never gets a config of its own.
+--- summon preset on the protagonist (summon spell entry: {on, tgt, pri,
+--- rep, var?, tgtUnlock?}); the summon SPRITE never gets a config of its own.
 function BfBot.UI._RefreshSummonsView()
     BfBot.UI._UpdateSummonTabNames()
 
@@ -1799,7 +1820,8 @@ function BfBot.UI._RefreshSummonsView()
     -- Merge new castable buffs into the preset (disabled, at bottom) — same
     -- behavior as the party view minus the ovr filter (no per-summon
     -- classification overrides). New entries follow the v9 spell-entry
-    -- schema: on/tgt/pri/rep (lock/tgtUnlock do not exist for summons).
+    -- schema: on/tgt/pri/rep (no lock; tgtUnlock is written on demand by
+    -- the picker's Unlock button, never seeded here).
     local maxPri = 0
     for _, spellCfg in pairs(preset.spells) do
         if (spellCfg.pri or 0) > maxPri then maxPri = spellCfg.pri end
@@ -1877,7 +1899,7 @@ end
 --- Summons-view write path: the stored spell entry for `resref` in the
 --- selected summon's current preset (the table IS the persisted config —
 --- mutations stick). Read-only lookup unless `create` is set; created
---- entries follow the v9 schema (on/tgt/pri/rep).
+--- entries follow the summon schema (on/tgt/pri/rep).
 function BfBot.UI._SummonSpellEntry(resref, create)
     local sel = BfBot.UI._SelectedSummon()
     if not sel then return nil end
@@ -2153,7 +2175,7 @@ function BfBot.UI.PickerSelf()
 end
 
 --- View-routed target write: party → Persist setter, summons → the stored
---- summon spell entry (v9 schema keeps tgt as "s"/"p"/name/ordered table).
+--- summon spell entry (tgt stays "s"/"p"/name/ordered table).
 function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
     if BfBot.UI._view == "summons" then
         local se = BfBot.UI._SummonSpellEntry(resref, 1)
@@ -2161,6 +2183,19 @@ function BfBot.UI._SetSpellTargetForView(sprite, resref, tgt)
         return
     end
     BfBot.Persist.SetSpellTarget(sprite, BfBot.UI._presetIdx, resref, tgt)
+end
+
+--- View-routed tgtUnlock write (#82). Summon spell entries carry the same
+--- optional 0/1 field as party entries, so the summons view has the same
+--- escape hatch for spells the classifier reports as self-only / party-wide.
+function BfBot.UI._SetTgtUnlockForView(sprite, resref, value)
+    local normalized = (value == 1) and 1 or 0
+    if BfBot.UI._view == "summons" then
+        local se = BfBot.UI._SummonSpellEntry(resref, 1)
+        if se then se.tgtUnlock = normalized end
+        return
+    end
+    BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, resref, normalized)
 end
 
 --- Quick-set: All Party. Checks all party members, keeps current order.
@@ -2197,7 +2232,16 @@ function BfBot.UI.PickerClear()
 end
 
 --- Confirm and close the picker. Saves the working copy to persist.
+--- A still-locked spell closes WITHOUT writing: every control that could
+--- have produced a checked name was disabled, so the empty working copy
+--- carries no intent and must not overwrite the stored target with the
+--- classifier default (#82).
 function BfBot.UI.PickerDone()
+    if buffbot_targetLocked == 1 then
+        BfBot.UI._targetSpellAnchor = nil
+        Infinity_PopMenu("BUFFBOT_TARGETS")
+        return
+    end
     local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
     if not entry then
         BfBot.UI._targetSpellAnchor = nil
@@ -2238,11 +2282,11 @@ function BfBot.UI.PickerDone()
     Infinity_PopMenu("BUFFBOT_TARGETS")
 end
 
---- Unlock targeting for a locked spell. Party view only: the v9 summon
---- spell-entry schema has no tgtUnlock field (the picker's Unlock button is
---- hidden in the summons view).
+--- Unlock targeting for a locked spell. Available in BOTH views (#82): the
+--- summon spell entry carries the same optional tgtUnlock field, and without
+--- it a self-only/party-wide classification was a permanent dead end in the
+--- summons view — every control in the picker is gated on the lock.
 function BfBot.UI.PickerUnlock()
-    if BfBot.UI._view == "summons" then return end
     local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._targetSpellAnchor)
     if not entry then
         BfBot.UI._targetSpellAnchor = nil
@@ -2256,7 +2300,7 @@ function BfBot.UI.PickerUnlock()
         return
     end
 
-    BfBot.Persist.SetTgtUnlock(sprite, BfBot.UI._presetIdx, entry.resref, 1)
+    BfBot.UI._SetTgtUnlockForView(sprite, entry.resref, 1)
     entry.tgtUnlock = 1
     buffbot_targetLocked = 0
     buffbot_targetLockText = ""
@@ -2386,17 +2430,32 @@ end
 --- presetIdx tags the run for the late-join listener (issue #19): every
 --- preset-driven entry point passes BfBot.UI._presetIdx so a summon
 --- spawning mid-run can look up its own summon preset.
+--- The selected active-buff policy (BfBot.Exec.GetForceMode) rides along on
+--- every run started here, which is why Cast All, Cast Character, the HUD
+--- preset picker and the summons cast all honor the toggle without each path
+--- repeating it. The F12 innates read the same selection in BfBotInn; only a
+--- raw console queue runs with the RefreshBelow option alone.
 function BfBot.UI._StartRun(queue, qcMode, presetIdx)
     local rate = BfBot.UI._FastForwardRate()
+    -- Guarded like the tooltip's threshold read: this module can be
+    -- force-reloaded on its own against an older BfBotExe, and a cast button
+    -- that hard-errors would be worse than falling back to the safe mode.
+    local forceMode = 0
+    if BfBot.Exec.GetForceMode then
+        local ok, mode = pcall(BfBot.Exec.GetForceMode)
+        if ok and type(mode) == "number" then forceMode = mode end
+    end
     local started, reason, detail
     if rate > 1 then
         if BfBot.Fast and BfBot.Fast.Start then
-            started, reason, detail = BfBot.Fast.Start(queue, rate, presetIdx)
+            started, reason, detail = BfBot.Fast.Start(queue, rate, presetIdx,
+                forceMode)
         else
             started, reason = false, "reason.exec.fast_unavailable"
         end
     else
-        started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx)
+        started, reason, detail = BfBot.Exec.Start(queue, qcMode, presetIdx,
+            forceMode)
     end
     if started then
         BfBot.UI._SurfaceBuildSkips()
@@ -3492,6 +3551,88 @@ function BfBot.UI._FastForwardTooltip()
     return BfBot.L10N.Get("ui.speed.tooltip")
 end
 
+-- Force Re-Cast (active-buff policy for the next run, issue #84)
+-- ============================================================
+
+--- Cached "Refresh Low" tooltip. The threshold it names lives in baldur.ini,
+--- and `tooltip lua` is evaluated per frame, so reading the INI inside the
+--- tooltip would hit the file on every draw. The cache is rebuilt on panel
+--- refresh and on every click — the only moments the threshold can have
+--- changed, because the option itself sits in the EEex options menu, which is
+--- reachable only while this panel is closed.
+local _forceLowTooltip = nil
+local _forceLowSeconds = nil
+
+function BfBot.UI._RefreshForceRecastCache()
+    -- Exec owns the threshold and is the only authority the run itself uses.
+    -- Falling back to the constant keeps the tooltip readable when Exec has
+    -- not loaded yet; it cannot change what a run actually skips.
+    local seconds
+    if BfBot.Exec and BfBot.Exec._RefreshThreshold then
+        local ok, value = pcall(BfBot.Exec._RefreshThreshold, 1)
+        if ok then seconds = value end
+    end
+    if type(seconds) ~= "number" or seconds ~= seconds
+        or seconds == math.huge then
+        seconds = BfBot.REFRESH_LOW_SECONDS
+    end
+    seconds = math.floor(seconds)
+    if _forceLowSeconds == seconds and _forceLowTooltip then return end
+    _forceLowSeconds = seconds
+    _forceLowTooltip = BfBot.L10N.Format("ui.force_recast.tooltip_low",
+        { seconds = seconds })
+end
+
+--- The mode this control displays. Exec is the single source of truth; the
+--- fallback only keeps the panel drawable if Exec has not loaded yet.
+local function _forceMode()
+    if BfBot.Exec and BfBot.Exec.GetForceMode then
+        local ok, mode = pcall(BfBot.Exec.GetForceMode)
+        if ok and type(mode) == "number" then return mode end
+    end
+    return 0
+end
+
+--- Cycle the active-buff policy: skip active → refresh low → force all.
+--- Unlike Quick Cast this writes nothing: Exec holds the value for the next
+--- run only, so no preset and no save changes.
+function BfBot.UI.CycleForceRecast()
+    if BfBot.Exec and BfBot.Exec.CycleForceMode then
+        pcall(BfBot.Exec.CycleForceMode)
+    end
+    BfBot.UI._RefreshForceRecastCache()
+end
+
+function BfBot.UI._ForceRecastLabel()
+    if not buffbot_isOpen then return "" end
+    local mode = _forceMode()
+    if mode == 1 then return BfBot.L10N.Get("ui.force_recast.low") end
+    if mode == 2 then return BfBot.L10N.Get("ui.force_recast.all") end
+    return BfBot.L10N.Get("ui.force_recast.off")
+end
+
+--- Reuses the Quick Cast palette entries deliberately: both controls answer
+--- "how much is BuffBot allowed to do here", so off/warn/cheat read the same.
+function BfBot.UI._ForceRecastColor()
+    local mode = _forceMode()
+    if mode == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
+    if mode == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
+    return _parseColor(BfBot.UI._T("qcOff"))
+end
+
+function BfBot.UI._ForceRecastTooltip()
+    local mode = _forceMode()
+    if mode == 2 then return BfBot.L10N.Get("ui.force_recast.tooltip_all") end
+    if mode == 1 then
+        -- Names the threshold the run will really use: the option's value
+        -- when it is set, the built-in fallback when it is off.
+        if not _forceLowTooltip then BfBot.UI._RefreshForceRecastCache() end
+        return _forceLowTooltip
+    end
+    return BfBot.L10N.Get("ui.force_recast.tooltip_off")
+end
+
+-- ============================================================
 -- Debug Mode Toggle
 -- ============================================================
 

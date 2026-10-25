@@ -85,6 +85,9 @@ BfBot.Persist._INI_DEFAULTS = {
     SummonsJoinCast = 1,     -- allied summons/clones with configured presets join party casts (#19)
     ItemUseMode = "inventory", -- "inventory" | "swap" (equip/use/restore)
     FastForward = 1,      -- 1 = normal, 2/4 = temporary native simulation speed
+    RefreshBelow = 0,        -- seconds; cast an active buff again when less than
+                             -- this is left of it. 0 = off, every active buff
+                             -- skips (the behavior before issue #84).
 }
 
 -- ---- Default config ----
@@ -377,6 +380,12 @@ function BfBot.Persist._ValidateConfig(config)
                         if type(entry.lock) ~= "number" or (entry.lock ~= 0 and entry.lock ~= 1) then
                             entry.lock = 0
                         end
+                        -- tgtUnlock is optional: normalize only what is
+                        -- present, so untouched entries stay field-free.
+                        if entry.tgtUnlock ~= nil and entry.tgtUnlock ~= 0
+                            and entry.tgtUnlock ~= 1 then
+                            entry.tgtUnlock = 0
+                        end
                         if type(entry.kind) ~= "string" or (entry.kind ~= "spl" and entry.kind ~= "itm") then
                             entry.kind = "spl"
                         end
@@ -457,11 +466,12 @@ function BfBot.Persist._ValidateSummons(summons)
                         if type(resref) ~= "string" or type(se) ~= "table" then
                             preset.spells[resref] = nil
                         else
-                            -- Spell entry: whitelist { on, tgt, pri, rep, var }
+                            -- Spell entry: whitelist
+                            -- { on, tgt, pri, rep, var, tgtUnlock }
                             for k in pairs(se) do
                                 if k ~= "on" and k ~= "tgt"
                                     and k ~= "pri" and k ~= "rep"
-                                    and k ~= "var" then
+                                    and k ~= "var" and k ~= "tgtUnlock" then
                                     se[k] = nil
                                 end
                             end
@@ -486,6 +496,14 @@ function BfBot.Persist._ValidateSummons(summons)
                             se.rep = BfBot.Persist._NormalizeSpellRepeat(se.rep)
                             if se.var ~= nil and type(se.var) ~= "string" then
                                 se.var = nil
+                            end
+                            -- Optional, same contract as the party path: the
+                            -- summons view needs the unlock escape hatch for
+                            -- spells the classifier reports as self-only or
+                            -- party-wide (#82).
+                            if se.tgtUnlock ~= nil and se.tgtUnlock ~= 0
+                                and se.tgtUnlock ~= 1 then
+                                se.tgtUnlock = 0
                             end
                         end
                     end
@@ -1000,7 +1018,7 @@ end
 
 --- PURE (no engine calls): seed a clone's spell table from its owner's
 --- preset, filtered to the spells the clone can actually cast. Deep-copies
---- on/tgt/pri/rep/var — tgt may be an ordered TABLE of names, which must be
+--- on/tgt/pri/rep/var/tgtUnlock — tgt may be an ordered TABLE of names, which must be
 --- copied, never aliased, so edits to the summon config can never mutate the
 --- owner's preset (or vice versa). Output holds numbers/strings/tables only
 --- (marshal constraint: no booleans, no userdata).
@@ -1025,6 +1043,10 @@ function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
                 rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep),
             }
             if type(entry.var) == "string" then copy.var = entry.var end
+            -- The seeded tgt is copied verbatim, so the owner's unlock has to
+            -- come along: otherwise a clone row would show a name target the
+            -- picker reports as locked (#82).
+            if entry.tgtUnlock == 1 then copy.tgtUnlock = 1 end
             if type(entry.tgt) == "table" then
                 local t = {}
                 for _, v in ipairs(entry.tgt) do
@@ -2209,6 +2231,39 @@ function BfBot.Persist.SetPref(key, value)
     else
         pcall(Infinity_SetINIValue, "BuffBot", key, value)
     end
+end
+
+--- Clamp a candidate RefreshBelow value to whole seconds in range (issue #84).
+--- baldur.ini is a plain text file a player can hand-edit, so a value read back
+--- is untrusted: NaN, infinities, fractions, negatives and strings all collapse
+--- to 0, which means "off" and keeps the old skip-every-active-buff behavior.
+-- @param value  candidate threshold in seconds
+-- @return number: integer in 0..BfBot.MAX_REFRESH_BELOW
+function BfBot.Persist._NormalizeRefreshBelow(value)
+    if type(value) == "string" then value = tonumber(value) end
+    if type(value) ~= "number" or value ~= value
+        or value == math.huge or value == -math.huge
+        or value < 0 then
+        return 0
+    end
+    value = math.floor(value)
+    if value > BfBot.MAX_REFRESH_BELOW then return BfBot.MAX_REFRESH_BELOW end
+    return value
+end
+
+--- Validated RefreshBelow threshold in seconds (0 = off). Every caller that
+--- compares a remaining duration must go through this, never GetPref directly.
+function BfBot.Persist.GetRefreshBelow()
+    return BfBot.Persist._NormalizeRefreshBelow(
+        BfBot.Persist.GetPref("RefreshBelow"))
+end
+
+--- Store a RefreshBelow threshold, validated the same way as on read.
+-- @return number: the value actually stored
+function BfBot.Persist.SetRefreshBelow(value)
+    local normalized = BfBot.Persist._NormalizeRefreshBelow(value)
+    BfBot.Persist.SetPref("RefreshBelow", normalized)
+    return normalized
 end
 
 -- ---- Preset management ----
