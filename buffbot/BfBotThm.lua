@@ -563,6 +563,26 @@ function BfBot.Theme.HasControlArt()
     return true
 end
 
+--- True once the panel chrome art is confirmed present — the button plates,
+--- tabs, cast plate and scrollbar. Checked separately from the row art above
+--- so a partial install degrades per group: a panel can keep its themed
+--- checkboxes while falling back to the engine's stone buttons.
+--- Cached for the same reason: a missing resource cannot appear mid-session.
+function BfBot.Theme.HasChromeArt()
+    if BfBot.Theme._chromeArt ~= nil then return BfBot.Theme._chromeArt end
+    if type(EEex_Resource_Fetch) ~= "function" then return false end
+    for _, resref in ipairs({ "BFBPLAT", "BFBTAB", "BFBCAST", "BFBSCRL" }) do
+        local ok, found = pcall(EEex_Resource_Fetch, resref, "BAM")
+        if not ok then return false end
+        if not found then
+            BfBot.Theme._chromeArt = false
+            return false
+        end
+    end
+    BfBot.Theme._chromeArt = true
+    return true
+end
+
 --- Set the accent by index (1=BG2, 2=SOD, 3=BG1) preserving dark/light.
 -- Out-of-range / non-numeric input falls back to BG2.
 function BfBot.Theme._SetAccent(idx)

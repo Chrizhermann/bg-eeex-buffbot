@@ -3312,6 +3312,47 @@ function BfBot.UI._RepeatColor(row)
     return BfBot.UI._T("text")
 end
 
+-- ============================================================
+-- Panel chrome art
+-- ============================================================
+-- Buttons, tabs and the cast plate carry Pecca's art instead of the engine's
+-- carved stone. Each helper returns the engine resref when the art is absent,
+-- so a partial install keeps a working panel rather than invisible buttons.
+--
+-- The art is one cycle per skin (0 SoD, 1 IWD, 2 BG1, 3 BG2) with four state
+-- frames inside it. Plain buttons leave `frame` alone and let the engine run
+-- its own hover/press states; a tab forces the frame, because "this tab is
+-- the open one" is not a state the engine knows about.
+
+--- Wide plate for a captioned button.
+function BfBot.UI._PlateBam()
+    return BfBot.Theme.HasChromeArt() and "BFBPLAT" or "GUIOSTUL"
+end
+
+--- Tab plate. Its selected frame carries the skin's accent outline.
+function BfBot.UI._TabBam()
+    return BfBot.Theme.HasChromeArt() and "BFBTAB" or "GUIOSTUL"
+end
+
+--- The wider plate behind Cast and Cast Character.
+function BfBot.UI._CastBam()
+    return BfBot.Theme.HasChromeArt() and "BFBCAST" or "GUIOSTUL"
+end
+
+--- Cycle index for every chrome BAM: the skin. The engine art has one cycle,
+--- so it must stay at 0 when the themed art is missing.
+function BfBot.UI._ChromeSeq()
+    if not BfBot.Theme.HasChromeArt() then return 0 end
+    return BfBot.Theme.ControlSkin()
+end
+
+--- Frame for a tab. Pecca's selected frame is the third in the cycle; the
+--- engine's stone button marks a pressed tab with its second.
+function BfBot.UI._TabFrame(selected)
+    if not selected then return 0 end
+    return BfBot.Theme.HasChromeArt() and 2 or 1
+end
+
 --- Checkbox display: "+" for enabled, empty for disabled.
 -- The checkbox and lock cells render as art when buffbot/visual is installed
 -- and fall back to text markers when it is not (see BfBot.Theme.HasControlArt).
