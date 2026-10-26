@@ -5,7 +5,8 @@
 -- before the capture phase queues the shot.
 --
 --   assert(loadfile("<this file>"))({phase = "prepare", theme = "bg2_light",
---                                    slot = 0, preset = 1, enable = {1,2,3}, lock = 2})
+--                                    slot = 0, preset = 1, enable = {1,2,3},
+--                                    lock = 2, order = 1})
 --   assert(loadfile("<this file>"))({phase = "capture"})
 --
 -- The PNG lands in the lab profile's ScrnShot folder. Nothing is cast, saved or
@@ -30,6 +31,9 @@ if args.phase == "capture" then
     -- switch came out without it (lab-verified 2026-10-25).
     assert(Infinity_GetFrameCounter() >= receipt.frame + 20, "SHOT_WAIT_FOR_RENDER")
     assert(on("BUFFBOT_MAIN") and buffbot_isOpen, "SHOT_PANEL_CLOSED")
+    if receipt.dialog then
+        assert(on(receipt.dialogMenu), "SHOT_DIALOG_CLOSED:" .. receipt.dialogMenu)
+    end
     assert(BfBot.Theme._GetAccentName() .. (BfBot.Theme._IsDark() == 1 and "_dark" or "_light")
         == receipt.theme, "SHOT_THEME_CHANGED")
     Infinity_TakeScreenshot()
@@ -57,6 +61,19 @@ assert(BfBot.Theme.Apply(theme), "SHOT_THEME_DID_NOT_APPLY")
 BfBot.UI.SetChar(slot)
 BfBot.UI.SetPreset(preset)
 if not on("BUFFBOT_MAIN") then BfBot.UI.Toggle() end
+-- An explicit panel size, centred, so one run can show the same panel small
+-- and large. Without it the panel keeps whatever size the lab profile saved.
+if args.panelW and args.panelH then
+    local sw, sh = Infinity_GetScreenSize()
+    BfBot.UI._panelX = math.max(0, math.floor((sw - args.panelW) / 2))
+    BfBot.UI._panelY = math.max(0, math.floor((sh - args.panelH) / 2))
+    BfBot.UI._ResizeTo(args.panelW, args.panelH)
+end
+-- The preset's cast-order toggle, so one run can show both states.
+if args.order ~= nil then
+    BfBot.Persist.SetAutoOrderAll(preset, args.order)
+    BfBot.UI._Refresh()
+end
 buffbot_searchText = args.query or ""
 BfBot.UI._SearchTick()
 assert(on("BUFFBOT_MAIN") and buffbot_isOpen, "SHOT_PANEL_DID_NOT_OPEN")
@@ -82,10 +99,30 @@ for index, entry in ipairs(buffbot_visibleSpells or {}) do
     end
 end
 
+-- One of BuffBot's own dialogs on top of the panel, so the shot covers the
+-- chrome the dialogs draw too, not only the main panel's.
+if args.dialog == "targets" then
+    BfBot.UI.OpenTargets(args.dialogRow or 1)
+    assert(on("BUFFBOT_TARGETS"), "SHOT_TARGETS_DID_NOT_OPEN")
+elseif args.dialog == "picker" then
+    BfBot.UI.OpenSpellPicker()
+    assert(on("BUFFBOT_SPELLPICKER"), "SHOT_PICKER_DID_NOT_OPEN")
+elseif args.dialog == "rename" then
+    BfBot.UI.OpenRename()
+    assert(on("BUFFBOT_RENAME"), "SHOT_RENAME_DID_NOT_OPEN")
+elseif args.dialog then
+    error("SHOT_UNKNOWN_DIALOG:" .. tostring(args.dialog))
+end
+
 LabShotReceipt = {
     frame = Infinity_GetFrameCounter(), theme = theme, before = before,
     slot = BfBot.UI._charSlot, preset = BfBot.UI._presetIdx, view = BfBot.UI._view,
     owner = BfBot._GetName(sprite), rows = #rows, visible = visible,
     screen = { Infinity_GetScreenSize() },
+    dialog = args.dialog,
+    dialogMenu = args.dialog and ({ targets = "BUFFBOT_TARGETS",
+        picker = "BUFFBOT_SPELLPICKER", rename = "BUFFBOT_RENAME" })[args.dialog],
+    panel = { BfBot.UI._panelX, BfBot.UI._panelY,
+              BfBot.UI._panelW, BfBot.UI._panelH },
 }
 return LabShotReceipt

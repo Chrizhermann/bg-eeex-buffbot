@@ -53,11 +53,6 @@ menu
 	}
 	label
 	{
-		name "bbQuickFrame"
-		area 0 0 0 0
-	}
-	label
-	{
 		name "bbQuickBg"
 		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		mosaic "BFBOTBG"
@@ -80,8 +75,14 @@ menu
 	label
 	{
 		name "bbQuickOverlay"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 0 0 0 0
+	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name "bbQuickFrame"
 		area 0 0 0 0
 	}
 	label
@@ -99,10 +100,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(1)"
-		text lua "BfBot.UI._QuickPresetName(1)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset1_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[1] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(1)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -111,10 +123,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(2)"
-		text lua "BfBot.UI._QuickPresetName(2)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset2_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[2] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(2)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -123,10 +146,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(3)"
-		text lua "BfBot.UI._QuickPresetName(3)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset3_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[3] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(3)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -135,10 +169,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(4)"
-		text lua "BfBot.UI._QuickPresetName(4)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset4_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[4] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(4)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -147,10 +192,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(5)"
-		text lua "BfBot.UI._QuickPresetName(5)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset5_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[5] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(5)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -159,10 +215,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(6)"
-		text lua "BfBot.UI._QuickPresetName(6)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset6_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[6] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(6)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -171,10 +238,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(7)"
-		text lua "BfBot.UI._QuickPresetName(7)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset7_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[7] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(7)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 	button
@@ -183,10 +261,21 @@ menu
 		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8] ~= nil"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI._CastQuickPreset(8)"
-		text lua "BfBot.UI._QuickPresetName(8)"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 0 0
+	}
+
+	label
+	{
+		name    "bbQuickPreset8_t"
+		enabled "BfBot.UI._quickPresets and BfBot.UI._quickPresets[8] ~= nil"
+		text lua "BfBot.UI._QuickPresetName(8)"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 0 0
 	}
 }
@@ -211,16 +300,7 @@ menu
 		on escape
 	}
 
-	-- Panel border (custom 9-slice leather+brass frame via EEex render hook)
-	-- MUST come before bbBg so border renders behind parchment
-	label
-	{
-		name    "bbBgFrame"
-		enabled "buffbot_isOpen"
-		area 340 50 540 510
-	}
-
-	-- Panel background (parchment texture, renders on top of border).
+	-- Panel background (parchment texture).
 	-- Three labels per theme; only the active theme's `enabled` evaluates true.
 	-- _Layout() repositions all three so theme switches stay aligned.
 	label
@@ -245,13 +325,29 @@ menu
 		mosaic "BFBOTBG3"
 	}
 
-	-- Dark mode overlay (theme-driven opacity, position synced via _Layout)
+	-- Dark mode overlay (theme-driven opacity, position synced via _Layout).
+	-- `rectangle N` picks a style, not a color. Style 5 tints warm, which made
+	-- "dark mode" lay a warm film over the parchment instead of darkening it.
+	-- Style 1 is the one the full-screen click-to-close dimmer above uses, and
+	-- that one reads as neutral dark. All eight veils use it.
 	label
 	{
 		name    "bbDarkOverlay"
 		enabled "buffbot_isOpen"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 340 50 540 510
+	}
+
+	-- Panel border (9-slice frame via EEex render hook). It comes AFTER the
+	-- parchment and the dark overlay: the frame is a thin rail with corner
+	-- bosses and a transparent middle, so drawing it on top keeps the whole
+	-- corner visible and lets the rail sit on the panel edge. The old frame
+	-- filled its rect and had to render behind.
+	label
+	{
+		name    "bbBgFrame"
+		enabled "buffbot_isOpen"
 		area 340 50 540 510
 	}
 
@@ -275,11 +371,14 @@ menu
 		area 340 55 540 35
 	}
 
-	-- Resize grip visual indicator (BEFORE handle so handle gets click priority)
+	-- Resize grip hint (BEFORE handle so handle gets click priority). It is
+	-- only drawn when the frame art is absent: with the frame on, the corner
+	-- boss lands on this exact spot and the two draw over each other. The
+	-- resize handle below is 80x48 and covers the boss either way.
 	label
 	{
 		name    "bbResizeGrip"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._HasFrameArt()"
 		text    "///"
 		text style "bb_normal"
 		text color lua "BfBot.UI._T('grip')"
@@ -295,15 +394,30 @@ menu
 		area 800 500 80 48
 	}
 
-	-- Reset layout button (right side of title bar)
+	-- Reset layout button (right side of title bar). The plate is drawn
+	-- first (render order is definition order) and _Layout gives it the
+	-- same area through the "_b" pairing; the control itself has to stay a
+	-- text item, because only a text item takes an action together with
+	-- `text color lua`.
+	label
+	{
+		name    "bbReset_b"
+		enabled "buffbot_isOpen"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		scaleToClip
+		ignoreEvents
+		area 820 55 50 24
+	}
+
 	text
 	{
 		name    "bbReset"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI._ResetLayout()"
 		text lua "BfBot.L10N.Get('common.reset')"
-		text style "bb_normal"
-		text color lua "BfBot.UI._T('reset')"
+		text style "bb_caption"
+		text color lua "BfBot.UI._T('btnText')"
 		text align center center
 		area 820 55 50 24
 	}
@@ -317,11 +431,22 @@ menu
 		name    "bbC0"
 		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[1] ~= nil"
 		action  "BfBot.UI.SetChar(0)"
-		text lua "buffbot_charNames[1]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsCharSelected(0) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(0))"
 		scaleToClip
+		area 350 90 80 24
+	}
+
+	label
+	{
+		name    "bbC0_t"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[1] ~= nil"
+		text lua "buffbot_charNames[1]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 350 90 80 24
 	}
 
@@ -330,11 +455,22 @@ menu
 		name    "bbC1"
 		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[2] ~= nil"
 		action  "BfBot.UI.SetChar(1)"
-		text lua "buffbot_charNames[2]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsCharSelected(1) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(1))"
 		scaleToClip
+		area 432 90 80 24
+	}
+
+	label
+	{
+		name    "bbC1_t"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[2] ~= nil"
+		text lua "buffbot_charNames[2]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 432 90 80 24
 	}
 
@@ -343,11 +479,22 @@ menu
 		name    "bbC2"
 		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[3] ~= nil"
 		action  "BfBot.UI.SetChar(2)"
-		text lua "buffbot_charNames[3]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsCharSelected(2) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(2))"
 		scaleToClip
+		area 514 90 80 24
+	}
+
+	label
+	{
+		name    "bbC2_t"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[3] ~= nil"
+		text lua "buffbot_charNames[3]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 514 90 80 24
 	}
 
@@ -356,11 +503,22 @@ menu
 		name    "bbC3"
 		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[4] ~= nil"
 		action  "BfBot.UI.SetChar(3)"
-		text lua "buffbot_charNames[4]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsCharSelected(3) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(3))"
 		scaleToClip
+		area 596 90 80 24
+	}
+
+	label
+	{
+		name    "bbC3_t"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[4] ~= nil"
+		text lua "buffbot_charNames[4]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 596 90 80 24
 	}
 
@@ -369,11 +527,22 @@ menu
 		name    "bbC4"
 		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[5] ~= nil"
 		action  "BfBot.UI.SetChar(4)"
-		text lua "buffbot_charNames[5]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsCharSelected(4) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(4))"
 		scaleToClip
+		area 678 90 80 24
+	}
+
+	label
+	{
+		name    "bbC4_t"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[5] ~= nil"
+		text lua "buffbot_charNames[5]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 678 90 80 24
 	}
 
@@ -382,11 +551,22 @@ menu
 		name    "bbC5"
 		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[6] ~= nil"
 		action  "BfBot.UI.SetChar(5)"
-		text lua "buffbot_charNames[6]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsCharSelected(5) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(5))"
 		scaleToClip
+		area 760 90 80 24
+	}
+
+	label
+	{
+		name    "bbC5_t"
+		enabled "BfBot.UI._IsPartyView() and buffbot_charNames[6] ~= nil"
+		text lua "buffbot_charNames[6]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 760 90 80 24
 	}
 
@@ -402,11 +582,22 @@ menu
 		name    "bbView"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.ToggleView()"
-		text lua "BfBot.UI._ViewBtnLabel()"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPartyView() and 0 or 1"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(not BfBot.UI._IsPartyView())"
 		scaleToClip
+		area 760 90 80 24
+	}
+
+	label
+	{
+		name    "bbView_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.UI._ViewBtnLabel()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 760 90 80 24
 	}
 
@@ -415,11 +606,22 @@ menu
 		name    "bbS0"
 		enabled "BfBot.UI._SummonTabVisible(1)"
 		action  "BfBot.UI.SetSummon(1)"
-		text lua "buffbot_summonTabNames[1]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsSummonSelected(1) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(1))"
 		scaleToClip
+		area 350 90 80 24
+	}
+
+	label
+	{
+		name    "bbS0_t"
+		enabled "BfBot.UI._SummonTabVisible(1)"
+		text lua "buffbot_summonTabNames[1]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 350 90 80 24
 	}
 
@@ -428,11 +630,22 @@ menu
 		name    "bbS1"
 		enabled "BfBot.UI._SummonTabVisible(2)"
 		action  "BfBot.UI.SetSummon(2)"
-		text lua "buffbot_summonTabNames[2]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsSummonSelected(2) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(2))"
 		scaleToClip
+		area 432 90 80 24
+	}
+
+	label
+	{
+		name    "bbS1_t"
+		enabled "BfBot.UI._SummonTabVisible(2)"
+		text lua "buffbot_summonTabNames[2]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 432 90 80 24
 	}
 
@@ -441,11 +654,22 @@ menu
 		name    "bbS2"
 		enabled "BfBot.UI._SummonTabVisible(3)"
 		action  "BfBot.UI.SetSummon(3)"
-		text lua "buffbot_summonTabNames[3]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsSummonSelected(3) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(3))"
 		scaleToClip
+		area 514 90 80 24
+	}
+
+	label
+	{
+		name    "bbS2_t"
+		enabled "BfBot.UI._SummonTabVisible(3)"
+		text lua "buffbot_summonTabNames[3]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 514 90 80 24
 	}
 
@@ -454,11 +678,22 @@ menu
 		name    "bbS3"
 		enabled "BfBot.UI._SummonTabVisible(4)"
 		action  "BfBot.UI.SetSummon(4)"
-		text lua "buffbot_summonTabNames[4]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsSummonSelected(4) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(4))"
 		scaleToClip
+		area 596 90 80 24
+	}
+
+	label
+	{
+		name    "bbS3_t"
+		enabled "BfBot.UI._SummonTabVisible(4)"
+		text lua "buffbot_summonTabNames[4]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 596 90 80 24
 	}
 
@@ -467,11 +702,22 @@ menu
 		name    "bbS4"
 		enabled "BfBot.UI._SummonTabVisible(5)"
 		action  "BfBot.UI.SetSummon(5)"
-		text lua "buffbot_summonTabNames[5]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsSummonSelected(5) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(5))"
 		scaleToClip
+		area 678 90 80 24
+	}
+
+	label
+	{
+		name    "bbS4_t"
+		enabled "BfBot.UI._SummonTabVisible(5)"
+		text lua "buffbot_summonTabNames[5]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 678 90 80 24
 	}
 
@@ -480,11 +726,22 @@ menu
 		name    "bbS5"
 		enabled "BfBot.UI._SummonTabVisible(6)"
 		action  "BfBot.UI.SetSummon(6)"
-		text lua "buffbot_summonTabNames[6]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsSummonSelected(6) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(6))"
 		scaleToClip
+		area 760 90 80 24
+	}
+
+	label
+	{
+		name    "bbS5_t"
+		enabled "BfBot.UI._SummonTabVisible(6)"
+		text lua "buffbot_summonTabNames[6]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 760 90 80 24
 	}
 
@@ -496,7 +753,8 @@ menu
 		action  "BfBot.UI.SummonPage(-1)"
 		text    "<"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
 		area 700 90 24 24
 	}
@@ -508,6 +766,7 @@ menu
 		text lua "buffbot_summonPageText"
 		text style "bb_normal_parchment"
 		text align center center
+		text color lua "BfBot.UI._T('text')"
 		area 728 90 40 24
 	}
 
@@ -518,7 +777,8 @@ menu
 		action  "BfBot.UI.SummonPage(1)"
 		text    ">"
 		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
 		area 772 90 24 24
 	}
@@ -531,6 +791,7 @@ menu
 		text lua "BfBot.L10N.Get('ui.no_allied_summons')"
 		text style "bb_normal_parchment"
 		text align center center
+		text color lua "BfBot.UI._T('text')"
 		area 350 90 520 24
 	}
 
@@ -543,11 +804,22 @@ menu
 		name    "bbP1"
 		enabled "buffbot_presetNames[1] ~= nil"
 		action  "BfBot.UI.SetPreset(1)"
-		text lua "buffbot_presetNames[1]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(1) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(1))"
 		scaleToClip
+		area 350 118 78 24
+	}
+
+	label
+	{
+		name    "bbP1_t"
+		enabled "buffbot_presetNames[1] ~= nil"
+		text lua "buffbot_presetNames[1]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 350 118 78 24
 	}
 
@@ -556,11 +828,22 @@ menu
 		name    "bbP2"
 		enabled "buffbot_presetNames[2] ~= nil"
 		action  "BfBot.UI.SetPreset(2)"
-		text lua "buffbot_presetNames[2]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(2) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(2))"
 		scaleToClip
+		area 431 118 78 24
+	}
+
+	label
+	{
+		name    "bbP2_t"
+		enabled "buffbot_presetNames[2] ~= nil"
+		text lua "buffbot_presetNames[2]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 431 118 78 24
 	}
 
@@ -569,11 +852,22 @@ menu
 		name    "bbP3"
 		enabled "buffbot_presetNames[3] ~= nil"
 		action  "BfBot.UI.SetPreset(3)"
-		text lua "buffbot_presetNames[3]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(3) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(3))"
 		scaleToClip
+		area 512 118 78 24
+	}
+
+	label
+	{
+		name    "bbP3_t"
+		enabled "buffbot_presetNames[3] ~= nil"
+		text lua "buffbot_presetNames[3]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 512 118 78 24
 	}
 
@@ -582,11 +876,22 @@ menu
 		name    "bbP4"
 		enabled "buffbot_presetNames[4] ~= nil"
 		action  "BfBot.UI.SetPreset(4)"
-		text lua "buffbot_presetNames[4]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(4) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(4))"
 		scaleToClip
+		area 593 118 78 24
+	}
+
+	label
+	{
+		name    "bbP4_t"
+		enabled "buffbot_presetNames[4] ~= nil"
+		text lua "buffbot_presetNames[4]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 593 118 78 24
 	}
 
@@ -595,11 +900,22 @@ menu
 		name    "bbP5"
 		enabled "buffbot_presetNames[5] ~= nil"
 		action  "BfBot.UI.SetPreset(5)"
-		text lua "buffbot_presetNames[5]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(5) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(5))"
 		scaleToClip
+		area 674 118 78 24
+	}
+
+	label
+	{
+		name    "bbP5_t"
+		enabled "buffbot_presetNames[5] ~= nil"
+		text lua "buffbot_presetNames[5]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 674 118 78 24
 	}
 
@@ -608,11 +924,22 @@ menu
 		name    "bbP6"
 		enabled "buffbot_presetNames[6] ~= nil"
 		action  "BfBot.UI.SetPreset(6)"
-		text lua "buffbot_presetNames[6]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(6) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(6))"
 		scaleToClip
+		area 674 118 78 24
+	}
+
+	label
+	{
+		name    "bbP6_t"
+		enabled "buffbot_presetNames[6] ~= nil"
+		text lua "buffbot_presetNames[6]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 674 118 78 24
 	}
 
@@ -621,11 +948,22 @@ menu
 		name    "bbP7"
 		enabled "buffbot_presetNames[7] ~= nil"
 		action  "BfBot.UI.SetPreset(7)"
-		text lua "buffbot_presetNames[7]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(7) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(7))"
 		scaleToClip
+		area 674 118 78 24
+	}
+
+	label
+	{
+		name    "bbP7_t"
+		enabled "buffbot_presetNames[7] ~= nil"
+		text lua "buffbot_presetNames[7]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 674 118 78 24
 	}
 
@@ -634,11 +972,22 @@ menu
 		name    "bbP8"
 		enabled "buffbot_presetNames[8] ~= nil"
 		action  "BfBot.UI.SetPreset(8)"
-		text lua "buffbot_presetNames[8]"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		frame lua "BfBot.UI._IsPresetSelected(8) and 1 or 0"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(8))"
 		scaleToClip
+		area 674 118 78 24
+	}
+
+	label
+	{
+		name    "bbP8_t"
+		enabled "buffbot_presetNames[8] ~= nil"
+		text lua "buffbot_presetNames[8]"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 674 118 78 24
 	}
 
@@ -648,10 +997,21 @@ menu
 		name    "bbRen"
 		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenRename()"
-		text lua "BfBot.L10N.Get('common.rename')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 758 118 56 24
+	}
+
+	label
+	{
+		name    "bbRen_t"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.rename')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 758 118 56 24
 	}
 
@@ -661,10 +1021,21 @@ menu
 		name    "bbNew"
 		enabled "BfBot.UI._CanCreatePreset() and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.CreateNewPreset()"
-		text lua "BfBot.L10N.Get('common.new')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 818 118 50 24
+	}
+
+	label
+	{
+		name    "bbNew_t"
+		enabled "BfBot.UI._CanCreatePreset() and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.new')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 818 118 50 24
 	}
 
@@ -682,8 +1053,11 @@ menu
 	label
 	{
 		name "bbSearchBg"
-		rectangle 5
-		rectangle opacity 35
+		bam lua "BfBot.UI._SearchBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame 0
+		scaleToClip
+		ignoreEvents
 		area 0 0 200 26
 	}
 	edit
@@ -701,10 +1075,20 @@ menu
 		name "bbSearchClear"
 		clickable lua "buffbot_searchText ~= ''"
 		action "BfBot.UI.ClearSearch()"
-		text lua "BfBot.L10N.Get('common.clear')"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 60 26
+	}
+
+	label
+	{
+		name    "bbSearchClear_t"
+		text lua "BfBot.L10N.Get('common.clear')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 0 0 60 26
 	}
 	button
@@ -712,11 +1096,22 @@ menu
 		name "bbSpeed"
 		clickable lua "BfBot.Exec.GetState() ~= 'running'"
 		action "BfBot.UI.CycleFastForward()"
-		text lua "BfBot.UI._FastForwardLabel()"
 		tooltip lua "BfBot.UI._FastForwardTooltip()"
-		text style "bb_button"
-		bam "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 0 0 130 26
+	}
+
+	label
+	{
+		name    "bbSpeed_t"
+		text lua "BfBot.UI._FastForwardLabel()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		tooltip lua "BfBot.UI._FastForwardTooltip()"
+		ignoreEvents
 		area 0 0 130 26
 	}
 	label
@@ -820,6 +1215,7 @@ menu
 				text lua "BfBot.UI._CheckboxText(BfBot.UI._VisibleSpellRow(rowNumber))"
 				text style "bb_normal_parchment"
 				text align center center
+				text color lua "BfBot.UI._T('text')"
 			}
 			label
 			{
@@ -870,6 +1266,7 @@ menu
 				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].durText or ''"
 				text style "bb_normal_parchment"
 				text align center center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -883,6 +1280,7 @@ menu
 				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].countText or ''"
 				text style "bb_normal_parchment"
 				text align center center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -910,6 +1308,7 @@ menu
 				text lua "buffbot_visibleSpells[rowNumber] and buffbot_visibleSpells[rowNumber].targetText or ''"
 				text style "bb_normal_parchment"
 				text align center center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -929,6 +1328,14 @@ menu
 			label
 			{
 				area 0 0 -1 36
+				bam lua "BfBot.UI._LockPlateBam(BfBot.UI._VisibleSpellRow(rowNumber))"
+				sequence 1
+				frame 0
+				align center center
+			}
+			label
+			{
+				area 0 0 -1 36
 				bam lua "BfBot.UI._LockBam(BfBot.UI._VisibleSpellRow(rowNumber))"
 				sequence 1
 				frame 0
@@ -943,7 +1350,7 @@ menu
 		table       "buffbot_visibleSpells"
 		var         "buffbot_visibleSelectedRow"
 		rowheight   36
-		scrollbar   "GUISCRC"
+		scrollbar   "BFBSCRL"
 	}
 
 	-- Coalesce 5E's spell-list notifications into one panel refresh.
@@ -971,10 +1378,21 @@ menu
 		name    "bbAdd"
 		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenSpellPicker()"
-		text lua "BfBot.L10N.Get('common.add_spell')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 350 402 110 28
+	}
+
+	label
+	{
+		name    "bbAdd_t"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.add_spell')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 350 402 110 28
 	}
 
@@ -982,12 +1400,24 @@ menu
 	button
 	{
 		name    "bbRmv"
-		enabled "BfBot.UI._HasSelection() and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ExcludeSelected()"
-		text lua "BfBot.L10N.Get('common.remove')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 466 402 100 28
+	}
+
+	label
+	{
+		name    "bbRmv_t"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.remove')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._HasSelection())"
+		ignoreEvents
 		area 466 402 100 28
 	}
 
@@ -996,14 +1426,27 @@ menu
 	button
 	{
 		name    "bbRepeat"
-		enabled "BfBot.UI._HasSelection()"
+		enabled "buffbot_isOpen"
+		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.StepSelectedRepeat(1)"
 		actionAlt "BfBot.UI.StepSelectedRepeat(-1)"
-		text lua "BfBot.UI._RepeatButtonText()"
-		text style "bb_button"
 		tooltip lua "BfBot.UI._RepeatTooltip()"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 572 402 90 28
+	}
+
+	label
+	{
+		name    "bbRepeat_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.UI._RepeatButtonText()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._HasSelection())"
+		tooltip lua "BfBot.UI._RepeatTooltip()"
+		ignoreEvents
 		area 572 402 90 28
 	}
 
@@ -1013,10 +1456,21 @@ menu
 		name    "bbExp"
 		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ExportConfig()"
-		text lua "BfBot.L10N.Get('common.export')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 704 402 80 28
+	}
+
+	label
+	{
+		name    "bbExp_t"
+		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.export')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 704 402 80 28
 	}
 
@@ -1026,10 +1480,21 @@ menu
 		name    "bbImp"
 		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.OpenImportPicker()"
-		text lua "BfBot.L10N.Get('common.import')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 790 402 80 28
+	}
+
+	label
+	{
+		name    "bbImp_t"
+		enabled "buffbot_isOpen and not BfBot._noIO and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.import')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 790 402 80 28
 	}
 
@@ -1042,12 +1507,24 @@ menu
 	button
 	{
 		name    "bbTog"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ToggleSelected()"
-		text lua "BfBot.UI._ToggleBtnText()"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 350 434 100 28
+	}
+
+	label
+	{
+		name    "bbTog_t"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		text lua "BfBot.UI._ToggleBtnText()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._HasSelection())"
+		ignoreEvents
 		area 350 434 100 28
 	}
 
@@ -1055,12 +1532,24 @@ menu
 	button
 	{
 		name    "bbTgt"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.OpenTargetsForSelected()"
-		text lua "BfBot.UI._TargetBtnText()"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 455 434 130 28
+	}
+
+	label
+	{
+		name    "bbTgt_t"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		text lua "BfBot.UI._TargetBtnText()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._HasSelection())"
+		ignoreEvents
 		area 455 434 130 28
 	}
 
@@ -1068,12 +1557,24 @@ menu
 	button
 	{
 		name    "bbUp"
-		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
-		text lua "BfBot.L10N.Get('common.up')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 590 434 44 28
+	}
+
+	label
+	{
+		name    "bbUp_t"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		text lua "BfBot.L10N.Get('common.up')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder())"
+		ignoreEvents
 		area 590 434 44 28
 	}
 
@@ -1081,12 +1582,24 @@ menu
 	button
 	{
 		name    "bbDn"
-		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
-		text lua "BfBot.L10N.Get('common.down')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 638 434 44 28
+	}
+
+	label
+	{
+		name    "bbDn_t"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		text lua "BfBot.L10N.Get('common.down')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder())"
+		ignoreEvents
 		area 638 434 44 28
 	}
 
@@ -1094,25 +1607,78 @@ menu
 	button
 	{
 		name    "bbSort"
-		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
-		text lua "BfBot.L10N.Get('common.sort')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
 		area 686 434 44 28
 	}
+
+	label
+	{
+		name    "bbSort_t"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		text lua "BfBot.L10N.Get('common.sort')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder())"
+		ignoreEvents
+		area 686 434 44 28
+	}
+	-- Cast order for this preset: the player's own, or longest-lasting
+	-- first. Off by default -- the standing rule is that the player's
+	-- priority is respected -- and nothing is written back while it is on,
+	-- so switching it off returns the manual order untouched.
+	label
+	{
+		name    "bbOrder_b"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		scaleToClip
+		ignoreEvents
+		area 0 0 150 28
+	}
+
+	text
+	{
+		name    "bbOrder"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "BfBot.UI._IsPartyView()"
+		action  "BfBot.UI.ToggleAutoOrder()"
+		text lua "BfBot.UI._AutoOrderLabel()"
+		text style "bb_caption"
+		text color lua "BfBot.UI._AutoOrderColor()"
+		text align center center
+		tooltip lua "BfBot.UI._AutoOrderTooltip()"
+		area 0 0 150 28
+	}
+
 
 	-- Delete current preset
 	button
 	{
 		name    "bbDel"
-		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
+		clickable lua "BfBot.UI._CanDeletePreset()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
-		text lua "BfBot.L10N.Get('common.delete_preset')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 760 434 110 28
+	}
+
+	label
+	{
+		name    "bbDel_t"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.delete_preset')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanDeletePreset())"
+		ignoreEvents
 		area 760 434 110 28
 	}
 
@@ -1127,10 +1693,21 @@ menu
 		name    "bbVTog"
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.ToggleSelected()"
-		text lua "BfBot.UI._ToggleBtnText()"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 350 434 80 28
+	}
+
+	label
+	{
+		name    "bbVTog_t"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		text lua "BfBot.UI._ToggleBtnText()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 350 434 80 28
 	}
 
@@ -1140,10 +1717,21 @@ menu
 		name    "bbVTgt"
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.OpenTargetsForSelected()"
-		text lua "BfBot.UI._TargetBtnText()"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 434 434 100 28
+	}
+
+	label
+	{
+		name    "bbVTgt_t"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		text lua "BfBot.UI._TargetBtnText()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 434 434 100 28
 	}
 
@@ -1153,10 +1741,21 @@ menu
 		name    "bbVVar"
 		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
 		action  "BfBot.UI.OpenVariantsForSelected()"
-		text lua "BfBot.UI._VariantBtnText()"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 538 434 100 28
+	}
+
+	label
+	{
+		name    "bbVVar_t"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		text lua "BfBot.UI._VariantBtnText()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 538 434 100 28
 	}
 
@@ -1165,11 +1764,23 @@ menu
 	{
 		name    "bbVUp"
 		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
+		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
-		text lua "BfBot.L10N.Get('common.up')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 642 434 40 28
+	}
+
+	label
+	{
+		name    "bbVUp_t"
+		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
+		text lua "BfBot.L10N.Get('common.up')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(not BfBot.UI._IsAutoOrder())"
+		ignoreEvents
 		area 642 434 40 28
 	}
 
@@ -1178,11 +1789,23 @@ menu
 	{
 		name    "bbVDn"
 		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
+		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
-		text lua "BfBot.L10N.Get('common.down')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 686 434 40 28
+	}
+
+	label
+	{
+		name    "bbVDn_t"
+		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
+		text lua "BfBot.L10N.Get('common.down')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(not BfBot.UI._IsAutoOrder())"
+		ignoreEvents
 		area 686 434 40 28
 	}
 
@@ -1191,13 +1814,54 @@ menu
 	{
 		name    "bbVSort"
 		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
+		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
-		text lua "BfBot.L10N.Get('common.sort')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
 		area 730 434 40 28
 	}
+
+	label
+	{
+		name    "bbVSort_t"
+		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
+		text lua "BfBot.L10N.Get('common.sort')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(not BfBot.UI._IsAutoOrder())"
+		ignoreEvents
+		area 730 434 40 28
+	}
+	-- Cast order for this preset: the player's own, or longest-lasting
+	-- first. Off by default -- the standing rule is that the player's
+	-- priority is respected -- and nothing is written back while it is on,
+	-- so switching it off returns the manual order untouched.
+	label
+	{
+		name    "bbVOrder_b"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		scaleToClip
+		ignoreEvents
+		area 0 0 150 28
+	}
+
+	text
+	{
+		name    "bbVOrder"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1"
+		clickable lua "BfBot.UI._IsPartyView()"
+		action  "BfBot.UI.ToggleAutoOrder()"
+		text lua "BfBot.UI._AutoOrderLabel()"
+		text style "bb_caption"
+		text color lua "BfBot.UI._AutoOrderColor()"
+		text align center center
+		tooltip lua "BfBot.UI._AutoOrderTooltip()"
+		area 0 0 150 28
+	}
+
 
 	-- Delete Preset (variant layout)
 	button
@@ -1205,10 +1869,21 @@ menu
 		name    "bbVDel"
 		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1 and BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
-		text lua "BfBot.L10N.Get('common.delete_preset_compact')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 780 434 90 28
+	}
+
+	label
+	{
+		name    "bbVDel_t"
+		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1 and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.delete_preset_compact')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 780 434 90 28
 	}
 
@@ -1223,10 +1898,21 @@ menu
 		enabled "buffbot_isOpen"
 		clickable lua "BfBot.UI._CanCastAll()"
 		action  "BfBot.UI.Cast()"
-		text lua "buffbot_castLabel"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._CastBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 350 468 85 28
+	}
+
+	label
+	{
+		name    "bbCast_t"
+		enabled "buffbot_isOpen"
+		text lua "buffbot_castLabel"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 350 468 85 28
 	}
 
@@ -1237,10 +1923,21 @@ menu
 		enabled "buffbot_isOpen"
 		clickable lua "BfBot.UI._CanCast()"
 		action  "BfBot.UI.CastCharacter()"
-		text lua "buffbot_castCharLabel"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._CastBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 439 468 115 28
+	}
+
+	label
+	{
+		name    "bbCastChar_t"
+		enabled "buffbot_isOpen"
+		text lua "buffbot_castCharLabel"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 439 468 115 28
 	}
 
@@ -1248,16 +1945,43 @@ menu
 	button
 	{
 		name    "bbStop"
-		enabled "BfBot.UI._IsRunning()"
+		enabled "buffbot_isOpen"
+		clickable lua "BfBot.UI._IsRunning()"
 		action  "BfBot.UI.Stop()"
-		text lua "BfBot.L10N.Get('common.stop')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
 		area 558 468 55 28
 	}
 
+	label
+	{
+		name    "bbStop_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('common.stop')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._IsRunning())"
+		ignoreEvents
+		area 558 468 55 28
+	}
+
 	-- Quick Cast cycling button (text element: supports both action + text color lua)
+	-- Plate under bbQC. The toggle itself stays a `text` element: only a
+	-- text item takes an action together with `text color lua`, which the
+	-- three-state colouring needs. Drawn before it, so it sits underneath.
+	label
+	{
+		name    "bbQC_b"
+		enabled "buffbot_isOpen and not BfBot._noIO"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame 0
+		scaleToClip
+		ignoreEvents
+		area 624 468 170 28
+	}
+
 	text
 	{
 		name    "bbQC"
@@ -1265,12 +1989,10 @@ menu
 		clickable lua "BfBot.UI._FastForwardRate() == 1"
 		action  "BfBot.UI.CycleQuickCast()"
 		text lua "BfBot.UI._QuickCastLabel()"
-		text style "bb_normal"
+		text style "bb_caption"
 		text color lua "BfBot.UI._QuickCastColor()"
 		text align center center
 		tooltip lua "BfBot.UI._QuickCastTooltip()"
-		rectangle 5
-		rectangle opacity 160
 		area 624 468 170 28
 	}
 
@@ -1280,27 +2002,51 @@ menu
 		name    "bbClose"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.Close()"
-		text lua "BfBot.L10N.Get('common.close')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 800 468 70 28
+	}
+
+	label
+	{
+		name    "bbClose_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('common.close')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 800 468 70 28
 	}
 
 	-- Force Re-Cast cycling button (active-buff policy for the next run).
 	-- A text element like bbQC: only those support action + text color lua.
+	-- Plate under bbForce. The toggle itself stays a `text` element: only a
+	-- text item takes an action together with `text color lua`, which the
+	-- three-state colouring needs. Drawn before it, so it sits underneath.
+	label
+	{
+		name    "bbForce_b"
+		enabled "buffbot_isOpen"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame 0
+		scaleToClip
+		ignoreEvents
+		area 710 500 160 28
+	}
+
 	text
 	{
 		name    "bbForce"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.CycleForceRecast()"
 		text lua "BfBot.UI._ForceRecastLabel()"
-		text style "bb_normal"
+		text style "bb_caption"
 		text color lua "BfBot.UI._ForceRecastColor()"
 		text align center center
 		tooltip lua "BfBot.UI._ForceRecastTooltip()"
-		rectangle 5
-		rectangle opacity 160
 		area 710 500 160 28
 	}
 
@@ -1312,6 +2058,7 @@ menu
 		text lua "BfBot.UI._GetStatusText()"
 		text style "bb_normal_parchment"
 		text align left center
+		text color lua "BfBot.UI._T('text')"
 		area 350 500 354 24
 	}
 }
@@ -1332,13 +2079,6 @@ menu
 		rectangle 1
 		rectangle opacity 50
 		on escape
-	}
-
-	-- Border frame
-	label
-	{
-		name    "bbTgtFrame"
-		area 450 120 260 450
 	}
 
 	-- Panel background (parchment) — one label per theme, only active theme enabled
@@ -1368,10 +2108,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayTgt"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 474 144 212 402
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbTgtFrame"
+		area 474 144 212 402
+	}
+
 
 	-- Header: spell name
 	label
@@ -1397,215 +2144,408 @@ menu
 	-- "Self" button
 	button
 	{
-		enabled "buffbot_targetLocked == 0"
+		name    "bbTgSelf"
+		enabled "buffbot_isOpen"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerSelf()"
-		text lua "BfBot.L10N.Get('common.self')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 479 199 95 26
+	}
+
+	label
+	{
+		name    "bbTgSelf_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('common.self')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
 		area 479 199 95 26
 	}
 
 	-- "All Party" button
 	button
 	{
-		enabled "buffbot_targetLocked == 0"
+		name    "bbTgParty"
+		enabled "buffbot_isOpen"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerAllParty()"
-		text lua "BfBot.L10N.Get('common.all_party')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 581 199 95 26
+	}
+
+	label
+	{
+		name    "bbTgParty_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('common.all_party')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
 		area 581 199 95 26
 	}
 
 	-- Row 1: checkbox (toggle) + name (select)
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
+		name    "bbTgChk1"
+		enabled "buffbot_pickerOrder[1] ~= nil"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerToggle(1)"
+		area 479 231 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk1_t"
+		enabled "buffbot_pickerOrder[1] ~= nil"
 		text lua "BfBot.UI._PickerCheckText(1)"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
+		area 479 231 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk1_a"
+		enabled "buffbot_pickerOrder[1] ~= nil"
+		bam lua "BfBot.UI._CheckBam()"
+		sequence lua "BfBot.UI._PickerCheckSeq(1)"
+		frame 0
+		align center center
+		ignoreEvents
 		area 479 231 36 26
 	}
 	text
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[1] ~= nil"
+		enabled "buffbot_pickerOrder[1] ~= nil"
 		action  "BfBot.UI.PickerSelect(1)"
 		text lua "BfBot.UI._PickerNameText(1)"
 		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(1)"
-		rectangle 5
-		rectangle opacity 120
 		area 517 231 159 26
 	}
 
 	-- Row 2
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
+		name    "bbTgChk2"
+		enabled "buffbot_pickerOrder[2] ~= nil"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerToggle(2)"
+		area 479 259 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk2_t"
+		enabled "buffbot_pickerOrder[2] ~= nil"
 		text lua "BfBot.UI._PickerCheckText(2)"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
+		area 479 259 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk2_a"
+		enabled "buffbot_pickerOrder[2] ~= nil"
+		bam lua "BfBot.UI._CheckBam()"
+		sequence lua "BfBot.UI._PickerCheckSeq(2)"
+		frame 0
+		align center center
+		ignoreEvents
 		area 479 259 36 26
 	}
 	text
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[2] ~= nil"
+		enabled "buffbot_pickerOrder[2] ~= nil"
 		action  "BfBot.UI.PickerSelect(2)"
 		text lua "BfBot.UI._PickerNameText(2)"
 		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(2)"
-		rectangle 5
-		rectangle opacity 120
 		area 517 259 159 26
 	}
 
 	-- Row 3
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
+		name    "bbTgChk3"
+		enabled "buffbot_pickerOrder[3] ~= nil"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerToggle(3)"
+		area 479 287 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk3_t"
+		enabled "buffbot_pickerOrder[3] ~= nil"
 		text lua "BfBot.UI._PickerCheckText(3)"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
+		area 479 287 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk3_a"
+		enabled "buffbot_pickerOrder[3] ~= nil"
+		bam lua "BfBot.UI._CheckBam()"
+		sequence lua "BfBot.UI._PickerCheckSeq(3)"
+		frame 0
+		align center center
+		ignoreEvents
 		area 479 287 36 26
 	}
 	text
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[3] ~= nil"
+		enabled "buffbot_pickerOrder[3] ~= nil"
 		action  "BfBot.UI.PickerSelect(3)"
 		text lua "BfBot.UI._PickerNameText(3)"
 		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(3)"
-		rectangle 5
-		rectangle opacity 120
 		area 517 287 159 26
 	}
 
 	-- Row 4
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
+		name    "bbTgChk4"
+		enabled "buffbot_pickerOrder[4] ~= nil"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerToggle(4)"
+		area 479 315 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk4_t"
+		enabled "buffbot_pickerOrder[4] ~= nil"
 		text lua "BfBot.UI._PickerCheckText(4)"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
+		area 479 315 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk4_a"
+		enabled "buffbot_pickerOrder[4] ~= nil"
+		bam lua "BfBot.UI._CheckBam()"
+		sequence lua "BfBot.UI._PickerCheckSeq(4)"
+		frame 0
+		align center center
+		ignoreEvents
 		area 479 315 36 26
 	}
 	text
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[4] ~= nil"
+		enabled "buffbot_pickerOrder[4] ~= nil"
 		action  "BfBot.UI.PickerSelect(4)"
 		text lua "BfBot.UI._PickerNameText(4)"
 		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(4)"
-		rectangle 5
-		rectangle opacity 120
 		area 517 315 159 26
 	}
 
 	-- Row 5
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
+		name    "bbTgChk5"
+		enabled "buffbot_pickerOrder[5] ~= nil"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerToggle(5)"
+		area 479 343 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk5_t"
+		enabled "buffbot_pickerOrder[5] ~= nil"
 		text lua "BfBot.UI._PickerCheckText(5)"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
+		area 479 343 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk5_a"
+		enabled "buffbot_pickerOrder[5] ~= nil"
+		bam lua "BfBot.UI._CheckBam()"
+		sequence lua "BfBot.UI._PickerCheckSeq(5)"
+		frame 0
+		align center center
+		ignoreEvents
 		area 479 343 36 26
 	}
 	text
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[5] ~= nil"
+		enabled "buffbot_pickerOrder[5] ~= nil"
 		action  "BfBot.UI.PickerSelect(5)"
 		text lua "BfBot.UI._PickerNameText(5)"
 		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(5)"
-		rectangle 5
-		rectangle opacity 120
 		area 517 343 159 26
 	}
 
 	-- Row 6
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
+		name    "bbTgChk6"
+		enabled "buffbot_pickerOrder[6] ~= nil"
+		clickable lua "buffbot_targetLocked == 0"
 		action  "BfBot.UI.PickerToggle(6)"
+		area 479 371 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk6_t"
+		enabled "buffbot_pickerOrder[6] ~= nil"
 		text lua "BfBot.UI._PickerCheckText(6)"
-		text style "bb_button"
-		bam     "GUIOSTUL"
-		scaleToClip
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+		ignoreEvents
+		area 479 371 36 26
+	}
+
+	label
+	{
+		name    "bbTgChk6_a"
+		enabled "buffbot_pickerOrder[6] ~= nil"
+		bam lua "BfBot.UI._CheckBam()"
+		sequence lua "BfBot.UI._PickerCheckSeq(6)"
+		frame 0
+		align center center
+		ignoreEvents
 		area 479 371 36 26
 	}
 	text
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_pickerOrder[6] ~= nil"
+		enabled "buffbot_pickerOrder[6] ~= nil"
 		action  "BfBot.UI.PickerSelect(6)"
 		text lua "BfBot.UI._PickerNameText(6)"
 		text style "bb_normal"
 		text align left center
 		text color lua "BfBot.UI._PickerRowColor(6)"
-		rectangle 5
-		rectangle opacity 120
 		area 517 371 159 26
 	}
 
 	-- Move Up button
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 1"
+		name    "bbTgUp"
+		enabled "buffbot_tgtPickerSel > 1"
 		action  "BfBot.UI.PickerMoveUp()"
-		text lua "BfBot.L10N.Get('common.up')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 479 403 95 26
+	}
+
+	label
+	{
+		name    "bbTgUp_t"
+		enabled "buffbot_tgtPickerSel > 1"
+		text lua "BfBot.L10N.Get('common.up')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 479 403 95 26
 	}
 
 	-- Move Down button
 	button
 	{
-		enabled "buffbot_targetLocked == 0 and buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerOrder"
+		name    "bbTgDn"
+		enabled "buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerOrder"
 		action  "BfBot.UI.PickerMoveDown()"
-		text lua "BfBot.L10N.Get('common.down')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 581 403 95 26
+	}
+
+	label
+	{
+		name    "bbTgDn_t"
+		enabled "buffbot_tgtPickerSel > 0 and buffbot_tgtPickerSel < #buffbot_pickerOrder"
+		text lua "BfBot.L10N.Get('common.down')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 581 403 95 26
 	}
 
 	-- Clear button (hidden when locked)
 	button
 	{
-		enabled "buffbot_targetLocked == 0"
+		name    "bbTgClear"
+		enabled "buffbot_isOpen"
 		action  "BfBot.UI.PickerClear()"
-		text lua "BfBot.L10N.Get('common.clear')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 479 435 95 26
+	}
+
+	label
+	{
+		name    "bbTgClear_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.L10N.Get('common.clear')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 479 435 95 26
 	}
 
 	-- Done button (always visible)
 	button
 	{
+		name    "bbTgDone"
 		action  "BfBot.UI.PickerDone()"
-		text lua "BfBot.L10N.Get('common.done')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 581 435 95 26
+	}
+
+	label
+	{
+		name    "bbTgDone_t"
+		text lua "BfBot.L10N.Get('common.done')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 581 435 95 26
 	}
 
@@ -1613,12 +2553,24 @@ menu
 	-- spell entries carry the same optional tgtUnlock field, #82)
 	button
 	{
+		name    "bbTgUnlock"
 		enabled "buffbot_targetLocked == 1"
 		action  "BfBot.UI.PickerUnlock()"
-		text lua "BfBot.L10N.Get('common.unlock_targeting')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 479 467 197 26
+	}
+
+	label
+	{
+		name    "bbTgUnlock_t"
+		enabled "buffbot_targetLocked == 1"
+		text lua "BfBot.L10N.Get('common.unlock_targeting')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 479 467 197 26
 	}
 }
@@ -1639,13 +2591,6 @@ menu
 		rectangle 1
 		rectangle opacity 50
 		on escape
-	}
-
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbRenFrame"
-		area 426 256 308 138
 	}
 
 	-- Small panel background (parchment) — one label per theme, only active theme enabled
@@ -1675,10 +2620,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayRen"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 450 280 260 90
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbRenFrame"
+		area 450 280 260 90
+	}
+
 
 	-- Label
 	label
@@ -1704,22 +2656,44 @@ menu
 	-- OK button
 	button
 	{
+		name    "bbRenOk"
 		action  "BfBot.UI.ConfirmRename(); Infinity_PopMenu('BUFFBOT_RENAME')"
-		text lua "BfBot.L10N.Get('common.ok')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 460 338 80 24
+	}
+
+	label
+	{
+		name    "bbRenOk_t"
+		text lua "BfBot.L10N.Get('common.ok')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 460 338 80 24
 	}
 
 	-- Cancel button
 	button
 	{
+		name    "bbRenCancel"
 		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
-		text lua "BfBot.L10N.Get('common.cancel')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 550 338 80 24
+	}
+
+	label
+	{
+		name    "bbRenCancel_t"
+		text lua "BfBot.L10N.Get('common.cancel')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 550 338 80 24
 	}
 }
@@ -1740,13 +2714,6 @@ menu
 		rectangle 1
 		rectangle opacity 50
 		on escape
-	}
-
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbConfFrame"
-		area 426 256 308 138
 	}
 
 	-- Small panel background (parchment) — one label per theme, only active theme enabled
@@ -1776,10 +2743,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayConf"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 450 280 260 90
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbConfFrame"
+		area 450 280 260 90
+	}
+
 
 	-- Message (set by BfBot.UI.OpenConfirm)
 	label
@@ -1794,22 +2768,44 @@ menu
 	-- Confirm button (runs the pending action)
 	button
 	{
+		name    "bbCfmDelete"
 		action  "BfBot.UI.RunConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
-		text lua "BfBot.L10N.Get('common.delete')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 460 338 80 24
+	}
+
+	label
+	{
+		name    "bbCfmDelete_t"
+		text lua "BfBot.L10N.Get('common.delete')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 460 338 80 24
 	}
 
 	-- Cancel button
 	button
 	{
+		name    "bbCfmCancel"
 		action  "BfBot.UI.CancelConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
-		text lua "BfBot.L10N.Get('common.cancel')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 550 338 80 24
+	}
+
+	label
+	{
+		name    "bbCfmCancel_t"
+		text lua "BfBot.L10N.Get('common.cancel')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 550 338 80 24
 	}
 }
@@ -1831,13 +2827,6 @@ menu
 		rectangle 1
 		rectangle opacity 50
 		on escape
-	}
-
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbPickFrame"
-		area 356 76 448 428
 	}
 
 	-- Panel background (parchment) — one label per theme, only active theme enabled
@@ -1867,10 +2856,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayPick"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 380 100 400 380
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbPickFrame"
+		area 380 100 400 380
+	}
+
 
 	-- Title
 	label
@@ -1918,6 +2914,7 @@ menu
 				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].durCatText or ''"
 				text style "bb_normal_parchment"
 				text align center center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -1930,6 +2927,7 @@ menu
 				text lua "buffbot_pickerSpells[rowNumber] and buffbot_pickerSpells[rowNumber].count and ('x' .. buffbot_pickerSpells[rowNumber].count) or ''"
 				text style "bb_normal_parchment"
 				text align center center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -1938,29 +2936,52 @@ menu
 		table       "buffbot_pickerSpells"
 		var         "buffbot_pickerSelected"
 		rowheight   34
-		scrollbar   "GUISCRC"
+		scrollbar   "BFBSCRL"
 	}
 
 	-- Add button
 	button
 	{
+		name    "bbPickAdd"
 		enabled "BfBot.UI._PickerHasSelection()"
 		action  "BfBot.UI.AddPickedSpell()"
-		text lua "BfBot.L10N.Get('ui.add_to_buff_list')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 390 430 180 28
+	}
+
+	label
+	{
+		name    "bbPickAdd_t"
+		enabled "BfBot.UI._PickerHasSelection()"
+		text lua "BfBot.L10N.Get('ui.add_to_buff_list')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 390 430 180 28
 	}
 
 	-- Cancel button
 	button
 	{
+		name    "bbPickCancel"
 		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
-		text lua "BfBot.L10N.Get('common.cancel')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 580 430 100 28
+	}
+
+	label
+	{
+		name    "bbPickCancel_t"
+		text lua "BfBot.L10N.Get('common.cancel')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 580 430 100 28
 	}
 }
@@ -1982,13 +3003,6 @@ menu
 		rectangle 1
 		rectangle opacity 50
 		on escape
-	}
-
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbImpFrame"
-		area 396 126 368 348
 	}
 
 	-- Panel background (parchment) — one label per theme, only active theme enabled
@@ -2018,10 +3032,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayImp"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 420 150 320 300
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbImpFrame"
+		area 420 150 320 300
+	}
+
 
 	-- Title
 	label
@@ -2045,6 +3066,7 @@ menu
 				text lua "buffbot_importList[rowNumber] and buffbot_importList[rowNumber].name or ''"
 				text style "bb_normal_parchment"
 				text align left center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -2053,29 +3075,52 @@ menu
 		table       "buffbot_importList"
 		var         "buffbot_importSelected"
 		rowheight   34
-		scrollbar   "GUISCRC"
+		scrollbar   "BFBSCRL"
 	}
 
 	-- Import button
 	button
 	{
+		name    "bbImpOk"
 		enabled "BfBot.UI._ImportHasSelection()"
 		action  "BfBot.UI.ImportSelected()"
-		text lua "BfBot.L10N.Get('common.import')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 430 390 140 28
+	}
+
+	label
+	{
+		name    "bbImpOk_t"
+		enabled "BfBot.UI._ImportHasSelection()"
+		text lua "BfBot.L10N.Get('common.import')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 430 390 140 28
 	}
 
 	-- Cancel button
 	button
 	{
+		name    "bbImpCancel"
 		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
-		text lua "BfBot.L10N.Get('common.cancel')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 580 390 120 28
+	}
+
+	label
+	{
+		name    "bbImpCancel_t"
+		text lua "BfBot.L10N.Get('common.cancel')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 580 390 120 28
 	}
 }
@@ -2097,13 +3142,6 @@ menu
 		rectangle 1
 		rectangle opacity 50
 		on escape
-	}
-
-	-- Border frame
-	label
-	{
-		name    "bbVarFrame"
-		area 396 156 368 268
 	}
 
 	-- Panel background (parchment) — one label per theme, only active theme enabled
@@ -2133,10 +3171,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayVar"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 420 180 320 220
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbVarFrame"
+		area 420 180 320 220
+	}
+
 
 	-- Title
 	label
@@ -2171,6 +3216,7 @@ menu
 				text lua "buffbot_variantTable[rowNumber] and buffbot_variantTable[rowNumber].name or ''"
 				text style "bb_normal_parchment"
 				text align left center
+				text color lua "BfBot.UI._T('text')"
 			}
 		}
 
@@ -2179,29 +3225,52 @@ menu
 		table       "buffbot_variantTable"
 		var         "buffbot_variantSelected"
 		rowheight   34
-		scrollbar   "GUISCRC"
+		scrollbar   "BFBSCRL"
 	}
 
 	-- Select button
 	button
 	{
+		name    "bbVarSelect"
 		enabled "buffbot_variantSelected > 0 and buffbot_variantSelected <= #buffbot_variantTable"
 		action  "BfBot.UI.SelectVariant(buffbot_variantSelected)"
-		text lua "BfBot.L10N.Get('common.select')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 430 355 140 28
+	}
+
+	label
+	{
+		name    "bbVarSelect_t"
+		enabled "buffbot_variantSelected > 0 and buffbot_variantSelected <= #buffbot_variantTable"
+		text lua "BfBot.L10N.Get('common.select')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 430 355 140 28
 	}
 
 	-- Cancel button
 	button
 	{
+		name    "bbVarCancel"
 		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
-		text lua "BfBot.L10N.Get('common.cancel')"
-		text style "bb_button"
-		bam     "GUIOSTUL"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
+		area 580 355 140 28
+	}
+
+	label
+	{
+		name    "bbVarCancel_t"
+		text lua "BfBot.L10N.Get('common.cancel')"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
 		area 580 355 140 28
 	}
 }

@@ -841,10 +841,11 @@ def test_picker_sections_sort_headers_and_item_colors() -> None:
                 },
             }
         end
+        -- _T hands back the engine's packed color: blue<<16 | green<<8 | red.
         BfBot.UI._T = function(key)
-            if key == "headerSub" then return "{11, 0, 0}" end
-            if key == "itemColor" then return "{22, 0, 0}" end
-            return "{33, 0, 0}"
+            if key == "headerSub" then return 11 end
+            if key == "itemColor" then return 22 end
+            return 33
         end
 
         BfBot.UI._BuildPickerList()
@@ -874,9 +875,9 @@ def test_picker_sections_sort_headers_and_item_colors() -> None:
             sequence = table.concat(sequence, ","),
             headerSelected = headerSelected,
             itemSelected = itemSelected,
-            headerColor = BfBot.UI._PickerNameColor(1)[1],
-            itemColor = BfBot.UI._PickerNameColor(5)[1],
-            spellColor = BfBot.UI._PickerNameColor(2)[1],
+            headerColor = BfBot.UI._PickerNameColor(1),
+            itemColor = BfBot.UI._PickerNameColor(5),
+            spellColor = BfBot.UI._PickerNameColor(2),
             writes = writes,
         }
         """

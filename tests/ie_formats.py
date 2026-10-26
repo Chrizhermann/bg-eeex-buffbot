@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+import zlib
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -129,3 +130,12 @@ def visual_art_names(visual_root: Path) -> set[str]:
     for name in VISUAL_BAM_NAMES:
         pages |= bam_v2_pages(visual_root / name)
     return set(VISUAL_BAM_NAMES) | {f"MOS{page}.PVRZ" for page in pages}
+
+
+def pvrz_size(path: Path) -> tuple[int, int]:
+    """The pixel size a PVRZ declares, from the PVR3 header it wraps."""
+    raw = path.read_bytes()
+    header = zlib.decompress(raw[4:])[:32]
+    assert struct.unpack_from("<I", header, 0)[0] == 0x03525650, path.name
+    height, width = struct.unpack_from("<II", header, 24)
+    return width, height

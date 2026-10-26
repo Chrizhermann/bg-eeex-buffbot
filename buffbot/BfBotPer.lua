@@ -184,6 +184,10 @@ function BfBot.Persist._GetInheritedPresetStructure(sprite)
                     and source.name or _LocalizedIndexedPreset(i),
                 cat = type(source.cat) == "string" and source.cat or "custom",
                 qc = 0,
+                -- The order toggle is how the preset is meant to run, like
+                -- its category -- unlike Quick Cast, which is a cheat and
+                -- always starts off.
+                ord = (source.ord == 1) and 1 or nil,
                 spells = {},
             }
             if not firstIndex then firstIndex = i end
@@ -348,6 +352,10 @@ function BfBot.Persist._ValidateConfig(config)
             if type(preset.qc) ~= "number" or preset.qc < 0 or preset.qc > 2 then
                 preset.qc = 0
             end
+            -- `ord` is optional and only ever 1: off is absence, so a save
+            -- from before the toggle existed needs no migration, and a
+            -- corrupt value heals into off rather than into a third state.
+            if preset.ord ~= 1 then preset.ord = nil end
             if type(preset.spells) ~= "table" then
                 preset.spells = {}
             else
@@ -1385,18 +1393,10 @@ function BfBot.Persist._EnsurePresetsDir()
     os.execute('mkdir "' .. BfBot.Persist._PRESETS_DIR .. '" 2>nul')
 end
 
---- Export a character's full config to a Lua file in the presets directory.
+--- File name, without ".lua", that ExportConfig writes for a character.
 -- @param sprite  character sprite
--- @return true, safeName on success; false, reasonCode, detail on failure
-function BfBot.Persist.ExportConfig(sprite)
-    if BfBot._noIO then
-        return false, "reason.export.luajit_required", {}
-    end
-    if not sprite then return false, "reason.export.no_sprite", {} end
-
-    local config = BfBot.Persist.GetConfig(sprite)
-    if not config then return false, "reason.export.no_config", {} end
-
+-- @return safeName, rawName (the unsanitized character name)
+function BfBot.Persist._ExportFileName(sprite)
     -- Get character name and sanitize for filename
     local rawName = BfBot._GetName(sprite)
     if type(rawName) ~= "string" then rawName = tostring(rawName or "?") end
@@ -1425,6 +1425,22 @@ function BfBot.Persist.ExportConfig(sprite)
 
     -- Prevent path traversal (extra safety — gsub already strips . and /)
     safeName = safeName:gsub("%.%.", ""):gsub("[/\\]", "")
+    return safeName, rawName
+end
+
+--- Export a character's full config to a Lua file in the presets directory.
+-- @param sprite  character sprite
+-- @return true, safeName on success; false, reasonCode, detail on failure
+function BfBot.Persist.ExportConfig(sprite)
+    if BfBot._noIO then
+        return false, "reason.export.luajit_required", {}
+    end
+    if not sprite then return false, "reason.export.no_sprite", {} end
+
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then return false, "reason.export.no_config", {} end
+
+    local safeName, rawName = BfBot.Persist._ExportFileName(sprite)
 
     BfBot.Persist._EnsurePresetsDir()
 
@@ -1915,6 +1931,118 @@ end
 --        IGNORED — the builder always fresh-resolves from oid+name)
 -- @param presetIdx  preset index 1..BfBot.MAX_PRESETS
 -- @return queue array compatible with BfBot.Exec.Start(), or nil + code + detail
+--- Reorder a pri-ordered list longest-duration-first, locked items pinned.
+---
+--- `items` is an array already in the player's own order; each entry needs
+--- `dur` (seconds, -1 permanent, nil unknown) and `lock` (1 pinned). A
+--- locked item keeps its index and the rest fill the gaps around it, which
+--- is what the Lock column promises. Equal durations keep the order the
+--- player gave them, so the result does not shuffle between calls.
+---
+--- Returns a new array; nothing here writes to a preset. That matters:
+--- the automatic order is a view of the manual one, and switching the
+--- toggle off has to give the manual order back untouched.
+function BfBot.Persist.OrderByDuration(items)
+    local count = #items
+    if count < 2 then return items end
+
+    local function key(item)
+        local duration = item and item.dur
+        if duration == nil then return -2 end     -- unknown sorts last
+        if duration == -1 then return 1e9 end     -- permanent sorts first
+        return duration
+    end
+
+    local pinned, loose = {}, {}
+    for index, item in ipairs(items) do
+        if item.lock == 1 then
+            pinned[index] = item
+        else
+            loose[#loose + 1] = { item = item, was = index }
+        end
+    end
+    table.sort(loose, function(a, b)
+        local ka, kb = key(a.item), key(b.item)
+        if ka ~= kb then return ka > kb end
+        return a.was < b.was
+    end)
+
+    local ordered, next = {}, 1
+    for index = 1, count do
+        if pinned[index] then
+            ordered[index] = pinned[index]
+        else
+            ordered[index] = loose[next].item
+            next = next + 1
+        end
+    end
+    return ordered
+end
+
+--- resref -> cast rank for one preset, honouring its order toggle.
+---
+--- With the toggle off -- the default, and the project's standing rule --
+--- this is the player's own `pri` order. With it on, the same reordering
+--- the Sort button applies once by hand is applied on every build, without
+--- being written back. `durationOf(resref)` supplies the duration; a resref
+--- it knows nothing about sorts last.
+function BfBot.Persist.EffectiveOrder(preset, durationOf)
+    local items = {}
+    for resref, spellCfg in pairs((preset and preset.spells) or {}) do
+        items[#items + 1] = {
+            resref = resref,
+            pri = tonumber(spellCfg.pri) or 999,
+            lock = spellCfg.lock or 0,
+            dur = durationOf and durationOf(resref) or nil,
+        }
+    end
+    table.sort(items, function(a, b)
+        if a.pri ~= b.pri then return a.pri < b.pri end
+        return a.resref < b.resref      -- duplicate pri still orders the same
+    end)
+
+    if BfBot.Persist.IsAutoOrder(preset) then
+        items = BfBot.Persist.OrderByDuration(items)
+    end
+
+    local rank = {}
+    for index, item in ipairs(items) do rank[item.resref] = index end
+    return rank
+end
+
+--- True when this preset casts longest-duration-first instead of in the
+--- player's own order. Absent means off, which is every preset ever saved
+--- before this existed.
+function BfBot.Persist.IsAutoOrder(preset)
+    return type(preset) == "table" and preset.ord == 1
+end
+
+--- The order toggle of one character's preset.
+function BfBot.Persist.GetAutoOrder(sprite, presetIndex)
+    return BfBot.Persist.IsAutoOrder(
+        BfBot.Persist.GetPreset(sprite, presetIndex)) and 1 or 0
+end
+
+function BfBot.Persist.SetAutoOrder(sprite, presetIndex, value)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset then return end
+    -- Off is stored as absence, not as 0: a preset that never asked for this
+    -- keeps the shape it had, and the field only ever appears where the
+    -- player switched it on.
+    preset.ord = (value == 1) and 1 or nil
+end
+
+--- Presets are parallel across the party, so the toggle follows the preset
+--- index for everyone -- the same contract Quick Cast has.
+function BfBot.Persist.SetAutoOrderAll(presetIndex, value)
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            BfBot.Persist.SetAutoOrder(sprite, presetIndex, value)
+        end
+    end
+end
+
 function BfBot.Persist.BuildQueueForSummon(summonEntry, presetIdx)
     if type(summonEntry) ~= "table" or type(summonEntry.oid) ~= "number"
         or type(summonEntry.name) ~= "string" then
@@ -2070,7 +2198,11 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
         local ok, castable, _ = pcall(BfBot.Scan.GetCastableSpells, sprite)
         if not ok or not castable then goto nextSlot end
 
-        -- Collect enabled, castable spells with priority
+        -- Collect enabled, castable spells in the preset's own cast order
+        local rank = BfBot.Persist.EffectiveOrder(preset, function(resref)
+            local scanData = castable[resref]
+            return scanData and scanData.duration or nil
+        end)
         local entries = {}
         local noTargetSkips = {}
         for resref, spellCfg in pairs(preset.spells) do
@@ -2078,7 +2210,7 @@ function BfBot.Persist.BuildQueueFromPreset(presetIndex)
                 local scanData = castable[resref]
                 if _Queueable(scanData) then
                     local resolved = BfBot.Persist._ResolveConfigTarget(
-                        spellCfg.tgt, slot, resref, spellCfg.pri or 999)
+                        spellCfg.tgt, slot, resref, rank[resref] or 999)
                     if #resolved == 0 then
                         table.insert(noTargetSkips,
                             _NoTargetSkip(BfBot._GetName(sprite),
@@ -2494,7 +2626,11 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             { slot = slot, error = not ok and tostring(castable) or nil }
     end
 
-    -- Collect enabled, castable spells with priority
+    -- Collect enabled, castable spells in the preset's own cast order
+    local rank = BfBot.Persist.EffectiveOrder(preset, function(resref)
+        local scanData = castable[resref]
+        return scanData and scanData.duration or nil
+    end)
     local entries = {}
     local noTargetSkips = {}
     for resref, spellCfg in pairs(preset.spells) do
@@ -2502,7 +2638,7 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
             local scanData = castable[resref]
             if _Queueable(scanData) then
                 local resolved = BfBot.Persist._ResolveConfigTarget(
-                    spellCfg.tgt, slot, resref, spellCfg.pri or 999)
+                    spellCfg.tgt, slot, resref, rank[resref] or 999)
                 if #resolved == 0 then
                     table.insert(noTargetSkips,
                         _NoTargetSkip(BfBot._GetName(sprite),

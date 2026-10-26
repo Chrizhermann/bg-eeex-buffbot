@@ -428,3 +428,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~顺序：手动~
+// ui.order.duration
+@724 = ~顺序：持续时间~
+// ui.order.tooltip_manual
+@725 = ~按你设定的顺序施放。点击可改为先施放持续时间最长的增益；你的顺序会被保留，关闭后即恢复。~
+// ui.order.tooltip_duration
+@726 = ~先施放持续时间最长的增益。锁定的行保持原位。点击可返回你自己的顺序。~

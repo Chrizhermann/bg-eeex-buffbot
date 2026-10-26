@@ -276,6 +276,10 @@ CATALOG_SCHEMA = {
     720: "options.refresh_below_1m",
     721: "options.refresh_below_5m",
     722: "options.refresh_below_1h",
+    723: "ui.order.manual",
+    724: "ui.order.duration",
+    725: "ui.order.tooltip_manual",
+    726: "ui.order.tooltip_duration",
 }
 
 
