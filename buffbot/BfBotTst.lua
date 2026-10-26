@@ -2695,29 +2695,42 @@ function BfBot.Test.Theming()
     end
 
     -- _T hands the engine a packed number, not the palette's own string
-    check("_T('title') returns a packed number on default palette",
-        type(BfBot.UI._T("title")) == "number")
+    check("_T('title') returns a packed number", type(BfBot.UI._T("title")) == "number")
 
-    -- bg2_light title is {50, 30, 10}; packed as alpha<<24|blue<<16|green<<8|red
-    check("_T('title') packs blue and red the engine's way round",
-        BfBot.UI._T("title") == (10 * 0x10000) + (30 * 0x100) + 50)
-
-    -- The raw accessor still exposes the authored string
-    check("_TRaw('title') returns the palette string",
-        BfBot.UI._TRaw("title") == "{50, 30, 10}")
+    -- The packing checks assert bg2_light's own title, {50, 30, 10}, so they
+    -- have to run on bg2_light -- not on whatever theme the player (or a lab
+    -- run) last chose. _active is swapped directly and put back: Theme.Apply
+    -- would write the player's theme to the INI as a side effect of a test.
+    do
+        local wasActive = BfBot.Theme._active
+        BfBot.Theme._active = BfBot.Theme._palettes.bg2_light
+        -- packed as alpha<<24 | blue<<16 | green<<8 | red
+        check("_T('title') packs blue and red the engine's way round",
+            BfBot.UI._T("title") == (10 * 0x10000) + (30 * 0x100) + 50)
+        -- The raw accessor still exposes the authored string
+        check("_TRaw('title') returns the palette string",
+            BfBot.UI._TRaw("title") == "{50, 30, 10}")
+        BfBot.Theme._active = wasActive
+    end
 
     -- Unknown key returns magenta sentinel
     check("_T(unknown) returns packed magenta",
         BfBot.UI._T("nonexistent") == 0xFF00FF)
 
-    -- Every palette has all 20 required keys
-    local required = {"overlay","borderResref","bgResref","title","text","textMuted","textAccent",
-                      "grip","reset","headerSub","lockText","spellLocked","pickerSel","pickerOn",
-                      "pickerOff","qcOff","qcLong","qcAll","lockActive","lockInactive"}
+    -- Every palette carries exactly the keys the default one does. Read off
+    -- bg2_light rather than listed here: a hand-kept list goes stale in both
+    -- directions -- it kept demanding `reset` long after that key was dropped,
+    -- and never learned about the ones the chrome work added.
+    local reference = BfBot.Theme._palettes.bg2_light
     for paletteName, palette in pairs(BfBot.Theme._palettes) do
-        for _, key in ipairs(required) do
+        for key in pairs(reference) do
             check(paletteName .. " has " .. key, palette[key] ~= nil)
         end
+        local extra = nil
+        for key in pairs(palette) do
+            if reference[key] == nil then extra = key end
+        end
+        check(paletteName .. " has no key bg2_light lacks", extra == nil)
     end
 
     -- Font size setter/getter round-trip with clamping
