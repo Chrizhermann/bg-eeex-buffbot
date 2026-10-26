@@ -6458,7 +6458,11 @@ end
 ---
 --- Read-only. It plans and discards; nothing is cast and nothing is saved.
 function BfBot.Test.PlanModel()
-    _reset()
+    -- The phase plans read-only, but it reads the live config to check the
+    -- migration, and GetConfig creates and stores a default for a character
+    -- that has none. That is a write to the player's save, so this phase
+    -- declares the guard like every other one that can reach their state.
+    return _GuardPhase("Plan Model", function()
     P("=== Phase: Shared Plan Model (issue #81) ===")
 
     if not BfBot.Plan then
@@ -6635,6 +6639,7 @@ function BfBot.Test.PlanModel()
     end
 
     return _summary("Plan Model")
+    end)
 end
 
 -- ============================================================
