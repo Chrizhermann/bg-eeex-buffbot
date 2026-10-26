@@ -428,3 +428,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Kolejność: ręczna~
+// ui.order.duration
+@724 = ~Kolejność: czas trwania~
+// ui.order.tooltip_manual
+@725 = ~Rzuca w kolejności, którą ustawiłeś. Kliknij, aby najpierw rzucać najdłużej działające wzmocnienia; twoja kolejność zostaje zachowana i wraca po wyłączeniu.~
+// ui.order.tooltip_duration
+@726 = ~Rzuca najpierw najdłużej działające wzmocnienia. Zablokowane wiersze zachowują swoje miejsce. Kliknij, aby wrócić do własnej kolejności.~

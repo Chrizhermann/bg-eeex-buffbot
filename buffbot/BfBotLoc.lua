@@ -192,6 +192,10 @@ local _registry = {
     ["options.refresh_below_off"] = { id = 719, fallback = [=[Off]=] },
     ["options.refresh_below_1m"] = { id = 720, fallback = [=[Under 1 minute left]=] },
     ["options.refresh_below_5m"] = { id = 721, fallback = [=[Under 5 minutes left]=] },
+    ["ui.order.manual"] = { id = 723, fallback = [=[Order: Manual]=] },
+    ["ui.order.duration"] = { id = 724, fallback = [=[Order: Duration]=] },
+    ["ui.order.tooltip_manual"] = { id = 725, fallback = [=[Casts in the order you set. Click to cast the longest-lasting buffs first instead; your own order is kept and comes back when you switch off.]=] },
+    ["ui.order.tooltip_duration"] = { id = 726, fallback = [=[Casts the longest-lasting buffs first. Locked rows keep their place. Click to go back to your own order.]=] },
     ["options.refresh_below_1h"] = { id = 722, fallback = [=[Under 1 hour left]=] },
 }
 

@@ -5,7 +5,8 @@
 -- before the capture phase queues the shot.
 --
 --   assert(loadfile("<this file>"))({phase = "prepare", theme = "bg2_light",
---                                    slot = 0, preset = 1, enable = {1,2,3}, lock = 2})
+--                                    slot = 0, preset = 1, enable = {1,2,3},
+--                                    lock = 2, order = 1})
 --   assert(loadfile("<this file>"))({phase = "capture"})
 --
 -- The PNG lands in the lab profile's ScrnShot folder. Nothing is cast, saved or
@@ -67,6 +68,11 @@ if args.panelW and args.panelH then
     BfBot.UI._panelX = math.max(0, math.floor((sw - args.panelW) / 2))
     BfBot.UI._panelY = math.max(0, math.floor((sh - args.panelH) / 2))
     BfBot.UI._ResizeTo(args.panelW, args.panelH)
+end
+-- The preset's cast-order toggle, so one run can show both states.
+if args.order ~= nil then
+    BfBot.Persist.SetAutoOrderAll(preset, args.order)
+    BfBot.UI._Refresh()
 end
 buffbot_searchText = args.query or ""
 BfBot.UI._SearchTick()

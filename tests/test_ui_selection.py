@@ -9,6 +9,7 @@ from lupa.luajit21 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
+PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
 TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
@@ -68,6 +69,10 @@ def ui_lua() -> LuaRuntime:
     )
     runtime.execute("io = nil")
     runtime.execute(LOC_SOURCE)
+    # The real persistence module, not a stub: the panel's cast order and
+    # the queue builders share one implementation there, and a stub would
+    # let the two drift without a test noticing.
+    runtime.execute(PERSIST_SOURCE)
     runtime.execute(UI_SOURCE)
     return runtime
 

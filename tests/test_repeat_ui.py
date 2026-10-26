@@ -834,9 +834,10 @@ GREY_WHEN_UNUSABLE = {
     "bbRepeat": "BfBot.UI._HasSelection()",
     "bbTog": "BfBot.UI._HasSelection()",
     "bbTgt": "BfBot.UI._HasSelection()",
-    "bbUp": "BfBot.UI._CanMoveUp()",
-    "bbDn": "BfBot.UI._CanMoveDown()",
-    "bbSort": "#buffbot_spellTable > 1",
+    # Reordering by hand is meaningless while the preset orders itself.
+    "bbUp": "BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder()",
+    "bbDn": "BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder()",
+    "bbSort": "#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder()",
     "bbDel": "BfBot.UI._CanDeletePreset()",
     "bbStop": "BfBot.UI._IsRunning()",
 }

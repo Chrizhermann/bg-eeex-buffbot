@@ -1357,13 +1357,13 @@ function BfBot.UI._Layout()
     -- fills the row instead of leaving Sort stranded left of a long gap.
     row(r5Y,
         { { "bbTog", 112 }, { "bbTgt", 142 } },
-        { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 } },
+        { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } },
         { { "bbDel", 142 } })
 
     -- Variant layout: the same shape with the Variant picker beside Target.
     row(r5Y,
         { { "bbVTog", 112 }, { "bbVTgt", 142 }, { "bbVVar", 142 } },
-        { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 } },
+        { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } },
         { { "bbVDel", 142 } })
 
     row(r6Y,
@@ -1853,6 +1853,12 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(rows, function(a, b) return a.pri < b.pri end)
+    -- With the preset's order toggle on, the list is shown in the order it
+    -- will actually be cast in. The stored priorities are left alone, so
+    -- switching the toggle off gives the player's own order straight back.
+    if BfBot.Persist.IsAutoOrder(preset) then
+        rows = BfBot.Persist.OrderByDuration(rows)
+    end
     return rows
 end
 
@@ -2918,46 +2924,58 @@ end
 --- Sort the current preset's spell list by duration (longest first).
 --- Locked spells stay at their current row index. Unlocked spells fill
 --- the remaining rows in duration-desc order. Persists via _RenumberPriorities.
+--- Reorder the visible rows once, by hand, and keep the result.
+---
+--- The same rule the per-preset order toggle applies on every refresh --
+--- `BfBot.Persist.OrderByDuration` is the one implementation, so the button
+--- and the toggle can never drift apart. The difference is that this writes
+--- the new order back into the preset: it is the player reordering their
+--- own list, not a view of it.
 function BfBot.UI.SortByDuration()
-    local n = #buffbot_spellTable
-    if n == 0 then return end
+    if #buffbot_spellTable == 0 then return end
+    if BfBot.UI._IsAutoOrder() then return end
     BfBot.UI._PrepareSpellSelectionForRebuild()
-
-    local function durKey(entry)
-        local d = entry.dur
-        if d == nil then return -2 end
-        if d == -1 then return 1e9 end  -- permanent sorts first
-        return d
-    end
-
-    -- Partition: keep locked entries pinned to their row indices
-    local locked = {}   -- [row] = entry
-    local unlocked = {} -- ordered list
-    for i, entry in ipairs(buffbot_spellTable) do
-        if entry.lock == 1 then
-            locked[i] = entry
-        else
-            table.insert(unlocked, entry)
-        end
-    end
-
-    -- Sort unlocked by duration desc
-    table.sort(unlocked, function(a, b) return durKey(a) > durKey(b) end)
-
-    -- Rebuild: locked at their row, unlocked fill the gaps
-    local result = {}
-    local uIdx = 1
-    for i = 1, n do
-        if locked[i] then
-            result[i] = locked[i]
-        else
-            result[i] = unlocked[uIdx]
-            uIdx = uIdx + 1
-        end
-    end
-    buffbot_spellTable = result
+    buffbot_spellTable = BfBot.Persist.OrderByDuration(buffbot_spellTable)
     BfBot.UI._RenumberPriorities()
     BfBot.UI._RestoreSpellSelection()
+end
+
+--- True when the preset on screen casts longest-duration-first.
+function BfBot.UI._IsAutoOrder()
+    if BfBot.UI._view == "summons" then return false end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return false end
+    return BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx) == 1
+end
+
+--- Flip it, for the whole party's preset of that index. Presets are
+--- parallel across characters, so an order that applied to one of them
+--- would make "Pre-Battle" mean two different things in one party.
+function BfBot.UI.ToggleAutoOrder()
+    if BfBot.UI._view == "summons" then return end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return end
+    local now = BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx)
+    BfBot.Persist.SetAutoOrderAll(BfBot.UI._presetIdx, now == 1 and 0 or 1)
+    BfBot.UI._Refresh()
+end
+
+function BfBot.UI._AutoOrderLabel()
+    if BfBot.UI._IsAutoOrder() then
+        return BfBot.L10N.Get("ui.order.duration")
+    end
+    return BfBot.L10N.Get("ui.order.manual")
+end
+
+function BfBot.UI._AutoOrderTooltip()
+    if BfBot.UI._IsAutoOrder() then
+        return BfBot.L10N.Get("ui.order.tooltip_duration")
+    end
+    return BfBot.L10N.Get("ui.order.tooltip_manual")
+end
+
+function BfBot.UI._AutoOrderColor()
+    return BfBot.UI._T(BfBot.UI._IsAutoOrder() and "qcLong" or "btnText")
 end
 
 -- ============================================================
