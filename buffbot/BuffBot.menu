@@ -2195,6 +2195,7 @@ menu
 	label
 	{
 		name "bpHeadUses"
+		tooltip lua "BfBot.Plan.Text('Free to add / total available now. Planned uses are already reserved.')"
 		enabled "BfBot.PartyUI.view == 'dashboard'"
 		text lua "BfBot.Plan.Text('Uses')"
 		text style "bb_normal_parchment"
@@ -2448,6 +2449,7 @@ menu
 			{
 				area 2 0 -1 52
 				text lua "bbPartyRows[rowNumber] and bbPartyRows[rowNumber].uses or ''"
+				tooltip lua "BfBot.PartyUI.UsesTip(rowNumber)"
 				text style "bb_normal_parchment"
 				text color lua "{38,32,26}"
 				text align left center

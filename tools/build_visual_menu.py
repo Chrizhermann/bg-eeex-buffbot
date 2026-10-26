@@ -55,7 +55,7 @@ def buffs():
             widget('button','rxHead'+name,[f'enabled "{shown}"',f'action "{U}.SortBy(\'{name.lower()}\')"'])
             label('rxHead'+name+'Caption',f"{P}.Text('{name}')",'header',shown)
             widget('label','rxSort'+name,[f'enabled "{shown} and {U}.sortField==\'{name.lower()}\'"','bam "BFBGLYPH"',f'sequence lua "{V}.Glyph({U}.sortDescending and \'sort-desc\' or \'sort-asc\')"','frame 0','scaleToClip','ignoreEvents'])
-        else:label('rxHead'+name,f"{P}.Text('{name}')",'header',shown)
+        else:label('rxHead'+name,f"{P}.Text('{name}')",'header',shown,extra=[f'tooltip lua "{P}.Text(\'Free to add / total available now. Planned uses are already reserved.\')"'] if name=='Uses' else [])
     # Both fixed layouts have separate row templates; integer percentage widths
     # follow integration §4's fallback, with remainder in the final column.
     for wide,widths,rh,cw,ch,pw,ph in [(False,[4,20,5,9]+[9]*6+[8],48,100,36,24,36),(True,[3,22,4,7]+[10]*6+[4],54,168,40,30,40)]:
@@ -67,8 +67,8 @@ def buffs():
         column(widths[1],[cell([4,0,-1,rh],f'{V}.RowTitle(rowNumber)',title_style,f'{V}.RowQualifier(rowNumber)==\'\'',extra=[f'tooltip lua "{V}.RowTip(rowNumber)"']),cell([4,-2,-1,28],f'{V}.RowTitle(rowNumber)',title_style,f'{V}.RowQualifier(rowNumber)~=\'\'',extra=[f'tooltip lua "{V}.RowTip(rowNumber)"']),cell([4,20,-1,24],f'{V}.RowQualifier(rowNumber)','muted',f'{V}.RowQualifier(rowNumber)~=\'\'',extra=[f'tooltip lua "{V}.RowTip(rowNumber)"'])])
         warn_x=int((1764 if wide else 1124)*widths[2]/100)-14
         column(widths[2],[cell([0,4,-1,rh-8],enabled=f'{V}.UsesExhausted(rowNumber)',extra=['fill 224 83 63 20']),
-            cell([4,0,-1,rh],"bbPartyRows[rowNumber] and bbPartyRows[rowNumber].uses or ''",'display'),
-            cell([warn_x,(rh-12)//2,12,12],enabled=f'{V}.UsesExhausted(rowNumber)',extra=['bam "BFBGLYPH"',f'sequence lua "{V}.Glyph(\'warning\')"','frame 0','scaleToClip',f'tooltip lua "{P}.Text(\'No unreserved uses\')"'])])
+            cell([4,0,-1,rh],"bbPartyRows[rowNumber] and bbPartyRows[rowNumber].uses or ''",'display',extra=[f'tooltip lua "{U}.UsesTip(rowNumber)"']),
+            cell([warn_x,(rh-12)//2,12,12],enabled=f'{V}.UsesExhausted(rowNumber)',extra=['bam "BFBGLYPH"',f'sequence lua "{V}.Glyph(\'warning\')"','frame 0','scaleToClip',f'tooltip lua "{U}.UsesTip(rowNumber)"'])])
         column(widths[3],[cell([2,0,-1,rh],f'{V}.RowDuration(rowNumber)')])
         for k in range(1,7):
             exists=f'{V}.Chip(rowNumber,{k})~=nil';checked=f'{V}.ChipChecked(rowNumber,{k})';bad=f'{V}.ChipError(rowNumber,{k})'

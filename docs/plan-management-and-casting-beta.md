@@ -1,5 +1,26 @@
 # Plan management and casting beta
 
+## Beta 4: usable plans and clearer counts
+
+Uses remains free-to-add / total available now. A 0/1 row with its one use assigned
+is valid and has no warning. Hovering the count shows free, available and reserved
+uses. The warning marks enabled planned requests without an assigned source,
+including missing casters, empty pools and invalid targets; disabled requests do
+not contribute. Variant rows report only their own unavailable requests.
+
+Queue construction retains available decisions in order instead of rejecting a
+plan for one unavailable request. The Cast button, HUD picker and completed-rest
+dispatch all print the unavailable request count in the game message log. Missing
+entries remain saved. An all-unavailable plan reports its skips and starts no run.
+Queue-size limits and Project Image safety validation still apply.
+
+Upstream main at `287ad0b` selectively adopted Redux controls/fast-forward into
+the original per-caster editor. It displays native counts as xN, not reserved-use
+fractions, and does not contain the recipient planner's warning predicate.
+
+The beta 4 check uses a copied 25 October quicksave and matching current EET/EEex
+resources. The older private game's EEex build cannot safely load this newer save.
+
 Implemented and tested in the isolated single-player EET copy on 20 October
 2026. The personal installation and Infinity UI++ files are unchanged.
 

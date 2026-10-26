@@ -42,7 +42,7 @@ def test_manual_move_selects_custom_and_survives_switch_back(dashboard):
     ''')
 
 
-def test_spending_uses_does_not_resort_but_still_blocks_casting(dashboard):
+def test_spending_uses_does_not_resort_and_only_skips_the_spent_cast(dashboard):
     assert dashboard.execute(r'''
       local s=snapshot();local a=source(s,'SHORT','A',12,'s',1);local b=source(s,'LONG','A',600,'l',1)
       a.fullCount=1;b.fullCount=1
@@ -50,7 +50,9 @@ def test_spending_uses_does_not_resort_but_still_blocks_casting(dashboard):
       local original=P.SortRequests;local sorts=0
       P.SortRequests=function(...)sorts=sorts+1;return original(...)end
       s.pools.l=0;U.Refresh(false);U.SetView('order');U.Refresh(false)
-      return sorts==0 and U.preset.requests[1].group=='LONG' and U.plan.missing==1 and not U.CanCast()
+      local queue=P.BuildQueue(s,U.preset.requests)
+      return sorts==0 and U.preset.requests[1].group=='LONG' and U.plan.missing==1 and U.CanCast()
+        and #queue==1 and queue[1].spell=='SHORT'
     ''')
 
 

@@ -934,6 +934,7 @@ label
  text align left center
  ignoreEvents
  enabled "BfBot.PartyUI.IsDashboard()"
+ tooltip lua "BfBot.Plan.Text('Free to add / total available now. Planned uses are already reserved.')"
 }
 button
 {
@@ -1055,6 +1056,7 @@ list
    text style "bvr_display"
    text point 14
    text align left center
+   tooltip lua "BfBot.PartyUI.UsesTip(rowNumber)"
   }
   label
   {
@@ -1064,7 +1066,7 @@ list
    sequence lua "BfBot.Visual.Glyph('warning')"
    frame 0
    scaleToClip
-   tooltip lua "BfBot.Plan.Text('No unreserved uses')"
+   tooltip lua "BfBot.PartyUI.UsesTip(rowNumber)"
   }
   label
   {
@@ -2110,6 +2112,7 @@ list
    text style "bvr_display"
    text point 14
    text align left center
+   tooltip lua "BfBot.PartyUI.UsesTip(rowNumber)"
   }
   label
   {
@@ -2119,7 +2122,7 @@ list
    sequence lua "BfBot.Visual.Glyph('warning')"
    frame 0
    scaleToClip
-   tooltip lua "BfBot.Plan.Text('No unreserved uses')"
+   tooltip lua "BfBot.PartyUI.UsesTip(rowNumber)"
   }
   label
   {
@@ -3587,9 +3590,10 @@ label
  text lua "BfBot.Plan.Text('Custom')"
  text style "bvr_button"
  text point 13
- text align center center
+ text align left center
  ignoreEvents
  enabled "BfBot.PartyUI.view=='order'"
+ text align center center
 }
 button
 {
@@ -5383,7 +5387,7 @@ list
   label
   {
    area 4 8 90 28
-   text lua "BfBot.Plan.Text(BfBot.PartyUI.choiceMode=='planImport' and 'Import' or BfBot.PartyUI.choiceMode=='add' and 'Add' or (BfBot.PartyUI.choiceMode=='casting' or BfBot.PartyUI.choiceMode=='theme') and 'Select' or 'Restore')"
+   text lua "BfBot.Plan.Text(BfBot.PartyUI.choiceMode=='planImport' and 'Import' or BfBot.PartyUI.choiceMode=='add' and 'Add' or (BfBot.PartyUI.choiceMode=='casting' or BfBot.PartyUI.choiceMode=='theme') and 'Select' or BfBot.PartyUI.choiceMode=='innateRecipients' and (bbPartyChoices[rowNumber].name:sub(1,3)=='[x]' and 'Remove' or 'Add') or 'Restore')"
    text style "bvr_button"
    text point 13
    text align left center
@@ -5399,7 +5403,7 @@ list
  table "bbPartyChoices"
  var "bbPartyChoiceSelection"
  action "if cellNumber==3 then BfBot.PartyUI.Choose() end"
- enabled "not BfBot.Visual.rename and (BfBot.PartyUI.choiceMode=='add' or BfBot.PartyUI.choiceMode=='hidden' or BfBot.PartyUI.choiceMode=='planImport' or BfBot.PartyUI.choiceMode=='casting' or BfBot.PartyUI.choiceMode=='theme')"
+ enabled "not BfBot.Visual.rename and (BfBot.PartyUI.choiceMode=='add' or BfBot.PartyUI.choiceMode=='hidden' or BfBot.PartyUI.choiceMode=='planImport' or BfBot.PartyUI.choiceMode=='innateRecipients' or BfBot.PartyUI.choiceMode=='casting' or BfBot.PartyUI.choiceMode=='theme')"
  rowheight 44
  scrollbar "BFBSCRL"
  hidehighlight

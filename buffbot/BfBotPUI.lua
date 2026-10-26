@@ -368,7 +368,7 @@ function U.ToggleRest()
     if BfBot.Rest then BfBot.Rest.pending = nil end
 end
 function U.CanCast()
-    return U.plan and U.plan.missing == 0 and #U.preset.requests > 0
+    return U.plan and #U.preset.requests > 0
         and BfBot.Exec.GetState() ~= "running"
 end
 function U.Cast()
@@ -378,8 +378,9 @@ function U.Cast()
     U.Refresh() -- Commit only against fresh availability, never a cached preview.
     if not U.CanCast() then return end
     P.ApplyOrder(U.snapshot,U.preset,P.EstimateCast)
-    local queue, _, reason = P.BuildQueue(U.snapshot, U.preset.requests)
-    if not queue then bbPartyStatus = reason or P.Text("Resolve unavailable casts before casting"); return end
+    local queue, plan, reason = P.BuildQueue(U.snapshot, U.preset.requests)
+    P.ReportSkipped(plan)
+    if not queue then bbPartyStatus = reason or P.Text("No available casts in this plan"); return end
     if BfBot.Exec.Start(queue, U.state.fast==1 and 4 or 0, nil) then U.Close() end
 end
 
@@ -455,7 +456,7 @@ function U.BuildDashboard()
         local row = { key=key, id=key .. ":" .. (variant or ""), variant=variant,
             name=group and U.BuffName(group,variant) or key .. (variant and (" — " .. variant) or ""),
             icon=metadata and metadata.icon ~= "" and metadata.icon or group and group.icon or "",
-            free=0,total=0,planned=0,cells={},party=false,qualifier="",variantGroup=isVariantGroup }
+            free=0,total=0,planned=0,unavailable=0,cells={},party=false,qualifier="",variantGroup=isVariantGroup }
         local pools, livingSource = {}, false
         for _,source in ipairs(group and group.sources or {}) do
             local compatible = variant and U.VariantInfo({sources={source}},variant)
@@ -494,9 +495,11 @@ function U.BuildDashboard()
                 index=existing,checked=existing~=nil,available=d and d.source~=nil,
                 possibilities=U.Possibilities(key,actor.key,variant)}
         end
-        for _,r in ipairs(U.preset.requests) do
+        for _,decision in ipairs(U.plan.decisions) do
+            local r=decision.request
             if r.group==key and r.var==variant then
                 row.planned=row.planned+1
+                if r.on~=0 and not decision.source then row.unavailable=row.unavailable+1 end
                 if r.target=="party" then row.party=true end
             end
         end
@@ -780,6 +783,17 @@ function U.RowName(index)
     return row and (row.name .. (row.qualifier ~= "" and ("\n" .. row.qualifier) or "")) or ""
 end
 function U.RowTip(index) return U.RowName(index) end
+function U.UsesTip(index)
+    local row=bbPartyRows[index]
+    if not row or row.heading then return "" end
+    local text=P.Text("Free to add: ") .. row.free .. "\n"
+        .. P.Text("Available now: ") .. row.total .. "\n"
+        .. P.Text("Reserved by this plan: ") .. (row.total-row.free)
+    if (row.unavailable or 0)>0 then
+        return text .. "\n" .. P.Text("Unavailable planned casts: ") .. row.unavailable
+    end
+    return text .. "\n" .. P.Text("No unavailable casts in this row")
+end
 function U.PartyColor(index)
     local row = bbPartyRows[index]
     return row and row.party and row.partyCell.checked and not row.partyCell.available

@@ -985,8 +985,9 @@ function BfBot.UI._CastQuickPreset(row)
     end
     local snapshot=BfBot.Plan.Snapshot()
     BfBot.Plan.ApplyOrder(snapshot,entry.preset,BfBot.Plan.EstimateCast)
-    local queue=BfBot.Plan.BuildQueue(snapshot,entry.preset.requests)
-    if not queue then BfBot._Display('BuffBot: resolve unavailable casts or an empty plan');return end
+    local queue,plan=BfBot.Plan.BuildQueue(snapshot,entry.preset.requests)
+    BfBot.Plan.ReportSkipped(plan)
+    if not queue then BfBot._Display('BuffBot: no available casts in this plan');return end
     -- Direct UI dispatch: no spell/innate action is queued on the selected PC.
     if BfBot.Exec.Start(queue,state.fast==1 and 4 or 0,nil) then BfBot._Display('BuffBot: '..entry.name) end
 end

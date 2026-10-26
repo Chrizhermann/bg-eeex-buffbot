@@ -129,8 +129,9 @@ function R.Tick()
     BfBot.Scan.InvalidateAll()
     local snapshot=BfBot.Plan.Snapshot()
     BfBot.Plan.ApplyOrder(snapshot,preset,BfBot.Plan.EstimateCast)
-    local queue = BfBot.Plan.BuildQueue(snapshot,preset.requests)
-    if not queue then R.Notify('Rest plan skipped: resolve unavailable casts'); return false end
+    local queue,plan = BfBot.Plan.BuildQueue(snapshot,preset.requests)
+    BfBot.Plan.ReportSkipped(plan)
+    if not queue then R.Notify('Rest plan skipped: no available casts'); return false end
     local ok = BfBot.Exec.Start(queue,state.fast==1 and 4 or 0,nil)
     if ok then R.Notify('Casting rest plan') end
     return false

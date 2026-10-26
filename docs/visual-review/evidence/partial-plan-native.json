@@ -1,0 +1,130 @@
+{
+  "version": "v1.10.1-redux-beta.4",
+  "automated": {
+    "passed": 1001,
+    "deselected": 5
+  },
+  "native": {
+    "missing": 1,
+    "notices": [
+      "BuffBot: skipped 1 unavailable planned cast(s)."
+    ],
+    "queueLength": 11,
+    "requests": 12,
+    "rows": [
+      {
+        "key": "spl:SPPR111",
+        "tip": "Free to add: 2\nAvailable now: 3\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "2/3",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR101",
+        "tip": "Free to add: 0\nAvailable now: 1\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "0/1",
+        "warning": false
+      },
+      {
+        "key": "spl:SPWI201",
+        "tip": "Free to add: 4\nAvailable now: 6\nReserved by this plan: 2\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "4/6",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR203",
+        "tip": "Free to add: 0\nAvailable now: 1\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "0/1",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR214",
+        "tip": "Free to add: 1\nAvailable now: 2\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "1/2",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR408",
+        "tip": "Free to add: 0\nAvailable now: 1\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "0/1",
+        "warning": false
+      },
+      {
+        "key": "spl:SPWI212",
+        "tip": "Free to add: 4\nAvailable now: 6\nReserved by this plan: 2\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "4/6",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR327",
+        "tip": "Free to add: 0\nAvailable now: 1\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "0/1",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR306",
+        "tip": "Free to add: 0\nAvailable now: 0\nReserved by this plan: 0\nUnavailable planned casts: 1",
+        "unavailable": 1,
+        "uses": "0/0",
+        "warning": true
+      },
+      {
+        "key": "spl:SPPR423",
+        "tip": "Free to add: 0\nAvailable now: 1\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "0/1",
+        "warning": false
+      },
+      {
+        "key": "spl:SPPR108",
+        "tip": "Free to add: 0\nAvailable now: 1\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "0/1",
+        "warning": false
+      },
+      {
+        "key": "spl:SPWI408",
+        "tip": "Free to add: 2\nAvailable now: 3\nReserved by this plan: 1\nNo unavailable casts in this row",
+        "unavailable": 0,
+        "uses": "2/3",
+        "warning": false
+      }
+    ],
+    "started": true,
+    "version": "1.10.1-redux-beta.4"
+  },
+  "completion": {
+    "audit": {
+      "applied": 60,
+      "gameTicks": 419,
+      "original": 30,
+      "reason": "complete",
+      "renderCap": 30,
+      "renderRestored": true,
+      "restored": true,
+      "wallMs": 14615
+    },
+    "cast": 11,
+    "fastActive": false,
+    "notices": [
+      "BuffBot: skipped 1 unavailable planned cast(s)."
+    ],
+    "rate": 30,
+    "requests": 12,
+    "skippedDuringExecution": 0,
+    "state": "done"
+  },
+  "upstream": {
+    "revision": "287ad0b",
+    "version": "1.12.0 (main)",
+    "uses": "native per-caster xN; no recipient free/total warning predicate"
+  },
+  "scope": "Copied current EET/EEex installation and quicksave; no personal save or UI++ files modified."
+}

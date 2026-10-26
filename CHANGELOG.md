@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.10.1-redux-beta.4 — 25 October 2026
+
+- Warn only for unavailable planned casts; fully reserved uses such as 0/1 are valid. Add count/header tooltips explaining free, available and reserved uses.
+- Skip unavailable requests while casting the remaining plan in saved order, including manual Cast, HUD presets and completed-rest plans. Print the unavailable-cast count to the game message log; keep missing entries saved.
+- Compare upstream main (1.12.0) and its retained per-caster xN counts: it does not use Redux's reserved-use fractions or this warning rule.
+
 ## v1.10.1-redux-beta.3 — 22 October 2026
 
 - Rewrite the README around the original Features / Requirements / Installation / Usage structure, with short player instructions for the Redux planner.

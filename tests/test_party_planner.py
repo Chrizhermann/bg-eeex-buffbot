@@ -76,10 +76,10 @@ def test_shared_spontaneous_pool_is_spent_across_different_buffs(lua):
         local requests = {request('BLUR','A'), request('MIRROR','A'), request('BLUR','B')}
         local plan = P.Assign(s, requests)
         local queue = P.BuildQueue(s, requests)
-        return plan.used.level2, plan.missing, plan.decisions[3].reason, queue == nil
+        return plan.used.level2, plan.missing, plan.decisions[3].reason, #queue
         """
     )
-    assert facts == (2, 1, "No unreserved uses", True)
+    assert facts == (2, 1, "No unreserved uses", 2)
 
 
 def test_pinned_caster_cannot_be_rerouted_to_another_caster(lua):
@@ -448,6 +448,7 @@ def test_planned_item_use_keeps_the_reserved_copy_and_does_not_mutate_catalog(lu
 
 
 def test_ui_refreshes_availability_again_before_casting(lua):
+    lua.execute("BfBot._Display=function() end")
     lua.execute((ROOT / "buffbot/BfBotPUI.lua").read_text(encoding="utf-8"))
     facts = lua.execute(
         """

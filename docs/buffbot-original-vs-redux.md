@@ -77,7 +77,7 @@ Left-click the persistent gear to edit. Right-click it to choose a named preset 
 | Source details | Retain every source's caster level, duration, item identity and restrictions. |
 | Recipient interface | Native icons and portraits, name search, sortable fields, inline Clear and readable recipient coverage. |
 | Stable browsing | Values update during edits; rows do not jump merely because an assignment changes a duration. |
-| Resource exhaustion | Eligible portraits remain visible when uses run out; availability gets a warning. |
+| Resource exhaustion | Eligible portraits stay visible. A fully reserved 0/1 row is valid; only unavailable planned casts warn. Those casts are skipped and counted in the message log while the rest run. |
 | Variants | Individual subspell rows; different people can request different schools while sharing parent uses. |
 | Catalog controls | Conservative discovery plus Add, Hide and Restore for exceptions. |
 | Presets | Create, rename, confirmed deletion, legacy import, and data-only export/import. |

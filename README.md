@@ -69,7 +69,9 @@ To uninstall, remove the main component first, then the LuaJIT helper if you use
 5. Open **Summary** to check which buffs each person will get.
 6. Click **Cast**.
 
-**Uses** shows free uses / total uses. Portraits stay visible when uses run out, so you can move a buff from one person to another. Self-only spells stay self-only. A duration range means the available casters can give different durations; each portrait shows its assigned or next-cast duration.
+**Uses** shows free uses / total uses. For example, **0/1** means one use is available and already reserved by your plan. Hover over the count for a breakdown. A warning appears only when a planned cast has no usable source. Portraits stay visible when uses run out, so you can move a buff from one person to another. Self-only spells stay self-only. A duration range means the available casters can give different durations; each portrait shows its assigned or next-cast duration.
+
+If a planned spell is unavailable, BuffBot skips it and casts the rest. The game message log shows how many planned casts were skipped. Missing entries stay in your saved list so they can work again after you rest or restore their source.
 
 BuffBot skips buffs it recognizes as already active. Some effects and modded spells are harder to detect. Use **Add spell / item** if a power is missing, or **Hide** to tidy the browser. Hidden entries already in a plan stay planned.
 
@@ -88,7 +90,7 @@ Fresh installs start with two empty lists: **Pre-Battle Buffs** and **Wake Up Bu
 
 The After Rest picker can use any list, or **Off**. It is separate from the list you are editing. Existing saves keep their lists and rest choice.
 
-After a completed standard eight-hour rest, BuffBot waits until the party can act. Combat cancels a pending run. If a requested cast is unavailable, it skips the whole rest plan. Shortened rests and other mods' rest systems need more testing.
+After a completed standard eight-hour rest, BuffBot waits until the party can act. Combat cancels a pending run. Unavailable casts are skipped and counted in the message log; the rest of the list still runs. Shortened rests and other mods' rest systems need more testing.
 
 ### Casting speed and interruptions
 

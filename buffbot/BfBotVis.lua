@@ -321,7 +321,7 @@ function V.ChipDuration(i,k)
 end
 function V.UsesExhausted(i)
     local r=bbPartyRows[i]
-    return r and not r.atWill and r.total and r.total>0 and r.free==0 or false
+    return r and not r.heading and (r.unavailable or 0)>0 or false
 end
 function V.RowDuration(i) return bbPartyRows[i] and bbPartyRows[i].heading and '' or U.RowDuration(i):gsub(' %- ','–') end
 function V.AfterFilter()

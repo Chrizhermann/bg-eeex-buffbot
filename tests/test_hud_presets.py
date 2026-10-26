@@ -18,7 +18,7 @@ def hud():
   Infinity_SetOffset=function(n,x,y)offsets[n]={x,y}end
   EEex_Menu_Find=function()return nil end
   EEex_Menu_GetArea=function()return -1300,602,3904,118 end
-  BfBot.Plan={ApplyOrder=function()end,GetState=function()return state end,Snapshot=function()return{}end,
+  BfBot.Plan={ReportSkipped=function()end,ApplyOrder=function()end,GetState=function()return state end,Snapshot=function()return{}end,
    BuildQueue=function(s,requests)if missing then return nil end;return requests end}
   BfBot.Exec={GetState=function()return busy and 'running' or 'idle'end,
    Start=function(q,mode,p)starts[#starts+1]={queue=q,mode=mode};return true end}

@@ -1003,7 +1003,6 @@ end
 function P.BuildQueue(snapshot, requests)
     if #requests > P.MAX_REQUESTS then return nil, nil, P.Text("Plan exceeds 256 requests") end
     local plan = P.Assign(snapshot, requests)
-    if plan.missing > 0 then return nil, plan end
     local queue = {}
     for _, d in ipairs(plan.decisions) do
         if d.source then
@@ -1035,4 +1034,13 @@ function P.BuildQueue(snapshot, requests)
         end
     end
     return queue, plan
+end
+
+-- Only report at dispatch, never during previews or sorting. Disabled requests
+-- do not contribute to Assign.missing and must not be counted as skipped casts.
+function P.ReportSkipped(plan)
+    local count=plan and plan.missing or 0
+    if count>0 then
+        BfBot._Display(P.Text("BuffBot: skipped ") .. count .. P.Text(" unavailable planned cast(s)."))
+    end
 end

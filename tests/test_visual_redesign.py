@@ -240,12 +240,13 @@ def test_blank_clicks_are_absorbed_without_dismissal():
         assert 'area 0 0 99999 99999' in shield and 'action "BfBot.Visual.AbsorbClick()"' in shield
 
 
-def test_uses_warning_retains_eligible_chips_and_clears_when_a_reservation_is_removed(visual):
+def test_fully_reserved_uses_are_not_a_warning_and_keep_eligible_chips(visual):
     assert visual.execute('''
       local s=snapshot();source(s,'BUFF','A',60,'a',1);setup(s)
       findrow('BUFF');U.DashboardClick(5);findrow('BUFF')
       local i=bbPartyRowSelection
-      assert(V.UsesExhausted(i) and V.Chip(i,2).target=='B')
+      assert(not V.UsesExhausted(i) and V.Chip(i,2).target=='B')
+      assert(U.UsesTip(i):find('Free to add: 0',1,true) and U.UsesTip(i):find('Reserved by this plan: 1',1,true))
       assert(not V.ChipChecked(i,2) and not V.ChipError(i,2))
       assert(V.ChipDuration(i,2)=='1.0m')
       U.DashboardClick(5);findrow('BUFF')
