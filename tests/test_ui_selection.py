@@ -322,9 +322,10 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
         BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
         BfBot.UI._presetIdx = 2
+        -- _T hands back the engine's packed color: blue<<16 | green<<8 | red.
         BfBot.UI._T = function(key)
-            if key == "textMuted" then return "{4, 5, 6}" end
-            return "{7, 8, 9}"
+            if key == "textMuted" then return (6 * 0x10000) + (5 * 0x100) + 4 end
+            return (9 * 0x10000) + (8 * 0x100) + 7
         end
         buffbot_spellTable = {
             {
@@ -358,8 +359,8 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
             checkboxDisabled = BfBot.UI._CheckboxText(1),
             finalState = buffbot_spellTable[1].on,
             finalCastable = buffbot_spellTable[1].castable,
-            colorBeforeR = colorBefore[1],
-            colorAfterR = colorAfter[1],
+            colorBeforeR = colorBefore,
+            colorAfterR = colorAfter,
         }
         """
     )
@@ -373,8 +374,9 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
     assert facts["checkboxDisabled"] == "[ ]"
     assert facts["finalState"] == 0
     assert facts["finalCastable"] == 0
-    assert facts["colorBeforeR"] == 4
-    assert facts["colorAfterR"] == 4
+    muted = (6 * 0x10000) + (5 * 0x100) + 4
+    assert facts["colorBeforeR"] == muted
+    assert facts["colorAfterR"] == muted
     assert (
         'greyscale lua "not buffbot_visibleSpells[rowNumber] or buffbot_visibleSpells[rowNumber].castable == 0"'
         in MENU_SOURCE

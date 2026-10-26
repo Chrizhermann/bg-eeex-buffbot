@@ -8,13 +8,6 @@
 -- so we don't wipe _T (which the .menu evaluates per-frame for theme colors).
 BfBot.UI = BfBot.UI or {}
 
--- Convert "{R, G, B}" string → {R, G, B} table. Used by color functions
--- that consume _T() (string) and hand tables back to the engine.
-local function _parseColor(s)
-    local r, g, b = s:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
-    return { tonumber(r) or 0, tonumber(g) or 0, tonumber(b) or 0 }
-end
-
 -- ============================================================
 -- Internal State
 -- ============================================================
@@ -884,7 +877,10 @@ function BfBot.UI._OnMenusLoaded()
     -- the new size on the next push, not on a live size change.
     BfBot.Theme._RegisterFontRenderListeners()
 
-    -- Register 9-slice border textures (one per theme variant)
+    -- Register 9-slice border textures (one per theme variant). The atlases
+    -- carry Pecca's corner at its native 38x28 and a short slice of each rail
+    -- for the edges, which the engine stretches — the rails are uniform, so a
+    -- stretched slice and a tiled one look the same.
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
     local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
@@ -893,16 +889,16 @@ function BfBot.UI._OnMenusLoaded()
     for _, resref in ipairs(BORDER_RESREFS) do
         local regOk, regErr = pcall(function()
             EEex.RegisterSlicedRect("BuffBot_Border_" .. resref, {
-                ["topLeft"]     = {   0,   0, 128, 128 },
-                ["top"]         = { 128,   0, 256, 128 },
-                ["topRight"]    = { 384,   0, 128, 128 },
-                ["right"]       = { 384, 128, 128, 256 },
-                ["bottomRight"] = { 384, 384, 128, 128 },
-                ["bottom"]      = { 128, 384, 256, 128 },
-                ["bottomLeft"]  = {   0, 384, 128, 128 },
-                ["left"]        = {   0, 128, 128, 256 },
-                ["center"]      = { 128, 128, 256, 256 },
-                ["dimensions"]  = { 512, 512 },
+                ["topLeft"]     = {   0,   0,  38,  28 },
+                ["top"]         = {  38,   0, 180,  28 },
+                ["topRight"]    = { 218,   0,  38,  28 },
+                ["right"]       = { 218,  28,  38,  72 },
+                ["bottomRight"] = { 218, 100,  38,  28 },
+                ["bottom"]      = {  38, 100, 180,  28 },
+                ["bottomLeft"]  = {   0, 100,  38,  28 },
+                ["left"]        = {   0,  28,  38,  72 },
+                ["center"]      = {  38,  28, 180,  72 },
+                ["dimensions"]  = { 256, 128 },
                 ["resref"]      = resref,
                 ["flags"]       = 0,
             })
@@ -1087,7 +1083,7 @@ function BfBot.UI._ToggleQuickMenu()
     for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
         Infinity_SetArea(name, x, y, w, h)
     end
-    Infinity_SetArea("bbQuickFrame", x - 24, y - 24, w + 48, h + 48)
+    Infinity_SetArea("bbQuickFrame", x - 14, y - 14, w + 28, h + 28)
     Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
     for i = 1, BfBot.MAX_PRESETS do
         Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
@@ -1147,7 +1143,7 @@ function BfBot.UI._Layout()
     setArea("bbBg2", px, py, pw, ph)
     setArea("bbBg3", px, py, pw, ph)
     setArea("bbDarkOverlay", px, py, pw, ph)
-    local bpad = 24  -- border overhang in pixels
+    local bpad = 14  -- border overhang: the rail sits just outside the parchment
     setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
 
     -- Title
@@ -3278,14 +3274,14 @@ end
 --- bronze tint for item rows, gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
-    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
-    if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if not entry then return BfBot.UI._T("text") end
+    if entry.castable == 0 then return BfBot.UI._T("textMuted") end
+    if entry.ovr == 1 then return BfBot.UI._T("textAccent") end
     if entry.kind == "itm" and entry.lock ~= 1 then
-        return _parseColor(BfBot.UI._T("itemColor"))
+        return BfBot.UI._T("itemColor")
     end
-    if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if entry.lock == 1 then return BfBot.UI._T("spellLocked") end
+    return BfBot.UI._T("text")
 end
 
 function BfBot.UI._SpellRowTooltip(row)
@@ -3299,21 +3295,21 @@ end
 --- item rows, normal text tint for spell rows.
 function BfBot.UI._PickerNameColor(row)
     local entry = buffbot_pickerSpells[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
-    if entry.isHeader then return _parseColor(BfBot.UI._T("headerSub")) end
-    if entry.kind == "itm" then return _parseColor(BfBot.UI._T("itemColor")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if not entry then return BfBot.UI._T("text") end
+    if entry.isHeader then return BfBot.UI._T("headerSub") end
+    if entry.kind == "itm" then return BfBot.UI._T("itemColor") end
+    return BfBot.UI._T("text")
 end
 
 --- Repeat column color: repeated casts use the theme accent. A single cast
 --- follows the normal spell-row color, including muted unavailable rows.
 function BfBot.UI._RepeatColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if not entry then return BfBot.UI._T("text") end
     local rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
-    if rep > 1 then return _parseColor(BfBot.UI._T("textAccent")) end
-    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if rep > 1 then return BfBot.UI._T("textAccent") end
+    if entry.castable == 0 then return BfBot.UI._T("textMuted") end
+    return BfBot.UI._T("text")
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
@@ -3367,8 +3363,8 @@ end
 --- Lock column color: gold when locked, muted otherwise.
 function BfBot.UI._LockColor(row)
     local entry = buffbot_spellTable[row]
-    if entry and entry.lock == 1 then return _parseColor(BfBot.UI._T("lockActive")) end
-    return _parseColor(BfBot.UI._T("lockInactive"))
+    if entry and entry.lock == 1 then return BfBot.UI._T("lockActive") end
+    return BfBot.UI._T("lockInactive")
 end
 
 --- Toggle the lock state on a spell row. Party view only (see _LockText).
@@ -3506,11 +3502,11 @@ function BfBot.UI._QuickCastLabel()
 end
 
 function BfBot.UI._QuickCastColor()
-    if BfBot.UI._FastForwardRate() > 1 then return _parseColor(BfBot.UI._T("textMuted")) end
+    if BfBot.UI._FastForwardRate() > 1 then return BfBot.UI._T("textMuted") end
     local qc = BfBot.UI._ViewQuickCast()
-    if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
-    if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
-    return _parseColor(BfBot.UI._T("qcOff"))
+    if qc == 1 then return BfBot.UI._T("qcLong") end
+    if qc == 2 then return BfBot.UI._T("qcAll") end
+    return BfBot.UI._T("qcOff")
 end
 
 function BfBot.UI._QuickCastTooltip()
@@ -3612,9 +3608,9 @@ end
 --- "how much is BuffBot allowed to do here", so off/warn/cheat read the same.
 function BfBot.UI._ForceRecastColor()
     local mode = _forceMode()
-    if mode == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
-    if mode == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
-    return _parseColor(BfBot.UI._T("qcOff"))
+    if mode == 1 then return BfBot.UI._T("qcLong") end
+    if mode == 2 then return BfBot.UI._T("qcAll") end
+    return BfBot.UI._T("qcOff")
 end
 
 function BfBot.UI._ForceRecastTooltip()

@@ -2694,13 +2694,21 @@ function BfBot.Test.Theming()
         else fail = fail + 1; P("  FAIL: " .. label) end
     end
 
-    -- _T returns valid color for known key in default palette
-    check("_T('title') returns string on default palette",
-        type(BfBot.UI._T("title")) == "string" and BfBot.UI._T("title"):find("^{"))
+    -- _T hands the engine a packed number, not the palette's own string
+    check("_T('title') returns a packed number on default palette",
+        type(BfBot.UI._T("title")) == "number")
+
+    -- bg2_light title is {50, 30, 10}; packed as alpha<<24|blue<<16|green<<8|red
+    check("_T('title') packs blue and red the engine's way round",
+        BfBot.UI._T("title") == (10 * 0x10000) + (30 * 0x100) + 50)
+
+    -- The raw accessor still exposes the authored string
+    check("_TRaw('title') returns the palette string",
+        BfBot.UI._TRaw("title") == "{50, 30, 10}")
 
     -- Unknown key returns magenta sentinel
-    check("_T(unknown) returns magenta",
-        BfBot.UI._T("nonexistent") == "{255, 0, 255}")
+    check("_T(unknown) returns packed magenta",
+        BfBot.UI._T("nonexistent") == 0xFF00FF)
 
     -- Every palette has all 20 required keys
     local required = {"overlay","borderResref","bgResref","title","text","textMuted","textAccent",

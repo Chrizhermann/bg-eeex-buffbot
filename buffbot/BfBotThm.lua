@@ -195,14 +195,47 @@ BfBot.Theme._active = BfBot.Theme._palettes.bg2_light
 -- doesn't exist yet; the `or {}` guard creates it without stomping if it does.
 BfBot.UI = BfBot.UI or {}
 
+-- Packed-color cache, keyed by the palette's own "{R, G, B}" string. Every
+-- rendered row asks _T for its colors, so the match+pack runs once per shade
+-- for the whole session rather than once per frame.
+BfBot.Theme._packed = {}
+
+--- Pack a palette "{R, G, B}" string the way the engine reads a color.
+-- The engine wants one 32-bit number, and it unpacks it as
+-- alpha<<24 | blue<<16 | green<<8 | red — blue and red the other way round
+-- from the usual 0xAARRGGBB. EEex reads its own font colors exactly this way
+-- (`EEex_Options_Private_UnpackColor`, and `GetFontStyleColor` masks the alpha
+-- byte to 0), which is the evidence this byte order is right.
+local function _pack(s)
+    local cached = BfBot.Theme._packed[s]
+    if cached then return cached end
+    local r, g, b = s:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
+    if not r then return 0x0000FF end  -- unreadable entry → red, a visible signal
+    local packed = (tonumber(b) * 0x10000) + (tonumber(g) * 0x100) + tonumber(r)
+    BfBot.Theme._packed[s] = packed
+    return packed
+end
+
 --- Theme color accessor.
--- Returns the active palette's value for the given semantic key, or magenta
--- "{255, 0, 255}" if the key is missing (visible debug signal).
+-- Returns the active palette's color for the given semantic key as the packed
+-- number the engine expects, or magenta if the key is missing (visible debug
+-- signal). Hand the result straight to `text color lua` or to any Lua color
+-- callback — both want the same number.
+--
+-- Before v1.12.1 this returned the palette's raw "{R, G, B}" string, which no
+-- engine path could read, so every label fell back to its style's default and
+-- the panel rendered the same near-black text in all six palettes.
 -- @param key string — one of the keys listed in the Palette Key Glossary above
 function BfBot.UI._T(key)
     local v = BfBot.Theme._active[key]
-    if v == nil then return "{255, 0, 255}" end
-    return v
+    if v == nil then return 0xFF00FF end
+    return _pack(v)
+end
+
+--- The palette's raw "{R, G, B}" string, for callers that need the components
+-- rather than a color to render — the test suite reads these.
+function BfBot.UI._TRaw(key)
+    return BfBot.Theme._active[key]
 end
 
 -- ============================================================

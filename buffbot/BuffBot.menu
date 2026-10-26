@@ -53,11 +53,6 @@ menu
 	}
 	label
 	{
-		name "bbQuickFrame"
-		area 0 0 0 0
-	}
-	label
-	{
 		name "bbQuickBg"
 		enabled "BfBot.Theme._active.bgResref == 'BFBOTBG'"
 		mosaic "BFBOTBG"
@@ -80,8 +75,14 @@ menu
 	label
 	{
 		name "bbQuickOverlay"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 0 0 0 0
+	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name "bbQuickFrame"
 		area 0 0 0 0
 	}
 	label
@@ -211,16 +212,7 @@ menu
 		on escape
 	}
 
-	-- Panel border (custom 9-slice leather+brass frame via EEex render hook)
-	-- MUST come before bbBg so border renders behind parchment
-	label
-	{
-		name    "bbBgFrame"
-		enabled "buffbot_isOpen"
-		area 340 50 540 510
-	}
-
-	-- Panel background (parchment texture, renders on top of border).
+	-- Panel background (parchment texture).
 	-- Three labels per theme; only the active theme's `enabled` evaluates true.
 	-- _Layout() repositions all three so theme switches stay aligned.
 	label
@@ -245,13 +237,29 @@ menu
 		mosaic "BFBOTBG3"
 	}
 
-	-- Dark mode overlay (theme-driven opacity, position synced via _Layout)
+	-- Dark mode overlay (theme-driven opacity, position synced via _Layout).
+	-- `rectangle N` picks a style, not a color. Style 5 tints warm, which made
+	-- "dark mode" lay a warm film over the parchment instead of darkening it.
+	-- Style 1 is the one the full-screen click-to-close dimmer above uses, and
+	-- that one reads as neutral dark. All eight veils use it.
 	label
 	{
 		name    "bbDarkOverlay"
 		enabled "buffbot_isOpen"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
+		area 340 50 540 510
+	}
+
+	-- Panel border (9-slice frame via EEex render hook). It comes AFTER the
+	-- parchment and the dark overlay: the frame is a thin rail with corner
+	-- bosses and a transparent middle, so drawing it on top keeps the whole
+	-- corner visible and lets the rail sit on the panel edge. The old frame
+	-- filled its rect and had to render behind.
+	label
+	{
+		name    "bbBgFrame"
+		enabled "buffbot_isOpen"
 		area 340 50 540 510
 	}
 
@@ -1334,13 +1342,6 @@ menu
 		on escape
 	}
 
-	-- Border frame
-	label
-	{
-		name    "bbTgtFrame"
-		area 450 120 260 450
-	}
-
 	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
@@ -1368,10 +1369,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayTgt"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 474 144 212 402
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbTgtFrame"
+		area 460 130 240 430
+	}
+
 
 	-- Header: spell name
 	label
@@ -1641,13 +1649,6 @@ menu
 		on escape
 	}
 
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbRenFrame"
-		area 426 256 308 138
-	}
-
 	-- Small panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
@@ -1675,10 +1676,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayRen"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 450 280 260 90
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbRenFrame"
+		area 436 266 288 118
+	}
+
 
 	-- Label
 	label
@@ -1742,13 +1750,6 @@ menu
 		on escape
 	}
 
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbConfFrame"
-		area 426 256 308 138
-	}
-
 	-- Small panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
@@ -1776,10 +1777,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayConf"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 450 280 260 90
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbConfFrame"
+		area 436 266 288 118
+	}
+
 
 	-- Message (set by BfBot.UI.OpenConfirm)
 	label
@@ -1833,13 +1841,6 @@ menu
 		on escape
 	}
 
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbPickFrame"
-		area 356 76 448 428
-	}
-
 	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
@@ -1867,10 +1868,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayPick"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 380 100 400 380
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbPickFrame"
+		area 366 86 428 408
+	}
+
 
 	-- Title
 	label
@@ -1984,13 +1992,6 @@ menu
 		on escape
 	}
 
-	-- Border frame (renders behind parchment)
-	label
-	{
-		name    "bbImpFrame"
-		area 396 126 368 348
-	}
-
 	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
@@ -2018,10 +2019,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayImp"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 420 150 320 300
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbImpFrame"
+		area 406 136 348 328
+	}
+
 
 	-- Title
 	label
@@ -2099,13 +2107,6 @@ menu
 		on escape
 	}
 
-	-- Border frame
-	label
-	{
-		name    "bbVarFrame"
-		area 396 156 368 268
-	}
-
 	-- Panel background (parchment) — one label per theme, only active theme enabled
 	label
 	{
@@ -2133,10 +2134,17 @@ menu
 	label
 	{
 		name    "bbDarkOverlayVar"
-		rectangle 5
+		rectangle 1
 		rectangle opacity lua "BfBot.Theme._active.overlay"
 		area 420 180 320 220
 	}
+	-- Panel border, drawn on top (see the main panel for why)
+	label
+	{
+		name    "bbVarFrame"
+		area 406 166 348 248
+	}
+
 
 	-- Title
 	label
