@@ -43,6 +43,9 @@ GUARDED_PHASES = {
     "SummonCasters": "SummonCasters",
     "RefreshThreshold": "RefreshThreshold",
     "Persist": "Persistence",
+    # Plans read-only, but reads the live config to check the migration --
+    # and GetConfig stores a default for a character that has none.
+    "PlanModel": "Plan Model",
     "QuickCast": "Quick Cast",
     "StaleState": "Stale State",
 }

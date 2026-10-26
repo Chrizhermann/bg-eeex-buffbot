@@ -796,7 +796,16 @@ def test_reason_registry_recognizer_and_producers_have_exact_parity():
         r'["\'](reason\.[a-z0-9_.]+)["\']'
     )
     produced = set()
-    for path in (PERSIST_PATH, EXEC_PATH, ROOT / "buffbot/BfBotFst.lua"):
+    for path in (
+        PERSIST_PATH,
+        EXEC_PATH,
+        ROOT / "buffbot/BfBotFst.lua",
+        # The plan model is in this list so the guard covers it, not because
+        # it produces codes: its rejections are the plain identifiers in
+        # BfBot.Plan.REASON, which a view maps to text. Should a reason.* code
+        # ever be returned from there, it has to be registered like any other.
+        ROOT / "buffbot/BfBotPln.lua",
+    ):
         produced.update(
             producer_pattern.findall(path.read_text(encoding="utf-8"))
         )
