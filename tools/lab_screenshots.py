@@ -259,6 +259,8 @@ def main() -> int:
     parser.add_argument("--preset", type=int, default=1)
     parser.add_argument("--enable", default="", help="canonical spell rows to switch on, e.g. 1,2,3")
     parser.add_argument("--lock", type=int, help="canonical spell row to lock")
+    parser.add_argument("--order", type=int, choices=(0, 1),
+                        help="the preset's cast-order toggle: 0 manual, 1 by duration")
     parser.add_argument("--query", default="")
     parser.add_argument("--dialog", default="", choices=("", "targets", "picker", "rename"),
                         help="open one of BuffBot's dialogs on top of the panel")
@@ -277,7 +279,10 @@ def main() -> int:
     parser.add_argument("--owner", default="Claude Code: BuffBot UI screenshots")
     args = parser.parse_args()
 
-    game, profile, out = args.game.resolve(), args.profile.resolve(), args.out
+    game, profile = args.game.resolve(), args.profile.resolve()
+    # Resolved, not as typed: the game-side Lua writes the journal files
+    # itself, from the game folder, so a relative --out never reaches here.
+    out = args.out.resolve()
     themes = [t.strip() for t in args.themes.split(",") if t.strip()]
     out.mkdir(parents=True, exist_ok=True)
     work = out / ".run"
@@ -346,10 +351,11 @@ def main() -> int:
 
         enable = "{" + args.enable + "}" if args.enable else "{}"
         lock = f",lock={args.lock}" if args.lock else ""
+        order = f",order={args.order}" if args.order is not None else ""
         dialog = (f",dialog='{args.dialog}',dialogRow={args.dialog_row}"
                   if args.dialog else "")
-        prepare_args = (f"slot={args.slot},preset={args.preset},enable={enable}{lock},"
-                        f"query=[[{args.query}]]{dialog}")
+        prepare_args = (f"slot={args.slot},preset={args.preset},enable={enable}{lock}"
+                        f"{order},query=[[{args.query}]]{dialog}")
         panels: list[tuple[int, int] | None] = [None]
         if args.panels:
             panels = [tuple(int(n) for n in size.lower().split("x"))

@@ -883,6 +883,7 @@ function BfBot.UI._OnMenusLoaded()
     -- stretched slice and a tiled one look the same.
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
+    BfBot.UI._borderOk = false
     local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
     local anyOk = false
     local errs = {}
@@ -909,6 +910,7 @@ function BfBot.UI._OnMenusLoaded()
             table.insert(errs, resref .. ": " .. tostring(regErr))
         end
     end
+    BfBot.UI._borderOk = anyOk and true or false
     BfBot.UI._borderStatus = anyOk
         and (#errs == 0 and "registered" or ("registered (partial; " .. table.concat(errs, "; ") .. ")"))
         or ("FAILED: " .. table.concat(errs, "; "))
@@ -1083,7 +1085,9 @@ function BfBot.UI._ToggleQuickMenu()
     for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
         Infinity_SetArea(name, x, y, w, h)
     end
-    Infinity_SetArea("bbQuickFrame", x - 14, y - 14, w + 28, h + 28)
+    -- Same rect as the background: an inflated frame leaves a see-through
+    -- ring between the parchment edge and the rail (see _Layout).
+    Infinity_SetArea("bbQuickFrame", x, y, w, h)
     Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
     for i = 1, BfBot.MAX_PRESETS do
         Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
@@ -1152,15 +1156,23 @@ function BfBot.UI._Layout()
         return x - gap
     end
 
-    -- Panel background (parchment inside, border frame extends 24px beyond).
-    -- Three labels exist (one per theme); only the active theme's is enabled,
-    -- but all three need their area updated so theme switches are seamless.
+    -- Panel background and the frame drawn on top of it, on the SAME rect.
+    -- Three background labels exist (one per theme); only the active theme's
+    -- is enabled, but all three need their area updated so theme switches are
+    -- seamless.
+    --
+    -- The frame rect must not be inflated. Pecca's frame is a thin rail lying
+    -- flush with the atlas edge over a transparent middle, so a rect larger
+    -- than the parchment moves the rail off the panel and leaves a see-through
+    -- ring between the two, with the game showing through it. (The old
+    -- generated border filled its rect opaquely and drew behind, which is why
+    -- it could overhang.) Same rect: rail on the panel edge, corner bosses on
+    -- the panel's corners, transparent middle over parchment.
     setArea("bbBg",  px, py, pw, ph)
     setArea("bbBg2", px, py, pw, ph)
     setArea("bbBg3", px, py, pw, ph)
     setArea("bbDarkOverlay", px, py, pw, ph)
-    local bpad = 14  -- border overhang: the rail sits just outside the parchment
-    setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
+    setArea("bbBgFrame", px, py, pw, ph)
 
     -- Title
     setArea("bbTitle", px, py + 5, pw, 30)
@@ -1357,13 +1369,13 @@ function BfBot.UI._Layout()
     -- fills the row instead of leaving Sort stranded left of a long gap.
     row(r5Y,
         { { "bbTog", 112 }, { "bbTgt", 142 } },
-        { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 } },
+        { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } },
         { { "bbDel", 142 } })
 
     -- Variant layout: the same shape with the Variant picker beside Target.
     row(r5Y,
         { { "bbVTog", 112 }, { "bbVTgt", 142 }, { "bbVVar", 142 } },
-        { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 } },
+        { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } },
         { { "bbVDel", 142 } })
 
     row(r6Y,
@@ -1853,6 +1865,12 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(rows, function(a, b) return a.pri < b.pri end)
+    -- With the preset's order toggle on, the list is shown in the order it
+    -- will actually be cast in. The stored priorities are left alone, so
+    -- switching the toggle off gives the player's own order straight back.
+    if BfBot.Persist.IsAutoOrder(preset) then
+        rows = BfBot.Persist.OrderByDuration(rows)
+    end
     return rows
 end
 
@@ -2918,46 +2936,58 @@ end
 --- Sort the current preset's spell list by duration (longest first).
 --- Locked spells stay at their current row index. Unlocked spells fill
 --- the remaining rows in duration-desc order. Persists via _RenumberPriorities.
+--- Reorder the visible rows once, by hand, and keep the result.
+---
+--- The same rule the per-preset order toggle applies on every refresh --
+--- `BfBot.Persist.OrderByDuration` is the one implementation, so the button
+--- and the toggle can never drift apart. The difference is that this writes
+--- the new order back into the preset: it is the player reordering their
+--- own list, not a view of it.
 function BfBot.UI.SortByDuration()
-    local n = #buffbot_spellTable
-    if n == 0 then return end
+    if #buffbot_spellTable == 0 then return end
+    if BfBot.UI._IsAutoOrder() then return end
     BfBot.UI._PrepareSpellSelectionForRebuild()
-
-    local function durKey(entry)
-        local d = entry.dur
-        if d == nil then return -2 end
-        if d == -1 then return 1e9 end  -- permanent sorts first
-        return d
-    end
-
-    -- Partition: keep locked entries pinned to their row indices
-    local locked = {}   -- [row] = entry
-    local unlocked = {} -- ordered list
-    for i, entry in ipairs(buffbot_spellTable) do
-        if entry.lock == 1 then
-            locked[i] = entry
-        else
-            table.insert(unlocked, entry)
-        end
-    end
-
-    -- Sort unlocked by duration desc
-    table.sort(unlocked, function(a, b) return durKey(a) > durKey(b) end)
-
-    -- Rebuild: locked at their row, unlocked fill the gaps
-    local result = {}
-    local uIdx = 1
-    for i = 1, n do
-        if locked[i] then
-            result[i] = locked[i]
-        else
-            result[i] = unlocked[uIdx]
-            uIdx = uIdx + 1
-        end
-    end
-    buffbot_spellTable = result
+    buffbot_spellTable = BfBot.Persist.OrderByDuration(buffbot_spellTable)
     BfBot.UI._RenumberPriorities()
     BfBot.UI._RestoreSpellSelection()
+end
+
+--- True when the preset on screen casts longest-duration-first.
+function BfBot.UI._IsAutoOrder()
+    if BfBot.UI._view == "summons" then return false end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return false end
+    return BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx) == 1
+end
+
+--- Flip it, for the whole party's preset of that index. Presets are
+--- parallel across characters, so an order that applied to one of them
+--- would make "Pre-Battle" mean two different things in one party.
+function BfBot.UI.ToggleAutoOrder()
+    if BfBot.UI._view == "summons" then return end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return end
+    local now = BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx)
+    BfBot.Persist.SetAutoOrderAll(BfBot.UI._presetIdx, now == 1 and 0 or 1)
+    BfBot.UI._Refresh()
+end
+
+function BfBot.UI._AutoOrderLabel()
+    if BfBot.UI._IsAutoOrder() then
+        return BfBot.L10N.Get("ui.order.duration")
+    end
+    return BfBot.L10N.Get("ui.order.manual")
+end
+
+function BfBot.UI._AutoOrderTooltip()
+    if BfBot.UI._IsAutoOrder() then
+        return BfBot.L10N.Get("ui.order.tooltip_duration")
+    end
+    return BfBot.L10N.Get("ui.order.tooltip_manual")
+end
+
+function BfBot.UI._AutoOrderColor()
+    return BfBot.UI._T(BfBot.UI._IsAutoOrder() and "qcLong" or "btnText")
 end
 
 -- ============================================================
@@ -3471,6 +3501,14 @@ end
 function BfBot.UI._CaptionColor(active)
     local on = active ~= nil and active ~= false and active ~= 0
     return BfBot.UI._T(on and "btnText" or "btnTextOff")
+end
+
+--- True when the 9-slice frame actually draws. Its bottom-right corner boss
+--- then sits exactly where the resize grip's "///" used to be printed, so the
+--- hint is dropped and the boss marks the corner instead. Without the art the
+--- corner is bare parchment and the hint is the only thing that marks it.
+function BfBot.UI._HasFrameArt()
+    return BfBot.UI._borderOk == true
 end
 
 --- The inset bar behind the search box.

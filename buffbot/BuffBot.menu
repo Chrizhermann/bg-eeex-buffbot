@@ -371,11 +371,14 @@ menu
 		area 340 55 540 35
 	}
 
-	-- Resize grip visual indicator (BEFORE handle so handle gets click priority)
+	-- Resize grip hint (BEFORE handle so handle gets click priority). It is
+	-- only drawn when the frame art is absent: with the frame on, the corner
+	-- boss lands on this exact spot and the two draw over each other. The
+	-- resize handle below is 80x48 and covers the boss either way.
 	label
 	{
 		name    "bbResizeGrip"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._HasFrameArt()"
 		text    "///"
 		text style "bb_normal"
 		text color lua "BfBot.UI._T('grip')"
@@ -1555,7 +1558,7 @@ menu
 	{
 		name    "bbUp"
 		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
-		clickable lua "BfBot.UI._CanMoveUp()"
+		clickable lua "BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1570,7 +1573,7 @@ menu
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanMoveUp())"
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder())"
 		ignoreEvents
 		area 590 434 44 28
 	}
@@ -1580,7 +1583,7 @@ menu
 	{
 		name    "bbDn"
 		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
-		clickable lua "BfBot.UI._CanMoveDown()"
+		clickable lua "BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1595,7 +1598,7 @@ menu
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanMoveDown())"
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder())"
 		ignoreEvents
 		area 638 434 44 28
 	}
@@ -1605,7 +1608,7 @@ menu
 	{
 		name    "bbSort"
 		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
-		clickable lua "#buffbot_spellTable > 1"
+		clickable lua "#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1620,10 +1623,39 @@ menu
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._CaptionColor(#buffbot_spellTable > 1)"
+		text color lua "BfBot.UI._CaptionColor(#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder())"
 		ignoreEvents
 		area 686 434 44 28
 	}
+	-- Cast order for this preset: the player's own, or longest-lasting
+	-- first. Off by default -- the standing rule is that the player's
+	-- priority is respected -- and nothing is written back while it is on,
+	-- so switching it off returns the manual order untouched.
+	label
+	{
+		name    "bbOrder_b"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		scaleToClip
+		ignoreEvents
+		area 0 0 150 28
+	}
+
+	text
+	{
+		name    "bbOrder"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		clickable lua "BfBot.UI._IsPartyView()"
+		action  "BfBot.UI.ToggleAutoOrder()"
+		text lua "BfBot.UI._AutoOrderLabel()"
+		text style "bb_caption"
+		text color lua "BfBot.UI._AutoOrderColor()"
+		text align center center
+		tooltip lua "BfBot.UI._AutoOrderTooltip()"
+		area 0 0 150 28
+	}
+
 
 	-- Delete current preset
 	button
@@ -1732,6 +1764,7 @@ menu
 	{
 		name    "bbVUp"
 		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
+		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1746,7 +1779,7 @@ menu
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._T('btnText')"
+		text color lua "BfBot.UI._CaptionColor(not BfBot.UI._IsAutoOrder())"
 		ignoreEvents
 		area 642 434 40 28
 	}
@@ -1756,6 +1789,7 @@ menu
 	{
 		name    "bbVDn"
 		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
+		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1770,7 +1804,7 @@ menu
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._T('btnText')"
+		text color lua "BfBot.UI._CaptionColor(not BfBot.UI._IsAutoOrder())"
 		ignoreEvents
 		area 686 434 40 28
 	}
@@ -1780,6 +1814,7 @@ menu
 	{
 		name    "bbVSort"
 		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
+		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1794,10 +1829,39 @@ menu
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._T('btnText')"
+		text color lua "BfBot.UI._CaptionColor(not BfBot.UI._IsAutoOrder())"
 		ignoreEvents
 		area 730 434 40 28
 	}
+	-- Cast order for this preset: the player's own, or longest-lasting
+	-- first. Off by default -- the standing rule is that the player's
+	-- priority is respected -- and nothing is written back while it is on,
+	-- so switching it off returns the manual order untouched.
+	label
+	{
+		name    "bbVOrder_b"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		scaleToClip
+		ignoreEvents
+		area 0 0 150 28
+	}
+
+	text
+	{
+		name    "bbVOrder"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1"
+		clickable lua "BfBot.UI._IsPartyView()"
+		action  "BfBot.UI.ToggleAutoOrder()"
+		text lua "BfBot.UI._AutoOrderLabel()"
+		text style "bb_caption"
+		text color lua "BfBot.UI._AutoOrderColor()"
+		text align center center
+		tooltip lua "BfBot.UI._AutoOrderTooltip()"
+		area 0 0 150 28
+	}
+
 
 	-- Delete Preset (variant layout)
 	button
@@ -2052,7 +2116,7 @@ menu
 	label
 	{
 		name    "bbTgtFrame"
-		area 460 130 240 430
+		area 474 144 212 402
 	}
 
 
@@ -2564,7 +2628,7 @@ menu
 	label
 	{
 		name    "bbRenFrame"
-		area 436 266 288 118
+		area 450 280 260 90
 	}
 
 
@@ -2687,7 +2751,7 @@ menu
 	label
 	{
 		name    "bbConfFrame"
-		area 436 266 288 118
+		area 450 280 260 90
 	}
 
 
@@ -2800,7 +2864,7 @@ menu
 	label
 	{
 		name    "bbPickFrame"
-		area 366 86 428 408
+		area 380 100 400 380
 	}
 
 
@@ -2976,7 +3040,7 @@ menu
 	label
 	{
 		name    "bbImpFrame"
-		area 406 136 348 328
+		area 420 150 320 300
 	}
 
 
@@ -3115,7 +3179,7 @@ menu
 	label
 	{
 		name    "bbVarFrame"
-		area 406 166 348 248
+		area 420 180 320 220
 	}
 
 
