@@ -1393,18 +1393,10 @@ function BfBot.Persist._EnsurePresetsDir()
     os.execute('mkdir "' .. BfBot.Persist._PRESETS_DIR .. '" 2>nul')
 end
 
---- Export a character's full config to a Lua file in the presets directory.
+--- File name, without ".lua", that ExportConfig writes for a character.
 -- @param sprite  character sprite
--- @return true, safeName on success; false, reasonCode, detail on failure
-function BfBot.Persist.ExportConfig(sprite)
-    if BfBot._noIO then
-        return false, "reason.export.luajit_required", {}
-    end
-    if not sprite then return false, "reason.export.no_sprite", {} end
-
-    local config = BfBot.Persist.GetConfig(sprite)
-    if not config then return false, "reason.export.no_config", {} end
-
+-- @return safeName, rawName (the unsanitized character name)
+function BfBot.Persist._ExportFileName(sprite)
     -- Get character name and sanitize for filename
     local rawName = BfBot._GetName(sprite)
     if type(rawName) ~= "string" then rawName = tostring(rawName or "?") end
@@ -1433,6 +1425,22 @@ function BfBot.Persist.ExportConfig(sprite)
 
     -- Prevent path traversal (extra safety — gsub already strips . and /)
     safeName = safeName:gsub("%.%.", ""):gsub("[/\\]", "")
+    return safeName, rawName
+end
+
+--- Export a character's full config to a Lua file in the presets directory.
+-- @param sprite  character sprite
+-- @return true, safeName on success; false, reasonCode, detail on failure
+function BfBot.Persist.ExportConfig(sprite)
+    if BfBot._noIO then
+        return false, "reason.export.luajit_required", {}
+    end
+    if not sprite then return false, "reason.export.no_sprite", {} end
+
+    local config = BfBot.Persist.GetConfig(sprite)
+    if not config then return false, "reason.export.no_config", {} end
+
+    local safeName, rawName = BfBot.Persist._ExportFileName(sprite)
 
     BfBot.Persist._EnsurePresetsDir()
 
