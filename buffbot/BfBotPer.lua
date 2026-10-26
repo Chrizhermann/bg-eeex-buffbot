@@ -799,7 +799,18 @@ function BfBot.Persist.GetConfig(sprite)
     local ok, config = pcall(function()
         return EEex_GetUDAux(sprite)[BfBot.Persist._KEY]
     end)
-    if not ok then return nil end
+    -- A failed read is NOT "this character has no config": returning nil here
+    -- keeps _CreateDefaultConfig below out of reach, so a transient UDAux
+    -- glitch can never write fresh defaults over the player's presets (#42).
+    -- It has to be said out loud, though -- the one path at this layer that
+    -- used to fail in silence, which is also how a load-order window would
+    -- announce itself if one exists.
+    if not ok then
+        BfBot._Warn("[Persist] GetConfig: UDAux read failed for "
+            .. tostring(BfBot._GetName and BfBot._GetName(sprite) or sprite)
+            .. ": " .. tostring(config))
+        return nil
+    end
     if not config then
         config = BfBot.Persist._CreateDefaultConfig(sprite)
     end

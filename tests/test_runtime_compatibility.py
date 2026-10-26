@@ -4363,3 +4363,72 @@ def test_export_contains_error_objects_whose_tostring_throws(
 
     assert facts["contained"]
     assert facts["empty"]
+
+
+# ---------------------------------------------------------------------------
+# A failed UDAux read must not look like "this character has no config" (#42)
+# ---------------------------------------------------------------------------
+
+
+def _config_reader(read: str) -> str:
+    """A GetConfig harness whose UDAux read is whatever `read` does."""
+    return """
+        BfBot.Scan = {}
+        BfBot.Class = {}
+        BfBot.Innate = {}
+        BfBot.Mp = {}
+        T_Warnings = {}
+        BfBot._Warn = function(message) T_Warnings[#T_Warnings + 1] = message end
+        BfBot._GetName = function(_) return "Zyntris" end
+        T_Created = 0
+        EEex_GetUDAux = function(sprite) %s end
+    """ % read
+
+
+def _get_config(source: str) -> dict:
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute("Infinity_DisplayString = function(_) end")
+    runtime.execute(CORE_SOURCE)
+    runtime.execute(source)
+    runtime.execute(PERSIST_SOURCE)
+    # The one path that would overwrite a saved config, counted rather than run.
+    runtime.execute("""
+        BfBot.Persist._CreateDefaultConfig = function()
+            T_Created = T_Created + 1
+            return BfBot.Persist.GetDefaultConfig()
+        end
+    """)
+    return dict(runtime.execute("""
+        local config = BfBot.Persist.GetConfig("sprite")
+        return { got = config ~= nil and 1 or 0,
+                 created = T_Created,
+                 warned = #T_Warnings,
+                 message = T_Warnings[1] or "" }
+    """).items())
+
+
+def test_a_failed_udaux_read_never_creates_defaults_over_a_saved_config():
+    """The data-loss path #42 feared: a transient read glitch treated as "no
+    config yet", with fresh defaults written over the player's presets."""
+    facts = _get_config(_config_reader('error("udaux exploded")'))
+
+    assert facts["got"] == 0, "a failed read must not hand back a config"
+    assert facts["created"] == 0, "a failed read must not create defaults"
+
+
+def test_a_failed_udaux_read_says_so():
+    """It used to fail in silence -- the one path at this layer that did."""
+    facts = _get_config(_config_reader('error("udaux exploded")'))
+
+    assert facts["warned"] == 1
+    assert "GetConfig" in facts["message"]
+    assert "udaux exploded" in facts["message"]
+    assert "Zyntris" in facts["message"]
+
+
+def test_a_character_with_no_config_yet_still_gets_defaults():
+    """The other half of the distinction: absent is not an error."""
+    facts = _get_config(_config_reader("return {}"))
+
+    assert facts["created"] == 1
+    assert facts["warned"] == 0
