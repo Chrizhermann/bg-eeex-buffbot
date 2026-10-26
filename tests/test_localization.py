@@ -1033,16 +1033,27 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_release = releases[0]
     current_normalized = current_release.casefold()
 
-    assert current_release.startswith("v1.12.0 (2026-10-24)")
+    assert current_release.startswith(
+        "v1.12.0 (2026-10-27) — Icewind Dale, Pecca's chrome "
+        "and the shared plan model"
+    )
+    # v1.12.0 ships the refresh threshold (#84) together with everything that
+    # followed it, because the threshold section was written but never tagged.
+    assert "icewind dale: enhanced edition support" in current_normalized
+    assert "a preset can order its own casts, if you ask it to" in current_normalized
+    assert "the shared plan model" in current_normalized
+    assert "**f12 preset innates.**" in current_normalized
     assert "refresh buffs that are nearly over" in current_normalized
     assert "[buffbot] refreshbelow" in current_normalized
     assert "repeat counts now repeat buffs under force all" in current_normalized
-    assert "no save-schema change" in current_normalized
+    assert "no save-schema version change" in current_normalized
     # The time threshold does not cover Stoneskin's skins, and the dead
     # config.opts.skip field is named rather than quietly left behind.
     assert "stoneskin's real resource is its skins (opcode 218)" in current_normalized
     assert "`config.opts.skip` in the save schema is still unused" in current_normalized
-    assert "full automated suite passes **1300 tests**" in current_normalized
+    assert "full automated suite passes **1463 tests**" in current_normalized
+    # The threshold's own count is kept as the milestone it was.
+    assert "brought the suite to **1300 tests** at the time" in current_normalized
     # Force All is a hard override, not a threshold value (#84).
     assert "force all is an unconditional override" in current_normalized
     assert "wasted spell slots are accepted deliberately" in current_normalized
