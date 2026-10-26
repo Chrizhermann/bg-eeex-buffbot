@@ -229,17 +229,21 @@ def new_screenshot(folder: Path, before: dict[str, int], deadline: float) -> Pat
 
 
 def capture(console: Console, shot: Path, scrnshot: Path, out: Path, theme: str,
-            prepare_args: str) -> dict:
+            prepare_args: str, panel: tuple[int, int] | None = None) -> dict:
     before = {p.name: p.stat().st_mtime_ns for p in scrnshot.glob("*") if p.is_file()}
-    receipt = console.call(f"prepare-{theme}", shot, f"{{phase='prepare',theme='{theme}',{prepare_args}}}")
+    label = theme if panel is None else f"{theme}-{panel[0]}x{panel[1]}"
+    size = "" if panel is None else f",panelW={panel[0]},panelH={panel[1]}"
+    receipt = console.call(f"prepare-{label}", shot,
+                           f"{{phase='prepare',theme='{theme}',{prepare_args}{size}}}")
     # The capture phase itself refuses to shoot too early; this is just the wait.
     time.sleep(1.5)
-    console.call(f"capture-{theme}", shot, "{phase='capture'}")
+    console.call(f"capture-{label}", shot, "{phase='capture'}")
     native = new_screenshot(scrnshot, before, time.monotonic() + 20)
-    target = out / f"{theme}.png"
+    target = out / f"{label}.png"
     shutil.copy2(native, target)
-    log(f"  {theme}: {target.name} ({target.stat().st_size // 1024} KiB, from {native.name})")
-    return {"theme": theme, "png": target.as_posix(), "native": native.as_posix(),
+    log(f"  {label}: {target.name} ({target.stat().st_size // 1024} KiB, from {native.name})")
+    return {"theme": theme, "panel": list(panel) if panel else None,
+            "png": target.as_posix(), "native": native.as_posix(),
             "receipt": receipt.get("returnValue")}
 
 
@@ -256,6 +260,13 @@ def main() -> int:
     parser.add_argument("--enable", default="", help="canonical spell rows to switch on, e.g. 1,2,3")
     parser.add_argument("--lock", type=int, help="canonical spell row to lock")
     parser.add_argument("--query", default="")
+    parser.add_argument("--dialog", default="", choices=("", "targets", "picker", "rename"),
+                        help="open one of BuffBot's dialogs on top of the panel")
+    parser.add_argument("--dialog-row", type=int, default=1,
+                        help="canonical spell row the dialog opens for")
+    parser.add_argument("--panels", default="",
+                        help="panel sizes to shoot per theme, e.g. 560x420,900x650; "
+                             "empty keeps whatever size the lab profile saved")
     parser.add_argument("--resolution", default="1920x1080",
                         help="window size to request before capturing; empty keeps the lab's own")
     parser.add_argument("--hold", action="store_true",
@@ -335,11 +346,19 @@ def main() -> int:
 
         enable = "{" + args.enable + "}" if args.enable else "{}"
         lock = f",lock={args.lock}" if args.lock else ""
+        dialog = (f",dialog='{args.dialog}',dialogRow={args.dialog_row}"
+                  if args.dialog else "")
         prepare_args = (f"slot={args.slot},preset={args.preset},enable={enable}{lock},"
-                        f"query=[[{args.query}]]")
+                        f"query=[[{args.query}]]{dialog}")
+        panels: list[tuple[int, int] | None] = [None]
+        if args.panels:
+            panels = [tuple(int(n) for n in size.lower().split("x"))
+                      for size in args.panels.split(",") if size.strip()]
         shot = REPO / "tools/lab/lab_shot.lua"
         for theme in themes:
-            shots.append(capture(console, shot, scrnshot, out, theme, prepare_args))
+            for panel in panels:
+                shots.append(capture(console, shot, scrnshot, out, theme,
+                                     prepare_args, panel))
     except Exception as problem:  # noqa: BLE001 - recorded, then the lab is stopped regardless
         error = f"{type(problem).__name__}: {problem}"
         log("FAILED " + error)
@@ -360,7 +379,7 @@ def main() -> int:
     run = report["lab_run"] or {}
     log(f"guard tripped={run.get('tripped')} audio_peak={run.get('max_job_audio_peak')} "
         f"left_in_job={run.get('left_in_job')}")
-    log(f"{len(shots)}/{len(themes)} screenshots in {out}")
+    log(f"{len(shots)} screenshots in {out}")
     return 1 if error else 0
 
 
