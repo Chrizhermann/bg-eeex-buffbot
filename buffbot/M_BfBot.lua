@@ -27,10 +27,10 @@ Infinity_DoFile("BfBotMp")   -- Multiplayer support / ownership probe (depends o
 Infinity_DoFile("BfBotFst")  -- Optional temporary simulation speed (native casting)
 Infinity_DoFile("BfBotPer")  -- Persistence (depends on Scan, Class)
 Infinity_DoFile("BfBotPln")  -- Shared plan model (depends on Scan, Class, Exec, Persist)
-Infinity_DoFile("BfBotInn")  -- Innate abilities (depends on Persist, Exec)
+Infinity_DoFile("BfBotInn")  -- Runtime SPLs, leftover F12 innate cleanup
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
-BfBot.Innate._EnsureSPLFiles()  -- Write innate SPL files to override (if missing)
-BfBot.Innate.Init()          -- Register sprite-loaded listener for innate grants
+BfBot.Innate._EnsureSPLFiles()  -- Write the Quick Cast SPLs to override
+BfBot.Innate.Init()          -- Reset leftover-innate cleanup when a game ends
 BfBot.Fast.Init()            -- Restore temporary simulation speed on load/exit
 
 -- Late-join listener (issue #19): a summon spawning MID-RUN attaches to the

@@ -4,6 +4,8 @@
 **Status:** Approved
 **Parent scope:** `docs/plans/2026-08-21-full-localization-design.md`
 
+**Update (2026-10-25):** BuffBot no longer generates F12 preset innates. The TLK-backed innate names this design kept went with them, so BuffBot now writes nothing to the TLK. The file-backed catalog stands.
+
 ## Problem
 
 The original localization design resolved every player-facing runtime string

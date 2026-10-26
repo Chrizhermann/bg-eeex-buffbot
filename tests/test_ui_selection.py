@@ -635,7 +635,7 @@ def test_preset_lifecycle_changes_clear_selection(
         BfBot.UI._OnSpellRowAction(3)
 
         BfBot.UI._Refresh = function() end
-        BfBot.Innate = {{ RefreshAll = function() end }}
+        BfBot.Innate = {{}}
         BfBot.Persist.CreatePresetAll = function() return 2 end
         BfBot.Persist.DeletePresetAll = function(_) return true end
         BfBot.Persist.GetConfig = function(_)

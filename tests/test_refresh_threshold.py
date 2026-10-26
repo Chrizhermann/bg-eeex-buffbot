@@ -11,6 +11,7 @@ from __future__ import annotations
 import faulthandler
 import sys
 from pathlib import Path
+import re
 
 import pytest
 from lupa.luajit21 import LuaRuntime
@@ -23,6 +24,7 @@ PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
 EXEC_SOURCE = (ROOT / "buffbot/BfBotExe.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 THEME_SOURCE = (ROOT / "buffbot/BfBotThm.lua").read_text(encoding="utf-8")
+TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
 
 TICKS_PER_SECOND = 15
 NOW = 100_000  # arbitrary world time, in game ticks
@@ -72,6 +74,7 @@ def exec_lua() -> LuaRuntime:
             return value
         end
         Infinity_SetINIString = function(_, key, value) T_Ini[key] = value end
+        Infinity_RemoveINIEntry = function(_, key) T_Ini[key] = nil end
 
         EEex_Utility_IterateCPtrList = function(list, fn)
             for _, value in ipairs(list) do
@@ -1040,10 +1043,10 @@ def test_module_level_force_mode_starts_at_skip_active() -> None:
 
 def test_a_bare_console_queue_runs_on_the_option_alone() -> None:
     # Superseded an earlier reading of #84 that kept the panel toggle out of
-    # F12. The selection is sticky and the panel keeps showing it, so a
-    # keypress made with the panel shut must mean what the panel says, and
-    # F12-after-rest is the reported case. Only a caller that passes nothing
-    # at all — a raw console queue — falls back to the option alone.
+    # the shortcuts. The selection is sticky and the panel keeps showing it,
+    # so a run started with the panel shut, from the actionbar preset picker,
+    # must mean what the panel says. Only a caller that passes nothing at all
+    # — a raw console queue — falls back to the option alone.
     source = EXEC_SOURCE
     start = source.index("function BfBot.Exec.Start(")
     body = source[start:source.index("\nfunction ", start + 1)]
@@ -1430,7 +1433,8 @@ def test_the_force_state_is_reachable_without_the_panel(
 
 def test_the_selection_and_the_running_mode_are_separate() -> None:
     # Exec.Start takes the mode as an argument and must not read the pending
-    # selection itself, or F12 would inherit whatever the panel last showed.
+    # selection itself, or a raw console queue would inherit whatever the
+    # panel last showed.
     source = EXEC_SOURCE
     start = source.index("function BfBot.Exec.Start(")
     end = source.index("\nfunction ", start + 1)
@@ -1470,24 +1474,6 @@ def test_a_panel_reloaded_against_an_older_exec_falls_back_to_skip(
 # --------------------------------------------------------------------------
 # Review follow-ups (PR #86)
 # --------------------------------------------------------------------------
-
-
-def test_the_f12_innate_path_passes_the_selected_policy_through() -> None:
-    # Pressing F12 after a rest is the case #84 was reported for, so an innate
-    # run must mean what the panel says. Both start paths carry the mode.
-    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
-    assert "if BfBot.Exec.GetForceMode then" in source
-    assert "pcall(BfBot.Exec.GetForceMode)" in source
-    assert "local forceMode = 0" in source
-    assert "BfBot.Fast.Start(queue, speed,\n                    presetIdx, forceMode)" in source
-    assert "BfBot.Exec.Start(queue, qcMode,\n                presetIdx, forceMode)" in source
-
-
-def test_the_innate_path_never_starts_a_run_without_the_mode() -> None:
-    source = (ROOT / "buffbot/BfBotInn.lua").read_text(encoding="utf-8")
-    for call in ("BfBot.Exec.Start(queue, qcMode, presetIdx)",
-                 "BfBot.Fast.Start(queue, speed, presetIdx)"):
-        assert call not in source, call
 
 
 def test_both_duration_formatters_agree_on_the_same_staircase(
@@ -1532,9 +1518,10 @@ def test_the_in_game_phase_guarantees_cleanup_after_a_failure() -> None:
     start = source.index("function BfBot.Test.RefreshThreshold()")
     body = source[start:source.index("\nfunction ", start + 1)]
 
-    assert "local guarded, guardErr = pcall(function()" in body
-    # The restore sits after the guarded block, not inside it.
-    guard_end = body.index("    end)")
+    guard_start = body.index("local guarded, guardErr = pcall(function()")
+    # The restore sits after the guarded block, not inside it. The guard
+    # closes with the first "end)" at its own indentation.
+    guard_end = body.index("\n    end)\n", guard_start)
     after = body[guard_end:]
     assert "effectID     = 321," in after
     assert 'BfBot.Persist.SetPref("RefreshBelow", savedPref)' in after
@@ -1545,5 +1532,109 @@ def test_the_in_game_phase_guarantees_cleanup_after_a_failure() -> None:
     assert body.count('SetPref("RefreshBelow", savedPref)') == 1
     # The dead force-mode save/restore pair is gone.
     assert "savedForce" not in body
-    # The cleanup's sprite handle must not be shadowed inside the guard.
-    assert body.count("local sprite = EEex_Sprite_GetInPortrait(0)") == 1
+    # The cleanup's sprite handle must not be shadowed inside the guard: the
+    # probe target is declared once, before it.
+    assert len(re.findall(r"\blocal sprite\b", body)) == 1
+    assert body.index("local sprite") < guard_start
+
+
+def _run_in_game_probe_phase(exec_lua: LuaRuntime, carried: dict[int, str]) -> dict:
+    """Run the in-game RefreshThreshold phase on a six-member stub party.
+
+    `carried` maps a portrait slot to the Lua constructor of one effect that
+    member already has. Applied probes are stored the way the engine stores
+    them: timing 0 and 10 become an absolute deadline (4096), delayed 3
+    becomes 6.
+    """
+    exec_lua.execute(TEST_SOURCE)
+    party = "\n".join(
+        f"T_Party[{slot}] = {{ name = 'M{slot}', m_id = {200 + slot},"
+        f" m_timedEffectList = {{ {carried.get(slot, '')} }},"
+        " m_equipedEffectList = {} }"
+        for slot in range(6)
+    )
+    return exec_lua.execute(
+        "T_Party = {}\n" + party + f"\nlocal SECOND = {TICKS_PER_SECOND}\n" + """
+        T_Lines, T_Applied = {}, {}
+        BfBot._Print = function(message) T_Lines[#T_Lines + 1] = message end
+        BfBot.UI = { CycleForceRecast = function() end }
+        -- The phase's player-state guard drops the scan caches afterwards.
+        BfBot.Scan.InvalidateAll = function() end
+        BfBot.Scan.InvalidateSummons = function() end
+        EEex_Sprite_GetInPortrait = function(slot) return T_Party[slot] end
+        EEex_GameObject_ApplyEffect = function(sprite, spec)
+            T_Applied[#T_Applied + 1] = sprite.name .. ":" .. spec.effectID
+            local list = sprite.m_timedEffectList
+            if spec.effectID == 321 then
+                for i = #list, 1, -1 do
+                    if list[i].m_sourceRes:get() == spec.res then
+                        table.remove(list, i)
+                    end
+                end
+                return
+            end
+            -- The engine never stores an op142 whose icon the creature
+            -- prevents (op169) or an opcode it is immune to (op101).
+            for _, effect in ipairs(list) do
+                if (spec.effectID == 142 and effect.m_effectId == 169
+                            and effect.m_dWFlags == (spec.dwFlags or 0))
+                        or (effect.m_effectId == 101 and effect.m_dWFlags == spec.effectID) then
+                    return
+                end
+            end
+            local timing, duration = spec.durationType, spec.duration
+            if timing == 0 then
+                timing, duration = 4096, T_Now + duration * SECOND
+            elseif timing == 10 then
+                timing, duration = 4096, T_Now + duration
+            elseif timing == 3 then
+                timing, duration = 6, T_Now + duration * SECOND
+            end
+            list[#list + 1] = T_Effect(spec.m_sourceRes, 0, {
+                m_effectId = spec.effectID, m_dWFlags = spec.dwFlags or 0,
+                m_durationType = timing, m_duration = duration,
+            })
+        end
+        local passed = BfBot.Test.RefreshThreshold()
+        return {
+            passed = passed,
+            applied = table.concat(T_Applied, ","),
+            log = table.concat(T_Lines, "\\n"),
+        }
+        """
+    )
+
+
+def test_in_game_probe_phase_reads_its_probes_on_the_leader(
+    exec_lua: LuaRuntime,
+) -> None:
+    facts = _run_in_game_probe_phase(exec_lua, {})
+
+    assert facts["passed"], facts["log"]
+    assert {probe.split(":")[0] for probe in facts["applied"].split(",")} == {"M0"}
+
+
+def test_in_game_probe_phase_moves_off_a_leader_who_prevents_the_probe_icon(
+    exec_lua: LuaRuntime,
+) -> None:
+    # IWD:EE's Enrage prevents portrait icon 0 (op169), and the engine then
+    # never stores an op142 effect with that icon on the barbarian.
+    facts = _run_in_game_probe_phase(exec_lua, {
+        0: "T_Effect('SPCL321', 60, { m_effectId = 169, m_dWFlags = 0 })",
+    })
+
+    assert facts["passed"], facts["log"]
+    probes = facts["applied"].split(",")
+    assert all(probe.startswith("M1:") for probe in probes)
+    assert "M1:142" in probes and "M1:321" in probes
+
+
+def test_in_game_probe_phase_warns_when_every_member_blocks_the_probe(
+    exec_lua: LuaRuntime,
+) -> None:
+    immune = "T_Effect('IMMUNE', 60, { m_effectId = 101, m_dWFlags = 142 })"
+    facts = _run_in_game_probe_phase(exec_lua, {slot: immune for slot in range(6)})
+
+    assert facts["passed"], facts["log"]
+    assert facts["applied"] == ""
+    assert "WARN: Every party member prevents the probe icon" in facts["log"]

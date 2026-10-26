@@ -338,13 +338,14 @@ BfBot.Scan = {
 
 
 # The player's own state: two members with configs of their own (one with
-# an unfinished item swap), one member BuffBot never configured.
+# an unfinished item swap), one member BuffBot never configured. The safety
+# tick removed the F12 innates earlier versions granted right after the
+# load, so the leader keeps only an innate of their own.
 PLAYER = r"""
 local leader = T_AddMember(0, 0, "Zyntris", "")
 local second = T_AddMember(1, 1, "Jaheira", "JAHEIRA")
 local third = T_AddMember(2, 2, "Imoen", "IMOEN2")
-leader.innates = { "BFBT01", "BFBT02", "BFBT03", "SPCL900" }
-second.innates = { "BFBT11", "BFBT12" }
+leader.innates = { "SPCL900" }
 
 EEex_GetUDAux(leader)[BfBot.Persist._KEY] = {
     v = 10, ap = 2,
@@ -445,7 +446,6 @@ function T_State()
     state.fontSize = tostring(BfBot.Theme._fontSize)
     state.panel = table.concat({ tostring(BfBot.UI._panelX), tostring(BfBot.UI._panelY),
         tostring(BfBot.UI._panelW), tostring(BfBot.UI._panelH) }, ",")
-    state.refreshPending = tostring(BfBot._innateRefreshPending)
     state.importGlobal = tostring(BfBot._import)
     return state
 end
@@ -470,7 +470,7 @@ function T_RunQueued()
 end
 
 function T_Refs()
-    local refs = { overrides = BfBot._overrides, refresh = BfBot.Innate.Refresh }
+    local refs = { overrides = BfBot._overrides }
     for slot = 0, 5 do
         local sprite = T_Party[slot]
         if sprite then
@@ -482,7 +482,7 @@ function T_Refs()
 end
 
 function T_SameRefs(refs)
-    local same = refs.overrides == BfBot._overrides and refs.refresh == BfBot.Innate.Refresh
+    local same = refs.overrides == BfBot._overrides
     for slot = 0, 5 do
         local sprite = T_Party[slot]
         if sprite then
@@ -599,8 +599,8 @@ def calls(lua: LuaRuntime, label: str) -> int:
 
 
 # Watchdog and StaleState strip Quick Cast buffs from the leader, as the end
-# of any run does. Innate grants or revokes must never be queued: they would
-# apply a scratch config to the sprite after the restore.
+# of any run does. Nothing else may be queued: a queued action runs only
+# after the restore, against the player's own state.
 ALLOWED_ENGINE_ACTIONS = {'ReallyForceSpellRES("BFBTCR",Myself)'}
 
 LEADER = "EEex_GetUDAux(T_Party[0])[BfBot.Persist._KEY]"
@@ -671,7 +671,7 @@ PHASE_CASES = [
                              "Persist.DeletePreset", "Persist.SetSpellTarget"], "",
                  id="Persist"),
     pytest.param("QuickCast", ["Persist.SetQuickCast"], "", id="QuickCast"),
-    pytest.param("PlanReconciliation", ["instant"], "", id="PlanReconciliation"),
+    pytest.param("LegacyInnateCleanup", ["instant"], "", id="LegacyInnateCleanup"),
 ]
 
 
@@ -689,6 +689,17 @@ def test_phase_leaves_the_players_state_as_it_was(
     run_queued(world)
     player.assert_untouched()
 
+
+# LegacyInnateCleanup's second pass over the party raises while the test's
+# grant is on the leader.
+BREAK_SECOND_LEGACY_PASS = (
+    "local real, passes = BfBot.Innate._RemoveLegacy, 0\n"
+    "BfBot.Innate._RemoveLegacy = function(...)\n"
+    "    passes = passes + 1\n"
+    "    if passes == 2 then error('tick broke') end\n"
+    "    return real(...)\n"
+    "end"
+)
 
 # phase, the writer it reaches before the raise, the raise, the report.
 RAISE_CASES = [
@@ -720,13 +731,8 @@ RAISE_CASES = [
     pytest.param("QuickCast", "Persist.SetQuickCast",
                  "BfBot.Innate._BuildCheatSPL = function() error('no SPL') end",
                  "Quick Cast raised: ", id="QuickCast"),
-    pytest.param("PlanReconciliation", "instant",
-                 "local real = BfBot.Innate._PlanReconciliation\n"
-                 "BfBot.Innate._PlanReconciliation = function(sprite, slot, config)\n"
-                 "    if config == nil then error('planner broke') end\n"
-                 "    return real(sprite, slot, config)\n"
-                 "end",
-                 "PlanReconciliation cases raised: ", id="PlanReconciliation"),
+    pytest.param("LegacyInnateCleanup", "instant", BREAK_SECOND_LEGACY_PASS,
+                 "LegacyInnateCleanup cases raised: ", id="LegacyInnateCleanup"),
 ]
 
 
@@ -746,25 +752,49 @@ def test_phase_that_raises_still_leaves_the_players_state(
     player.assert_untouched()
 
 
-def test_interrupted_reconciliation_cases_remove_the_synthetic_innate(
+def test_interrupted_legacy_innate_cases_remove_the_test_grant(
     world: LuaRuntime,
 ) -> None:
-    world.execute(
-        """
-        local real = BfBot.Innate._PlanReconciliation
-        BfBot.Innate._PlanReconciliation = function(sprite, slot, config)
-            if config == nil then error('planner broke') end
-            return real(sprite, slot, config)
-        end
-        """
-    )
+    world.execute(BREAK_SECOND_LEGACY_PASS)
 
-    world.globals().BfBot.Test.PlanReconciliation()
+    world.globals().BfBot.Test.LegacyInnateCleanup()
 
-    assert ("PASS: cleanup: synthetic BFBT07 removed after an interrupted case"
+    assert ("PASS: cleanup: the test's BFBT01 removed after an interrupted case"
             in output(world))
-    assert list(world.globals().T_Party[0].innates.values()) == [
-        "BFBT01", "BFBT02", "BFBT03", "SPCL900"]
+    assert list(world.globals().T_Party[0].innates.values()) == ["SPCL900"]
+
+
+def test_legacy_innate_phase_removes_only_leftovers_the_tick_has_not_reached(
+    world: LuaRuntime,
+) -> None:
+    # Right after a load a member can still carry F12 innates from an earlier
+    # version. The phase's pass removes them, as the safety tick would a moment
+    # later, and touches nothing else.
+    world.execute("T_Party[1].innates = { 'BFBT11', 'SPCL901', 'BFBT12' }")
+    player = Player(world)
+
+    passed = world.globals().BfBot.Test.LegacyInnateCleanup()
+
+    assert passed is True
+    run_queued(world)
+    assert player.changes() == {
+        "member1.innates": ("BFBT11,SPCL901,BFBT12", "SPCL901")}
+
+
+def test_legacy_innate_phase_leaves_a_leftover_it_cannot_probe_with(
+    world: LuaRuntime,
+) -> None:
+    # The leader still knows the very innate the phase grants: a grant would
+    # add nothing, so the phase skips and the safety tick removes it later.
+    world.execute("T_Party[0].innates = { 'BFBT01', 'SPCL900' }")
+    player = Player(world)
+
+    passed = world.globals().BfBot.Test.LegacyInnateCleanup()
+
+    assert passed is True
+    assert "still knows BFBT01 from an earlier version" in output(world)
+    assert calls(world, "instant") == 0
+    player.assert_untouched()
 
 
 def test_export_tests_leave_an_unreadable_export_alone(world: LuaRuntime) -> None:
@@ -842,8 +872,6 @@ function T_Vandal()
     Infinity_RemoveINIEntry("BuffBot", "CombatInterrupt")
     BfBot.Theme._SetFontSize(1)
     BfBot.UI._ResetLayout()
-    BfBot._innateRefreshPending = true
-    BfBot.Innate.Refresh(2)
     return true
 end
 """
@@ -865,7 +893,7 @@ def ran(lua: LuaRuntime) -> list[str]:
 
 def test_run_all_calls_the_phases_these_tests_stub() -> None:
     assert RUN_ALL_PHASES[0] == "CheckFields"
-    assert set(GUARDED_PHASES) | {"PlanReconciliation"} <= set(RUN_ALL_PHASES)
+    assert set(GUARDED_PHASES) | {"LegacyInnateCleanup"} <= set(RUN_ALL_PHASES)
 
 
 def test_run_all_of_the_real_phases_leaves_the_players_state(world: LuaRuntime) -> None:
@@ -1003,7 +1031,7 @@ WRITERS = re.compile(
     r"|BfBot\.Class\.SetOverride|BfBot\._overrides"
     r"|BfBot\.Exec\.(?:Start|Stop|_Complete|_ForceComplete|_SafetyTick|_RecoverItemSwaps)\b"
     r"|BfBot\.Theme\._SetFontSize|BfBot\.UI\._(?:ResetLayout|SaveLayout|OnDrag|OnResize)\b")
-UNGUARDED = sorted(set(RUN_ALL_PHASES) - set(GUARDED_PHASES) - {"PlanReconciliation"})
+UNGUARDED = sorted(set(RUN_ALL_PHASES) - set(GUARDED_PHASES))
 
 
 @pytest.mark.parametrize("name", UNGUARDED)

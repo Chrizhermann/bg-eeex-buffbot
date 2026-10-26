@@ -155,7 +155,6 @@ local function snapshot()
     s.memory.palette = paletteName()
     s.memory.panel = strict({ x = BfBot.UI._panelX, y = BfBot.UI._panelY,
         w = BfBot.UI._panelW, h = BfBot.UI._panelH })
-    s.memory.innateRefreshPending = tostring(BfBot._innateRefreshPending)
     s.memory.pendingSkips = strict(BfBot.Persist._pendingSkips)
     s.memory.execState = tostring(BfBot.Exec and BfBot.Exec._state)
     return s
@@ -191,7 +190,6 @@ local function setupFixture()
     BfBot.Persist.RenamePresetAll(2, "Lab Fight")
     local boss = BfBot.Persist.CreatePresetAll("Lab Boss")
     note("CreatePresetAll -> " .. tostring(boss))
-    BfBot.Innate.RefreshAll()
 
     -- Leader: quick cast, active preset, lock/repeat/targets in presets 2-3.
     BfBot.Persist.SetQuickCast(leader, 1, 2)

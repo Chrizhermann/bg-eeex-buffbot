@@ -62,6 +62,49 @@ local function _tryField(ud, names, expectedType)
     return nil, nil
 end
 
+--- Resolve a SPELL.IDS symbol to its spell resref (1xxx SPPR, 2xxx SPWI,
+--- 3xxx SPIN, 4xxx SPCL). The symbol is a spell's identity across games and
+--- mod layouts, where one resref can name different spells: Prayer is SPPR316
+--- in IWD:EE, whose SPPR327 is Storm Shell. Nil when the symbol is absent.
+local function _spellResrefForSymbol(symbol)
+    local found
+    local ok = pcall(function()
+        local list = EEex_Resource_LoadIDS("SPELL")
+        EEex_Resource_IterateUnpackedIDSEntries(list, function(id, line, start)
+            local name = type(start) == "string" and start or line
+            if type(id) == "number" and type(name) == "string"
+                and name:match("^%s*(.-)%s*$"):upper() == symbol then
+                found = id
+                return true
+            end
+        end)
+    end)
+    if not ok or not found then return nil end
+    local prefix = ({ "SPPR", "SPWI", "SPIN", "SPCL" })[math.floor(found / 1000)]
+    return prefix and string.format("%s%03d", prefix, found % 1000) or nil
+end
+
+--- True when the SPL's ability 0 carries an opcode-214 (variant selection)
+--- feature block that names a variant 2DA, the form _DetectVariants reads.
+--- Read directly, so the result does not depend on the code under test.
+local function _hasVariantTable(hdr)
+    local ability = hdr and hdr:getAbility(0)
+    if not ability then return false end
+    local found = false
+    BfBot.Class._IterateFeatureBlocks(hdr, ability, function(fb)
+        if fb[BfBot._fields.fb_opcode] ~= 214 then return end
+        local value = fb[BfBot._fields.fb_res]
+        local ok, res = pcall(function()
+            return type(value) == "string" and value or value:get()
+        end)
+        if ok and type(res) == "string" and res ~= "" then
+            found = true
+            return true
+        end
+    end)
+    return found
+end
+
 -- ============================================================
 -- Player state guard
 -- Players run the suite on their own saves, and it drives the real
@@ -72,9 +115,7 @@ end
 -- own tables go back by reference afterwards -- outside the pcall around
 -- the phase, so neither a failed check nor a raise can skip it. BuffBot's
 -- baldur.ini keys, the font size and the panel geometry return to their
--- exact earlier values, an absent key included. Innate reconciliation is
--- held off meanwhile: it queues actions that would apply a scratch config
--- to the sprite only after the restore.
+-- exact earlier values, an absent key included.
 -- ============================================================
 
 local _INI_SECTION = "BuffBot"
@@ -143,8 +184,6 @@ local function _RestorePrefs(saved, problems)
     end
 end
 
-local function _HoldInnateRefresh() end
-
 --- Snapshot the player's state together with the scratch copies to use.
 --- Reads only, so a raise here leaves nothing swapped.
 local function _TakePlayerState()
@@ -165,9 +204,6 @@ local function _TakePlayerState()
     end
     saved.overrides = BfBot._overrides
     saved.scratchOverrides = _DeepCopy(saved.overrides)
-    saved.innate = BfBot.Innate
-    saved.refresh = saved.innate and saved.innate.Refresh
-    saved.refreshPending = BfBot._innateRefreshPending
     saved.theme = BfBot.Theme
     saved.fontSize = saved.theme and saved.theme._fontSize
     saved.ui = BfBot.UI
@@ -184,7 +220,6 @@ local function _UseScratchState(saved)
         member.aux.BBItemSwap = member.scratchItemSwap
     end
     BfBot._overrides = saved.scratchOverrides
-    if saved.refresh then saved.innate.Refresh = _HoldInnateRefresh end
 end
 
 --- Put the player's own state back. Returns what could not be restored.
@@ -196,8 +231,6 @@ local function _RestorePlayerState(saved)
     end
     local scratchOverrides = BfBot._overrides
     BfBot._overrides = saved.overrides
-    if saved.refresh then saved.innate.Refresh = saved.refresh end
-    BfBot._innateRefreshPending = saved.refreshPending
 
     local problems = {}
     local function step(what, fn)
@@ -2086,17 +2119,28 @@ function BfBot.Test.SubwindowDetection()
         _warning("Cannot load SPWI305 — skipping normal spell test")
     end
 
-    -- ---- Test 3: Variant spell (SPWI422 Protection from Energy) ----
+    -- ---- Test 3: Variant spell ----
+    -- The reference layout's SPWI422 (Protection from Energy) names other
+    -- spells elsewhere (IWD:EE: Beltyn's Burning Blood), so the subject is the
+    -- first candidate with a variant table. Spell Immunity has one in BG:EE,
+    -- BG2:EE and IWD:EE alike.
     P("")
-    P("  [3] Variant spell (SPWI422 Protection from Energy)")
+    local varRef, varHdrOk, varHdr = nil, false, nil
+    for _, candidate in ipairs({ "SPWI422", _spellResrefForSymbol("WIZARD_SPELL_IMMUNITY") }) do
+        local ok, hdr = pcall(EEex_Resource_Demand, candidate, "SPL")
+        if ok and hdr and _hasVariantTable(hdr) then
+            varRef, varHdrOk, varHdr = candidate, true, hdr
+            break
+        end
+    end
+    P("  [3] Variant spell (" .. tostring(varRef) .. ")")
 
-    local varHdrOk, varHdr = pcall(EEex_Resource_Demand, "SPWI422", "SPL")
     if varHdrOk and varHdr then
         local varAbil = varHdr:getAbility(0)
         if varAbil then
             local ok, variants = pcall(BfBot.Class._DetectVariants, varHdr, varAbil)
             if ok and variants and type(variants) == "table" and #variants > 0 then
-                _ok("SPWI422 returned " .. #variants .. " variant(s)")
+                _ok(varRef .. " returned " .. #variants .. " variant(s)")
 
                 -- ---- Test 3a: Each entry has required fields ----
                 P("")
@@ -2140,17 +2184,17 @@ function BfBot.Test.SubwindowDetection()
                         .. " icon=" .. v.icon .. ")")
                 end
             elseif ok and variants == nil then
-                _warning("SPWI422 returned nil — spell may not have opcode 214 in this install")
+                _nok(varRef .. " has a variant table but _DetectVariants returned nil")
             elseif ok then
-                _nok("SPWI422 returned unexpected: " .. type(variants))
+                _nok(varRef .. " returned unexpected: " .. type(variants))
             else
-                _nok("_DetectVariants threw on SPWI422: " .. tostring(variants))
+                _nok("_DetectVariants threw on " .. varRef .. ": " .. tostring(variants))
             end
         else
-            _warning("Cannot get ability 0 for SPWI422")
+            _warning("Cannot get ability 0 for " .. varRef)
         end
     else
-        _warning("Cannot load SPWI422 — not available in this install")
+        _warning("No variant spell with a variant table in this install")
     end
 
     -- ---- Test 4: Classify result includes hasVariants ----
@@ -2180,35 +2224,35 @@ function BfBot.Test.SubwindowDetection()
     end
 
     -- Test 4b: Classify variant spell
-    BfBot._cache.class["SPWI422"] = nil
     if varHdrOk and varHdr then
+        BfBot._cache.class[varRef] = nil
         local varAbil = varHdr:getAbility(0)
         if varAbil then
-            local ok, classResult = pcall(BfBot.Class.Classify, "SPWI422", varHdr, varAbil)
+            local ok, classResult = pcall(BfBot.Class.Classify, varRef, varHdr, varAbil)
             if ok and classResult then
                 if classResult.hasVariants == true then
-                    _ok("SPWI422 classify: hasVariants = true")
+                    _ok(varRef .. " classify: hasVariants = true")
                     if classResult.variants and #classResult.variants > 0 then
-                        _ok("SPWI422 classify: variants array has "
+                        _ok(varRef .. " classify: variants array has "
                             .. #classResult.variants .. " entries")
                     else
-                        _nok("SPWI422 classify: variants array missing or empty")
+                        _nok(varRef .. " classify: variants array missing or empty")
                     end
                     -- Variant spells should be classified as buffs
                     if classResult.isBuff then
-                        _ok("SPWI422 classify: isBuff = true (inherited from variants)")
+                        _ok(varRef .. " classify: isBuff = true (inherited from variants)")
                     else
-                        _nok("SPWI422 classify: isBuff should be true, got false")
+                        _nok(varRef .. " classify: isBuff should be true, got false")
                     end
                 else
-                    _warning("SPWI422 classify: hasVariants = false — may not have op214 in this install")
+                    _nok(varRef .. " classify: hasVariants = false despite its variant table")
                 end
             else
-                _nok("Classify SPWI422 failed: " .. tostring(classResult))
+                _nok("Classify " .. varRef .. " failed: " .. tostring(classResult))
             end
         end
     else
-        _warning("Skipping SPWI422 classify test — not loaded")
+        _warning("Skipping variant classify test — no variant spell in this install")
     end
 
     -- ---- Test 5: Scan entry propagates hasVariants ----
@@ -2565,7 +2609,11 @@ function BfBot.Test.DurationRecursion()
     -- Main fix: hierarchical spells that deliver effects via op=146 sub-spells.
     -- Parent SPLs contain only op=146 "Cast Spell" references; real timed
     -- effects live in the sub-spells. Classifier must recurse.
-    testSpell("SPPR327", 30, "Prayer (op=146 -> #PRAYERG 30s)")
+    -- Prayer is found by its SPELL.IDS symbol (IWD:EE: SPPR316, while its
+    -- SPPR327 is Storm Shell); a SPELL.IDS without the symbol keeps the
+    -- reference layout's SPPR327.
+    local prayer = _spellResrefForSymbol("CLERIC_PRAYER") or "SPPR327"
+    testSpell(prayer, 30, "Prayer (op=146 -> #PRAYERG 30s)")
     testLinkedSpell("OHTMPS2", "Chaos of Battle")
 
     -- Regression: Chant's parent SPL has a direct op=176 sibling at 60s.
@@ -2598,25 +2646,25 @@ function BfBot.Test.DurationRecursion()
     -- Wrapper spell: Prayer delivers via op=146 -> #PRAYERG/#PRAYERB.
     -- Leafs must be a non-empty table and must not contain the parent.
     do
-        local hdr, ability = loadSpell("SPPR327", "Prayer leafs")
+        local hdr, ability = loadSpell(prayer, "Prayer leafs")
         if hdr then
             local _, _, leafs = BfBot.Class.GetDuration(hdr, ability)
             if type(leafs) ~= "table" then
-                _nok("Prayer (SPPR327): third return is " .. type(leafs)
+                _nok("Prayer (" .. prayer .. "): third return is " .. type(leafs)
                     .. " (want table)")
             else
                 _check(#leafs >= 1, string.format(
-                    "Prayer (SPPR327): %d leaf resref(s) collected [%s] (want >=1)",
-                    #leafs, table.concat(leafs, ",")))
+                    "Prayer (%s): %d leaf resref(s) collected [%s] (want >=1)",
+                    prayer, #leafs, table.concat(leafs, ",")))
                 local hasParent = false
                 for _, r in ipairs(leafs) do
-                    if r == "SPPR327" then
+                    if r:upper() == prayer:upper() then
                         hasParent = true
                         break
                     end
                 end
                 _check(not hasParent,
-                    "Prayer (SPPR327): leafs exclude the parent resref")
+                    "Prayer (" .. prayer .. "): leafs exclude the parent resref")
             end
         end
     end
@@ -2639,15 +2687,15 @@ function BfBot.Test.DurationRecursion()
     -- so a stale pre-upgrade cached result (hot-reload of BfBotCls only —
     -- the cache lives in BfBotCor) cannot mask the new field.
     do
-        local hdr, ability = loadSpell("SPPR327", "Classify leafResrefs")
+        local hdr, ability = loadSpell(prayer, "Classify leafResrefs")
         if hdr then
-            BfBot._cache.class["SPPR327"] = nil
-            local cls = BfBot.Class.Classify("SPPR327", hdr, ability)
+            BfBot._cache.class[prayer] = nil
+            local cls = BfBot.Class.Classify(prayer, hdr, ability)
             if type(cls.leafResrefs) == "table" then
-                _ok("Classify(SPPR327).leafResrefs is a table (len="
+                _ok("Classify(" .. prayer .. ").leafResrefs is a table (len="
                     .. #cls.leafResrefs .. ")")
             else
-                _nok("Classify(SPPR327).leafResrefs is "
+                _nok("Classify(" .. prayer .. ").leafResrefs is "
                     .. type(cls.leafResrefs) .. " (want table)")
             end
         end
@@ -2657,19 +2705,13 @@ function BfBot.Test.DurationRecursion()
 end
 
 -- ============================================================
--- Orphan detection (issue #47 — preset-delete leaves stale BFBT innate)
+-- Leftover F12 innates (BuffBot no longer grants them; old saves can)
 -- ============================================================
 
-function BfBot.Test.PlanReconciliation()
+function BfBot.Test.LegacyInnateCleanup()
     _reset()
-    local P = Infinity_DisplayString
-    P("== PlanReconciliation ==")
+    P("== LegacyInnateCleanup ==")
 
-    -- Pick any party slot with a sprite. We bootstrap our own BFBT state via
-    -- INSTANT.IDS AddSpecialAbility, so this test does NOT depend on prior
-    -- BuffBot panel use — works on a freshly-loaded save where the
-    -- AddLoadedListener hasn't fired yet. REAL granted innates from prior
-    -- panel use are merged into the synthetic configs below (issue #56).
     local sprite, slotIdx
     for s = 0, 5 do
         local sp = EEex_Sprite_GetInPortrait(s)
@@ -2677,212 +2719,109 @@ function BfBot.Test.PlanReconciliation()
     end
     if not sprite then
         _warning("No party slot found — skipping (need at least one party member)")
-        return _summary("PlanReconciliation")
+        return _summary("LegacyInnateCleanup")
     end
+    local name = BfBot._GetName(sprite)
 
-    -- Synthetic presets 7/8 are intentional: default configs carry presets
-    -- 1-2 and the user would have to manually create up to preset 7 to
-    -- collide (guarded below).
-    local syntheticPreset = 7
-    local missingPreset = 8
-
-    -- The sprite may carry REAL granted BFBT innates (issue #56 — the
-    -- normal state on any save after panel use with innates enabled). The
-    -- planner correctly reports those as orphans relative to a synthetic-
-    -- only config, so derive the real granted presets up front (probe the
-    -- planner once with an all-presets config, parse the preset digit out
-    -- of each actual resref) and merge them into every synthetic config in
-    -- Cases 3-5. Must run BEFORE the synthetic grant below so the synthetic
-    -- preset never leaks into realPresets (Case 4 relies on it being absent
-    -- from desired).
-    local allPresets = {}
-    for i = 1, BfBot.MAX_PRESETS do allPresets[i] = {} end
-    local probe = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = allPresets })
-
-    -- Judge the save's dirtiness from probe.actual itself, NOT from the
-    -- planner's hasMismatch: dirty = a duplicated entry (legacy v1.3.9
-    -- accumulation) or a preset digit outside 1..MAX_PRESETS. On a dirty
-    -- save hasMismatch is true regardless of the configs below, so Cases
-    -- 3/5 can't assert anything meaningful — skip. On a CLEAN actual set,
-    -- though, every entry is desired by the all-presets probe config, so
-    -- planner-reported hasMismatch is an over-report regression (would
-    -- cause spurious revoke-all/regrant churn in Refresh) — that must
-    -- FAIL loudly, or the regression hides behind a permanently-skipped
-    -- phase and RunAll stays green.
-    local realPresets, probeDirty = {}, false
-    for resref, count in pairs(probe.actual) do
-        local rp = tonumber(resref:match("^BFBT%d(%d)$"))
-        if count > 1 or not rp or rp < 1 or rp > BfBot.MAX_PRESETS then
-            probeDirty = true
-        else
-            realPresets[rp] = true
+    local function _knownCount(resref)
+        local n = 0
+        for _, _, known in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
+            if type(known) == "string" and known:upper() == resref then n = n + 1 end
         end
-    end
-    if probeDirty then
-        _warning("sprite carries duplicated/unknown BFBT entries — skipping"
-            .. " (open the BuffBot panel once to reconcile, then re-run)")
-        return _summary("PlanReconciliation")
-    end
-    if probe.hasMismatch then
-        _nok("all-presets probe reports hasMismatch on a clean actual set"
-            .. " — planner over-report (would cause revoke/regrant churn)")
-        return _summary("PlanReconciliation")
-    end
-    if realPresets[syntheticPreset] or realPresets[missingPreset] then
-        -- Preset 7 or 8 really granted: the synthetic grant would alias the
-        -- user's real innate and the opcode-172 cleanup in Case 8 would
-        -- revoke it — a user-visible state mutation. Bail out instead.
-        local collided = {}
-        for _, cp in ipairs({ syntheticPreset, missingPreset }) do
-            if realPresets[cp] then collided[#collided + 1] = cp end
-        end
-        _warning("preset(s) " .. table.concat(collided, " and ")
-            .. " really granted on sprite — skipping to protect user innates")
-        return _summary("PlanReconciliation")
+        return n
     end
 
-    --- Config whose presets are the sprite's real granted presets plus the
-    -- given extras. Cases 3-5 must account for what is actually on the
-    -- sprite, or the planner (correctly) flags the real innates as orphans.
-    local function _cfgWith(...)
-        local presets = {}
-        for rp in pairs(realPresets) do presets[rp] = {} end
-        for _, rp in ipairs({ ... }) do presets[rp] = {} end
-        return { presets = presets }
+    local counts = BfBot.Innate._LegacyCopies(sprite)
+    _check(type(counts) == "table", "known-innate walk works on " .. name)
+    if type(counts) ~= "table" then return _summary("LegacyInnateCleanup") end
+
+    -- A leftover innate as earlier versions granted it. INSTANT.IDS does not
+    -- list AddSpecialAbility, yet the instant call grants it synchronously on
+    -- 2.7.3.0; the phase skips where it does not. It never adds a second copy
+    -- (v1.3.9's stacks came from opcode 171), so duplicate counts are covered
+    -- by the offline tests.
+    local legacyResref = string.format("BFBT%d1", slotIdx)
+    local function _grant()
+        EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
+            'AddSpecialAbility("' .. legacyResref .. '")', sprite)
+    end
+    -- A copy from an earlier version that the safety tick has not removed
+    -- yet: a grant would add nothing, and the tick takes the copy shortly.
+    if _knownCount(legacyResref) > 0 then
+        _warning(name .. " still knows " .. legacyResref
+            .. " from an earlier version — skipping until the safety tick removes it")
+        return _summary("LegacyInnateCleanup")
+    end
+    _grant()
+    local granted = _knownCount(legacyResref)
+    if granted == 0 then
+        _warning("instant AddSpecialAbility didn't take effect — skipping")
+        return _summary("LegacyInnateCleanup")
     end
 
-    -- Inject a synthetic BFBT entry the planner can detect.
-    -- AddSpecialAbility IS in INSTANT.IDS so the grant lands synchronously.
-    local syntheticResref = string.format("BFBT%d%d", slotIdx, syntheticPreset)
-    EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
-        'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
-
-    -- Verify the grant landed by running the planner against a config that
-    -- includes the preset — if the planner doesn't see the synthetic entry
-    -- in actual, the grant didn't take effect.
-    local verify = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {} } })
-    if not verify.actual[syntheticResref] then
-        _warning("INSTANT.IDS AddSpecialAbility didn't take effect — skipping")
-        return _summary("PlanReconciliation")
-    end
-
-    -- From here the sprite carries the synthetic innate. The cases run in a
-    -- pcall so the cleanup after them runs whether they pass, fail or raise.
+    -- From here the sprite carries the test's grant. The cases run in a
+    -- pcall so the removal after them runs whether they pass, fail or raise.
     local casesOk, casesErr = pcall(function()
 
-    -- Case 1: nil config → empty plan, no mismatch.
-    local p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, nil)
-    _check(p.hasMismatch == false and next(p.desired) == nil,
-        "nil config → empty desired, no mismatch")
+    P(string.format("  the grant left %d known cop%s of %s",
+        granted, granted == 1 and "y" or "ies", legacyResref))
+    local _, total = BfBot.Innate._LegacyCopies(sprite)
+    _check(type(total) == "number" and total >= granted,
+        "every known copy of " .. legacyResref .. " is counted")
 
-    -- Case 2: config without presets table → empty plan, no mismatch.
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, {})
-    _check(p.hasMismatch == false and next(p.desired) == nil,
-        "config without presets → empty desired, no mismatch")
+    -- The safety tick's pass on the live party. It handles every member not
+    -- handled yet in this game, so the record is cleared first and left as the
+    -- pass sets it. Opcode 172 resolves inside EEex_GameObject_ApplyEffect, so
+    -- the removal shows on the next line.
+    BfBot.Innate._cleaned = {}
+    local ok, err = pcall(BfBot.Innate._RemoveLegacy)
+    _check(ok, "_RemoveLegacy runs on the live party"
+        .. (ok and "" or (": " .. tostring(err))))
+    _check(_knownCount(legacyResref) == 0,
+        "every copy of " .. legacyResref .. " removed end-to-end")
+    for s = 0, 5 do
+        local member = EEex_Sprite_GetInPortrait(s)
+        if member then
+            local _, left = BfBot.Innate._LegacyCopies(member)
+            _check(left == 0, "no leftover F12 innate on "
+                .. BfBot._GetName(member) .. " (" .. tostring(left) .. " left)")
+        end
+    end
+    _check(BfBot.Innate._cleaned[sprite.m_id] == true,
+        name .. " is recorded as handled in this game")
 
-    -- Case 3: config explicitly contains the synthetic preset (plus the
-    -- real granted ones) → no mismatch, synthetic entry is in both actual
-    -- and desired.
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        _cfgWith(syntheticPreset))
-    _check(p.hasMismatch == false
-        and p.actual[syntheticResref] == 1
-        and p.desired[syntheticResref] == true,
-        "config contains preset " .. syntheticPreset .. " → no mismatch")
+    -- Handled once per game: a later grant stays until the next load.
+    _grant()
+    BfBot.Innate._RemoveLegacy()
+    _check(_knownCount(legacyResref) >= 1,
+        "a handled member is not walked again in this game")
 
-    -- Case 4: config has different presets (the real granted ones plus
-    -- 1-2), missing the synthetic one → mismatch (the orphan bug, #47).
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx, _cfgWith(1, 2))
-    _check(p.hasMismatch == true and p.actual[syntheticResref] == 1,
-        "config minus preset " .. syntheticPreset .. " + sprite has it → mismatch (orphan)")
-
-    -- Case 5: config requires a preset the sprite doesn't have (preset 8,
-    -- guarded above) → no mismatch (orphans are sprite-side, not
-    -- desired-side), and desired contains the missing entry so the
-    -- orchestrator can grant it.
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        _cfgWith(syntheticPreset, missingPreset))
-    local missingResref = string.format("BFBT%d%d", slotIdx, missingPreset)
-    _check(p.hasMismatch == false
-        and p.desired[missingResref] == true
-        and p.actual[missingResref] == nil,
-        "config requires preset " .. missingPreset
-        .. " not on sprite → no mismatch, desired has missing entry")
-
-    -- Case 6: foreign slot — querying a different current slot must retain
-    -- the old entry in actual and flag it for revoke-all reconciliation (#57).
-    local foreignSlot = (slotIdx + 1) % 6
-    p = BfBot.Innate._PlanReconciliation(sprite, foreignSlot,
-        { presets = { [1] = {} } })
-    _check(p.actual[syntheticResref] == 1 and p.hasMismatch == true,
-        "querying slot " .. foreignSlot .. " flags slot-" .. slotIdx
-        .. " BFBT entries as stale")
-
-    -- Case 7: AddSpecialAbility dedup assumption.
-    -- The planner's `n > 1` branch only triggers in legacy v1.3.9-affected
-    -- saves (opcode 171 grants bypassed dedup). On a clean engine, every
-    -- AddSpecialAbility call dedupes — calling it twice yields count=1, not 2.
-    -- This case is a tripwire: if engine behavior ever changes, we want to
-    -- catch it because the reconciliation grants rely on this assumption
-    -- when adding missing entries or rebuilding after opcode 172 cleanup.
-    EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
-        'AddSpecialAbility("' .. syntheticResref .. '")', sprite)
-    p = BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {} } })
-    _check(p.actual[syntheticResref] == 1,
-        "AddSpecialAbility dedupes — second grant keeps count=1 (tripwire)")
-
-    -- Case 8: end-to-end opcode 172 (Remove Innate) verification.
-    -- The previous cases verify the planner; this verifies the underlying
-    -- removal mechanism. Production Refresh queues a BFBTRM spell apply
-    -- (FIFO via action queue), and BFBTRM is itself just a container for
-    -- 48 opcode 172 effects (one per BFBT resref). The opcode-172 → known-
-    -- innate removal step is what actually fixes issue #47 — so testing it
-    -- in isolation, synchronously, is sufficient (and stronger: it doesn't
-    -- conflate planner correctness with engine spell-cast plumbing).
-    --
-    -- EEex_GameObject_ApplyEffect with immediateResolve=1 (the default)
-    -- applies the effect during the call, so we can assert state on the
-    -- very next line. This bypasses the BCS action queue entirely.
-    _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == 1,
-        "pre-revoke: synthetic " .. syntheticResref .. " present on sprite")
-
-    EEex_GameObject_ApplyEffect(sprite, {
-        effectID = 172,         -- Remove Innate
-        targetType = 1,         -- self
-        res = syntheticResref,  -- resref of innate to remove
-    })
-
-    _check(BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-        { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] == nil,
-        "post-revoke: opcode 172 removed " .. syntheticResref .. " end-to-end (issue #47 fix verified)")
+    -- Remove the test's own grant.
+    local removed, left = BfBot.Innate._RemoveFrom(sprite)
+    _check(type(removed) == "number" and removed >= 1 and left == 0,
+        string.format("_RemoveFrom removed the test's grant (%s removed, %s left)",
+            tostring(removed), tostring(left)))
+    _check(_knownCount(legacyResref) == 0, legacyResref .. " is gone again")
     end)
 
-    -- Opcode 172 in Case 8 removes only the synthetic entry; the sprite's
-    -- legitimately-configured BFBT innates (if any) are untouched. When a
-    -- case raised before it, the synthetic entry is removed here instead.
-    local function syntheticPresent()
-        return BfBot.Innate._PlanReconciliation(sprite, slotIdx,
-            { presets = { [syntheticPreset] = {} } }).actual[syntheticResref] ~= nil
-    end
-    if syntheticPresent() then
-        local removeOk, removeErr = pcall(EEex_GameObject_ApplyEffect, sprite, {
-            effectID = 172,         -- Remove Innate
-            targetType = 1,         -- self
-            res = syntheticResref,
-        })
-        _check(removeOk and not syntheticPresent(),
-            "cleanup: synthetic " .. syntheticResref .. " removed after an interrupted case"
+    -- The test's grant must not outlive the phase. When a case raised before
+    -- removing it, it is removed here instead.
+    if _knownCount(legacyResref) > 0 then
+        local removeOk, removeErr = pcall(BfBot.Innate._RemoveFrom, sprite)
+        _check(removeOk and _knownCount(legacyResref) == 0,
+            "cleanup: the test's " .. legacyResref .. " removed after an interrupted case"
             .. (removeOk and "" or (" (" .. tostring(removeErr) .. ")")))
     end
     if not casesOk then
-        _nok("PlanReconciliation cases raised: " .. tostring(casesErr))
+        _nok("LegacyInnateCleanup cases raised: " .. tostring(casesErr))
     end
 
-    return _summary("PlanReconciliation")
+    -- A click on a leftover innate before its removal runs must do nothing.
+    _check(pcall(BFBOTGO, { m_effectAmount = slotIdx, m_dWFlags = 1 }),
+        "BFBOTGO ignores a leftover innate click")
+    _check(pcall(BFBOTGO, nil), "BFBOTGO survives a missing effect")
+
+    return _summary("LegacyInnateCleanup")
 end
 
 -- ============================================================
@@ -3071,6 +3010,31 @@ function BfBot.Test.Theming()
         BfBot.Theme._SetFontSize(1)
         check("bb_normal.point = 10 at small", styles.bb_normal.point == math.floor(12 * 0.85))
         BfBot.Theme._SetFontSize(2)  -- restore default
+    end
+
+    -- Live items rescale by font, which differs per game (IWD:EE: POSTANTI,
+    -- SHERWOOD). Each bb_* style's font must map to its base point unless
+    -- two styles share that font at different sizes.
+    if styles then
+        local _, ambiguous = BfBot.Theme._DeriveFontBasePoints()
+        local shared = {}
+        for _, font in ipairs(ambiguous) do shared[font] = true end
+        for bbName, basePt in pairs(BfBot.Theme._BASE_POINTS) do
+            local style = styles[bbName]
+            if type(style) == "table" and type(style.font) == "string" then
+                local font = style.font:upper()
+                check(bbName .. " font " .. font .. " rescales from " .. basePt
+                        .. (shared[font] and " (shared: keeps load size)" or ""),
+                    shared[font] or BfBot.Theme._FONT_TO_BASE_POINT[font] == basePt)
+            end
+        end
+    end
+
+    -- Plain panel buttons draw the running game's own button BAM.
+    if type(EEex_Resource_Fetch) == "function" then
+        local resref = BfBot.Theme.ButtonBam()
+        local ok, found = pcall(EEex_Resource_Fetch, resref, "BAM")
+        check("engine button BAM " .. resref .. " exists", ok and found ~= nil)
     end
 
     P(string.format("  %d pass / %d fail", pass, fail))
@@ -3328,29 +3292,31 @@ function BfBot.Test.Items()
     -- ---- [2] _GetItemAbility manual stride ----
     -- Item_Header_st:getAbility(i) is BUGGED in EEex (stride uses header
     -- sizeof, garbage for i >= 1); _GetItemAbility walks pointers manually.
-    -- STAF11 (Staff of Curing, BG2EE) is multi-ability: a0 melee, buff at a2.
+    -- Multi-ability staves: BG2:EE's STAF11 and IWD:EE's STAFHMG (Staff of
+    -- the Hanged Man). The first one present with >= 2 abilities is used.
     P("")
-    P("  [2] _GetItemAbility on a multi-ability ITM (STAF11)")
-    local hdrOk, itmHdr = pcall(EEex_Resource_Demand, "STAF11", "ITM")
-    if not hdrOk or not itmHdr then
-        _warning("STAF11.ITM not demandable on this install - skipping")
+    P("  [2] _GetItemAbility on a multi-ability ITM")
+    local itmRef, itmHdr, nAbil = nil, nil, 0
+    for _, candidate in ipairs({ "STAF11", "STAFHMG" }) do
+        local ok, hdr = pcall(EEex_Resource_Demand, candidate, "ITM")
+        if ok and hdr and (hdr.abilityCount or 0) >= 2 then
+            itmRef, itmHdr, nAbil = candidate, hdr, hdr.abilityCount
+            break
+        end
+    end
+    if not itmHdr then
+        _warning("No multi-ability staff (STAF11, STAFHMG) on this install - skipping")
     else
-        local nAbil = itmHdr.abilityCount or 0
-        if nAbil < 2 then
-            _warning("STAF11 has " .. nAbil
-                .. " abilities on this install (want >= 2) - skipping")
-        else
-            local aOk, a0 = pcall(BfBot.Scan._GetItemAbility, itmHdr, 0)
-            local bOk, aN = pcall(BfBot.Scan._GetItemAbility, itmHdr, nAbil - 1)
-            _check(aOk and a0 ~= nil and bOk and aN ~= nil, string.format(
-                "_GetItemAbility returns abilities 0 and %d (of %d)",
-                nAbil - 1, nAbil))
-            if aOk and a0 and bOk and aN then
-                local stride = EEex_UDToPtr(aN) - EEex_UDToPtr(a0)
-                _check(stride == Item_ability_st.sizeof * (nAbil - 1),
-                    "ability stride uses Item_ability_st.sizeof"
-                    .. " (EEex getAbility bug workaround)")
-            end
+        local aOk, a0 = pcall(BfBot.Scan._GetItemAbility, itmHdr, 0)
+        local bOk, aN = pcall(BfBot.Scan._GetItemAbility, itmHdr, nAbil - 1)
+        _check(aOk and a0 ~= nil and bOk and aN ~= nil, string.format(
+            "_GetItemAbility returns %s abilities 0 and %d (of %d)",
+            itmRef, nAbil - 1, nAbil))
+        if aOk and a0 and bOk and aN then
+            local stride = EEex_UDToPtr(aN) - EEex_UDToPtr(a0)
+            _check(stride == Item_ability_st.sizeof * (nAbil - 1),
+                "ability stride uses Item_ability_st.sizeof"
+                .. " (EEex getAbility bug workaround)")
         end
     end
 
@@ -4905,7 +4871,7 @@ function BfBot.Test.SummonCasters()
     end
 
     -- [7.9] Per-character builder puppet-lock (review M2): the Cast-
-    -- Character button and the F12 innate path both build through
+    -- Character button builds through
     -- BuildQueueForCharacter, which previously let a Project-Image owner
     -- queue probe-verified zombie casts. Same policy as the preset builder.
     -- Fully synthetic for determinism on the shared save: the scan is
@@ -6697,7 +6663,7 @@ function BfBot.Test.RefreshThreshold()
     -- ---- 2. Threshold resolution against the real baldur.ini ----
     --
     -- From here on the phase writes the player's real baldur.ini and
-    -- applies live effects to the protagonist, including a PERMANENT one.
+    -- applies live effects to a party member, including a PERMANENT one.
     -- This phase runs inside RunAll(), so an error in the middle must not
     -- be able to leave either behind: a stuck portrait-icon effect and a
     -- RefreshBelow of 864000 would read as "re-cast everything, always"
@@ -6705,7 +6671,36 @@ function BfBot.Test.RefreshThreshold()
     -- a pcall, and the restore below runs unconditionally.
     local savedPref = BfBot.Persist.GetPref("RefreshBelow")
     local TAG = "BFBTPRB"
-    local sprite = EEex_Sprite_GetInPortrait(0)
+
+    -- The probes are inert portrait-icon effects (op142, icon PROBE_ICON).
+    -- A creature that prevents that icon (op169; IWD:EE's Enrage does for
+    -- icon 0) or is immune to op142 (op101) never holds them, so the live
+    -- reads use the first party member without such a blocker.
+    local PROBE_ICON = 0
+    local function _blocksProbe(member)
+        local blocked = false
+        for _, list in ipairs({ member.m_timedEffectList, member.m_equipedEffectList }) do
+            pcall(EEex_Utility_IterateCPtrList, list, function(effect)
+                if (effect.m_effectId == 169 and effect.m_dWFlags == PROBE_ICON)
+                        or (effect.m_effectId == 101 and effect.m_dWFlags == 142) then
+                    blocked = true
+                    return true
+                end
+            end)
+        end
+        return blocked
+    end
+    local sprite, blockedMembers = nil, 0
+    for slot = 0, 5 do
+        local member = EEex_Sprite_GetInPortrait(slot)
+        if member then
+            if not _blocksProbe(member) then
+                sprite = member
+                break
+            end
+            blockedMembers = blockedMembers + 1
+        end
+    end
 
     local guarded, guardErr = pcall(function()
 
@@ -6746,8 +6741,11 @@ function BfBot.Test.RefreshThreshold()
         -- shadow it here, or a probe could be applied to one sprite and
         -- cleaned off another.
         local now = BfBot.Exec._GetGameTime()
-        if not sprite then
-            _warning("No party leader - skipped the live effect reads")
+        if not sprite and blockedMembers > 0 then
+            _warning("Every party member prevents the probe icon or is immune"
+                .. " to op142 - skipped the live effect reads")
+        elseif not sprite then
+            _warning("No party member - skipped the live effect reads")
         elseif type(EEex_GameObject_ApplyEffect) ~= "function" then
             _warning("EEex_GameObject_ApplyEffect missing - skipped live reads")
         elseif type(now) ~= "number" then
@@ -6765,6 +6763,7 @@ function BfBot.Test.RefreshThreshold()
                     effectID     = 142,   -- Display Portrait Icon: timed, inert
                     targetType   = 2,
                     effectAmount = 1,
+                    dwFlags      = PROBE_ICON,
                     durationType = probe.durationType,
                     duration     = probe.duration,
                     m_sourceRes  = TAG,
@@ -6982,8 +6981,8 @@ function BfBot.Test.RunAll()
     local durRecOk = BfBot.Test.DurationRecursion()
     P("")
 
-    -- Phase: Reconciliation planner (covers orphan detection, issue #47)
-    local orphanOk = BfBot.Test.PlanReconciliation()
+    -- Phase: leftover F12 innates from earlier versions are removed
+    local legacyInnateOk = BfBot.Test.LegacyInnateCleanup()
     P("")
 
     -- Phase 14: Theming (issue #32)
@@ -7036,7 +7035,7 @@ function BfBot.Test.RunAll()
     P("  Selection Refresh:   " .. (selectionOk and "PASS" or "FAIL"))
     P("  Movable Panel: " .. (movPanelOk and "PASS" or "FAIL"))
     P("  Duration Recursion: " .. (durRecOk and "PASS" or "FAIL"))
-    P("  Reconciliation:     " .. (orphanOk and "PASS" or "FAIL"))
+    P("  Legacy Innates:     " .. (legacyInnateOk and "PASS" or "FAIL"))
     P("  Theming: " .. (themingOk and "PASS" or "FAIL"))
     P("  Stale State: " .. (staleOk and "PASS" or "FAIL"))
     P("  Items: " .. (itemsOk and "PASS" or "FAIL"))
@@ -7047,7 +7046,7 @@ function BfBot.Test.RunAll()
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and orphanOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk
     end)
 
     for _, problem in ipairs(problems) do
@@ -7773,8 +7772,8 @@ function BfBot.Test.Persist()
         end
     end
     -- NOTE: _CreateDefaultConfig's listed-but-disabled item handling is not
-    -- exercised here — it requires a live sprite scan (inventory-dependent)
-    -- and triggers Innate.Refresh side effects. Covered by in-game QA.
+    -- exercised here — it requires a live sprite scan (inventory-dependent).
+    -- Covered by in-game QA.
 
     -- ---- Summary ----
     P("")
@@ -7861,134 +7860,43 @@ function BfBot.Test.ExecStop()
 end
 
 -- ============================================================
--- Innate Ability Diagnostics
+-- Leftover F12 Innate Diagnostics
 -- ============================================================
 
---- Diagnostic: check SPL files on disk and known innates per party member.
+--- Diagnostic: the F12 preset innates of earlier versions that party members
+--- still carry.
 function BfBot.Test.Innate()
     local P = Infinity_DisplayString
 
     P("")
-    P("[BuffBot] === Innate Ability Diagnostics ===")
+    P("[BuffBot] === Leftover F12 Innate Diagnostics ===")
     P("")
 
-    -- Check SPL files on disk
-    if BfBot._noIO then
-        P("[BuffBot] SPL file check skipped (no io — LuaJIT not installed)")
-    else
-        local splFound, splMissing = 0, 0
-        for slot = 0, 5 do
-            for preset = 1, BfBot.MAX_PRESETS do
-                local resref = string.format("BFBT%d%d", slot, preset)
-                local path = "override/" .. resref .. ".SPL"
-                local f = io.open(path, "rb")
-                if f then
-                    local size = f:seek("end")
-                    f:close()
-                    splFound = splFound + 1
-                else
-                    splMissing = splMissing + 1
-                end
-            end
-        end
-        P(string.format("[BuffBot] SPL files on disk: %d found, %d missing", splFound, splMissing))
-    end
-    P("")
-
-    -- Check known innates per party member
     for slot = 0, 5 do
         local sprite = EEex_Sprite_GetInPortrait(slot)
         if sprite then
             local name = BfBot._GetName(sprite)
-            local bfbtInnates = {}
-            local otherCount = 0
-
-            -- Iterate known innate spells, tracking per-resref accumulation.
-            -- Uses for-style iterator (yields level, index, resref) per the EEex
-            -- API for plain GetKnownInnateSpellsIterator (the WithAbility variant
-            -- yields a 4th value). Wrapped in pcall to keep the diagnostic alive
-            -- even if a sprite returns a weird iterator state.
-            local bfbtCounts = {}
-            pcall(function()
-                for _, _, resref in EEex_Sprite_GetKnownInnateSpellsIterator(sprite) do
-                    if resref and resref:sub(1, 4) == "BFBT" then
-                        table.insert(bfbtInnates, resref)
-                        bfbtCounts[resref] = (bfbtCounts[resref] or 0) + 1
-                    elseif resref then
-                        otherCount = otherCount + 1
-                    end
-                end
-            end)
-
-            local maxAcc = 0
-            for _, c in pairs(bfbtCounts) do
-                if c > maxAcc then maxAcc = c end
-            end
-            local accNote = maxAcc > 1 and string.format(" [ACCUMULATION x%d]", maxAcc) or ""
-
-            if #bfbtInnates > 0 then
-                P(string.format("[BuffBot] Slot %d (%s): Known: %d BuffBot innates: %s  (+%d other)%s",
-                    slot, name, #bfbtInnates, table.concat(bfbtInnates, ", "), otherCount, accNote))
+            local counts, total = BfBot.Innate._LegacyCopies(sprite)
+            if not counts then
+                P(string.format("[BuffBot] Slot %d (%s): known innates unreadable (%s)",
+                    slot, name, tostring(total)))
             else
-                P(string.format("[BuffBot] Slot %d (%s): Known: 0 BuffBot innates  (%d other innates)",
-                    slot, name, otherCount))
-            end
-
-            -- Innates have exactly one memorized-spell container regardless
-            -- of the SPL header level used to group presets in the F12 UI.
-            -- Show the raw entry flags so issue #64 recharge failures are
-            -- distinguishable from missing/duplicate known-spell entries.
-            local memorizedCount, availableCount = 0, 0
-            local rawFlags = {}
-            local memorizedOk, memorizedErr = pcall(function()
-                if not sprite.m_memorizedSpellsInnate then
-                    error("missing innate memorization array")
+                local most = 0
+                for _, copies in pairs(counts) do
+                    if copies > most then most = copies end
                 end
-                local memorized = sprite.m_memorizedSpellsInnate:getReference(0)
-                if not memorized then error("container 0 unavailable") end
-                EEex_Utility_IterateCPtrList(memorized, function(mem)
-                    local resref = mem.m_spellId:get()
-                    if type(resref) == "string"
-                            and resref:match("^BFBT[0-5][1-8]$") then
-                        local flags = mem.m_flags
-                        memorizedCount = memorizedCount + 1
-                        if not EEex_IsBitUnset(flags, 0) then
-                            availableCount = availableCount + 1
-                        end
-                        rawFlags[#rawFlags + 1] = resref .. "=" .. tostring(flags)
-                    end
-                end)
-            end)
-
-            if memorizedOk then
-                P(string.format("[BuffBot]   Memorized container 0: %d BuffBot entries, %d available",
-                    memorizedCount, availableCount))
-                P("[BuffBot]   Raw flags: "
-                    .. (#rawFlags > 0 and table.concat(rawFlags, ", ") or "(none)"))
-            else
-                P("[BuffBot]   Memorized container 0: unavailable ("
-                    .. tostring(memorizedErr) .. ")")
-                P("[BuffBot]   Raw flags: unavailable")
-            end
-
-            -- Check config
-            local config = BfBot.Persist.GetConfig(sprite)
-            if config then
-                local presetCount = 0
-                for i = 1, BfBot.MAX_PRESETS do
-                    if config.presets[i] then presetCount = presetCount + 1 end
-                end
-                P(string.format("[BuffBot]   Config: %d presets, expected %d innates",
-                    presetCount, presetCount))
-            else
-                P("[BuffBot]   Config: NONE (no presets configured)")
+                local okId, id = pcall(function() return sprite.m_id end)
+                local handled = okId and BfBot.Innate._cleaned[id] == true
+                P(string.format("[BuffBot] Slot %d (%s): %d leftover F12 innate(s)%s%s",
+                    slot, name, total,
+                    most > 1 and string.format(" [ACCUMULATION x%d]", most) or "",
+                    handled and ", handled in this game" or ""))
             end
         end
     end
 
     P("")
-    P("[BuffBot] To force reconciliation on a slot: BfBot.Innate.Refresh(slot)")
-    P("[BuffBot] To re-generate SPLs: BfBot.Innate._EnsureSPLFiles()")
+    P("[BuffBot] The safety tick removes leftovers once per member and game.")
     P("")
 end
 
@@ -8123,36 +8031,6 @@ function BfBot.Test.QuickCast()
 
     if removerData:sub(1, 4) == "SPL " then _ok("BFBTCR signature OK")
     else _nok("BFBTCR bad signature: " .. removerData:sub(1, 4)) end
-
-    -- ---- Test 6: Innate SPL structure (single opcode 402 dispatch) ----
-    P("")
-    P("  [6] Innate SPL structure (single opcode 402 dispatch)")
-
-    local innateData = BfBot.Innate._BuildSPL(0, 1)
-    -- Header(114) + Ability(40) + one opcode-402 feature(48).
-    local expectedSize = 114 + 40 + 48
-    if type(innateData) == "string" and #innateData == expectedSize then
-        _ok("BFBT01.SPL: " .. expectedSize .. " bytes")
-    else
-        _nok("BFBT01.SPL: expected " .. expectedSize .. " got "
-            .. tostring(innateData and #innateData))
-    end
-
-    if innateData:sub(1, 4) == "SPL " then _ok("BFBT01 signature OK")
-    else _nok("BFBT01 bad signature") end
-
-    local function _wordAt(data, offset)
-        local lo, hi = data:byte(offset + 1, offset + 2)
-        return lo and hi and (lo + hi * 256) or nil
-    end
-    local featureCount = _wordAt(innateData, 114 + 0x1E)
-    local opcode = _wordAt(innateData, 114 + 40)
-    if featureCount == 1 and opcode == 402 then
-        _ok("Exactly one effect: opcode 402 BFBOTGO dispatch")
-    else
-        _nok("Expected one opcode 402 effect, got count="
-            .. tostring(featureCount) .. " opcode=" .. tostring(opcode))
-    end
 
     -- ---- Summary ----
     P("")

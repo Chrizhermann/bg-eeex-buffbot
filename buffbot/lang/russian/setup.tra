@@ -1,7 +1,7 @@
 // installer.component.luajit
 @100 = ~BuffBot: поддержка EEex LuaJIT (определяется автоматически)~
 // installer.require.game
-@101 = ~BuffBot требует BG:EE, BG2:EE или EET.~
+@101 = ~BuffBot требует BG:EE, BG2:EE, EET или IWD:EE.~
 // installer.require.eeex
 @102 = ~BuffBot требует EEex версии 0.11.0-alpha или новее. Сначала установите EEex: https://github.com/Bubb13/EEex/releases~
 // installer.luajit.already_active
@@ -26,23 +26,6 @@
 @112 = ~Перед установкой главного компонента BuffBot требуется активный EEex LuaJIT. Сначала установите «BuffBot: поддержка EEex LuaJIT» либо включите компонент LuaJIT / Experimental в EEex, а затем снова установите BuffBot. Пользователи Project Infinity должны разместить компонент LuaJIT перед «BuffBot: автоматизация усилений в игре».~
 // installer.catalog_directory
 @113 = ~russian~
-
-// innate.preset_1
-@200 = ~BuffBot 1~
-// innate.preset_2
-@201 = ~BuffBot 2~
-// innate.preset_3
-@202 = ~BuffBot 3~
-// innate.preset_4
-@203 = ~BuffBot 4~
-// innate.preset_5
-@204 = ~BuffBot 5~
-// innate.preset_6
-@205 = ~BuffBot 6~
-// innate.preset_7
-@206 = ~BuffBot 7~
-// innate.preset_8
-@207 = ~BuffBot 8~
 
 // common.buffbot
 @300 = ~BuffBot~
@@ -221,19 +204,11 @@
 @453 = ~[Б]~
 
 // feedback.no_luajit
-@500 = ~BuffBot: LuaJIT не обнаружен. Врождённые способности F12, быстрое применение, экспорт/импорт и журналирование отключены. Для полной функциональности установите компонент EEex LuaJIT.~
+@500 = ~BuffBot: LuaJIT не обнаружен. Быстрое применение, экспорт/импорт и журналирование отключены. Для полной функциональности установите компонент EEex LuaJIT.~
 // feedback.combat_stopped
 @501 = ~BuffBot: обнаружен бой — применение остановлено~
 // feedback.cast_timeout
 @502 = ~BuffBot: превышено время ожидания — применение остановлено~
-// feedback.party_changed_after_run
-@503 = ~BuffBot: состав группы изменился — повторите после завершения текущего запуска~
-// feedback.party_changed_refreshing
-@504 = ~BuffBot: состав группы изменился — врождённые способности обновляются, попробуйте снова~
-// feedback.no_spells_with_reason
-@505 = ~BuffBot: нет заклинаний или предметов для применения ({reason})~
-// feedback.innate_error
-@506 = ~Ошибка врождённой способности BuffBot: {error}~
 // feedback.no_spells_preset
 @507 = ~BuffBot: в этом наборе нет заклинаний или предметов для применения~
 // feedback.character_remote_control

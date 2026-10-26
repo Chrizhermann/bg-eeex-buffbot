@@ -281,27 +281,12 @@ function BfBot.Persist._CreateDefaultConfig(sprite)
         end
     end
 
-    -- Store in UDAux. Only call Refresh if the write succeeded — otherwise
-    -- Refresh → GetConfig → _CreateDefaultConfig re-enters recursively
-    -- (GetConfig's `if not config` gate sees the still-empty UDAux), which
-    -- recurses until stack overflow.
+    -- Store in UDAux.
     local setOk = pcall(function()
         EEex_GetUDAux(sprite)[BfBot.Persist._KEY] = config
     end)
     if not setOk then
-        BfBot._Warn("[Persist] Failed to store default config in UDAux; skipping innate reconciliation")
-        return config
-    end
-
-    -- Reconcile innates with the new config. UDAux is now populated, so
-    -- Refresh's call to GetConfig returns the stored config (no reentry).
-    if BfBot.Innate and BfBot.Innate.Refresh then
-        for s = 0, 5 do
-            if EEex_Sprite_GetInPortrait(s) == sprite then
-                BfBot.Innate.Refresh(s)
-                break
-            end
-        end
+        BfBot._Warn("[Persist] Failed to store default config in UDAux")
     end
 
     return config
@@ -1886,8 +1871,8 @@ BfBot.Persist._pendingSkips = BfBot.Persist._pendingSkips or {}
 --- Hand over (and clear) the build-time SKIP messages collected since the
 --- last drain. UI cast handlers drain once BEFORE building (discard stale)
 --- and once after a SUCCESSFUL Exec.Start (surface into the fresh run's
---- panel log); a refused Start and the F12 innate path drain-and-discard
---- (the lines were file-logged at build time).
+--- panel log); a refused Start drains and discards them (the lines were
+--- file-logged at build time).
 -- @return array of message strings (possibly empty)
 function BfBot.Persist.DrainBuildSkips()
     local msgs = BfBot.Persist._pendingSkips
@@ -2661,8 +2646,8 @@ function BfBot.Persist.BuildQueueForCharacter(slot, presetIndex)
 
     -- Puppet-lock policy (issue #19), same rules as BuildQueueFromPreset: a
     -- PI-locked owner's entries are skipped entirely (the probe-verified
-    -- zombie-cast hazard applies to the Cast-Character button and the F12
-    -- innate path just the same — both build here); a chain that casts PI
+    -- zombie-cast hazard applies to the Cast-Character button, which builds
+    -- here, just the same); a chain that casts PI
     -- drops its trailing entries. Deliberate scope extension of the plan's
     -- puppet-lock policy to the per-character builder (Task 7 review).
     -- Guarded on #entries: an empty build can't be locked, so don't pay for

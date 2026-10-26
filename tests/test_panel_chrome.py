@@ -37,9 +37,13 @@ CAST_BUTTONS = {"bbCast", "bbCastChar"}
 # open state, so none of the panel-chrome rules apply to it.
 NOT_PANEL_CHROME = {"bbHudButton"}
 
-# The art each helper names, and the engine art it falls back to.
+# The art each helper names, and the engine art it falls back to outside
+# IWD:EE (the fixture leaves engine_mode unset, as a BG game reads).
 THEMED = {"_PlateBam": "BFBPLAT", "_TabBam": "BFBTAB", "_CastBam": "BFBCAST"}
 ENGINE_BUTTON = "GUIOSTUL"
+# engine.lua's engine_mode: 0 BG:EE, 1 BG2:EE (and EET), 2 IWD:EE, whose
+# GUIOSTUL frames are unrelated texture fragments.
+ENGINE_BUTTON_BY_MODE = {0: "GUIOSTUL", 1: "GUIOSTUL", 2: "GUIBUTMT"}
 
 
 def buttons() -> list[tuple[str, str]]:
@@ -79,7 +83,7 @@ def lua() -> LuaRuntime:
     # Only the two functions under test are needed, and pulling in the whole
     # theme and UI modules would drag in the engine's menu globals.
     for source, names in (
-        (THEME_SOURCE, ("HasChromeArt", "ControlSkin")),
+        (THEME_SOURCE, ("HasChromeArt", "ControlSkin", "ButtonBam")),
         (UI_SOURCE, ("_PlateBam", "_TabBam", "_CastBam", "_ChromeSeq", "_TabFrame")),
     ):
         for name in names:
@@ -199,6 +203,20 @@ def test_each_helper_names_the_themed_art_and_falls_back_to_the_engine(
     assert lua.eval(f"BfBot.UI.{helper}()") == themed
     with_art(lua, False)
     assert lua.eval(f"BfBot.UI.{helper}()") == ENGINE_BUTTON
+
+
+@pytest.mark.parametrize("helper", sorted(THEMED))
+@pytest.mark.parametrize("mode,engine", sorted(ENGINE_BUTTON_BY_MODE.items()))
+def test_each_helper_falls_back_to_the_running_games_own_button(
+    lua, helper, mode, engine
+):
+    """IWD:EE's GUIOSTUL would draw texture fragments; its buttons are
+    GUIBUTMT. The themed art is the same in every game."""
+    lua.execute(f"engine_mode = {mode}")
+    with_art(lua, False)
+    assert lua.eval(f"BfBot.UI.{helper}()") == engine
+    with_art(lua, True)
+    assert lua.eval(f"BfBot.UI.{helper}()") == THEMED[helper]
 
 
 # The art's own order, read off the rendered BAMs: skin 0 is BG:EE's red

@@ -164,7 +164,7 @@ BEGIN @100
 DESIGNATED 1
 LABEL ~BuffBot-LuaJIT~
 
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet iwdee~)
   @101
 
 REQUIRE_PREDICATE (
@@ -290,7 +290,7 @@ DESIGNATED 0
 LABEL ~BuffBot-Main~
 
 // ---- Prerequisites ----
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~)
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet iwdee~)
   @101
 
 // EEex component numbers changed in v1.0.0. Detect the runtime capability
@@ -362,20 +362,6 @@ END
 // already active, so carry its validated directory marker into the COPY path.
 OUTER_SPRINT bfbot_selected_language @113
 
-// ---- TLK strings for innate ability tooltips ----
-// One strref per preset (1..MAX_PRESETS=8). WeiDU does NOT guarantee
-// contiguous strrefs across upgrades — existing strings keep their old
-// strrefs while new strings get appended at the end. So Lua reads all 8
-// as an array indexed by preset rather than computing from a base.
-OUTER_SET bfbot_strref_1 = RESOLVE_STR_REF(@200)
-OUTER_SET bfbot_strref_2 = RESOLVE_STR_REF(@201)
-OUTER_SET bfbot_strref_3 = RESOLVE_STR_REF(@202)
-OUTER_SET bfbot_strref_4 = RESOLVE_STR_REF(@203)
-OUTER_SET bfbot_strref_5 = RESOLVE_STR_REF(@204)
-OUTER_SET bfbot_strref_6 = RESOLVE_STR_REF(@205)
-OUTER_SET bfbot_strref_7 = RESOLVE_STR_REF(@206)
-OUTER_SET bfbot_strref_8 = RESOLVE_STR_REF(@207)
-
 // ---- Copy mod files to override ----
 COPY ~buffbot/M_BfBot.lua~   ~override~
 COPY ~buffbot/BfBotCor.lua~  ~override~
@@ -396,7 +382,6 @@ COPY ~buffbot/BfBotTst.lua~  ~override~
 COPY ~buffbot/BuffBot.menu~  ~override~
 
 // ---- Copy visual assets (parchment background, border texture, icons) ----
-COPY ~buffbot/BFBOTIB.BAM~  ~override~
 COPY ~buffbot/BFBOTBG.MOS~  ~override~
 COPY ~buffbot/MOS9900.PVRZ~ ~override~
 COPY ~buffbot/MOS9901.PVRZ~ ~override~
@@ -427,17 +412,3 @@ COPY ~buffbot/visual~ ~override~
 
 // ---- Create presets directory for config export/import ----
 MKDIR ~override/bfbot_presets~
-
-// ---- Write per-preset strrefs (one per line) for Lua tooltip lookup ----
-<<<<<<<< .../buffbot-inlined/bfbot_strrefs.txt
-%bfbot_strref_1%
-%bfbot_strref_2%
-%bfbot_strref_3%
-%bfbot_strref_4%
-%bfbot_strref_5%
-%bfbot_strref_6%
-%bfbot_strref_7%
-%bfbot_strref_8%
->>>>>>>>
-COPY ~.../buffbot-inlined/bfbot_strrefs.txt~ ~override/bfbot_strrefs.txt~
-  EVALUATE_BUFFER

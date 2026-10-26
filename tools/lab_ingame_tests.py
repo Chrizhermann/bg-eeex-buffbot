@@ -1,7 +1,7 @@
 """Run BuffBot's in-game test suite from a quiet lab game, headless.
 
 `BfBot.Test.RunAll()` is the only check that exercises the real engine --
-spell data, the spellbook scan, the marshal, the innate reconciliation -- and
+spell data, the spellbook scan, the marshal, the leftover F12 innate removal -- and
 until now it had to be typed into the in-game console by hand, which is why it
 is the gate that gets skipped. This runs it the same way the screenshot tool
 takes its shots: take a lab slot, start the game hidden and muted, load a save

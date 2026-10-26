@@ -308,6 +308,12 @@ function BfBot.Theme._RegisterStyles()
             styles[bbName] = EEex.DeepCopy(styles[parent])
         end
     end
+    local map, ambiguous = BfBot.Theme._DeriveFontBasePoints()
+    BfBot.Theme._FONT_TO_BASE_POINT = map
+    if #ambiguous > 0 and BfBot._Warn then
+        BfBot._Warn("Theme: fonts shared by text styles of different sizes keep their "
+            .. "load-time size: " .. table.concat(ambiguous, ", "))
+    end
     BfBot.Theme._RefreshStyles()
 end
 
@@ -326,16 +332,45 @@ function BfBot.Theme._RefreshStyles()
     end
 end
 
--- Map IE font name → BuffBot's base point. Body/edit/cell styles use NORMAL,
--- bb_button inherits the engine's STONESML button font, and bb_title uses
--- REALMS. Engine items in OTHER menus aren't touched — iteration is scoped
--- to our owned menus. ITEM_BUTTON ignores the point update, but retaining its
--- mapping keeps this traversal harmless and makes that limitation explicit.
-BfBot.Theme._FONT_TO_BASE_POINT = {
-    NORMAL   = 12,  -- bb_normal, bb_normal_parchment, bb_edit, bb_caption
-    STONESML = 14,  -- (no BuffBot style uses it; kept for engine items)
-    REALMS   = 18,  -- bb_title
-}
+--- Map each font the registered bb_* styles inherit (upper case) to BuffBot's
+-- base point. A parsed item keeps only its font, not its style, so the font is
+-- what live rescaling goes by. The fonts come from the game's own styles:
+-- BG2:EE draws body, cell and edit text in NORMAL and titles in REALMS, while
+-- IWD:EE uses POSTANTI for parchment and edit text and SHERWOOD for titles;
+-- both use STONESML for buttons (whose point ITEM_BUTTON ignores). A font two
+-- bb_* styles share with different base points (a UI mod can make it so) stays
+-- unmapped: which style an item came from is unknowable, so it keeps the size
+-- it was parsed with, correct for the text size chosen at load.
+-- @return map, sorted list of the fonts left unmapped as ambiguous
+function BfBot.Theme._DeriveFontBasePoints()
+    local map, ambiguous = {}, {}
+    if type(styles) == "table" then
+        for bbName, basePt in pairs(BfBot.Theme._BASE_POINTS) do
+            local style = styles[bbName]
+            local font = type(style) == "table" and style.font
+            if type(font) == "string" and font ~= "" then
+                font = font:upper()
+                if not ambiguous[font] then
+                    if map[font] == nil then
+                        map[font] = basePt
+                    elseif map[font] ~= basePt then
+                        map[font] = nil
+                        ambiguous[font] = true
+                    end
+                end
+            end
+        end
+    end
+    local list = {}
+    for font in pairs(ambiguous) do list[#list + 1] = font end
+    table.sort(list)
+    return map, list
+end
+
+-- Engine items in OTHER menus aren't touched — iteration is scoped to our
+-- owned menus. Filled by _RegisterStyles; deriving here as well keeps live
+-- scaling working when this file is reloaded after the styles exist.
+BfBot.Theme._FONT_TO_BASE_POINT = BfBot.Theme._DeriveFontBasePoints()
 
 -- Menus we own (defined in buffbot/BuffBot.menu). Iterated by name.
 BfBot.Theme._OWNED_MENUS = {
@@ -357,8 +392,8 @@ local function _updateItemPoint(item)
     local txt = item and item.text
     if not txt or not txt.font then return end
     local ok, fontName = pcall(function() return txt.font:get() end)
-    if not ok or not fontName then return end
-    local base = BfBot.Theme._FONT_TO_BASE_POINT[fontName]
+    if not ok or type(fontName) ~= "string" then return end
+    local base = BfBot.Theme._FONT_TO_BASE_POINT[fontName:upper()]
     if not base then return end
     local mult = BfBot.Theme._SIZE_MULT[BfBot.Theme._fontSize] or 1.0
     txt.point = math.floor(base * mult)
@@ -595,7 +630,7 @@ end
 --- True once the panel chrome art is confirmed present — the button plates,
 --- tabs, cast plate and scrollbar. Checked separately from the row art above
 --- so a partial install degrades per group: a panel can keep its themed
---- checkboxes while falling back to the engine's stone buttons.
+--- checkboxes while falling back to the game's own buttons (ButtonBam below).
 --- Cached for the same reason: a missing resource cannot appear mid-session.
 function BfBot.Theme.HasChromeArt()
     if BfBot.Theme._chromeArt ~= nil then return BfBot.Theme._chromeArt end
@@ -610,6 +645,21 @@ function BfBot.Theme.HasChromeArt()
     end
     BfBot.Theme._chromeArt = true
     return true
+end
+
+-- ============================================================
+-- Engine button art
+-- ============================================================
+-- Without the chrome art the panel's buttons and tabs draw the game's own
+-- wide button BAM. BG:EE, BG2:EE and EET use GUIOSTUL. IWD:EE ships a BAM
+-- under that name too, but its frames are unrelated texture fragments; the
+-- game's own buttons use GUIBUTMT, with the same frame order (normal,
+-- pressed, highlighted, disabled). engine.lua's engine_mode names the game:
+-- 0 BGEE, 1 BG2EE, 2 IWDEE.
+
+--- Resref of the engine button BAM for the running game.
+function BfBot.Theme.ButtonBam()
+    return engine_mode == 2 and "GUIBUTMT" or "GUIOSTUL"
 end
 
 --- Set the accent by index (1=BG2, 2=SOD, 3=BG1) preserving dark/light.

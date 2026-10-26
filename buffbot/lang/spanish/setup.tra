@@ -1,7 +1,7 @@
 // installer.component.luajit
 @100 = ~BuffBot: compatibilidad con EEex LuaJIT (detección automática)~
 // installer.require.game
-@101 = ~BuffBot requiere BG:EE, BG2:EE o EET.~
+@101 = ~BuffBot requiere BG:EE, BG2:EE, EET o IWD:EE.~
 // installer.require.eeex
 @102 = ~BuffBot requiere EEex v0.11.0-alpha o posterior. Instala primero EEex: https://github.com/Bubb13/EEex/releases~
 // installer.luajit.already_active
@@ -26,23 +26,6 @@
 @112 = ~BuffBot requiere que EEex LuaJIT esté activo antes de instalar el componente principal. Instala primero "BuffBot: compatibilidad con EEex LuaJIT" o activa el componente LuaJIT / Experimental de EEex y vuelve a instalar BuffBot. Los usuarios de Project Infinity deben colocar el componente LuaJIT antes de "BuffBot: automatización de mejoras en el juego".~
 // installer.catalog_directory
 @113 = ~spanish~
-
-// innate.preset_1
-@200 = ~BuffBot 1~
-// innate.preset_2
-@201 = ~BuffBot 2~
-// innate.preset_3
-@202 = ~BuffBot 3~
-// innate.preset_4
-@203 = ~BuffBot 4~
-// innate.preset_5
-@204 = ~BuffBot 5~
-// innate.preset_6
-@205 = ~BuffBot 6~
-// innate.preset_7
-@206 = ~BuffBot 7~
-// innate.preset_8
-@207 = ~BuffBot 8~
 
 // common.buffbot
 @300 = ~BuffBot~
@@ -221,19 +204,11 @@
 @453 = ~[B]~
 
 // feedback.no_luajit
-@500 = ~BuffBot: no se detectó LuaJIT. Las aptitudes especiales de F12, el lanzamiento rápido, la exportación/importación y el registro están desactivados. Instala el componente EEex LuaJIT para disponer de todas las funciones.~
+@500 = ~BuffBot: no se detectó LuaJIT. El lanzamiento rápido, la exportación/importación y el registro están desactivados. Instala el componente EEex LuaJIT para disponer de todas las funciones.~
 // feedback.combat_stopped
 @501 = ~BuffBot: combate detectado; lanzamiento detenido~
 // feedback.cast_timeout
 @502 = ~BuffBot: se agotó el tiempo de lanzamiento; proceso detenido~
-// feedback.party_changed_after_run
-@503 = ~BuffBot: el grupo ha cambiado; vuelve a intentarlo cuando termine el proceso actual~
-// feedback.party_changed_refreshing
-@504 = ~BuffBot: el grupo ha cambiado; actualizando aptitudes especiales, inténtalo de nuevo~
-// feedback.no_spells_with_reason
-@505 = ~BuffBot: no hay conjuros ni objetos que usar ({reason})~
-// feedback.innate_error
-@506 = ~Error de aptitud especial de BuffBot: {error}~
 // feedback.no_spells_preset
 @507 = ~BuffBot: no hay conjuros ni objetos que usar en este preajuste~
 // feedback.character_remote_control

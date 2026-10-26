@@ -254,33 +254,52 @@ end
 
 ---
 
-## 4. Cross-Game Support (BG:EE / BG2:EE / EET)
+## 4. Cross-Game Support (BG:EE / BG2:EE / EET / IWD:EE)
 
 ### 4.1 Game Detection **[DOC]**
 
 ```
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~) @0
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet iwdee~) @0
 ```
 
-BuffBot targets three game configurations:
+BuffBot targets four game configurations:
 
 | Token | Game | Notes |
 |-------|------|-------|
 | `bgee` | Baldur's Gate: Enhanced Edition | Includes SoD if installed |
 | `bg2ee` | Baldur's Gate II: Enhanced Edition | |
 | `eet` | Enhanced Edition Trilogy | BG1 + SoD + BG2 merged; uses BG2:EE engine |
+| `iwdee` | Icewind Dale: Enhanced Edition | WeiDU 249 detects it by `howparty.2da` |
 
-BuffBot does not target IWD:EE (unlike BSME, which does). The spell systems differ
-enough that IWD:EE support would require separate testing and configuration.
+IWD:EE was added after the original plan, which had left it out on the assumption
+that its spell system differed too much. It does not: the dynamic spellbook scan,
+classifier and casting paths needed no IWD-specific code. **[SRC]** What did differ
+was found in an IWD:EE 2.7.3.0 + EEex v1.3.1 lab:
+
+- **Button art.** IWD:EE ships a `GUIOSTUL.BAM`, but its frames are texture
+  fragments, not buttons. The game's own buttons use `GUIBUTMT` with the same frame
+  order. The panel draws Pecca's chrome art where it is installed; without it, the
+  button helpers fall back to `BfBot.Theme.ButtonBam()`, which checks `engine_mode`
+  (0 BG:EE, 1 BG2:EE, 2 IWD:EE) at runtime. One installer path serves every game.
+- **Fonts.** IWD:EE's text styles use `POSTANTI` and `SHERWOOD` where BG2:EE uses
+  `NORMAL` and `REALMS`, so the text-size rescaling derives its font map from the
+  running game's styles instead of a fixed table.
+- **Party load events.** IWD:EE loads the party before the members take their
+  portrait slots, both on a new game and on a save load, so EEex's sprite-loaded
+  listener sees portrait index -1. This turned out not to be IWD-specific: BG2:EE
+  2.7.3.0 with EEex v1.3.1 does the same on a save load. Per-member work therefore
+  runs from the exec safety tick, not from a load listener. BuffBot has since
+  dropped its F12 preset innates; the tick now only removes the copies that saves
+  from earlier versions still carry (`BfBot.Innate._RemoveLegacy`).
 
 ### 4.2 What Differs Between Games **[INF]**
 
-| Aspect | BG:EE | BG2:EE | EET |
-|--------|-------|--------|-----|
-| Spell level cap | 5 | 9 + HLAs | 9 + HLAs |
-| Default UI | Vanilla BGEE | Vanilla BG2EE | Varies (depends on UI mod) |
-| BAM art style | BG1 aesthetic | BG2 aesthetic | BG2 aesthetic |
-| SoD content | Maybe present | No | Integrated |
+| Aspect | BG:EE | BG2:EE | EET | IWD:EE |
+|--------|-------|--------|-----|--------|
+| Spell level cap | 5 | 9 + HLAs | 9 + HLAs | 9 (no HLAs) |
+| Default UI | Vanilla BGEE | Vanilla BG2EE | Varies (depends on UI mod) | Vanilla IWDEE |
+| BAM art style | BG1 aesthetic | BG2 aesthetic | BG2 aesthetic | IWD aesthetic |
+| SoD content | Maybe present | No | Integrated | No |
 
 At the `.tp2` level, the primary differences are:
 - **BAM variants**: Different icon art styles per game
@@ -432,7 +451,7 @@ LABEL ~BuffBot-Main~
 
 // --- Prerequisites ---
 
-REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet~) @1
+REQUIRE_PREDICATE (GAME_IS ~bgee bg2ee eet iwdee~) @1
 
 REQUIRE_PREDICATE
   (MOD_IS_INSTALLED ~EEex.tp2~ (ID_OF_LABEL ~EEex.tp2~ ~B3-EEex-Main~))
@@ -588,7 +607,7 @@ Key WeiDU constructs used in the starter tp2, for reference:
 | `DESIGNATED` | Explicit component number | `DESIGNATED 0` |
 | `LABEL` | Human-readable component ID | `LABEL ~BuffBot-Main~` |
 | `REQUIRE_PREDICATE` | Skip component if condition is false | Game check, dependency check |
-| `GAME_IS` | Test which game is running | `GAME_IS ~bgee bg2ee eet~` |
+| `GAME_IS` | Test which game is running | `GAME_IS ~bgee bg2ee eet iwdee~` |
 | `MOD_IS_INSTALLED` | Test if another mod's component is installed | `MOD_IS_INSTALLED ~EEex.tp2~ ~0~` |
 | `ID_OF_LABEL` | Look up component number by label | `ID_OF_LABEL ~EEex.tp2~ ~B3-EEex-Main~` |
 | `ACTION_IF` / `ELSE` | Conditional logic at install time | UI framework detection |

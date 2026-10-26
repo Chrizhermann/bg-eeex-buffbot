@@ -2511,7 +2511,6 @@ function BfBot.UI.CreateNewPreset()
     if idx then
         BfBot.UI._ClearSpellSelection()
         BfBot.UI._presetIdx = idx
-        BfBot.Innate.RefreshAll()
         BfBot.UI._Refresh()
     end
 end
@@ -2537,7 +2536,6 @@ function BfBot.UI.DeleteCurrentPreset()
                 local config = BfBot.Persist.GetConfig(sprite)
                 BfBot.UI._ClampPresetIdx(config)
             end
-            BfBot.Innate.RefreshAll()
             BfBot.UI._Refresh()
         end
     end)
@@ -2574,8 +2572,8 @@ end
 --- The selected active-buff policy (BfBot.Exec.GetForceMode) rides along on
 --- every run started here, which is why Cast All, Cast Character, the HUD
 --- preset picker and the summons cast all honor the toggle without each path
---- repeating it. The F12 innates read the same selection in BfBotInn; only a
---- raw console queue runs with the RefreshBelow option alone.
+--- repeating it. Only a raw console queue runs with the RefreshBelow option
+--- alone.
 function BfBot.UI._StartRun(queue, qcMode, presetIdx)
     local rate = BfBot.UI._FastForwardRate()
     -- Guarded like the tooltip's threshold read: this module can be
@@ -3476,8 +3474,10 @@ end
 -- Panel chrome art
 -- ============================================================
 -- Buttons, tabs and the cast plate carry Pecca's art instead of the engine's
--- carved stone. Each helper returns the engine resref when the art is absent,
--- so a partial install keeps a working panel rather than invisible buttons.
+-- carved stone. Each helper returns the running game's own button BAM
+-- (BfBot.Theme.ButtonBam: GUIBUTMT on IWD:EE, GUIOSTUL elsewhere) when the
+-- art is absent, so a partial install keeps a working panel rather than
+-- invisible buttons or IWD:EE's unrelated GUIOSTUL frames.
 --
 -- The art is one cycle per skin (0 SoD, 1 IWD, 2 BG1, 3 BG2) with four state
 -- frames inside it. Plain buttons leave `frame` alone and let the engine run
@@ -3486,12 +3486,12 @@ end
 
 --- Wide plate for a captioned button.
 function BfBot.UI._PlateBam()
-    return BfBot.Theme.HasChromeArt() and "BFBPLAT" or "GUIOSTUL"
+    return BfBot.Theme.HasChromeArt() and "BFBPLAT" or BfBot.Theme.ButtonBam()
 end
 
 --- Tab plate. Its selected frame carries the skin's accent outline.
 function BfBot.UI._TabBam()
-    return BfBot.Theme.HasChromeArt() and "BFBTAB" or "GUIOSTUL"
+    return BfBot.Theme.HasChromeArt() and "BFBTAB" or BfBot.Theme.ButtonBam()
 end
 
 --- The caption colour for a button whose own `clickable` gate is `active`.
@@ -3518,7 +3518,7 @@ end
 
 --- The wider plate behind Cast and Cast Character.
 function BfBot.UI._CastBam()
-    return BfBot.Theme.HasChromeArt() and "BFBCAST" or "GUIOSTUL"
+    return BfBot.Theme.HasChromeArt() and "BFBCAST" or BfBot.Theme.ButtonBam()
 end
 
 --- Cycle index for every chrome BAM: the skin. The engine art has one cycle,
@@ -3529,7 +3529,7 @@ function BfBot.UI._ChromeSeq()
 end
 
 --- Frame for a tab. Pecca's selected frame is the third in the cycle; the
---- engine's stone button marks a pressed tab with its second.
+--- engine's button (either game's) marks a pressed tab with its second.
 function BfBot.UI._TabFrame(selected)
     if not selected then return 0 end
     return BfBot.Theme.HasChromeArt() and 2 or 1

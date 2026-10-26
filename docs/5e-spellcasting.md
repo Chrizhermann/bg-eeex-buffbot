@@ -31,7 +31,6 @@ Keep the game unpaused while waiting for preparation and spell-slot updates.
 - **Old preset entries pointing directly at `D5Z...I` abilities stop casting.** Replace them with the spell's normal entry.
 - **An unfinished dual-class conversion or preparation step may leave affected spells unavailable.** Finish preparation and rest before retrying; BuffBot deliberately declines ordinary-slot casts in that state.
 - **Divine casters, multiclass/dual-class combinations, special free casts, mod-added spell copies, repeats, summons, and clones need broader playtesting.** Some have automated coverage, which is not live acceptance.
-- Copied BuffBot F12 abilities on clones remain unsupported. Use the Summons view or Cast All; this general BuffBot limitation also applies to 5E games.
 
 ## Short tester checklist
 
