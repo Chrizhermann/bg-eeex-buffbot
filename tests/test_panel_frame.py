@@ -107,3 +107,68 @@ def test_the_shipped_atlases_are_what_the_builder_makes() -> None:
         shipped = bam.decode_pvrz((ROOT / "buffbot" / f"{resref}.PVRZ").read_bytes())
         rebuilt = bam.decode_pvrz(builder.pvrz.create_pvrz_bytes(builder.build(cycle)))
         assert shipped.tobytes() == rebuilt.tobytes(), accent
+
+
+# --------------------------------------------------------------- the rects
+
+MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
+
+# Every panel: the background label, and the frame drawn on top of it.
+PANELS = {
+    "bbTgtFrame": "bbTgtBg",
+    "bbRenFrame": "bbRenBg",
+    "bbConfFrame": "bbConfBg",
+    "bbPickFrame": "bbPickBg",
+    "bbImpFrame": "bbImpBg",
+    "bbVarFrame": "bbVarBg",
+}
+
+
+def _static_area(name: str) -> str:
+    import re
+
+    at = MENU_SOURCE.index('name    "%s"' % name)
+    block = MENU_SOURCE[at : MENU_SOURCE.index("}", at)]
+    return re.search(r"^\t\tarea (.*)$", block, re.M).group(1).strip()
+
+
+@pytest.mark.parametrize("frame,background", sorted(PANELS.items()))
+def test_a_dialogs_frame_sits_on_its_background_not_around_it(
+    frame: str, background: str
+) -> None:
+    """The frame is a thin rail lying flush with the atlas edge over a
+    transparent middle. Inflate its rect and the rail leaves the panel: what
+    shows between the parchment edge and the rail is whatever is behind the
+    panel -- the game."""
+    assert _static_area(frame) == _static_area(background), frame
+
+
+def test_the_main_panel_and_the_quick_menu_frame_the_same_rect() -> None:
+    import re
+
+    layout = re.search(
+        r"function BfBot\.UI\._Layout\(\).*?\n^end$", UI_SOURCE, re.S | re.M
+    ).group(0)
+    background = re.search(r'setArea\("bbBg",\s*(.*?)\)', layout).group(1)
+    frame = re.search(r'setArea\("bbBgFrame",\s*(.*?)\)', layout).group(1)
+    assert frame == background
+
+    # The quick menu sets its three theme backgrounds and its veil in one
+    # loop, then the frame on the line after it.
+    loop = re.search(r'for _, name in ipairs\(\{"bbQuickBg".*?'
+                     r'Infinity_SetArea\(name,\s*(.*?)\)', UI_SOURCE, re.S)
+    quick_frame = re.search(r'Infinity_SetArea\("bbQuickFrame",\s*(.*?)\)',
+                            UI_SOURCE)
+    assert quick_frame.group(1) == loop.group(1)
+
+
+def test_the_resize_hint_yields_to_the_corner_boss() -> None:
+    """With the frame on, the bottom-right boss lands on the grip's own 20x20
+    spot. Two things drawing the same corner is worse than one."""
+    at = MENU_SOURCE.index('name    "bbResizeGrip"')
+    block = MENU_SOURCE[at : MENU_SOURCE.index("}", at)]
+    assert "not BfBot.UI._HasFrameArt()" in block
+    # The click target is unaffected: it is its own, larger, handle.
+    handle = MENU_SOURCE[MENU_SOURCE.index('name       "bbResizeHandle"') :]
+    assert "_HasFrameArt" not in handle[: handle.index("}")]

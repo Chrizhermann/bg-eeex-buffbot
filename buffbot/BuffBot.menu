@@ -371,11 +371,14 @@ menu
 		area 340 55 540 35
 	}
 
-	-- Resize grip visual indicator (BEFORE handle so handle gets click priority)
+	-- Resize grip hint (BEFORE handle so handle gets click priority). It is
+	-- only drawn when the frame art is absent: with the frame on, the corner
+	-- boss lands on this exact spot and the two draw over each other. The
+	-- resize handle below is 80x48 and covers the boss either way.
 	label
 	{
 		name    "bbResizeGrip"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._HasFrameArt()"
 		text    "///"
 		text style "bb_normal"
 		text color lua "BfBot.UI._T('grip')"
@@ -2113,7 +2116,7 @@ menu
 	label
 	{
 		name    "bbTgtFrame"
-		area 460 130 240 430
+		area 474 144 212 402
 	}
 
 
@@ -2625,7 +2628,7 @@ menu
 	label
 	{
 		name    "bbRenFrame"
-		area 436 266 288 118
+		area 450 280 260 90
 	}
 
 
@@ -2748,7 +2751,7 @@ menu
 	label
 	{
 		name    "bbConfFrame"
-		area 436 266 288 118
+		area 450 280 260 90
 	}
 
 
@@ -2861,7 +2864,7 @@ menu
 	label
 	{
 		name    "bbPickFrame"
-		area 366 86 428 408
+		area 380 100 400 380
 	}
 
 
@@ -3037,7 +3040,7 @@ menu
 	label
 	{
 		name    "bbImpFrame"
-		area 406 136 348 328
+		area 420 150 320 300
 	}
 
 
@@ -3176,7 +3179,7 @@ menu
 	label
 	{
 		name    "bbVarFrame"
-		area 406 166 348 248
+		area 420 180 320 220
 	}
 
 

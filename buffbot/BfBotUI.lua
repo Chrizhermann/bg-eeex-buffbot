@@ -883,6 +883,7 @@ function BfBot.UI._OnMenusLoaded()
     -- stretched slice and a tiled one look the same.
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
+    BfBot.UI._borderOk = false
     local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
     local anyOk = false
     local errs = {}
@@ -909,6 +910,7 @@ function BfBot.UI._OnMenusLoaded()
             table.insert(errs, resref .. ": " .. tostring(regErr))
         end
     end
+    BfBot.UI._borderOk = anyOk and true or false
     BfBot.UI._borderStatus = anyOk
         and (#errs == 0 and "registered" or ("registered (partial; " .. table.concat(errs, "; ") .. ")"))
         or ("FAILED: " .. table.concat(errs, "; "))
@@ -1083,7 +1085,9 @@ function BfBot.UI._ToggleQuickMenu()
     for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
         Infinity_SetArea(name, x, y, w, h)
     end
-    Infinity_SetArea("bbQuickFrame", x - 14, y - 14, w + 28, h + 28)
+    -- Same rect as the background: an inflated frame leaves a see-through
+    -- ring between the parchment edge and the rail (see _Layout).
+    Infinity_SetArea("bbQuickFrame", x, y, w, h)
     Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
     for i = 1, BfBot.MAX_PRESETS do
         Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
@@ -1152,15 +1156,23 @@ function BfBot.UI._Layout()
         return x - gap
     end
 
-    -- Panel background (parchment inside, border frame extends 24px beyond).
-    -- Three labels exist (one per theme); only the active theme's is enabled,
-    -- but all three need their area updated so theme switches are seamless.
+    -- Panel background and the frame drawn on top of it, on the SAME rect.
+    -- Three background labels exist (one per theme); only the active theme's
+    -- is enabled, but all three need their area updated so theme switches are
+    -- seamless.
+    --
+    -- The frame rect must not be inflated. Pecca's frame is a thin rail lying
+    -- flush with the atlas edge over a transparent middle, so a rect larger
+    -- than the parchment moves the rail off the panel and leaves a see-through
+    -- ring between the two, with the game showing through it. (The old
+    -- generated border filled its rect opaquely and drew behind, which is why
+    -- it could overhang.) Same rect: rail on the panel edge, corner bosses on
+    -- the panel's corners, transparent middle over parchment.
     setArea("bbBg",  px, py, pw, ph)
     setArea("bbBg2", px, py, pw, ph)
     setArea("bbBg3", px, py, pw, ph)
     setArea("bbDarkOverlay", px, py, pw, ph)
-    local bpad = 14  -- border overhang: the rail sits just outside the parchment
-    setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
+    setArea("bbBgFrame", px, py, pw, ph)
 
     -- Title
     setArea("bbTitle", px, py + 5, pw, 30)
@@ -3489,6 +3501,14 @@ end
 function BfBot.UI._CaptionColor(active)
     local on = active ~= nil and active ~= false and active ~= 0
     return BfBot.UI._T(on and "btnText" or "btnTextOff")
+end
+
+--- True when the 9-slice frame actually draws. Its bottom-right corner boss
+--- then sits exactly where the resize grip's "///" used to be printed, so the
+--- hint is dropped and the boss marks the corner instead. Without the art the
+--- corner is bare parchment and the hint is the only thing that marks it.
+function BfBot.UI._HasFrameArt()
+    return BfBot.UI._borderOk == true
 end
 
 --- The inset bar behind the search box.
