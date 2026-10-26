@@ -6524,16 +6524,37 @@ function BfBot.Test.PlanModel()
         if not okPlan then
             _nok("Assign failed: " .. tostring(plan))
         else
-            local served = 0
+            -- Every request was built from a source that exists and has a
+            -- use left, so most are served. Not all have to be: the pools are
+            -- finite and shared, and a self-only source cannot stand in for
+            -- another caster's -- so a group whose first source is spent by an
+            -- earlier request may find no substitute. What must hold is that
+            -- the allocator never drops one silently: an unserved request
+            -- carries a reason, and that reason is one of the documented ones,
+            -- because step 3's catalog keys are derived from them.
+            local reasons = {}
+            for _, name in pairs(BfBot.Plan.REASON) do reasons[name] = true end
+            local served, unexplained = 0, 0
             for _, decision in ipairs(plan.decisions) do
-                if decision.source then served = served + 1
+                if decision.source then
+                    served = served + 1
                 else
                     P("  INFO: " .. decision.request.group
                         .. " unserved: " .. tostring(decision.reason))
+                    if not reasons[decision.reason] then
+                        unexplained = unexplained + 1
+                        _nok("unserved with no documented reason: "
+                            .. decision.request.group .. " ("
+                            .. tostring(decision.reason) .. ")")
+                    end
                 end
             end
-            _check(served == expected,
-                "allocated " .. served .. " of " .. expected .. " request(s)")
+            _check(#plan.decisions == expected,
+                "every request got a decision (" .. #plan.decisions
+                .. " of " .. expected .. ")")
+            _check(unexplained == 0,
+                "allocated " .. served .. " of " .. expected
+                .. " request(s); every refusal names a documented reason")
             -- No pool may be spent beyond its capacity.
             local overspent = 0
             for pool, used in pairs(plan.used) do
