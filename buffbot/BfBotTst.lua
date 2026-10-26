@@ -106,6 +106,259 @@ local function _hasVariantTable(hdr)
 end
 
 -- ============================================================
+-- Player state guard
+-- Players run the suite on their own saves, and it drives the real
+-- persistence API on the loaded party. A phase that writes player state
+-- runs inside _GuardPhase, and RunAll() runs inside _WithPlayerState as a
+-- whole: every party member's config and item-swap journal and the
+-- classifier overrides are swapped for deep copies first, and the player's
+-- own tables go back by reference afterwards -- outside the pcall around
+-- the phase, so neither a failed check nor a raise can skip it. BuffBot's
+-- baldur.ini keys, the font size and the panel geometry return to their
+-- exact earlier values, an absent key included.
+-- ============================================================
+
+local _INI_SECTION = "BuffBot"
+local _INI_ABSENT = "\1BuffBot-absent\1"
+-- [BuffBot] keys outside _INI_DEFAULTS: the suite's own probe key and the
+-- debug-log toggle.
+local _EXTRA_INI_KEYS = { "BB_TestKey", "Debug" }
+
+--- Copy a value; subtables shared in the source stay shared in the copy.
+local function _DeepCopy(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for k, v in pairs(value) do
+        copy[_DeepCopy(k, seen)] = _DeepCopy(v, seen)
+    end
+    return copy
+end
+
+--- Raw stored text of a [BuffBot] key, or false when it is absent.
+local function _ReadPref(key)
+    local raw = Infinity_GetINIString(_INI_SECTION, key, _INI_ABSENT)
+    if raw == _INI_ABSENT then return false end
+    return tostring(raw)
+end
+
+--- Every [BuffBot] key as stored. Without Infinity_GetINIString an absent
+--- key cannot be told from its default, so the values go through GetPref.
+local function _SavePrefs()
+    local saved = { exact = type(Infinity_GetINIString) == "function", values = {} }
+    local keys = {}
+    for key in pairs(BfBot.Persist._INI_DEFAULTS) do keys[#keys + 1] = key end
+    for _, key in ipairs(_EXTRA_INI_KEYS) do keys[#keys + 1] = key end
+    for _, key in ipairs(keys) do
+        if saved.exact then
+            saved.values[key] = _ReadPref(key)
+        else
+            saved.values[key] = BfBot.Persist.GetPref(key)
+        end
+    end
+    return saved
+end
+
+--- Write back every key that changed, removing keys that were absent.
+local function _RestorePrefs(saved, problems)
+    for key, value in pairs(saved.values) do
+        if saved.exact then
+            if _ReadPref(key) ~= value then
+                if value == false then
+                    if type(Infinity_RemoveINIEntry) == "function" then
+                        Infinity_RemoveINIEntry(_INI_SECTION, key)
+                    end
+                else
+                    BfBot.Persist.SetPref(key, value)
+                end
+                if _ReadPref(key) ~= value then
+                    problems[#problems + 1] = "baldur.ini [BuffBot] " .. key
+                        .. " (was " .. (value or "absent") .. ")"
+                end
+            end
+        elseif BfBot.Persist.GetPref(key) ~= value then
+            BfBot.Persist.SetPref(key, value)
+        end
+    end
+end
+
+--- Snapshot the player's state together with the scratch copies to use.
+--- Reads only, so a raise here leaves nothing swapped.
+local function _TakePlayerState()
+    local saved = { members = {}, prefs = _SavePrefs() }
+    if type(EEex_GetUDAux) == "function" then
+        for slot = 0, 5 do
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite then
+                local aux = EEex_GetUDAux(sprite)
+                local config, itemSwap = aux[BfBot.Persist._KEY], aux.BBItemSwap
+                saved.members[#saved.members + 1] = {
+                    aux = aux, config = config, itemSwap = itemSwap,
+                    scratchConfig = _DeepCopy(config),
+                    scratchItemSwap = _DeepCopy(itemSwap),
+                }
+            end
+        end
+    end
+    saved.overrides = BfBot._overrides
+    saved.scratchOverrides = _DeepCopy(saved.overrides)
+    saved.theme = BfBot.Theme
+    saved.fontSize = saved.theme and saved.theme._fontSize
+    saved.ui = BfBot.UI
+    if saved.ui then
+        saved.panel = { x = saved.ui._panelX, y = saved.ui._panelY,
+            w = saved.ui._panelW, h = saved.ui._panelH }
+    end
+    return saved
+end
+
+local function _UseScratchState(saved)
+    for _, member in ipairs(saved.members) do
+        member.aux[BfBot.Persist._KEY] = member.scratchConfig
+        member.aux.BBItemSwap = member.scratchItemSwap
+    end
+    BfBot._overrides = saved.scratchOverrides
+end
+
+--- Put the player's own state back. Returns what could not be restored.
+local function _RestorePlayerState(saved)
+    -- The assignments come first: they cannot fail and they are what counts.
+    for _, member in ipairs(saved.members) do
+        member.aux[BfBot.Persist._KEY] = member.config
+        member.aux.BBItemSwap = member.itemSwap
+    end
+    local scratchOverrides = BfBot._overrides
+    BfBot._overrides = saved.overrides
+
+    local problems = {}
+    local function step(what, fn)
+        local ok, err = pcall(fn)
+        if not ok then problems[#problems + 1] = what .. ": " .. tostring(err) end
+    end
+    step("the classifier caches", function()
+        -- A classification made under a scratch override must not outlive it.
+        local before = type(saved.overrides) == "table" and saved.overrides or {}
+        local after = type(scratchOverrides) == "table" and scratchOverrides or {}
+        for _, set in ipairs({ before, after }) do
+            for identity in pairs(set) do
+                if before[identity] ~= after[identity] then
+                    BfBot._cache.class[identity] = nil
+                    BfBot._cache.class["itm:" .. tostring(identity)] = nil
+                end
+            end
+        end
+        BfBot.Scan.InvalidateAll()
+        BfBot.Scan.InvalidateSummons()
+    end)
+    step("baldur.ini", function() _RestorePrefs(saved.prefs, problems) end)
+    step("the font size", function()
+        local theme = saved.theme
+        if theme and theme._fontSize ~= saved.fontSize then
+            if type(saved.fontSize) == "number" then
+                theme._SetFontSize(saved.fontSize)
+            else
+                theme._fontSize = saved.fontSize
+            end
+        end
+    end)
+    step("the panel geometry", function()
+        local ui, panel = saved.ui, saved.panel
+        if ui and (ui._panelX ~= panel.x or ui._panelY ~= panel.y
+            or ui._panelW ~= panel.w or ui._panelH ~= panel.h) then
+            ui._panelX, ui._panelY = panel.x, panel.y
+            ui._panelW, ui._panelH = panel.w, panel.h
+            ui._Layout()
+        end
+    end)
+    step("the open panel", function()
+        -- An open panel may show rows built from a scratch config.
+        if buffbot_isOpen and saved.ui then saved.ui._Refresh() end
+    end)
+    return problems
+end
+
+--- Run body() against scratch player state, then restore the player's own.
+-- @return ok, result or error, list of restore problems
+local function _WithPlayerState(body)
+    local tookOk, saved = pcall(_TakePlayerState)
+    if not tookOk then
+        return false, "could not isolate the player's state, nothing was run: "
+            .. tostring(saved), {}
+    end
+    _UseScratchState(saved)
+    local ok, result = pcall(body)
+    return ok, result, _RestorePlayerState(saved)
+end
+
+--- A phase that writes player state. A raise fails it once the state is
+--- back, and so does any state that could not be put back.
+local function _GuardPhase(section, body)
+    _reset()
+    local ok, result, problems = _WithPlayerState(body)
+    for _, problem in ipairs(problems) do
+        _nok(section .. ": could not restore " .. problem)
+    end
+    if not ok then
+        _nok(section .. " raised: " .. tostring(result))
+        return _summary(section)
+    end
+    return result and #problems == 0
+end
+
+--- What each path holds: its bytes, or false when there is no such file.
+-- @return list, or nil + the path that exists but cannot be read
+local function _SaveFiles(paths)
+    local saved = {}
+    if type(io) ~= "table" then return saved end  -- no io: nothing is written
+    for _, path in ipairs(paths) do
+        local f, err, code = io.open(path, "rb")
+        if f then
+            saved[#saved + 1] = { path = path, bytes = f:read("*a") }
+            f:close()
+        elseif code == 2 then  -- ENOENT
+            saved[#saved + 1] = { path = path, bytes = false }
+        else
+            return nil, path .. " (" .. tostring(err) .. ")"
+        end
+    end
+    return saved
+end
+
+local function _ReadBytes(path)
+    local f = io.open(path, "rb")
+    if not f then return false end
+    local bytes = f:read("*a")
+    f:close()
+    return bytes
+end
+
+--- Put every path back as _SaveFiles found it. Returns what failed.
+local function _RestoreFiles(saved)
+    local problems = {}
+    for _, file in ipairs(saved) do
+        if _ReadBytes(file.path) ~= file.bytes then
+            local err
+            if file.bytes then
+                local out
+                out, err = io.open(file.path, "wb")
+                if out then
+                    out:write(file.bytes)
+                    out:close()
+                end
+            else
+                err = select(2, os.remove(file.path))
+            end
+            if _ReadBytes(file.path) ~= file.bytes then
+                problems[#problems + 1] = file.path .. " (" .. tostring(err) .. ")"
+            end
+        end
+    end
+    return problems
+end
+
+-- ============================================================
 -- BfBot.Test.CheckFields — Field Name Verification
 -- MUST run first. Verifies all assumed field names.
 -- ============================================================
@@ -695,6 +948,7 @@ end
 -- ============================================================
 
 function BfBot.Test.Override()
+    return _GuardPhase("Override", function()
     P("=== Override: Manual spell include/exclude ===")
     _reset()
 
@@ -788,6 +1042,7 @@ function BfBot.Test.Override()
     BfBot.Persist.SetOverride(sprite, "TESTSPELL", nil)
 
     return _summary("Override")
+    end)
 end
 
 -- ============================================================
@@ -795,6 +1050,7 @@ end
 -- ============================================================
 
 function BfBot.Test.SpellLockPersist()
+    return _GuardPhase("SpellLockPersist", function()
     P("=== SpellLockPersist: persistence layer ===")
     _reset()
 
@@ -897,6 +1153,7 @@ function BfBot.Test.SpellLockPersist()
            "Migration preserves 'pri' field")
 
     return _summary("SpellLockPersist")
+    end)
 end
 
 -- ============================================================
@@ -1174,6 +1431,7 @@ end
 -- ============================================================
 
 function BfBot.Test.ExportImport()
+    return _GuardPhase("ExportImport", function()
     P("=== ExportImport: Config file export/import ===")
     _reset()
 
@@ -1208,14 +1466,31 @@ function BfBot.Test.ExportImport()
         _nok("Serialized output doesn't parse")
     end
 
+    -- Tests 2-6 write into the player's own presets folder: the export
+    -- lands on the leader's export name, and the kind filter adds a file of
+    -- its own. Keep what both paths hold and put it back afterwards,
+    -- whether the tests pass, fail or raise.
+    local fakeName = "BFBT_TEST_KIND"
+    local fakePath = BfBot.Persist._PRESETS_DIR .. "/" .. fakeName .. ".lua"
+    local leaderExport = BfBot.Persist._ExportFileName(sprite0)
+    local savedFiles, unreadable = _SaveFiles({
+        BfBot.Persist._PRESETS_DIR .. "/" .. leaderExport .. ".lua", fakePath })
+    if not savedFiles then
+        _nok("Cannot keep " .. unreadable .. " for its restore; file tests not run")
+        return _summary("ExportImport")
+    end
+
+    local filesOk, filesErr = pcall(function()
     -- Test 2: Export writes a file
     local exportOk, exportName = BfBot.Persist.ExportConfig(sprite0)
     if exportOk then
         _ok("ExportConfig succeeded: " .. tostring(exportName))
     else
         _nok("ExportConfig failed: " .. tostring(exportName))
-        return _summary("ExportImport")
+        return
     end
+    _check(exportName == leaderExport,
+        "Export wrote the file kept for restore (" .. tostring(exportName) .. ")")
 
     -- Test 3: ListExports finds the file
     local exports = BfBot.Persist.ListExports()
@@ -1270,8 +1545,6 @@ function BfBot.Test.ExportImport()
     end
 
     -- Test 6: Items kept even if not in inventory; spells stripped if not castable
-    local fakeName = "BFBT_TEST_KIND"
-    local fakePath = BfBot.Persist._PRESETS_DIR .. "/" .. fakeName .. ".lua"
     local fakeConfig = {
         v = 10, ap = 1,
         presets = { [1] = { name = "T", cat = "custom", qc = 0, spells = {
@@ -1318,16 +1591,18 @@ function BfBot.Test.ExportImport()
     else
         _nok("Could not write kind-filter test file: " .. tostring(fakePath))
     end
-
-    -- Cleanup: remove kind-filter test file
-    pcall(function() os.remove(fakePath) end)
-
-    -- Cleanup: remove test export file
-    pcall(function()
-        os.remove(BfBot.Persist._PRESETS_DIR .. "/" .. exportName .. ".lua")
     end)
 
+    -- Cleanup: both files exactly as they were, or gone if they did not exist.
+    for _, problem in ipairs(_RestoreFiles(savedFiles)) do
+        _nok("Could not restore " .. problem)
+    end
+    if not filesOk then
+        _nok("ExportImport file tests raised: " .. tostring(filesErr))
+    end
+
     return _summary("ExportImport")
+    end)
 end
 
 -- ============================================================
@@ -1420,6 +1695,7 @@ end
 
 --- Test: Target picker redesign — name resolution, dual-format, lock gating.
 function BfBot.Test.TargetPicker()
+    return _GuardPhase("TargetPicker", function()
     _reset()
     P("")
     P("========================================")
@@ -1630,6 +1906,7 @@ function BfBot.Test.TargetPicker()
     end
 
     return _summary("TargetPicker")
+    end)
 end
 
 -- ============================================================
@@ -1637,6 +1914,7 @@ end
 -- ============================================================
 
 function BfBot.Test.CombatSafety()
+    return _GuardPhase("Combat Safety", function()
     _reset()
     P("")
     P("========================================")
@@ -1792,6 +2070,7 @@ function BfBot.Test.CombatSafety()
     -- ---- Summary ----
     P("")
     return _summary("Combat Safety")
+    end)
 end
 
 -- ============================================================
@@ -1799,6 +2078,7 @@ end
 -- ============================================================
 
 function BfBot.Test.SubwindowDetection()
+    return _GuardPhase("Subwindow Detection", function()
     _reset()
     P("")
     P("========================================")
@@ -2235,6 +2515,7 @@ function BfBot.Test.SubwindowDetection()
     -- ---- Summary ----
     P("")
     return _summary("Subwindow Detection")
+    end)
 end
 
 -- ============================================================
@@ -2464,13 +2745,24 @@ function BfBot.Test.LegacyInnateCleanup()
         EEex_Action_ExecuteResponseStringOnAIBaseInstantly(
             'AddSpecialAbility("' .. legacyResref .. '")', sprite)
     end
-    local before = _knownCount(legacyResref)
+    -- A copy from an earlier version that the safety tick has not removed
+    -- yet: a grant would add nothing, and the tick takes the copy shortly.
+    if _knownCount(legacyResref) > 0 then
+        _warning(name .. " still knows " .. legacyResref
+            .. " from an earlier version — skipping until the safety tick removes it")
+        return _summary("LegacyInnateCleanup")
+    end
     _grant()
     local granted = _knownCount(legacyResref)
-    if granted <= before then
+    if granted == 0 then
         _warning("instant AddSpecialAbility didn't take effect — skipping")
         return _summary("LegacyInnateCleanup")
     end
+
+    -- From here the sprite carries the test's grant. The cases run in a
+    -- pcall so the removal after them runs whether they pass, fail or raise.
+    local casesOk, casesErr = pcall(function()
+
     P(string.format("  the grant left %d known cop%s of %s",
         granted, granted == 1 and "y" or "ies", legacyResref))
     local _, total = BfBot.Innate._LegacyCopies(sprite)
@@ -2510,6 +2802,19 @@ function BfBot.Test.LegacyInnateCleanup()
         string.format("_RemoveFrom removed the test's grant (%s removed, %s left)",
             tostring(removed), tostring(left)))
     _check(_knownCount(legacyResref) == 0, legacyResref .. " is gone again")
+    end)
+
+    -- The test's grant must not outlive the phase. When a case raised before
+    -- removing it, it is removed here instead.
+    if _knownCount(legacyResref) > 0 then
+        local removeOk, removeErr = pcall(BfBot.Innate._RemoveFrom, sprite)
+        _check(removeOk and _knownCount(legacyResref) == 0,
+            "cleanup: the test's " .. legacyResref .. " removed after an interrupted case"
+            .. (removeOk and "" or (" (" .. tostring(removeErr) .. ")")))
+    end
+    if not casesOk then
+        _nok("LegacyInnateCleanup cases raised: " .. tostring(casesErr))
+    end
 
     -- A click on a leftover innate before its removal runs must do nothing.
     _check(pcall(BFBOTGO, { m_effectAmount = slotIdx, m_dWFlags = 1 }),
@@ -2524,6 +2829,7 @@ end
 -- ============================================================
 
 function BfBot.Test.MovablePanel()
+    return _GuardPhase("MovablePanel", function()
     _reset()
     P("== MovablePanel ==")
 
@@ -2621,18 +2927,21 @@ function BfBot.Test.MovablePanel()
     _check(BfBot.UI._panelY >= 0,
         "drag clamps Y >= 0 (" .. tostring(BfBot.UI._panelY) .. ")")
 
-    -- Clean up: restore defaults
+    -- Clean up: _GuardPhase then puts the player's own layout back, in
+    -- memory and in baldur.ini.
     motionX = nil
     motionY = nil
     BfBot.UI._ResetLayout()
 
     return _summary("MovablePanel")
+    end)
 end
 
 -- ============================================================
 -- BfBot.Test.Theming — Theme module unit tests (issue #32)
 -- ============================================================
 function BfBot.Test.Theming()
+    return _GuardPhase("Theming", function()
     P("==== Test: Theming ====")
     local pass = 0
     local fail = 0
@@ -2642,25 +2951,47 @@ function BfBot.Test.Theming()
         else fail = fail + 1; P("  FAIL: " .. label) end
     end
 
-    -- _T returns valid color for known key in default palette
-    check("_T('title') returns string on default palette",
-        type(BfBot.UI._T("title")) == "string" and BfBot.UI._T("title"):find("^{"))
+    -- _T hands the engine a packed number, not the palette's own string
+    check("_T('title') returns a packed number", type(BfBot.UI._T("title")) == "number")
 
-    -- Unknown key returns magenta sentinel
-    check("_T(unknown) returns magenta",
-        BfBot.UI._T("nonexistent") == "{255, 0, 255}")
-
-    -- Every palette has all 20 required keys
-    local required = {"overlay","borderResref","bgResref","title","text","textMuted","textAccent",
-                      "grip","reset","headerSub","lockText","spellLocked","pickerSel","pickerOn",
-                      "pickerOff","qcOff","qcLong","qcAll","lockActive","lockInactive"}
-    for paletteName, palette in pairs(BfBot.Theme._palettes) do
-        for _, key in ipairs(required) do
-            check(paletteName .. " has " .. key, palette[key] ~= nil)
-        end
+    -- The packing checks assert bg2_light's own title, {50, 30, 10}, so they
+    -- have to run on bg2_light -- not on whatever theme the player (or a lab
+    -- run) last chose. _active is swapped directly and put back: Theme.Apply
+    -- would write the player's theme to the INI as a side effect of a test.
+    do
+        local wasActive = BfBot.Theme._active
+        BfBot.Theme._active = BfBot.Theme._palettes.bg2_light
+        -- packed as alpha<<24 | blue<<16 | green<<8 | red
+        check("_T('title') packs blue and red the engine's way round",
+            BfBot.UI._T("title") == (10 * 0x10000) + (30 * 0x100) + 50)
+        -- The raw accessor still exposes the authored string
+        check("_TRaw('title') returns the palette string",
+            BfBot.UI._TRaw("title") == "{50, 30, 10}")
+        BfBot.Theme._active = wasActive
     end
 
-    -- Font size setter/getter round-trip with clamping
+    -- Unknown key returns magenta sentinel
+    check("_T(unknown) returns packed magenta",
+        BfBot.UI._T("nonexistent") == 0xFF00FF)
+
+    -- Every palette carries exactly the keys the default one does. Read off
+    -- bg2_light rather than listed here: a hand-kept list goes stale in both
+    -- directions -- it kept demanding `reset` long after that key was dropped,
+    -- and never learned about the ones the chrome work added.
+    local reference = BfBot.Theme._palettes.bg2_light
+    for paletteName, palette in pairs(BfBot.Theme._palettes) do
+        for key in pairs(reference) do
+            check(paletteName .. " has " .. key, palette[key] ~= nil)
+        end
+        local extra = nil
+        for key in pairs(palette) do
+            if reference[key] == nil then extra = key end
+        end
+        check(paletteName .. " has no key bg2_light lacks", extra == nil)
+    end
+
+    -- Font size setter/getter round-trip with clamping. _GuardPhase puts
+    -- the player's own size back afterwards.
     BfBot.Theme._SetFontSize(1)
     check("SetFontSize(1) stores small", BfBot.Theme._GetFontSize() == 1)
     BfBot.Theme._SetFontSize(3)
@@ -2708,12 +3039,16 @@ function BfBot.Test.Theming()
 
     P(string.format("  %d pass / %d fail", pass, fail))
     return fail == 0
+    end)
 end
 
 -- ============================================================
 -- BfBot.Test.StaleState — Save-reload mid-cast recovery (issue #38)
 -- ============================================================
 function BfBot.Test.StaleState()
+    -- Stop() and _SafetyTick recover item swaps: they tag each party
+    -- member's unfinished swap journal, which the save stores.
+    return _GuardPhase("Stale State", function()
     _reset()
     P("")
     P("========================================")
@@ -2925,6 +3260,7 @@ function BfBot.Test.StaleState()
 
     P("")
     return _summary("Stale State")
+    end)
 end
 
 -- ============================================================
@@ -3178,6 +3514,9 @@ end
 -- verify the watchdog trips on a stall, leaves a healthy run alone, and never
 -- dereferences cached sprite userdata (records hold plain caster refs only).
 function BfBot.Test.Watchdog()
+    -- A force-complete recovers item swaps: it tags each party member's
+    -- unfinished swap journal, which the save stores.
+    return _GuardPhase("Watchdog", function()
     _reset()
     P("")
     P("========================================")
@@ -3324,6 +3663,7 @@ function BfBot.Test.Watchdog()
     _restore()
     P("")
     return _summary("Watchdog")
+    end)
 end
 
 -- ============================================================
@@ -3335,6 +3675,7 @@ end
 -- the contract (boolean, nil-safe), the SP/host live result, the control-mode
 -- switch, and that the queue builder actually drops filtered casters.
 function BfBot.Test.Mp()
+    return _GuardPhase("Multiplayer", function()
     _reset()
     P("")
     P("========================================")
@@ -3390,6 +3731,7 @@ function BfBot.Test.Mp()
 
     P("")
     return _summary("Multiplayer")
+    end)
 end
 
 -- ============================================================
@@ -3397,6 +3739,7 @@ end
 -- ============================================================
 
 function BfBot.Test.SummonCasters()
+    return _GuardPhase("SummonCasters", function()
     P("=== SummonCasters: caster keys + live-sprite resolver ===")
     _reset()
 
@@ -5791,6 +6134,7 @@ function BfBot.Test.SummonCasters()
     end
 
     return _summary("SummonCasters")
+    end)
 end
 
 -- ============================================================
@@ -6069,6 +6413,202 @@ function BfBot.Test.EEexCompatibility()
 end
 
 -- ============================================================
+-- BfBot.Test.PlanModel — Shared plan model against the live party
+-- ============================================================
+
+--- The offline suite covers the allocator with synthetic snapshots. This phase
+--- covers what it cannot reach: that `Snapshot` reads the REAL party, that the
+--- pool keys it produces match the uses the engine reports, that radial
+--- delivery is recognized on real spells, and that the live per-character
+--- config migrates into a plan without losing a configured cast.
+---
+--- Read-only. It plans and discards; nothing is cast and nothing is saved.
+function BfBot.Test.PlanModel()
+    -- The phase plans read-only, but it reads the live config to check the
+    -- migration, and GetConfig creates and stores a default for a character
+    -- that has none. That is a write to the player's save, so this phase
+    -- declares the guard like every other one that can reach their state.
+    return _GuardPhase("Plan Model", function()
+    P("=== Phase: Shared Plan Model (issue #81) ===")
+
+    if not BfBot.Plan then
+        _nok("BfBot.Plan is not loaded")
+        return _summary("Plan Model")
+    end
+
+    local okSnap, snap = pcall(BfBot.Plan.Snapshot)
+    if not okSnap or type(snap) ~= "table" then
+        _nok("Snapshot failed: " .. tostring(snap))
+        return _summary("Plan Model")
+    end
+
+    -- A party exists, so the snapshot has to see it.
+    local partyCount = 0
+    for _ in pairs(snap.actors) do partyCount = partyCount + 1 end
+    _check(partyCount > 0, "snapshot found " .. partyCount .. " party member(s)")
+    _check(#snap.order == partyCount, "order list matches the actor table")
+
+    -- Every actor is addressable, and the protagonist is keyed by join order.
+    local sawProtagonist = false
+    for key, actor in pairs(snap.actors) do
+        if key == "protagonist" then sawProtagonist = true end
+        if type(actor.name) ~= "string" or actor.name == "" then
+            _nok("actor " .. tostring(key) .. " has no name")
+        end
+        if actor.slot == nil or actor.slot < 0 or actor.slot > 5 then
+            _nok("actor " .. tostring(key) .. " has an impossible slot")
+        end
+    end
+    _check(sawProtagonist, "the protagonist is keyed by join order")
+
+    -- Casters are party members plus any allied spellcasting summons.
+    _check(#snap.casters >= partyCount,
+        "caster list covers the party (" .. #snap.casters .. " caster(s))")
+
+    -- Groups and pools. A party with spellcasters must produce both; a party of
+    -- pure fighters legitimately produces neither, so that is a WARN.
+    local groupCount, sourceCount, radial = 0, 0, 0
+    for _, group in pairs(snap.groups) do
+        groupCount = groupCount + 1
+        sourceCount = sourceCount + #group.sources
+        for _, source in ipairs(group.sources) do
+            if type(source.pool) ~= "string" then
+                _nok(group.key .. ": source has no pool key")
+            end
+            if source.id == nil then _nok(group.key .. ": source has no id") end
+            if source.row and source.row.radialParty == 1 then radial = radial + 1 end
+        end
+    end
+    if groupCount == 0 then
+        _warning("no buff groups — a party without castable buffs?")
+    else
+        _ok(groupCount .. " buff group(s), " .. sourceCount .. " source(s)")
+    end
+    P("  INFO: " .. radial .. " radial party source(s) detected")
+
+    -- Pool capacity must never exceed what the engine reports for that spell.
+    -- A pool that claims more uses than exist is the one failure mode that
+    -- silently promises casts the run cannot make.
+    local overclaimed = 0
+    for _, group in pairs(snap.groups) do
+        for _, source in ipairs(group.sources) do
+            local capacity = snap.pools[source.pool]
+            if capacity and source.row and source.row.kind ~= "itm"
+                and source.row.count and capacity > source.row.count then
+                overclaimed = overclaimed + 1
+                P("  FAIL: " .. source.pool .. " claims " .. capacity
+                    .. " uses, the scan reports " .. source.row.count)
+            end
+        end
+    end
+    _check(overclaimed == 0, "no pool claims more uses than the scan reports")
+
+    -- Allocation on the live snapshot. Every group gets one request for its
+    -- own caster (or the party, when the delivery is area), which must be
+    -- servable: the source exists and its pool has at least one use.
+    local requests, expected = {}, 0
+    for key, group in pairs(snap.groups) do
+        local source = group.sources[1]
+        if source and not source.reason and (snap.pools[source.pool] or 0) > 0 then
+            -- An area source only accepts "party"; everything else is served
+            -- on its own caster, which is legal for self-only sources too.
+            local target = source.aoe and "party" or source.actor
+            requests[#requests + 1] = { group = key, target = target, on = 1 }
+            expected = expected + 1
+        end
+    end
+    if expected == 0 then
+        _warning("nothing castable to allocate — no memorized buffs?")
+    else
+        local okPlan, plan = pcall(BfBot.Plan.Assign, snap, requests)
+        if not okPlan then
+            _nok("Assign failed: " .. tostring(plan))
+        else
+            local served = 0
+            for _, decision in ipairs(plan.decisions) do
+                if decision.source then served = served + 1
+                else
+                    P("  INFO: " .. decision.request.group
+                        .. " unserved: " .. tostring(decision.reason))
+                end
+            end
+            _check(served == expected,
+                "allocated " .. served .. " of " .. expected .. " request(s)")
+            -- No pool may be spent beyond its capacity.
+            local overspent = 0
+            for pool, used in pairs(plan.used) do
+                if used > (snap.pools[pool] or 0) then overspent = overspent + 1 end
+            end
+            _check(overspent == 0, "no pool was spent past its capacity")
+        end
+    end
+
+    -- Repeat expansion against the live repeat ceiling.
+    local flat = BfBot.Plan.ExpandRequests({
+        { group = "x", target = "protagonist", on = 1, rep = BfBot.MAX_SPELL_REPEATS } })
+    _check(#flat == BfBot.MAX_SPELL_REPEATS,
+        "a repeat of " .. BfBot.MAX_SPELL_REPEATS .. " reserves that many uses")
+    _check(#BfBot.Plan.ExpandRequests({
+        { group = "x", target = "protagonist", on = 1 } }) == 1,
+        "a missing repeat count reserves one use")
+
+    -- Migration of the live configuration. A preset the player actually has
+    -- must either migrate completely or name what is missing.
+    local protagonist = BfBot.Persist._GetProtagonist and BfBot.Persist._GetProtagonist()
+    local config = protagonist and BfBot.Persist.GetConfig(protagonist)
+    local active = config and config.ap or 1
+    -- Counted BEFORE the migration runs, so the comparison below is real.
+    local entriesBefore = 0
+    if config and config.presets and config.presets[active] then
+        for _ in pairs(config.presets[active].spells or {}) do
+            entriesBefore = entriesBefore + 1
+        end
+    end
+    if not config then
+        _warning("no protagonist config — load a save before this phase")
+    else
+        local okImport, migrated, reason, detail = pcall(
+            BfBot.Plan.ImportLegacy, snap, active)
+        if not okImport then
+            _nok("ImportLegacy failed: " .. tostring(migrated))
+        elseif migrated then
+            _ok("preset " .. active .. " migrated to " .. #migrated .. " request(s)")
+            -- Every migrated request has to be addressable in this snapshot.
+            local bad = 0
+            for _, request in ipairs(migrated) do
+                if not snap.groups[request.group] then bad = bad + 1 end
+                if request.target ~= "party" and not snap.actors[request.target] then
+                    bad = bad + 1
+                end
+                if request.manual == nil then bad = bad + 1 end
+            end
+            _check(bad == 0, "every migrated request names a live group and target")
+        else
+            -- A refusal is a correct outcome, not a failure: it means a
+            -- configured spell or recipient is genuinely gone.
+            _ok("migration refused with a reason: " .. tostring(reason)
+                .. " (" .. tostring(detail) .. ")")
+        end
+    end
+
+    -- The per-character config must come out of the migration unchanged:
+    -- migration READS the old presets, it does not consume them, so a
+    -- half-finished schema move loses nothing.
+    if config and config.presets and config.presets[active] then
+        local preset = config.presets[active]
+        _check(type(preset.spells) == "table",
+            "the migrated preset still holds its own spell table")
+        local entries = 0
+        for _ in pairs(preset.spells or {}) do entries = entries + 1 end
+        _check(entries == entriesBefore,
+            "the preset still holds all " .. entriesBefore .. " of its entries")
+    end
+
+    return _summary("Plan Model")
+    end)
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 -- Remaining-duration threshold / force re-cast (issue #84)
@@ -6083,6 +6623,7 @@ end
 --- and removes them again with opcode 321 before returning, so nothing of the
 --- test survives it. A portrait icon carries no gameplay effect either way.
 function BfBot.Test.RefreshThreshold()
+    return _GuardPhase("RefreshThreshold", function()
     _reset()
     P("")
     P("========================================")
@@ -6326,6 +6867,8 @@ function BfBot.Test.RefreshThreshold()
         end
     end
 
+    -- _GuardPhase afterwards also removes the key again when the player's
+    -- baldur.ini never had it.
     BfBot.Persist.SetPref("RefreshBelow", savedPref)
     _check(BfBot.Persist.GetPref("RefreshBelow") == savedPref,
         "restored the player's own RefreshBelow setting")
@@ -6336,6 +6879,7 @@ function BfBot.Test.RefreshThreshold()
     end
 
     return _summary("RefreshThreshold")
+    end)
 end
 
 -- ============================================================
@@ -6344,6 +6888,10 @@ function BfBot.Test.RunAll()
     -- Open log file so output is captured
     BfBot._OpenLog()
 
+    -- The whole suite runs against scratch player state as well, so a phase
+    -- that reaches it only indirectly (GetConfig creates a missing config)
+    -- leaves nothing behind either, and a raise ends the run cleanly.
+    local ran, allOk, problems = _WithPlayerState(function()
     P("========================================")
     P("  BuffBot Test Suite v" .. (BfBot.VERSION or "?"))
     P("========================================")
@@ -6354,7 +6902,6 @@ function BfBot.Test.RunAll()
     if not fieldsOk then
         P("CRITICAL: Field verification failed.")
         P("Run BfBot.Test.DumpFeatureBlocks('SPWI305') to investigate.")
-        BfBot._CloseLog()
         return false
     end
 
@@ -6462,6 +7009,10 @@ function BfBot.Test.RunAll()
     local refreshOk = BfBot.Test.RefreshThreshold()
     P("")
 
+    -- Phase: Shared plan model against the live party (issue #81)
+    local planOk = BfBot.Test.PlanModel()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -6491,11 +7042,21 @@ function BfBot.Test.RunAll()
     P("  Watchdog: " .. (watchdogOk and "PASS" or "FAIL"))
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
+    P("  Plan Model:         " .. (planOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk
+    end)
+
+    for _, problem in ipairs(problems) do
+        P("CRITICAL: could not restore " .. problem)
+    end
+    if not ran then
+        P("CRITICAL: the suite stopped: " .. tostring(allOk))
+    end
     BfBot._CloseLog()
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk
+    return ran and allOk and #problems == 0
 end
 
 -- ============================================================
@@ -6604,6 +7165,7 @@ end
 --- Test the persistence module.
 -- Usage from console: BfBot.Test.Persist()
 function BfBot.Test.Persist()
+    return _GuardPhase("Persistence", function()
     _reset()
     P("")
     P("========================================")
@@ -7234,6 +7796,7 @@ function BfBot.Test.Persist()
     P("")
 
     return result
+    end)
 end
 
 -- ============================================================
@@ -7342,6 +7905,7 @@ end
 -- ============================================================
 
 function BfBot.Test.QuickCast()
+    return _GuardPhase("Quick Cast", function()
     _reset()
     P("")
     P("========================================")
@@ -7471,6 +8035,7 @@ function BfBot.Test.QuickCast()
     -- ---- Summary ----
     P("")
     return _summary("Quick Cast")
+    end)
 end
 
 -- ============================================================

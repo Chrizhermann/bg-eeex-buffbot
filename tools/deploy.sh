@@ -20,7 +20,7 @@ OVERRIDE_DIR="$GAME_DIR/override"
 CATALOG_PATH="$OVERRIDE_DIR/bfbot_l10n.tra"
 
 # Verify source files exist
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotFst.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotFst.lua BfBotMp.lua BfBotPer.lua BfBotPln.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     if [ ! -f "$SRC_DIR/$f" ]; then
         echo "ERROR: $SRC_DIR/$f not found"
         exit 1
@@ -55,7 +55,7 @@ else
 fi
 
 # Copy source files
-for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotFst.lua BfBotMp.lua BfBotPer.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
+for f in M_BfBot.lua BfBotCor.lua BfBotLoc.lua BfBotThm.lua BfBotCls.lua BfBotScn.lua BfBot5e.lua BfBotExe.lua BfBotFst.lua BfBotMp.lua BfBotPer.lua BfBotPln.lua BfBotInn.lua BfBotUI.lua BfBotTst.lua BuffBot.menu; do
     cp "$SRC_DIR/$f" "$OVERRIDE_DIR/$f"
 done
 

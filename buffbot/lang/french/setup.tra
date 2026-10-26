@@ -403,3 +403,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Ordre : manuel~
+// ui.order.duration
+@724 = ~Ordre : durée~
+// ui.order.tooltip_manual
+@725 = ~Lance les sorts dans l'ordre que vous avez défini. Cliquez pour lancer d'abord les bénédictions les plus longues ; votre ordre est conservé et revient si vous désactivez.~
+// ui.order.tooltip_duration
+@726 = ~Lance d'abord les bénédictions les plus longues. Les lignes verrouillées gardent leur place. Cliquez pour revenir à votre ordre.~

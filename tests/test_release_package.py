@@ -51,6 +51,7 @@ BUFFBOT_RELEASE_FILES = {
     "buffbot/BfBotLoc.lua",
     "buffbot/BfBotMp.lua",
     "buffbot/BfBotPer.lua",
+    "buffbot/BfBotPln.lua",
     "buffbot/BfBotScn.lua",
     "buffbot/BfBotThm.lua",
     "buffbot/BfBotTst.lua",

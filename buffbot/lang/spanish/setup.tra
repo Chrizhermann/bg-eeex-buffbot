@@ -403,3 +403,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Orden: manual~
+// ui.order.duration
+@724 = ~Orden: duración~
+// ui.order.tooltip_manual
+@725 = ~Lanza en el orden que has fijado. Haz clic para lanzar primero las mejoras más duraderas; tu orden se conserva y vuelve al desactivarlo.~
+// ui.order.tooltip_duration
+@726 = ~Lanza primero las mejoras más duraderas. Las filas bloqueadas mantienen su lugar. Haz clic para volver a tu orden.~

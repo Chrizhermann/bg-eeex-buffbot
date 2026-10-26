@@ -278,9 +278,9 @@ was found in an IWD:EE 2.7.3.0 + EEex v1.3.1 lab:
 
 - **Button art.** IWD:EE ships a `GUIOSTUL.BAM`, but its frames are texture
   fragments, not buttons. The game's own buttons use `GUIBUTMT` with the same frame
-  order, so `BuffBot.menu` reads the BAM name from `BfBot.Theme.ButtonBam()`, which
-  checks `engine_mode` (0 BG:EE, 1 BG2:EE, 2 IWD:EE) at runtime. One installer path
-  serves every game.
+  order. The panel draws Pecca's chrome art where it is installed; without it, the
+  button helpers fall back to `BfBot.Theme.ButtonBam()`, which checks `engine_mode`
+  (0 BG:EE, 1 BG2:EE, 2 IWD:EE) at runtime. One installer path serves every game.
 - **Fonts.** IWD:EE's text styles use `POSTANTI` and `SHERWOOD` where BG2:EE uses
   `NORMAL` and `REALMS`, so the text-size rescaling derives its font map from the
   running game's styles instead of a fixed table.

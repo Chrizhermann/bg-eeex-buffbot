@@ -8,13 +8,6 @@
 -- so we don't wipe _T (which the .menu evaluates per-frame for theme colors).
 BfBot.UI = BfBot.UI or {}
 
--- Convert "{R, G, B}" string → {R, G, B} table. Used by color functions
--- that consume _T() (string) and hand tables back to the engine.
-local function _parseColor(s)
-    local r, g, b = s:match("^%{(%d+),%s*(%d+),%s*(%d+)%}$")
-    return { tonumber(r) or 0, tonumber(g) or 0, tonumber(b) or 0 }
-end
-
 -- ============================================================
 -- Internal State
 -- ============================================================
@@ -884,25 +877,29 @@ function BfBot.UI._OnMenusLoaded()
     -- the new size on the next push, not on a live size change.
     BfBot.Theme._RegisterFontRenderListeners()
 
-    -- Register 9-slice border textures (one per theme variant)
+    -- Register 9-slice border textures (one per theme variant). The atlases
+    -- carry Pecca's corner at its native 38x28 and a short slice of each rail
+    -- for the edges, which the engine stretches — the rails are uniform, so a
+    -- stretched slice and a tiled one look the same.
     -- Wrapped in pcall — stores status for later console inspection
     BfBot.UI._borderStatus = "not attempted"
+    BfBot.UI._borderOk = false
     local BORDER_RESREFS = { "BFBOTFR", "BFBOTFR2", "BFBOTFR3" }
     local anyOk = false
     local errs = {}
     for _, resref in ipairs(BORDER_RESREFS) do
         local regOk, regErr = pcall(function()
             EEex.RegisterSlicedRect("BuffBot_Border_" .. resref, {
-                ["topLeft"]     = {   0,   0, 128, 128 },
-                ["top"]         = { 128,   0, 256, 128 },
-                ["topRight"]    = { 384,   0, 128, 128 },
-                ["right"]       = { 384, 128, 128, 256 },
-                ["bottomRight"] = { 384, 384, 128, 128 },
-                ["bottom"]      = { 128, 384, 256, 128 },
-                ["bottomLeft"]  = {   0, 384, 128, 128 },
-                ["left"]        = {   0, 128, 128, 256 },
-                ["center"]      = { 128, 128, 256, 256 },
-                ["dimensions"]  = { 512, 512 },
+                ["topLeft"]     = {   0,   0,  38,  28 },
+                ["top"]         = {  38,   0, 180,  28 },
+                ["topRight"]    = { 218,   0,  38,  28 },
+                ["right"]       = { 218,  28,  38,  72 },
+                ["bottomRight"] = { 218, 100,  38,  28 },
+                ["bottom"]      = {  38, 100, 180,  28 },
+                ["bottomLeft"]  = {   0, 100,  38,  28 },
+                ["left"]        = {   0,  28,  38,  72 },
+                ["center"]      = {  38,  28, 180,  72 },
+                ["dimensions"]  = { 256, 128 },
                 ["resref"]      = resref,
                 ["flags"]       = 0,
             })
@@ -913,6 +910,7 @@ function BfBot.UI._OnMenusLoaded()
             table.insert(errs, resref .. ": " .. tostring(regErr))
         end
     end
+    BfBot.UI._borderOk = anyOk and true or false
     BfBot.UI._borderStatus = anyOk
         and (#errs == 0 and "registered" or ("registered (partial; " .. table.concat(errs, "; ") .. ")"))
         or ("FAILED: " .. table.concat(errs, "; "))
@@ -1087,7 +1085,9 @@ function BfBot.UI._ToggleQuickMenu()
     for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
         Infinity_SetArea(name, x, y, w, h)
     end
-    Infinity_SetArea("bbQuickFrame", x - 24, y - 24, w + 48, h + 48)
+    -- Same rect as the background: an inflated frame leaves a see-through
+    -- ring between the parchment edge and the rail (see _Layout).
+    Infinity_SetArea("bbQuickFrame", x, y, w, h)
     Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
     for i = 1, BfBot.MAX_PRESETS do
         Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
@@ -1126,6 +1126,7 @@ function BfBot.UI._Layout()
     local px = BfBot.UI._panelX or math.floor((sw - pw) / 2)
     local py = BfBot.UI._panelY or math.floor((sh - ph) / 2)
     local pad = 10
+    local gapS = 6   -- the spacing used across the header rows
     local cx = px + pad
     local cw = pw - 2 * pad
 
@@ -1138,32 +1139,68 @@ function BfBot.UI._Layout()
     local function setArea(name, x, y, w, h)
         Infinity_SetArea(name, x, y, w, h)
         pcall(Infinity_SetArea, name .. "_t", x, y, w, h)
+        -- "<name>_b" is a plate drawn UNDER a clickable text element, for the
+        -- two status toggles that have to stay text items (only a text item
+        -- takes an action together with `text color lua`).
+        pcall(Infinity_SetArea, name .. "_b", x, y, w, h)
     end
 
-    -- Panel background (parchment inside, border frame extends 24px beyond).
-    -- Three labels exist (one per theme); only the active theme's is enabled,
-    -- but all three need their area updated so theme switches are seamless.
+    --- Lay a cluster of controls left to right from `x`, returning where it
+    --- ends. Widths are the caption's natural size; the panel grows by moving
+    --- the clusters apart, never by stretching a button into a slab.
+    local function cluster(x, y, h, gap, items)
+        for _, item in ipairs(items) do
+            setArea(item[1], x, y, item[2], h)
+            x = x + item[2] + gap
+        end
+        return x - gap
+    end
+
+    -- Panel background and the frame drawn on top of it, on the SAME rect.
+    -- Three background labels exist (one per theme); only the active theme's
+    -- is enabled, but all three need their area updated so theme switches are
+    -- seamless.
+    --
+    -- The frame rect must not be inflated. Pecca's frame is a thin rail lying
+    -- flush with the atlas edge over a transparent middle, so a rect larger
+    -- than the parchment moves the rail off the panel and leaves a see-through
+    -- ring between the two, with the game showing through it. (The old
+    -- generated border filled its rect opaquely and drew behind, which is why
+    -- it could overhang.) Same rect: rail on the panel edge, corner bosses on
+    -- the panel's corners, transparent middle over parchment.
     setArea("bbBg",  px, py, pw, ph)
     setArea("bbBg2", px, py, pw, ph)
     setArea("bbBg3", px, py, pw, ph)
     setArea("bbDarkOverlay", px, py, pw, ph)
-    local bpad = 24  -- border overhang in pixels
-    setArea("bbBgFrame", px - bpad, py - bpad, pw + 2 * bpad, ph + 2 * bpad)
+    setArea("bbBgFrame", px, py, pw, ph)
 
     -- Title
     setArea("bbTitle", px, py + 5, pw, 30)
 
-    -- Character tabs (6 buttons, evenly spaced) + view toggle at the right
+    -- Character tabs + view toggle at the right. The tabs divide the row
+    -- between the characters who are actually in the party: dividing it by
+    -- six left a party of three with three tab-widths of empty parchment
+    -- between the last name and the Summons toggle. Capped, because one
+    -- companion must not get a tab the width of the panel.
     local charY = py + 40
     local charH = 24
     local charGap = 4
-    local viewW = 88
+    local viewW = 100
     local rowW = cw - viewW - charGap   -- tab area shared by both views
-    local charW = math.floor((rowW - 5 * charGap) / 6)
+    local function visibleCount(names, limit)
+        local count = 0
+        for i = 1, limit do
+            if names and names[i] ~= nil then count = count + 1 end
+        end
+        return math.max(count, 1)
+    end
+    local charCount = visibleCount(buffbot_charNames, 6)
+    local charW = math.min(math.floor((rowW - (charCount - 1) * charGap) / charCount), 170)
     for i = 0, 5 do
         setArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
     end
-    setArea("bbView", cx + cw - viewW, charY, viewW, charH)
+    setArea("bbView", math.min(cx + charCount * (charW + charGap), cx + cw - viewW),
+        charY, viewW, charH)
 
     -- Summon tabs (summons view; same row) + paging cluster before the toggle
     local pageBtnW = 24
@@ -1179,29 +1216,43 @@ function BfBot.UI._Layout()
     setArea("bbSNext", pcX + pageBtnW + pageLblW + 2 * charGap, charY, pageBtnW, charH)
     setArea("bbSEmpty", cx, charY, rowW, charH)
 
-    -- Preset tabs (up to MAX_PRESETS buttons + Rename 56px + New 50px)
+    -- Preset tabs + Rename / New. Sized to the presets that exist, for the
+    -- same reason as the character tabs: eight reserved slots put Rename at
+    -- the far right of a row holding two tabs. Rename and New follow the
+    -- last tab instead of being pinned to the panel edge, so the row reads
+    -- as one group however many presets there are.
     local preY = py + 68
     local preH = 24
     local preGap = 3
-    local renW = 56
-    local newW = 50
+    local renW = 78
+    local newW = 62
     local maxP = BfBot.MAX_PRESETS
     local preAvailW = cw - renW - newW - 2 * preGap
-    local preW = math.floor((preAvailW - (maxP - 1) * preGap) / maxP)
+    local preCount = visibleCount(buffbot_presetNames, maxP)
+    local preW = math.min(
+        math.floor((preAvailW - (preCount - 1) * preGap) / preCount), 170)
     for i = 1, maxP do
         setArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
     end
-    local renX = cx + maxP * (preW + preGap)
+    local renX = cx + preCount * (preW + preGap)
     setArea("bbRen", renX, preY, renW, preH)
     setArea("bbNew", renX + renW + preGap, preY, newW, preH)
 
     -- Search stays separate from preset order. Casting speed belongs beside
     -- it as a global run preference, leaving per-preset Quick Cast below.
-    local searchY, searchH, speedW = py + 98, 26, 130
-    setArea("bbSearchLabel", cx, searchY, 70, searchH)
-    setArea("bbSearchBg", cx + 72, searchY, cw - 72 - 64 - speedW - 12, searchH)
-    setArea("bbSearch", cx + 78, searchY + 2, cw - 84 - 64 - speedW - 12, searchH - 4)
-    setArea("bbSearchClear", cx + cw - speedW - 70, searchY, 60, searchH)
+    -- Search row: label, the inset bar, then Clear and the speed toggle at
+    -- the right. The bar ends where Clear begins, computed from the two
+    -- widths rather than from a stack of literals that had to be kept in
+    -- step across four lines.
+    local searchY, searchH = py + 98, 26
+    local speedW, clearW, labelW = 148, 76, 70
+    local clearX = cx + cw - speedW - gapS - clearW
+    local barX = cx + labelW + gapS
+    setArea("bbSearchLabel", cx, searchY, labelW, searchH)
+    setArea("bbSearchBg", barX, searchY, math.max(clearX - gapS - barX, 40), searchH)
+    setArea("bbSearch", barX + 8, searchY + 3,
+        math.max(clearX - gapS - barX - 16, 24), searchH - 6)
+    setArea("bbSearchClear", clearX, searchY, clearW, searchH)
     setArea("bbSpeed", cx + cw - speedW, searchY, speedW, searchH)
     -- Column headers sit in their own strip directly above the list, aligned
     -- to the list's column widths. The engine reserves the scrollbar strip
@@ -1221,68 +1272,131 @@ function BfBot.UI._Layout()
     header("bbHTgt",  70, 24)
     header("bbHLock", 94,  6)
 
-    -- Spell list (fills middle area)
+    -- Spell list (fills middle area). The footer below is four 28px rows
+    -- with 6px between them and 12px of air above the bottom rail; keeping
+    -- that arithmetic in one place is what stops the list from growing into
+    -- the buttons when a row is added or a height changes.
     local listY = hdrY + hdrH
-    local footerH = 130
-    local listH = math.max(ph - 130 - hdrH - footerH, 50)
+    local footerH = 12 + 4 * 28 + 3 * 6 + 8   -- edge + rows + gaps + breathing
+    -- Whole rows only. The list draws a partial row at the bottom when its
+    -- height is not a multiple of `rowheight`, which reads as a spell cut in
+    -- half by the parchment. The leftover pixels go above the footer, where
+    -- they are just air.
+    local rowH = 36                           -- BuffBot.menu: bbList rowheight
+    local listH = math.max(ph - 130 - hdrH - footerH, rowH)
+    listH = listH - (listH % rowH)
     setArea("bbList", cx, listY, cw, listH)
     setArea("bbSearchEmpty", cx + 10, listY + 8, cw - 20, 28)
 
-    -- Bottom rows (positioned from panel bottom)
+    -- ---------------------------------------------------------------
+    -- Footer
+    -- ---------------------------------------------------------------
+    -- The footer is one bar, not four rows of controls pinned to opposite
+    -- corners. Pinning looked right at the 550px minimum and fell apart as
+    -- the panel grew: the clusters walked to the edges and left a hole the
+    -- width of the parchment between them. The bar therefore has a maximum
+    -- width and is centred in anything wider, so the controls stay a group
+    -- at every size, and every row has a middle zone so the slack lands
+    -- between groups rather than in one gap.
     local btnH = 28
-    local r4Y = py + ph - footerH + 4   -- Override buttons
-    local r5Y = r4Y + 32                -- Spell action buttons
-    local r6Y = r5Y + 32                -- Action buttons
-    local r7Y = r6Y + 32                -- Status
+    local gap = 6
+    local edge = 12                     -- clear air above the bottom rail
+    local barW = math.min(cw, 980)
+    local bx = cx + math.floor((cw - barW) / 2)
+    local bRight = bx + barW
+    --- Lay one footer row as a single centred run of groups, scaled to fit.
+    ---
+    --- Two things shape this. The widths in the calls below are the
+    --- captions' natural sizes at the default font, and they add up to more
+    --- than the panel's 550px minimum can hold, so a row that does not fit
+    --- shrinks every width in it by the same factor -- crowded captions at
+    --- the minimum are accepted, controls growing into each other are not.
+    --- And the groups stay together in the middle rather than being pinned
+    --- to the bar's two edges: pinned, a wide panel showed three buttons at
+    --- the far left, two at the far right and a hand's width of empty
+    --- parchment between them.
+    local groupGap = 28                 -- the seam between two groups
+    local function row(y, ...)
+        local groups = {}
+        local count, widths = 0, 0
+        -- select, not ipairs({...}): a nil group (a row with no middle)
+        -- is a hole that ipairs stops at, and the groups after it would
+        -- silently never be placed.
+        for index = 1, select("#", ...) do
+            local group = select(index, ...)
+            if group and #group > 0 then
+                groups[#groups + 1] = group
+                for _, item in ipairs(group) do
+                    count = count + 1
+                    widths = widths + item[2]
+                end
+            end
+        end
+        if #groups == 0 then return end
 
-    -- Override row. Keep the selected-spell Repeat control between the
-    -- Add/Remove cluster and the right-aligned import/export cluster.
-    local overrideGap = 6
-    local addW, removeW, repeatW, ioW = 110, 100, 90, 80
-    setArea("bbAdd", cx, r4Y, addW, btnH)
-    setArea("bbRmv", cx + addW + overrideGap, r4Y, removeW, btnH)
-    setArea("bbRepeat", cx + addW + removeW + 2 * overrideGap,
-        r4Y, repeatW, btnH)
-    setArea("bbImp", cx + cw - ioW, r4Y, ioW, btnH)
-    setArea("bbExp", cx + cw - 2 * ioW - overrideGap, r4Y, ioW, btnH)
+        -- The gaps and the seams are fixed air; only the controls give way.
+        local seams = #groups - 1
+        local budget = barW - (count - #groups) * gap - seams * groupGap
+        local scale = (widths > budget and budget > 0) and (budget / widths) or 1
 
-    -- Spell action buttons: normal layout. The right-aligned delete button
-    -- leaves a flexible gap after Sort at the 550px minimum panel width.
-    setArea("bbTog", cx, r5Y, 100, btnH)
-    setArea("bbTgt", cx + 105, r5Y, 130, btnH)
-    setArea("bbUp", cx + 240, r5Y, 44, btnH)
-    setArea("bbDn", cx + 288, r5Y, 44, btnH)
-    setArea("bbSort", cx + 336, r5Y, 44, btnH)
-    setArea("bbDel", cx + cw - 110, r5Y, 110, btnH)
+        local total, scaled = seams * groupGap, {}
+        for index, group in ipairs(groups) do
+            local fitted = {}
+            for i, item in ipairs(group) do
+                fitted[i] = { item[1], math.max(math.floor(item[2] * scale), 24) }
+                total = total + fitted[i][2] + (i > 1 and gap or 0)
+            end
+            scaled[index] = fitted
+        end
 
-    -- Spell action buttons: variant layout (includes the Variant picker).
-    setArea("bbVTog", cx, r5Y, 80, btnH)
-    setArea("bbVTgt", cx + 84, r5Y, 100, btnH)
-    setArea("bbVVar", cx + 188, r5Y, 100, btnH)
-    setArea("bbVUp", cx + 292, r5Y, 40, btnH)
-    setArea("bbVDn", cx + 336, r5Y, 40, btnH)
-    setArea("bbVSort", cx + 380, r5Y, 40, btnH)
-    setArea("bbVDel", cx + cw - 90, r5Y, 90, btnH)
+        local x = bx + math.floor((barW - total) / 2)
+        for _, group in ipairs(scaled) do
+            x = cluster(x, y, btnH, gap, group) + groupGap
+        end
+    end
 
-    -- Action buttons: Cast All, Cast Char, Stop — left side; Quick Cast, Close — right side
-    local closeW = 70
-    local qcW = 170
-    local castAllW = 85
-    local castCharW = 115
-    local stopW = 55
-    setArea("bbCast", cx, r6Y, castAllW, btnH)
-    setArea("bbCastChar", cx + castAllW + 4, r6Y, castCharW, btnH)
-    setArea("bbStop", cx + castAllW + castCharW + 8, r6Y, stopW, btnH)
-    setArea("bbClose", cx + cw - closeW, r6Y, closeW, btnH)
-    setArea("bbQC", cx + cw - closeW - qcW - 6, r6Y, qcW, btnH)
+    local r7Y = py + ph - edge - btnH    -- Status
+    local r6Y = r7Y - btnH - gap         -- Cast / Close
+    local r5Y = r6Y - btnH - gap         -- Spell actions
+    local r4Y = r5Y - btnH - gap         -- Add / Remove / Export / Import
 
-    -- Status line, with the active-buff toggle right-aligned beside it.
-    -- Row 6 is full at the 550px minimum panel width (Cast All / Cast Char /
-    -- Stop meet Quick Cast / Close there), so the second run-policy toggle
-    -- sits under Quick Cast instead of next to it.
-    local forceW = 160
-    setArea("bbStatus", cx, r7Y, cw - forceW - 6, 24)
-    setArea("bbForce", cx + cw - forceW, r7Y, forceW, btnH)
+    row(r4Y,
+        { { "bbAdd", 150 }, { "bbRmv", 110 }, { "bbRepeat", 100 } },
+        nil,
+        { { "bbExp", 92 }, { "bbImp", 92 } })
+
+    -- Normal layout: reorder and sort sit in the middle, which is what
+    -- fills the row instead of leaving Sort stranded left of a long gap.
+    row(r5Y,
+        { { "bbTog", 112 }, { "bbTgt", 142 } },
+        { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } },
+        { { "bbDel", 142 } })
+
+    -- Variant layout: the same shape with the Variant picker beside Target.
+    row(r5Y,
+        { { "bbVTog", 112 }, { "bbVTgt", 142 }, { "bbVVar", 142 } },
+        { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } },
+        { { "bbVDel", 142 } })
+
+    row(r6Y,
+        { { "bbCast", 98 }, { "bbCastChar", 152 }, { "bbStop", 70 } },
+        nil,
+        { { "bbQC", 240 }, { "bbClose", 86 } })
+
+    -- The status line reads as prose, so it keeps the panel's own width
+    -- rather than the bar's. The active-buff toggle is a control and stays
+    -- in the bar with the rest of them.
+    -- The toggle is centred like the rows above it; pinned to the bar's
+    -- right edge it was the one control left hanging out there once the
+    -- other rows moved to the middle.
+    local forceW = math.min(182, barW)
+    local forceX = bx + math.floor((barW - forceW) / 2)
+    setArea("bbForce", forceX, r7Y, forceW, btnH)
+    -- The status line runs from the panel edge to wherever the toggle starts.
+    -- Giving it the panel's width minus the toggle's would reach past the
+    -- toggle whenever the bar is narrower than the panel, and the status text
+    -- would print straight through it.
+    setArea("bbStatus", cx, r7Y, math.max(forceX - gap - cx, 1), btnH)
 
     -- Drag handle covers title bar area
     setArea("bbDragHandle", px, py, pw, 35)
@@ -1292,7 +1406,7 @@ function BfBot.UI._Layout()
     setArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
 
     -- Reset button in title bar (right-aligned, 50px wide)
-    setArea("bbReset", px + pw - 60, py + 5, 50, 24)
+    setArea("bbReset", px + pw - 76, py + 5, 64, 24)
 end
 
 -- ============================================================
@@ -1334,8 +1448,16 @@ function BfBot.UI._OnResize()
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
 
-    local pw = (BfBot.UI._panelW or math.floor(sw * 0.8)) + dx
-    local ph = (BfBot.UI._panelH or math.floor(sh * 0.8)) + dy
+    BfBot.UI._ResizeTo((BfBot.UI._panelW or math.floor(sw * 0.8)) + dx,
+        (BfBot.UI._panelH or math.floor(sh * 0.8)) + dy)
+end
+
+--- Resize the panel to `pw` x `ph`, enforcing the minimums, the screen and the
+--- background textures. The drag handler is one caller; the screenshot lab is
+--- another, so a size can be set without faking a mouse drag.
+function BfBot.UI._ResizeTo(pw, ph)
+    local sw, sh = Infinity_GetScreenSize()
+    if not sw or not sh then return end
 
     -- Enforce minimums
     pw = math.max(BfBot.UI._MIN_W, pw)
@@ -1743,6 +1865,12 @@ function BfBot.UI._BuildSpellRows(sprite, preset, castable, ovr)
 
     -- Sort by priority (ascending: lower = cast first)
     table.sort(rows, function(a, b) return a.pri < b.pri end)
+    -- With the preset's order toggle on, the list is shown in the order it
+    -- will actually be cast in. The stored priorities are left alone, so
+    -- switching the toggle off gives the player's own order straight back.
+    if BfBot.Persist.IsAutoOrder(preset) then
+        rows = BfBot.Persist.OrderByDuration(rows)
+    end
     return rows
 end
 
@@ -2098,10 +2226,20 @@ end
 
 --- Button text for a picker row. Left-side checkbox label.
 function BfBot.UI._PickerCheckText(row)
+    if BfBot.Theme.HasControlArt() then return "" end
     local name = buffbot_pickerOrder[row]
     if not name then return "" end
     if buffbot_pickerChecked[name] then return "[X]" end
     return "[ ]"
+end
+
+--- The checkbox cycle for a picker row: ticked, empty, or the greyed tick
+--- while targeting is locked. Same art and same cycles as the spell list.
+function BfBot.UI._PickerCheckSeq(row)
+    local name = buffbot_pickerOrder[row]
+    local checked = name ~= nil and buffbot_pickerChecked[name] ~= nil
+    if buffbot_targetLocked == 1 then return checked and 2 or 1 end
+    return checked and 0 or 1
 end
 
 --- Button text for a picker row. Name label (right side).
@@ -2117,6 +2255,11 @@ end
 
 --- Text color for a picker row — highlight if selected.
 function BfBot.UI._PickerRowColor(row)
+    -- While targeting is locked the rows are shown, not hidden, so the
+    -- player can see what unlocking would offer. They read as unavailable.
+    if buffbot_targetLocked == 1 then
+        return BfBot.UI._T("pickerOff")
+    end
     if row == buffbot_tgtPickerSel then
         return BfBot.UI._T("pickerSel")
     end
@@ -2142,6 +2285,7 @@ end
 
 --- Select a picker row (click on name area).
 function BfBot.UI.PickerSelect(row)
+    if buffbot_targetLocked == 1 then return end
     if row >= 1 and row <= #buffbot_pickerOrder then
         buffbot_tgtPickerSel = row
     end
@@ -2790,46 +2934,58 @@ end
 --- Sort the current preset's spell list by duration (longest first).
 --- Locked spells stay at their current row index. Unlocked spells fill
 --- the remaining rows in duration-desc order. Persists via _RenumberPriorities.
+--- Reorder the visible rows once, by hand, and keep the result.
+---
+--- The same rule the per-preset order toggle applies on every refresh --
+--- `BfBot.Persist.OrderByDuration` is the one implementation, so the button
+--- and the toggle can never drift apart. The difference is that this writes
+--- the new order back into the preset: it is the player reordering their
+--- own list, not a view of it.
 function BfBot.UI.SortByDuration()
-    local n = #buffbot_spellTable
-    if n == 0 then return end
+    if #buffbot_spellTable == 0 then return end
+    if BfBot.UI._IsAutoOrder() then return end
     BfBot.UI._PrepareSpellSelectionForRebuild()
-
-    local function durKey(entry)
-        local d = entry.dur
-        if d == nil then return -2 end
-        if d == -1 then return 1e9 end  -- permanent sorts first
-        return d
-    end
-
-    -- Partition: keep locked entries pinned to their row indices
-    local locked = {}   -- [row] = entry
-    local unlocked = {} -- ordered list
-    for i, entry in ipairs(buffbot_spellTable) do
-        if entry.lock == 1 then
-            locked[i] = entry
-        else
-            table.insert(unlocked, entry)
-        end
-    end
-
-    -- Sort unlocked by duration desc
-    table.sort(unlocked, function(a, b) return durKey(a) > durKey(b) end)
-
-    -- Rebuild: locked at their row, unlocked fill the gaps
-    local result = {}
-    local uIdx = 1
-    for i = 1, n do
-        if locked[i] then
-            result[i] = locked[i]
-        else
-            result[i] = unlocked[uIdx]
-            uIdx = uIdx + 1
-        end
-    end
-    buffbot_spellTable = result
+    buffbot_spellTable = BfBot.Persist.OrderByDuration(buffbot_spellTable)
     BfBot.UI._RenumberPriorities()
     BfBot.UI._RestoreSpellSelection()
+end
+
+--- True when the preset on screen casts longest-duration-first.
+function BfBot.UI._IsAutoOrder()
+    if BfBot.UI._view == "summons" then return false end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return false end
+    return BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx) == 1
+end
+
+--- Flip it, for the whole party's preset of that index. Presets are
+--- parallel across characters, so an order that applied to one of them
+--- would make "Pre-Battle" mean two different things in one party.
+function BfBot.UI.ToggleAutoOrder()
+    if BfBot.UI._view == "summons" then return end
+    local sprite = BfBot.UI._GetSelectedSprite()
+    if not sprite then return end
+    local now = BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx)
+    BfBot.Persist.SetAutoOrderAll(BfBot.UI._presetIdx, now == 1 and 0 or 1)
+    BfBot.UI._Refresh()
+end
+
+function BfBot.UI._AutoOrderLabel()
+    if BfBot.UI._IsAutoOrder() then
+        return BfBot.L10N.Get("ui.order.duration")
+    end
+    return BfBot.L10N.Get("ui.order.manual")
+end
+
+function BfBot.UI._AutoOrderTooltip()
+    if BfBot.UI._IsAutoOrder() then
+        return BfBot.L10N.Get("ui.order.tooltip_duration")
+    end
+    return BfBot.L10N.Get("ui.order.tooltip_manual")
+end
+
+function BfBot.UI._AutoOrderColor()
+    return BfBot.UI._T(BfBot.UI._IsAutoOrder() and "qcLong" or "btnText")
 end
 
 -- ============================================================
@@ -3276,14 +3432,14 @@ end
 --- bronze tint for item rows, gold-tinted for locked, dark brown for normal.
 function BfBot.UI._SpellNameColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
-    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
-    if entry.ovr == 1 then return _parseColor(BfBot.UI._T("textAccent")) end
+    if not entry then return BfBot.UI._T("text") end
+    if entry.castable == 0 then return BfBot.UI._T("textMuted") end
+    if entry.ovr == 1 then return BfBot.UI._T("textAccent") end
     if entry.kind == "itm" and entry.lock ~= 1 then
-        return _parseColor(BfBot.UI._T("itemColor"))
+        return BfBot.UI._T("itemColor")
     end
-    if entry.lock == 1 then return _parseColor(BfBot.UI._T("spellLocked")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if entry.lock == 1 then return BfBot.UI._T("spellLocked") end
+    return BfBot.UI._T("text")
 end
 
 function BfBot.UI._SpellRowTooltip(row)
@@ -3297,21 +3453,86 @@ end
 --- item rows, normal text tint for spell rows.
 function BfBot.UI._PickerNameColor(row)
     local entry = buffbot_pickerSpells[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
-    if entry.isHeader then return _parseColor(BfBot.UI._T("headerSub")) end
-    if entry.kind == "itm" then return _parseColor(BfBot.UI._T("itemColor")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if not entry then return BfBot.UI._T("text") end
+    if entry.isHeader then return BfBot.UI._T("headerSub") end
+    if entry.kind == "itm" then return BfBot.UI._T("itemColor") end
+    return BfBot.UI._T("text")
 end
 
 --- Repeat column color: repeated casts use the theme accent. A single cast
 --- follows the normal spell-row color, including muted unavailable rows.
 function BfBot.UI._RepeatColor(row)
     local entry = buffbot_spellTable[row]
-    if not entry then return _parseColor(BfBot.UI._T("text")) end
+    if not entry then return BfBot.UI._T("text") end
     local rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep)
-    if rep > 1 then return _parseColor(BfBot.UI._T("textAccent")) end
-    if entry.castable == 0 then return _parseColor(BfBot.UI._T("textMuted")) end
-    return _parseColor(BfBot.UI._T("text"))
+    if rep > 1 then return BfBot.UI._T("textAccent") end
+    if entry.castable == 0 then return BfBot.UI._T("textMuted") end
+    return BfBot.UI._T("text")
+end
+
+-- ============================================================
+-- Panel chrome art
+-- ============================================================
+-- Buttons, tabs and the cast plate carry Pecca's art instead of the engine's
+-- carved stone. Each helper returns the running game's own button BAM
+-- (BfBot.Theme.ButtonBam: GUIBUTMT on IWD:EE, GUIOSTUL elsewhere) when the
+-- art is absent, so a partial install keeps a working panel rather than
+-- invisible buttons or IWD:EE's unrelated GUIOSTUL frames.
+--
+-- The art is one cycle per skin (0 SoD, 1 IWD, 2 BG1, 3 BG2) with four state
+-- frames inside it. Plain buttons leave `frame` alone and let the engine run
+-- its own hover/press states; a tab forces the frame, because "this tab is
+-- the open one" is not a state the engine knows about.
+
+--- Wide plate for a captioned button.
+function BfBot.UI._PlateBam()
+    return BfBot.Theme.HasChromeArt() and "BFBPLAT" or BfBot.Theme.ButtonBam()
+end
+
+--- Tab plate. Its selected frame carries the skin's accent outline.
+function BfBot.UI._TabBam()
+    return BfBot.Theme.HasChromeArt() and "BFBTAB" or BfBot.Theme.ButtonBam()
+end
+
+--- The caption colour for a button whose own `clickable` gate is `active`.
+--- Footer buttons stay on screen when they cannot be used -- hiding them
+--- left holes in the bar and moved the neighbours around -- so the caption
+--- has to grey out with the plate. A label has no `clickable` of its own.
+function BfBot.UI._CaptionColor(active)
+    local on = active ~= nil and active ~= false and active ~= 0
+    return BfBot.UI._T(on and "btnText" or "btnTextOff")
+end
+
+--- True when the 9-slice frame actually draws. Its bottom-right corner boss
+--- then sits exactly where the resize grip's "///" used to be printed, so the
+--- hint is dropped and the boss marks the corner instead. Without the art the
+--- corner is bare parchment and the hint is the only thing that marks it.
+function BfBot.UI._HasFrameArt()
+    return BfBot.UI._borderOk == true
+end
+
+--- The inset bar behind the search box.
+function BfBot.UI._SearchBam()
+    return BfBot.Theme.HasChromeArt() and "BFBSEAR" or ""
+end
+
+--- The wider plate behind Cast and Cast Character.
+function BfBot.UI._CastBam()
+    return BfBot.Theme.HasChromeArt() and "BFBCAST" or BfBot.Theme.ButtonBam()
+end
+
+--- Cycle index for every chrome BAM: the skin. The engine art has one cycle,
+--- so it must stay at 0 when the themed art is missing.
+function BfBot.UI._ChromeSeq()
+    if not BfBot.Theme.HasChromeArt() then return 0 end
+    return BfBot.Theme.ControlSkin()
+end
+
+--- Frame for a tab. Pecca's selected frame is the third in the cycle; the
+--- engine's button (either game's) marks a pressed tab with its second.
+function BfBot.UI._TabFrame(selected)
+    if not selected then return 0 end
+    return BfBot.Theme.HasChromeArt() and 2 or 1
 end
 
 --- Checkbox display: "+" for enabled, empty for disabled.
@@ -3342,6 +3563,15 @@ end
 --- Lock art: the "blocked" glyph on locked rows only. An unlocked row stays
 --- empty rather than showing a second box — the column header names it, and
 --- the glyph sheet has no neutral "unlocked" symbol to pair with it.
+--- The socket drawn behind the lock glyph on a locked row.
+--- BFBGLYPH is light line art meant for the dark plates; on parchment it
+--- was a cream outline on cream and all but invisible. The checkbox
+--- column's empty well is the right size and the same visual language, so
+--- the glyph sits in one of those.
+function BfBot.UI._LockPlateBam(row)
+    return (BfBot.UI._LockBam(row) ~= "") and BfBot.UI._CheckBam() or ""
+end
+
 function BfBot.UI._LockBam(row)
     if not BfBot.Theme.HasControlArt() then return "" end
     if BfBot.UI._view == "summons" then return "" end
@@ -3365,8 +3595,8 @@ end
 --- Lock column color: gold when locked, muted otherwise.
 function BfBot.UI._LockColor(row)
     local entry = buffbot_spellTable[row]
-    if entry and entry.lock == 1 then return _parseColor(BfBot.UI._T("lockActive")) end
-    return _parseColor(BfBot.UI._T("lockInactive"))
+    if entry and entry.lock == 1 then return BfBot.UI._T("lockActive") end
+    return BfBot.UI._T("lockInactive")
 end
 
 --- Toggle the lock state on a spell row. Party view only (see _LockText).
@@ -3504,11 +3734,11 @@ function BfBot.UI._QuickCastLabel()
 end
 
 function BfBot.UI._QuickCastColor()
-    if BfBot.UI._FastForwardRate() > 1 then return _parseColor(BfBot.UI._T("textMuted")) end
+    if BfBot.UI._FastForwardRate() > 1 then return BfBot.UI._T("textMuted") end
     local qc = BfBot.UI._ViewQuickCast()
-    if qc == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
-    if qc == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
-    return _parseColor(BfBot.UI._T("qcOff"))
+    if qc == 1 then return BfBot.UI._T("qcLong") end
+    if qc == 2 then return BfBot.UI._T("qcAll") end
+    return BfBot.UI._T("qcOff")
 end
 
 function BfBot.UI._QuickCastTooltip()
@@ -3610,9 +3840,9 @@ end
 --- "how much is BuffBot allowed to do here", so off/warn/cheat read the same.
 function BfBot.UI._ForceRecastColor()
     local mode = _forceMode()
-    if mode == 1 then return _parseColor(BfBot.UI._T("qcLong")) end
-    if mode == 2 then return _parseColor(BfBot.UI._T("qcAll")) end
-    return _parseColor(BfBot.UI._T("qcOff"))
+    if mode == 1 then return BfBot.UI._T("qcLong") end
+    if mode == 2 then return BfBot.UI._T("qcAll") end
+    return BfBot.UI._T("qcOff")
 end
 
 function BfBot.UI._ForceRecastTooltip()

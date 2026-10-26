@@ -8,6 +8,8 @@ _CheckEntry's decision from the two.
 
 from __future__ import annotations
 
+import faulthandler
+import sys
 from pathlib import Path
 import re
 
@@ -72,6 +74,7 @@ def exec_lua() -> LuaRuntime:
             return value
         end
         Infinity_SetINIString = function(_, key, value) T_Ini[key] = value end
+        Infinity_RemoveINIEntry = function(_, key) T_Ini[key] = nil end
 
         EEex_Utility_IterateCPtrList = function(list, fn)
             for _, value in ipairs(list) do
@@ -1128,6 +1131,38 @@ def ui_lua(exec_lua: LuaRuntime) -> LuaRuntime:
     return exec_lua
 
 
+@pytest.fixture
+def ui_layout(ui_lua: LuaRuntime):
+    """Run the real _Layout at a screen size and hand back every area."""
+
+    def run(width: int, height: int) -> dict[str, tuple[int, int, int, int]]:
+        suppress = sys.platform == "win32" and faulthandler.is_enabled()
+        if suppress:
+            faulthandler.disable()
+        try:
+            raw = ui_lua.execute(
+                """
+                local areas = {}
+                Infinity_GetScreenSize = function() return %d, %d end
+                Infinity_SetArea = function(name, x, y, w, h)
+                    areas[name] = { x, y, w, h }
+                end
+                BfBot.UI._Layout()
+                return areas
+                """
+                % (width, height)
+            )
+        finally:
+            if suppress:
+                faulthandler.enable()
+        return {
+            key: tuple(int(value[i]) for i in range(1, 5))
+            for key, value in raw.items()
+        }
+
+    return run
+
+
 def test_the_toggle_cycles_through_its_three_states_and_wraps(
     ui_lua: LuaRuntime,
 ) -> None:
@@ -1223,10 +1258,28 @@ def test_the_menu_button_is_wired_to_the_toggle_helpers() -> None:
     assert 'enabled "buffbot_isOpen"' in block
 
 
-def test_the_layout_keeps_the_toggle_inside_the_panel_beside_the_status_line() -> None:
-    source = UI_SOURCE
-    assert 'setArea("bbForce", cx + cw - forceW, r7Y, forceW, btnH)' in source
-    assert 'setArea("bbStatus", cx, r7Y, cw - forceW - 6, 24)' in source
+def test_the_layout_keeps_the_toggle_inside_the_panel_beside_the_status_line(
+    ui_layout,
+) -> None:
+    """Run the real layout and look at where things landed.
+
+    This used to assert the two `setArea` lines verbatim, which broke the
+    moment the footer was rearranged even though the toggle was still in the
+    right place. What matters is the result: the toggle shares the bottom row
+    with the status line, does not cover it, and stays inside the parchment.
+    """
+    for width, height in ((1920, 1080), (1280, 720), (800, 600)):
+        areas = ui_layout(width, height)
+        px, py, pw, ph = areas["bbBg"]
+        sx, sy, sw, sh = areas["bbStatus"]
+        fx, fy, fw, fh = areas["bbForce"]
+
+        assert fy == sy, (width, height)
+        assert fx >= sx + sw, ("toggle overlaps the status line", width, height)
+        assert fx + fw <= px + pw, ("toggle leaves the panel", width, height)
+        assert fy + fh <= py + ph, ("toggle below the panel", width, height)
+        # Clear air above the bottom rail, or the frame cuts the caption.
+        assert py + ph - (fy + fh) >= 8, (width, height)
 
 
 def test_a_refresh_is_not_logged_as_a_splstate_false_positive(
@@ -1505,6 +1558,9 @@ def _run_in_game_probe_phase(exec_lua: LuaRuntime, carried: dict[int, str]) -> d
         T_Lines, T_Applied = {}, {}
         BfBot._Print = function(message) T_Lines[#T_Lines + 1] = message end
         BfBot.UI = { CycleForceRecast = function() end }
+        -- The phase's player-state guard drops the scan caches afterwards.
+        BfBot.Scan.InvalidateAll = function() end
+        BfBot.Scan.InvalidateSummons = function() end
         EEex_Sprite_GetInPortrait = function(slot) return T_Party[slot] end
         EEex_GameObject_ApplyEffect = function(sprite, spec)
             T_Applied[#T_Applied + 1] = sprite.name .. ":" .. spec.effectID

@@ -403,3 +403,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Order: Manual~
+// ui.order.duration
+@724 = ~Order: Duration~
+// ui.order.tooltip_manual
+@725 = ~Casts in the order you set. Click to cast the longest-lasting buffs first instead; your own order is kept and comes back when you switch off.~
+// ui.order.tooltip_duration
+@726 = ~Casts the longest-lasting buffs first. Locked rows keep their place. Click to go back to your own order.~

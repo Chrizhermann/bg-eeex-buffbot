@@ -77,13 +77,14 @@ def test_spell_rows_normalize_repeat_text_and_use_theme_colors(
 ) -> None:
     facts = repeat_ui_lua.execute(
         """
+        -- _T hands back the engine's packed color: blue<<16 | green<<8 | red.
         BfBot.UI._T = function(key)
             local colors = {
-                text = "{7, 8, 9}",
-                textMuted = "{4, 5, 6}",
-                textAccent = "{1, 2, 3}",
+                text = (9 * 0x10000) + (8 * 0x100) + 7,
+                textMuted = (6 * 0x10000) + (5 * 0x100) + 4,
+                textAccent = (3 * 0x10000) + (2 * 0x100) + 1,
             }
-            return colors[key] or "{0, 0, 0}"
+            return colors[key] or 0
         end
         local preset = {
             spells = {
@@ -118,9 +119,9 @@ def test_spell_rows_normalize_repeat_text_and_use_theme_colors(
             validText = rows[2].repeatText,
             malformedRep = rows[3].rep,
             malformedText = rows[3].repeatText,
-            normalR = normal[1],
-            accentR = accent[1],
-            mutedR = muted[1],
+            normalR = normal,
+            accentR = accent,
+            mutedR = muted,
         }
         """
     )
@@ -131,9 +132,9 @@ def test_spell_rows_normalize_repeat_text_and_use_theme_colors(
     assert facts["validText"] == "R5"
     assert facts["malformedRep"] == 1
     assert facts["malformedText"] == "R1"
-    assert facts["normalR"] == 7
-    assert facts["accentR"] == 1
-    assert facts["mutedR"] == 4
+    assert facts["normalR"] == (9 * 0x10000) + (8 * 0x100) + 7
+    assert facts["accentR"] == (3 * 0x10000) + (2 * 0x100) + 1
+    assert facts["mutedR"] == (6 * 0x10000) + (5 * 0x100) + 4
 
 
 def test_selected_repeat_routes_party_and_summon_writes_without_refresh(
@@ -824,11 +825,51 @@ def test_spell_list_columns_and_cell_actions_match_the_repeat_design() -> None:
     assert action == "BfBot.UI._OnVisibleSpellRowAction(cellNumber)"
 
 
+# Footer buttons that are not always usable. The state gate greys them; the
+# `enabled` gate only decides whether the control belongs on screen at all
+# (wrong view, or the variant row standing in for the normal one). Hiding a
+# usable-later button left a hole in the bar and shifted its neighbours.
+GREY_WHEN_UNUSABLE = {
+    "bbRmv": "BfBot.UI._HasSelection()",
+    "bbRepeat": "BfBot.UI._HasSelection()",
+    "bbTog": "BfBot.UI._HasSelection()",
+    "bbTgt": "BfBot.UI._HasSelection()",
+    # Reordering by hand is meaningless while the preset orders itself.
+    "bbUp": "BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder()",
+    "bbDn": "BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder()",
+    "bbSort": "#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder()",
+    "bbDel": "BfBot.UI._CanDeletePreset()",
+    "bbStop": "BfBot.UI._IsRunning()",
+}
+
+
+@pytest.mark.parametrize("name,gate", sorted(GREY_WHEN_UNUSABLE.items()))
+def test_footer_buttons_grey_out_instead_of_leaving_holes_in_the_bar(
+    name: str, gate: str
+) -> None:
+    button = _named_item_block(name)
+    caption = _named_item_block(name + "_t")
+
+    assert 'clickable lua "' + gate + '"' in button
+    # The state gate must be gone from both `enabled` lines, or the control
+    # still disappears and the greying never shows.
+    enabled = re.search(r'\benabled\s+"([^"]*)"', button).group(1)
+    assert gate not in enabled
+    assert enabled == re.search(r'\benabled\s+"([^"]*)"', caption).group(1)
+    assert "buffbot_isOpen" in enabled
+    assert 'text color lua "BfBot.UI._CaptionColor(' + gate + ')"' in caption
+
+
+FOOTER_ROW_HEIGHT = 28
+
+
 def test_repeat_footer_binding_is_selection_only_and_supports_both_directions() -> None:
     block = _named_item_block("bbRepeat")
 
+    # The selection gate greys the button; it does not hide it. See
+    # test_footer_buttons_grey_out_instead_of_leaving_holes_in_the_bar.
     assert re.search(
-        r"\benabled\s+['\"]BfBot\.UI\._HasSelection\(\)['\"]", block
+        r"\bclickable\s+lua\s+['\"]BfBot\.UI\._HasSelection\(\)['\"]", block
     )
     assert re.search(
         r"\baction\s+['\"]BfBot\.UI\.StepSelectedRepeat\(1\)['\"]", block
@@ -837,13 +878,31 @@ def test_repeat_footer_binding_is_selection_only_and_supports_both_directions() 
         r"\bactionAlt\s+['\"]BfBot\.UI\.StepSelectedRepeat\(-1\)['\"]", block
     )
     assert re.search(
-        r"\btext\s+lua\s+['\"]BfBot\.UI\._RepeatButtonText\(\)['\"]", block
-    )
-    assert re.search(
         r"\btooltip\s+lua\s+['\"]BfBot\.UI\._RepeatTooltip\(\)['\"]", block
     )
     assert all(word not in block for word in ("castable", "count", ".on"))
-    assert _static_area("bbRepeat")[2:] == (90, 28)
+    # The exact width is a look-and-feel number _Layout owns; what matters
+    # here is that the button is one footer row high and wide enough for the
+    # longest caption ("Repeat: x5").
+    repeat_w, repeat_h = _static_area("bbRepeat")[2:]
+    assert repeat_h == FOOTER_ROW_HEIGHT
+    assert repeat_w >= 80
+
+    # The caption lives in its own label beside the button: the engine's
+    # STONESML typeface has no lower case, and ITEM_BUTTON ignores a button's
+    # own point size, so a caption on the button could neither read "x3" nor
+    # follow the font-size preference. _Layout keeps the pair on one area.
+    caption = _named_item_block("bbRepeat_t")
+    assert re.search(
+        r"\btext\s+lua\s+['\"]BfBot\.UI\._RepeatButtonText\(\)['\"]", caption
+    )
+    assert re.search(
+        r"\btext\s+color\s+lua\s+"
+        r"['\"]BfBot\.UI\._CaptionColor\(BfBot\.UI\._HasSelection\(\)\)['\"]",
+        caption,
+    )
+    assert "ignoreEvents" in caption
+    assert _static_area("bbRepeat_t") == _static_area("bbRepeat")
 
 
 def test_static_minimum_layout_keeps_all_footer_controls_in_bounds() -> None:
@@ -913,7 +972,8 @@ def test_dynamic_minimum_layout_keeps_list_and_all_footer_rows_valid(
         return tuple(int(values[index]) for index in range(1, 5))
 
     areas = {name: area(name) for group in groups for name in group}
-    assert areas["bbRepeat"][2:] == (90, 28)
+    assert areas["bbRepeat"][3] == FOOTER_ROW_HEIGHT
+    assert areas["bbRepeat"][2] >= 80
     for group in groups:
         _assert_horizontal_group_is_valid(areas, group, 110, 640)
 
@@ -922,6 +982,101 @@ def test_dynamic_minimum_layout_keeps_list_and_all_footer_rows_valid(
     assert list_y >= 50 and list_y + list_h <= areas["bbAdd"][1]
     for name, (_, y, _, height) in areas.items():
         assert 50 <= y and y + height <= 400, name
+
+
+@pytest.mark.parametrize("panel_h", [380, 455, 512, 600, 730])
+def test_the_spell_list_is_a_whole_number_of_rows_at_every_panel_height(
+    repeat_ui_lua: LuaRuntime, panel_h: int
+) -> None:
+    """A list height that is not a multiple of `rowheight` draws the last row
+    clipped -- a spell name sliced by the parchment edge."""
+    menu = (ROOT / "buffbot" / "BuffBot.menu").read_text(encoding="utf-8")
+    list_block = menu[menu.index('name    "bbList"') :]
+    row_height = int(re.search(r"\browheight\s+(\d+)", list_block).group(1))
+
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        lua_areas = repeat_ui_lua.execute(
+            """
+            local areas = {}
+            Infinity_GetScreenSize = function() return 1920, 1080 end
+            Infinity_SetArea = function(name, x, y, w, h)
+                areas[name] = { x, y, w, h }
+            end
+            BfBot.UI._panelX = 40
+            BfBot.UI._panelY = 40
+            BfBot.UI._panelW = 900
+            BfBot.UI._panelH = """
+            + str(panel_h)
+            + """
+            BfBot.UI._Layout()
+            return areas
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    list_h = int(lua_areas["bbList"][4])
+    assert list_h >= row_height
+    assert list_h % row_height == 0, (panel_h, list_h, row_height)
+    # The rows the list gives up must not push it into the footer either.
+    assert int(lua_areas["bbList"][2]) + list_h <= int(lua_areas["bbAdd"][2])
+
+
+@pytest.mark.parametrize("panel_w", [550, 700, 900, 1200, 1600])
+def test_footer_rows_shrink_instead_of_overlapping_at_every_panel_width(
+    repeat_ui_lua: LuaRuntime, panel_w: int
+) -> None:
+    """The footer's widths are natural caption sizes, wider than the 550px
+    minimum can hold. _Layout scales a row that does not fit; the controls
+    must stay inside the panel and clear of each other at every width."""
+    suppress_fault_handler = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress_fault_handler:
+        faulthandler.disable()
+    try:
+        lua_areas = repeat_ui_lua.execute(
+            """
+            local areas = {}
+            Infinity_GetScreenSize = function() return 1920, 1080 end
+            Infinity_SetArea = function(name, x, y, w, h)
+                areas[name] = { x, y, w, h }
+            end
+            BfBot.UI._panelX = 40
+            BfBot.UI._panelY = 40
+            BfBot.UI._panelW = """
+            + str(panel_w)
+            + """
+            BfBot.UI._panelH = 600
+            BfBot.UI._Layout()
+            return areas
+            """
+        )
+    finally:
+        if suppress_fault_handler:
+            faulthandler.enable()
+
+    def area(name: str) -> tuple[int, int, int, int]:
+        values = lua_areas[name]
+        return tuple(int(values[index]) for index in range(1, 5))
+
+    rows = [
+        ["bbAdd", "bbRmv", "bbRepeat", "bbExp", "bbImp"],
+        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort", "bbDel"],
+        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVDel"],
+        ["bbCast", "bbCastChar", "bbStop", "bbQC", "bbClose"],
+    ]
+    areas = {name: area(name) for row in rows for name in row}
+    left, right = 40 + 10, 40 + panel_w - 10
+    for row in rows:
+        _assert_horizontal_group_is_valid(areas, row, left, right)
+        # A scaled row still reads as one row: same height, same baseline.
+        heights = {areas[name][3] for name in row}
+        baselines = {areas[name][1] for name in row}
+        assert heights == {28}
+        assert len(baselines) == 1
 
 
 HEADER_COLUMNS = {
@@ -1087,3 +1242,63 @@ def test_checkbox_and_lock_columns_bind_both_the_text_and_the_art_label() -> Non
         r"\"BfBot\.UI\._CheckSeq\(BfBot\.UI\._VisibleSpellRow\(rowNumber\)\)\"",
         block,
     )
+
+
+def test_every_panel_draws_its_border_after_its_themed_background() -> None:
+    # Pecca's frame is a thin rail with corner bosses and nothing in between,
+    # so it draws last: on top of the parchment and the dark-mode overlay. The
+    # generated leather frame it replaced filled its whole rect and had to sit
+    # behind them. A frame that slips back in front of its background would
+    # render invisible, which no screenshot-free test would otherwise catch.
+    for frame, background in (
+        ("bbBgFrame", "bbBg"),
+        ("bbTgtFrame", "bbTgtBg"),
+        ("bbRenFrame", "bbRenBg"),
+        ("bbConfFrame", "bbConfBg"),
+        ("bbPickFrame", "bbPickBg"),
+        ("bbImpFrame", "bbImpBg"),
+        ("bbVarFrame", "bbVarBg"),
+        ("bbQuickFrame", "bbQuickBg"),
+    ):
+        frame_at = re.search(rf"name\s+\"{frame}\"", MENU_SOURCE)
+        background_at = re.search(rf"name\s+\"{background}\"", MENU_SOURCE)
+        assert frame_at and background_at, frame
+        assert background_at.start() < frame_at.start(), frame
+
+
+def test_the_border_atlas_matches_the_registered_nine_patch() -> None:
+    # The rects below index into BFBOTFR*.PVRZ. If an atlas is rebuilt at a
+    # different size the engine would sample the wrong pixels, and nothing
+    # else in the suite reads both sides.
+    source = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
+    block = source.split("EEex.RegisterSlicedRect(", 1)[1].split("end)", 1)[0]
+    rects = {
+        name: tuple(int(v) for v in values.replace(" ", "").split(","))
+        for name, values in re.findall(r'\["(\w+)"\]\s*=\s*\{([^}]+)\}', block)
+    }
+    width, height = rects.pop("dimensions")
+    for name, (x, y, w, h) in rects.items():
+        assert 0 <= x and x + w <= width, name
+        assert 0 <= y and y + h <= height, name
+    assert rects["topLeft"][2:] == rects["bottomRight"][2:]
+    assert rects["top"][2] == rects["center"][2] == rects["bottom"][2]
+    assert rects["left"][3] == rects["center"][3] == rects["right"][3]
+
+    from tests.ie_formats import pvrz_size
+
+    for resref in ("BFBOTFR", "BFBOTFR2", "BFBOTFR3"):
+        assert pvrz_size(ROOT / f"buffbot/{resref}.PVRZ") == (width, height), resref
+
+
+def test_dark_mode_veils_use_the_neutral_rectangle_style() -> None:
+    # `rectangle N` selects a style, not a color. Style 5 tints warm, so dark
+    # mode laid a warm film over the parchment instead of darkening it; style 1
+    # is what the full-screen click-to-close dimmer uses and reads as neutral.
+    # The sub-menu backdrops that are not palette-driven keep their own style.
+    veils = re.findall(
+        r'name\s+"(bb(?:Quick|Dark)Overlay\w*)"\n(?:[^\n]*\n)*?\s*rectangle (\d+)'
+        r'\n(?:[^\n]*\n)*?\s*rectangle opacity lua "BfBot\.Theme\._active\.overlay"',
+        MENU_SOURCE,
+    )
+    assert len(veils) == 8, [name for name, _ in veils]
+    assert all(style == "1" for _, style in veils), veils

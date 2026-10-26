@@ -403,3 +403,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Reihenfolge: Manuell~
+// ui.order.duration
+@724 = ~Reihenfolge: Dauer~
+// ui.order.tooltip_manual
+@725 = ~Wirkt in der Reihenfolge, die du festgelegt hast. Klicke, um stattdessen die am längsten wirkenden Buffs zuerst zu wirken; deine eigene Reihenfolge bleibt erhalten und kommt beim Ausschalten zurück.~
+// ui.order.tooltip_duration
+@726 = ~Wirkt die am längsten wirkenden Buffs zuerst. Gesperrte Zeilen behalten ihren Platz. Klicke, um zu deiner eigenen Reihenfolge zurückzukehren.~

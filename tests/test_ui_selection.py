@@ -9,6 +9,7 @@ from lupa.luajit21 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
+PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
 TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
@@ -68,6 +69,10 @@ def ui_lua() -> LuaRuntime:
     )
     runtime.execute("io = nil")
     runtime.execute(LOC_SOURCE)
+    # The real persistence module, not a stub: the panel's cast order and
+    # the queue builders share one implementation there, and a stub would
+    # let the two drift without a test noticing.
+    runtime.execute(PERSIST_SOURCE)
     runtime.execute(UI_SOURCE)
     return runtime
 
@@ -322,9 +327,10 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
         BfBot.UI._view = "party"
         BfBot.UI._charSlot = 0
         BfBot.UI._presetIdx = 2
+        -- _T hands back the engine's packed color: blue<<16 | green<<8 | red.
         BfBot.UI._T = function(key)
-            if key == "textMuted" then return "{4, 5, 6}" end
-            return "{7, 8, 9}"
+            if key == "textMuted" then return (6 * 0x10000) + (5 * 0x100) + 4 end
+            return (9 * 0x10000) + (8 * 0x100) + 7
         end
         buffbot_spellTable = {
             {
@@ -358,8 +364,8 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
             checkboxDisabled = BfBot.UI._CheckboxText(1),
             finalState = buffbot_spellTable[1].on,
             finalCastable = buffbot_spellTable[1].castable,
-            colorBeforeR = colorBefore[1],
-            colorAfterR = colorAfter[1],
+            colorBeforeR = colorBefore,
+            colorAfterR = colorAfter,
         }
         """
     )
@@ -373,8 +379,9 @@ def test_unavailable_spell_remains_muted_but_can_be_toggled(
     assert facts["checkboxDisabled"] == "[ ]"
     assert facts["finalState"] == 0
     assert facts["finalCastable"] == 0
-    assert facts["colorBeforeR"] == 4
-    assert facts["colorAfterR"] == 4
+    muted = (6 * 0x10000) + (5 * 0x100) + 4
+    assert facts["colorBeforeR"] == muted
+    assert facts["colorAfterR"] == muted
     assert (
         'greyscale lua "not buffbot_visibleSpells[rowNumber] or buffbot_visibleSpells[rowNumber].castable == 0"'
         in MENU_SOURCE
@@ -1370,3 +1377,53 @@ def test_status_label_tracks_executor_without_refresh(ui_lua: LuaRuntime) -> Non
     assert ui_lua.eval(binding.group(1)) == "Done"
     ui_lua.globals().nativeState = "stopped"
     assert ui_lua.eval(binding.group(1)) == "Stopped"
+
+def _targets_menu() -> str:
+    start = MENU_SOURCE.index('name    "BUFFBOT_TARGETS"')
+    end = MENU_SOURCE.index('name    "BUFFBOT_RENAME"')
+    return MENU_SOURCE[start:end]
+
+
+def _dialog_item(name: str) -> str:
+    menu = _targets_menu()
+    at = menu.index('name    "' + name + '"')
+    return menu[menu.rindex("{", 0, at) : menu.index("}", at) + 1]
+
+
+def test_the_targets_dialog_greys_its_party_while_targeting_is_locked() -> None:
+    """Locked is the default for every entry, so hiding the rows left the
+    dialog holding a header and two buttons in 400px of parchment. The party
+    is shown unavailable instead, which is also what "Unlock Targeting"
+    then refers to."""
+    menu = _targets_menu()
+
+    # No control disappears for being locked any more. The reverse gate
+    # stays: the "(Self-only)" line exists only while it is locked.
+    for line in menu.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("enabled "):
+            assert "buffbot_targetLocked == 0" not in stripped, stripped
+
+    # Every control the lock governs is greyed by it instead.
+    for name in ["bbTgSelf", "bbTgParty"] + [f"bbTgChk{n}" for n in range(1, 7)]:
+        block = _dialog_item(name)
+        assert 'clickable lua "buffbot_targetLocked == 0"' in block, name
+        caption = _dialog_item(name + "_t")
+        assert (
+            'text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"'
+            in caption
+        ), name
+
+    # The member rows are text items, which take no `clickable`: their own
+    # entry point and their colour carry the lock.
+    assert menu.count('action  "BfBot.UI.PickerSelect(') == 6
+    for helper in ("PickerSelf", "PickerAllParty", "PickerToggle", "PickerSelect"):
+        body = re.search(
+            r"function BfBot\.UI\." + helper + r"\(.*?^end$", UI_SOURCE, re.S | re.M
+        ).group(0)
+        assert "if buffbot_targetLocked == 1 then return end" in body, helper
+    row_color = re.search(
+        r"function BfBot\.UI\._PickerRowColor\(.*?^end$", UI_SOURCE, re.S | re.M
+    ).group(0)
+    assert "buffbot_targetLocked == 1" in row_color
+

@@ -403,3 +403,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Ordem: manual~
+// ui.order.duration
+@724 = ~Ordem: duração~
+// ui.order.tooltip_manual
+@725 = ~Conjura na ordem que você definiu. Clique para conjurar primeiro os bônus mais duradouros; sua ordem é mantida e volta ao desligar.~
+// ui.order.tooltip_duration
+@726 = ~Conjura primeiro os bônus mais duradouros. As linhas travadas mantêm seu lugar. Clique para voltar à sua ordem.~

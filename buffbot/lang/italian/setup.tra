@@ -403,3 +403,11 @@
 @721 = ~Under 5 minutes left~
 // options.refresh_below_1h
 @722 = ~Under 1 hour left~
+// ui.order.manual
+@723 = ~Ordine: manuale~
+// ui.order.duration
+@724 = ~Ordine: durata~
+// ui.order.tooltip_manual
+@725 = ~Lancia nell'ordine che hai impostato. Clicca per lanciare prima i potenziamenti più duraturi; il tuo ordine resta salvato e torna quando disattivi.~
+// ui.order.tooltip_duration
+@726 = ~Lancia prima i potenziamenti più duraturi. Le righe bloccate mantengono il loro posto. Clicca per tornare al tuo ordine.~

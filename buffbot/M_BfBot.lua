@@ -26,6 +26,7 @@ Infinity_DoFile("BfBotExe")  -- Execution engine (depends on Scan, _GetName)
 Infinity_DoFile("BfBotMp")   -- Multiplayer support / ownership probe (depends on _GetName)
 Infinity_DoFile("BfBotFst")  -- Optional temporary simulation speed (native casting)
 Infinity_DoFile("BfBotPer")  -- Persistence (depends on Scan, Class)
+Infinity_DoFile("BfBotPln")  -- Shared plan model (depends on Scan, Class, Exec, Persist)
 Infinity_DoFile("BfBotInn")  -- Runtime SPLs, leftover F12 innate cleanup
 BfBot.Persist.Init()         -- Register marshal handlers for save/load
 BfBot.Innate._EnsureSPLFiles()  -- Write the Quick Cast SPLs to override
