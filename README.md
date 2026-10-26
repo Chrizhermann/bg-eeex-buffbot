@@ -226,7 +226,7 @@ Project Image locks its owner while active. BuffBot limits the Project Image cas
 
 ## Icewind Dale: Enhanced Edition
 
-BuffBot runs on IWD:EE 2.7.3.0 with EEex v1.3.1. The panel, presets, targets, skipping active buffs and save-game persistence work as they do in Baldur's Gate. Panel buttons use IWD:EE's own button art, and the text size option knows IWD:EE's fonts.
+BuffBot runs on IWD:EE 2.7.3.0 with EEex v1.3.1. The panel, presets, targets, skipping active buffs and save-game persistence work as they do in Baldur's Gate. Panel buttons wear the same themed art as in Baldur's Gate; an install without that art falls back to IWD:EE's own buttons. The text size option knows IWD:EE's fonts.
 
 **Tested** on two fresh IWD:EE 2.7.3.0 installs with EEex v1.3.1 and Bubb's Spell Menu Extended v5.2: one where BuffBot's helper activated LuaJIT, one where EEex's own LuaJIT component had done it. Across the two, with a new six-character party including a priest and a mage, presets were configured in the panel and cast, an already active Armor was skipped, and the configuration survived saving and reloading, from the main menu and from inside the game. The full in-game test suite passed on both. Removing **In-Game Buff Automation** was tested as well, and so was upgrading from a version with F12 preset abilities: a save that carried them lost them on loading.
 
