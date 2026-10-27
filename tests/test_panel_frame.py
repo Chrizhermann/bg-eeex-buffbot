@@ -155,11 +155,11 @@ def test_the_main_panel_and_the_quick_menu_frame_the_same_rect() -> None:
     assert frame == background
 
     # The quick menu sets its three theme backgrounds and its veil in one
-    # loop, then the frame on the line after it.
+    # loop, then the frame on the line after it. Both go through the menu's
+    # own setArea, which carries each caption along with its control.
     loop = re.search(r'for _, name in ipairs\(\{"bbQuickBg".*?'
-                     r'Infinity_SetArea\(name,\s*(.*?)\)', UI_SOURCE, re.S)
-    quick_frame = re.search(r'Infinity_SetArea\("bbQuickFrame",\s*(.*?)\)',
-                            UI_SOURCE)
+                     r'setArea\(name,\s*(.*?)\)', UI_SOURCE, re.S)
+    quick_frame = re.search(r'setArea\("bbQuickFrame",\s*(.*?)\)', UI_SOURCE)
     assert quick_frame.group(1) == loop.group(1)
 
 

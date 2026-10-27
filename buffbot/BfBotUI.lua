@@ -1081,16 +1081,26 @@ function BfBot.UI._ToggleQuickMenu()
     local h = 44 + #rows * rowH
     local x = math.max(margin, math.min(sw - w - margin, BfBot.UI._hudX or sw))
     local y = math.max(margin, math.min(sh - h - margin, (BfBot.UI._hudY or sh) - h - margin))
+    -- The same pairing _Layout uses: a button is a button item with its
+    -- caption in a separate label above it, so whatever moves the button has
+    -- to move the caption. This menu opens wherever the mouse is, and the
+    -- captions used to keep the area the .menu gives them -- eight labels
+    -- sitting wherever the panel last was while their rows travelled.
+    local function setArea(name, ax, ay, aw, ah)
+        Infinity_SetArea(name, ax, ay, aw, ah)
+        pcall(Infinity_SetArea, name .. "_t", ax, ay, aw, ah)
+        pcall(Infinity_SetArea, name .. "_b", ax, ay, aw, ah)
+    end
     Infinity_SetArea("bbQuickOutside", 0, 0, sw, sh)
     for _, name in ipairs({"bbQuickBg", "bbQuickBg2", "bbQuickBg3", "bbQuickOverlay"}) do
-        Infinity_SetArea(name, x, y, w, h)
+        setArea(name, x, y, w, h)
     end
     -- Same rect as the background: an inflated frame leaves a see-through
     -- ring between the parchment edge and the rail (see _Layout).
-    Infinity_SetArea("bbQuickFrame", x, y, w, h)
-    Infinity_SetArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
+    setArea("bbQuickFrame", x, y, w, h)
+    setArea("bbQuickTitle", x + 12, y + 7, w - 24, 24)
     for i = 1, BfBot.MAX_PRESETS do
-        Infinity_SetArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
+        setArea("bbQuickPreset" .. i, x + 10, y + 34 + (i - 1) * rowH, w - 20, rowH - 4)
     end
     Infinity_PushMenu("BUFFBOT_QUICK_PRESETS")
 end
@@ -1196,8 +1206,15 @@ function BfBot.UI._Layout()
     end
     local charCount = visibleCount(buffbot_charNames, 6)
     local charW = math.min(math.floor((rowW - (charCount - 1) * charGap) / charCount), 170)
+    -- The width is sized for the tabs that exist, but all six slots are
+    -- placed, because a slot the party has not filled is only disabled, not
+    -- removed. Sizing for two and placing six marched slots 3-6 off the
+    -- panel: an area outside the parchment, under the frame and over
+    -- whatever stands beside the panel. A slot past the count is parked on
+    -- the last real tab, where it is invisible and inside the panel.
     for i = 0, 5 do
-        setArea("bbC" .. i, cx + i * (charW + charGap), charY, charW, charH)
+        setArea("bbC" .. i, cx + math.min(i, charCount - 1) * (charW + charGap),
+            charY, charW, charH)
     end
     setArea("bbView", math.min(cx + charCount * (charW + charGap), cx + cw - viewW),
         charY, viewW, charH)
@@ -1231,8 +1248,13 @@ function BfBot.UI._Layout()
     local preCount = visibleCount(buffbot_presetNames, maxP)
     local preW = math.min(
         math.floor((preAvailW - (preCount - 1) * preGap) / preCount), 170)
+    -- Same slot rule as the character tabs above: sized for the presets that
+    -- exist, placed for all eight reserved slots, so a slot past the count is
+    -- parked on the last real tab instead of leaving the panel.
     for i = 1, maxP do
-        setArea("bbP" .. i, cx + (i - 1) * (preW + preGap), preY, preW, preH)
+        setArea("bbP" .. i,
+            cx + math.min(i - 1, preCount - 1) * (preW + preGap),
+            preY, preW, preH)
     end
     local renX = cx + preCount * (preW + preGap)
     setArea("bbRen", renX, preY, renW, preH)
