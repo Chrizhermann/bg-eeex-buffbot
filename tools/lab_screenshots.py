@@ -229,12 +229,17 @@ def new_screenshot(folder: Path, before: dict[str, int], deadline: float) -> Pat
 
 
 def capture(console: Console, shot: Path, scrnshot: Path, out: Path, theme: str,
-            prepare_args: str, panel: tuple[int, int] | None = None) -> dict:
+            prepare_args: str, panel: tuple[int, int] | None = None,
+            font_size: int | None = None) -> dict:
     before = {p.name: p.stat().st_mtime_ns for p in scrnshot.glob("*") if p.is_file()}
     label = theme if panel is None else f"{theme}-{panel[0]}x{panel[1]}"
+    if font_size is not None:
+        label += f"-font{font_size}"
     size = "" if panel is None else f",panelW={panel[0]},panelH={panel[1]}"
+    font = "" if font_size is None else f",fontSize={font_size}"
     receipt = console.call(f"prepare-{label}", shot,
-                           f"{{phase='prepare',theme='{theme}',{prepare_args}{size}}}")
+                           f"{{phase='prepare',theme='{theme}',"
+                           f"{prepare_args}{size}{font}}}")
     # The capture phase itself refuses to shoot too early; this is just the wait.
     time.sleep(1.5)
     console.call(f"capture-{label}", shot, "{phase='capture'}")
@@ -243,6 +248,7 @@ def capture(console: Console, shot: Path, scrnshot: Path, out: Path, theme: str,
     shutil.copy2(native, target)
     log(f"  {label}: {target.name} ({target.stat().st_size // 1024} KiB, from {native.name})")
     return {"theme": theme, "panel": list(panel) if panel else None,
+            "fontSize": font_size,
             "png": target.as_posix(), "native": native.as_posix(),
             "receipt": receipt.get("returnValue")}
 
@@ -269,6 +275,9 @@ def main() -> int:
     parser.add_argument("--panels", default="",
                         help="panel sizes to shoot per theme, e.g. 560x420,900x650; "
                              "empty keeps whatever size the lab profile saved")
+    parser.add_argument("--font-size", type=int, choices=(1, 2, 3),
+                        help="BuffBot's text size (1 small, 2 medium, 3 large); "
+                             "the lab profile's own value when omitted")
     parser.add_argument("--resolution", default="1920x1080",
                         help="window size to request before capturing; empty keeps the lab's own")
     parser.add_argument("--hold", action="store_true",
@@ -364,7 +373,7 @@ def main() -> int:
         for theme in themes:
             for panel in panels:
                 shots.append(capture(console, shot, scrnshot, out, theme,
-                                     prepare_args, panel))
+                                     prepare_args, panel, args.font_size))
     except Exception as problem:  # noqa: BLE001 - recorded, then the lab is stopped regardless
         error = f"{type(problem).__name__}: {problem}"
         log("FAILED " + error)

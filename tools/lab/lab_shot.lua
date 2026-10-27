@@ -58,6 +58,16 @@ BfBot.UI._CloseQuickMenu()
 -- it was open. Switching with the panel open is a separate case worth its own look.
 if on("BUFFBOT_MAIN") and before.theme ~= theme then BfBot.UI.Close() end
 assert(BfBot.Theme.Apply(theme), "SHOT_THEME_DID_NOT_APPLY")
+-- The player's text size, because the footer widths are the captions' natural
+-- sizes and a larger font is exactly where a caption outgrows its plate. The
+-- lab profile's own value applies when nothing is asked for.
+if args.fontSize then
+    -- _SetFontSize clamps to [1,3] and returns nothing, so the size is read
+    -- back rather than trusted: a typo would otherwise shoot the default.
+    BfBot.Theme._SetFontSize(args.fontSize)
+    assert(BfBot.Theme._GetFontSize() == args.fontSize,
+        "SHOT_FONT_SIZE_REFUSED:" .. tostring(args.fontSize))
+end
 BfBot.UI.SetChar(slot)
 BfBot.UI.SetPreset(preset)
 if not on("BUFFBOT_MAIN") then BfBot.UI.Toggle() end
