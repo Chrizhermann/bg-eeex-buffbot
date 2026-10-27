@@ -1034,32 +1034,43 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.0 (2026-10-27) — Icewind Dale, Pecca's chrome "
-        "and the shared plan model"
+        "v1.12.1 (2026-10-27) — the panel's controls, where they belong"
     )
+    # The three layout defects v1.12.0 shipped with, each named with the
+    # symptom a player reported rather than the function that was wrong.
+    assert ("captions stayed their own size while their plates shrank"
+            in current_normalized)
+    assert "reserved tab slots left the panel" in current_normalized
+    assert "the quick-preset menu left its captions behind" in current_normalized
+    assert "full automated suite passes **1520 tests**" in current_normalized
+    assert "not checked in game: the six dialogs" in current_normalized
+
+    feature_release = source.split("\n## v1.12.0 (2026-10-27)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # v1.12.0 ships the refresh threshold (#84) together with everything that
     # followed it, because the threshold section was written but never tagged.
-    assert "icewind dale: enhanced edition support" in current_normalized
-    assert "a preset can order its own casts, if you ask it to" in current_normalized
-    assert "the shared plan model" in current_normalized
-    assert "**f12 preset innates.**" in current_normalized
-    assert "refresh buffs that are nearly over" in current_normalized
-    assert "[buffbot] refreshbelow" in current_normalized
-    assert "repeat counts now repeat buffs under force all" in current_normalized
-    assert "no save-schema version change" in current_normalized
+    assert "icewind dale: enhanced edition support" in feature_release
+    assert "a preset can order its own casts, if you ask it to" in feature_release
+    assert "the shared plan model" in feature_release
+    assert "**f12 preset innates.**" in feature_release
+    assert "refresh buffs that are nearly over" in feature_release
+    assert "[buffbot] refreshbelow" in feature_release
+    assert "repeat counts now repeat buffs under force all" in feature_release
+    assert "no save-schema version change" in feature_release
     # The time threshold does not cover Stoneskin's skins, and the dead
     # config.opts.skip field is named rather than quietly left behind.
-    assert "stoneskin's real resource is its skins (opcode 218)" in current_normalized
-    assert "`config.opts.skip` in the save schema is still unused" in current_normalized
-    assert "full automated suite passes **1463 tests**" in current_normalized
+    assert "stoneskin's real resource is its skins (opcode 218)" in feature_release
+    assert "`config.opts.skip` in the save schema is still unused" in feature_release
+    assert "full automated suite passes **1463 tests**" in feature_release
     # The threshold's own count is kept as the milestone it was.
-    assert "brought the suite to **1300 tests** at the time" in current_normalized
+    assert "brought the suite to **1300 tests** at the time" in feature_release
     # Force All is a hard override, not a threshold value (#84).
-    assert "force all is an unconditional override" in current_normalized
-    assert "wasted spell slots are accepted deliberately" in current_normalized
-    assert "lab check, bg2:ee 2.7.3.0 with eeex v1.3.1" in current_normalized
-    assert "34/34" in current_normalized
-    assert "not checked in game: the eeex options entry" in current_normalized
+    assert "force all is an unconditional override" in feature_release
+    assert "wasted spell slots are accepted deliberately" in feature_release
+    assert "lab check, bg2:ee 2.7.3.0 with eeex v1.3.1" in feature_release
+    assert "34/34" in feature_release
+    assert "not checked in game: the eeex options entry" in feature_release
 
     fork_release = source.split("\n## v1.11.0 (2026-10-24)", 1)[1].split(
         "\n## ", 1

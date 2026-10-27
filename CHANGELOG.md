@@ -1,5 +1,58 @@
 # Changelog
 
+## v1.12.1 (2026-10-27) — the panel's controls, where they belong
+
+Three layout defects, all found after v1.12.0 went out and all reported from
+a live game as controls sitting in the wrong place, overlapping, and not
+reacting to a click. None of them depends on the EEex version.
+
+### Fixed
+- **Captions stayed their own size while their plates shrank.** A footer row
+  that does not fit narrows every plate in it by one factor, but the captions
+  are separate items drawn at the font's own size and centred, so they kept
+  their width. At the 550px minimum "Down" printed across "Up" and "Sort",
+  "Order: Manual" and "Quick Cast: Suspended" ran past their plates, and
+  "Delete Preset" was cut off by the panel edge — and a click landed on
+  whatever plate was really under the text, which is the neighbour or nothing.
+  Each caption now takes the share of its size that its plate kept, down to a
+  floor of six points. The scale lives in the per-render listener, because
+  that listener rewrites every item's point size immediately before it is
+  drawn: a scaled point written anywhere else survives exactly one frame.
+- **Reserved tab slots left the panel.** The character and preset rows size
+  themselves to the tabs that exist but place all six and all eight slots,
+  since an unfilled slot is only disabled, not removed. Sized for two and
+  placed for eight, the spare slots marched off the parchment — on a
+  1075×621 panel with five presets, slots 7 and 8 sat at x 1148..1491 while
+  the panel ended at 1175: outside it, under the frame, over whatever stands
+  beside the panel. v1.11.0 divided the row by the fixed six slots and never
+  did this; v1.12.0 divided by the visible count without carrying that into
+  the placing. A slot past the count is now parked on the last real tab.
+- **The quick-preset menu left its captions behind.** It opens wherever the
+  mouse is and moved its eight rows, but not the labels that carry their
+  text, so those kept the area the `.menu` gives them while the buttons
+  travelled. Both go through the same pairing the main panel uses now.
+
+### Testing
+- The full automated suite passes **1520 tests**. New: `tests/test_panel_geometry.py`
+  runs the real `_Layout` at five panel sizes and four party/preset counts and
+  checks that no control leaves the panel, that nothing in a row overlaps, that
+  the footer rows do not grow into each other, that every caption is moved by
+  whatever moves its control, and that the scale a row reports is exactly what
+  its plate lost. Ten of its checks fail against v1.12.0. Seven more drive the
+  caption scale through the real render path — register the listeners, draw the
+  item, read the point — over scaling, restoring full size when the panel grows
+  again, the six-point floor, the text-size preference, and a factor that makes
+  no sense.
+- **Lab check, BG2:EE 2.7.3.0 with EEex v1.3.1** (quiet dev lab): the panel
+  shot at 1075×621 and at the 550×350 minimum, before and after. The three
+  footer rows and both tab rows sit inside the panel at both sizes, and every
+  caption is inside its own plate. `tools/lab_screenshots.py` grew a
+  `--font-size` flag for it, and the shot receipt now reports each caption's
+  scale beside its plate width.
+- Not checked in game: the six dialogs, whose controls have fixed areas in the
+  `.menu` and are not covered by the footer's scaling, and the tab rows with
+  six long character names on a narrow panel.
+
 ## v1.12.0 (2026-10-27) — Icewind Dale, Pecca's chrome and the shared plan model
 
 ### Added
