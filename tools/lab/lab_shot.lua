@@ -124,8 +124,40 @@ elseif args.dialog then
     error("SHOT_UNKNOWN_DIALOG:" .. tostring(args.dialog))
 end
 
+-- What the captions actually ended up at: the plate's width beside the point
+-- size the caption is drawn in. A caption wider than its plate prints over
+-- the plate next to it, and a screenshot is a poor instrument for telling
+-- 11 points from 12.
+-- The remote console stringifies a return value, so this comes back as one
+-- line of "name=point@plateWidth" rather than a table.
+local function captionReport()
+    if not EEex_Menu_Find then return "no-menu-api" end
+    local menu = EEex_Menu_Find("BUFFBOT_MAIN")
+    local item = menu and menu.items
+    local parts = {}
+    while item ~= nil do
+        local nameOk, name = pcall(function() return item.name:get() end)
+        if nameOk and type(name) == "string" and name:sub(-2) == "_t" then
+            -- The scale, not the live text.point: the per-render listener
+            -- writes the point right before each draw, so reading it here
+            -- reports the frame before this layout rather than this one.
+            local areaOk, w = pcall(function() return item.area.w end)
+            local scale = BfBot.Theme.CaptionScale
+                and BfBot.Theme.CaptionScale(name) or 1
+            parts[#parts + 1] = name .. "="
+                .. string.format("%.2f", scale)
+                .. "@" .. tostring(areaOk and w or "?")
+        end
+        item = item.next
+    end
+    table.sort(parts)
+    return table.concat(parts, " ")
+end
+
 LabShotReceipt = {
     frame = Infinity_GetFrameCounter(), theme = theme, before = before,
+    captions = captionReport(),
+    fontSize = BfBot.Theme._GetFontSize and BfBot.Theme._GetFontSize(),
     slot = BfBot.UI._charSlot, preset = BfBot.UI._presetIdx, view = BfBot.UI._view,
     owner = BfBot._GetName(sprite), rows = #rows, visible = visible,
     screen = { Infinity_GetScreenSize() },
@@ -135,4 +167,9 @@ LabShotReceipt = {
     panel = { BfBot.UI._panelX, BfBot.UI._panelY,
               BfBot.UI._panelW, BfBot.UI._panelH },
 }
-return LabShotReceipt
+-- A table comes back from the console as "table: 0x...", so the line that is
+-- worth reading is returned as text. LabShotReceipt stays for probing by hand.
+return "panel=" .. BfBot.UI._panelW .. "x" .. BfBot.UI._panelH
+    .. " font=" .. tostring(BfBot.Theme._GetFontSize
+        and BfBot.Theme._GetFontSize())
+    .. " | " .. LabShotReceipt.captions

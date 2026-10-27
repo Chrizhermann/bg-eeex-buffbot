@@ -298,3 +298,112 @@ def test_every_palette_color_survives_packing(options_lua):
         """
     )
     assert bad == ""
+
+
+# ---------------------------------------------------------------------------
+# Caption scaling: a caption shrinks with the plate the footer narrowed.
+# The per-render listener is the last word on an item's point, so that is
+# where the scale has to land -- and where these drive it from.
+# ---------------------------------------------------------------------------
+
+
+CAPTION_HARNESS = """
+    BfBot.Theme._FONT_TO_BASE_POINT = { NORMAL = 12 }
+    BfBot.Theme._fontSize = 2
+    BfBot.Theme._fontListenersRegistered = nil
+    T_Listeners = {}
+    EEex_Menu_AddBeforeUIItemRenderListener = function(name, fn)
+        T_Listeners[name] = fn
+    end
+    local function item(name, font, point)
+        return {
+            name = { get = function() return name end },
+            text = { font = { get = function() return font end },
+                     point = point },
+        }
+    end
+    T_Items = { %s }
+    for index = 1, #T_Items - 1 do T_Items[index].next = T_Items[index + 1] end
+    EEex_Menu_Find = function(name)
+        if name ~= "BUFFBOT_MAIN" then return nil end
+        return { items = T_Items[1] }
+    end
+    BfBot.Theme._RegisterFontRenderListeners()
+"""
+
+
+def _render(options_lua, name: str) -> int:
+    """Draw one item the way the engine does, and report its point size."""
+    return options_lua.execute(
+        """
+        for _, it in ipairs(T_Items) do
+            if it.name.get() == "%s" then
+                T_Listeners["%s"](it)
+                return it.text.point
+            end
+        end
+        error("no item named %s")
+        """ % (name, name, name)
+    )
+
+
+def test_a_caption_takes_the_point_size_its_plate_leaves_it(options_lua):
+    options_lua.execute(CAPTION_HARNESS % (
+        'item("bbSort_t", "NORMAL", 12), item("bbDel_t", "NORMAL", 12)'))
+    options_lua.execute(
+        "BfBot.Theme.ApplyCaptionScales({ bbSort = 0.5, bbDel = 1 })")
+    assert _render(options_lua, "bbSort_t") == 6     # floor(12 * 1.0 * 0.5)
+    assert _render(options_lua, "bbDel_t") == 12
+
+
+def test_a_status_toggle_scales_under_its_own_name(options_lua):
+    """Quick Cast and the order toggle have to stay text items -- only a text
+    item takes an action together with `text color lua` -- so they carry the
+    control's name rather than a "<name>_t" caption."""
+    options_lua.execute(CAPTION_HARNESS % 'item("bbQC", "NORMAL", 12)')
+    options_lua.execute("BfBot.Theme.ApplyCaptionScales({ bbQC = 0.5 })")
+    assert _render(options_lua, "bbQC") == 6
+
+
+def test_widening_the_panel_gives_a_caption_its_size_back(options_lua):
+    """The layout reports only what it narrowed, so a panel that grows again
+    has to restore everything else."""
+    options_lua.execute(CAPTION_HARNESS % 'item("bbSort_t", "NORMAL", 12)')
+    options_lua.execute("BfBot.Theme.ApplyCaptionScales({ bbSort = 0.6 })")
+    assert _render(options_lua, "bbSort_t") == 7
+    options_lua.execute("BfBot.Theme.ApplyCaptionScales({})")
+    assert _render(options_lua, "bbSort_t") == 12
+
+
+def test_a_caption_never_shrinks_below_what_can_be_read_at_all(options_lua):
+    """Past this the panel is simply too small, and an unreadable caption on
+    its own plate still beats a readable one printed over its neighbour."""
+    options_lua.execute(CAPTION_HARNESS % 'item("bbSort_t", "NORMAL", 12)')
+    options_lua.execute("BfBot.Theme.ApplyCaptionScales({ bbSort = 0.05 })")
+    assert _render(options_lua, "bbSort_t") == 6
+
+
+def test_the_caption_scale_follows_the_players_text_size(options_lua):
+    options_lua.execute(CAPTION_HARNESS % 'item("bbSort_t", "NORMAL", 12)')
+    options_lua.execute("""
+        BfBot.Theme._fontSize = 3
+        BfBot.Theme.ApplyCaptionScales({ bbSort = 0.5 })
+    """)
+    assert _render(options_lua, "bbSort_t") == 7   # floor(12 * 1.20 * 0.5)
+
+
+def test_an_item_the_layout_did_not_narrow_keeps_its_size(options_lua):
+    options_lua.execute(CAPTION_HARNESS % (
+        'item("bbList", "NORMAL", 12), item("bbSort_t", "NORMAL", 12)'))
+    options_lua.execute("BfBot.Theme.ApplyCaptionScales({ bbSort = 0.5 })")
+    assert _render(options_lua, "bbList") == 12
+
+
+@pytest.mark.parametrize("scale", ["0/0", "-1", "2", "'nonsense'"])
+def test_a_scale_that_makes_no_sense_leaves_the_caption_alone(options_lua, scale):
+    """A factor is a width ratio; anything else is a layout bug, and drawing
+    nothing or a giant caption would be a worse answer than the plain size."""
+    options_lua.execute(CAPTION_HARNESS % 'item("bbSort_t", "NORMAL", 12)')
+    options_lua.execute(
+        "BfBot.Theme.ApplyCaptionScales({ bbSort = %s })" % scale)
+    assert _render(options_lua, "bbSort_t") == 12

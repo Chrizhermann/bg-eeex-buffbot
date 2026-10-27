@@ -48,6 +48,11 @@ VARIANT_ROW = [
 
 LAYOUT_LUA = """
 local areas = {}
+captionScales = {}
+BfBot.Theme.ApplyCaptionScales = function(scales)
+    captionScales = {}
+    for name, scale in pairs(scales or {}) do captionScales[name] = scale end
+end
 Infinity_GetScreenSize = function() return 1920, 1080 end
 Infinity_SetArea = function(name, x, y, w, h)
     areas[name] = { x, y, w, h }
@@ -192,6 +197,62 @@ def test_the_visible_tabs_never_overlap_their_row_neighbours(
                     f"{chars} character(s)/{presets} preset(s): {name} "
                     f"{rect} overlaps {other_name} {other}"
                 )
+
+
+def _caption_scales(lua: LuaRuntime) -> dict[str, float]:
+    return dict(lua.eval("captionScales").items())
+
+
+def _natural_widths() -> dict[str, int]:
+    """The widths written into _Layout's row() calls: each caption's own size
+    at the default font, before any row has to give way."""
+    widths = {
+        name: int(width)
+        for name, width in re.findall(r'\{\s*"(bb[A-Za-z0-9_]+)"\s*,\s*(\d+)\s*\}',
+                                      UI_SOURCE)
+    }
+    assert len(widths) > 15, widths
+    return widths
+
+
+@pytest.mark.parametrize(("width", "height"), SIZES)
+def test_a_caption_shrinks_by_exactly_what_its_plate_lost(
+    repeat_ui_lua, width, height
+) -> None:
+    """A row that does not fit narrows every plate in it. The captions are
+    separate labels drawn at the font's own size, so without this they kept
+    their width while the plates shrank -- printing over the plate beside
+    them, which is where the click then landed."""
+    areas = _layout(repeat_ui_lua, width, height)
+    scales = _caption_scales(repeat_ui_lua)
+    natural = _natural_widths()
+    assert scales, "the layout reported no caption scales at all"
+    for name, scale in sorted(scales.items()):
+        assert 0 < scale <= 1, (name, scale)
+        assert scale == pytest.approx(areas[name][2] / natural[name]), (
+            f"{width}x{height}: {name} scaled its caption {scale} while its "
+            f"plate went {natural[name]} -> {areas[name][2]}"
+        )
+
+
+def test_the_minimum_panel_actually_squeezes_something(repeat_ui_lua) -> None:
+    """Otherwise the check above passes on a layout that never shrinks."""
+    _layout(repeat_ui_lua, 550, 350)
+    scales = _caption_scales(repeat_ui_lua)
+    assert any(scale < 1 for scale in scales.values()), (
+        "nothing shrank at the 550px minimum, where the rows do not fit"
+    )
+
+
+def test_a_panel_wide_enough_leaves_the_normal_rows_alone(repeat_ui_lua) -> None:
+    """The variant row carries one control more than the normal one and sits
+    marginally over the bar's 980px cap even on a large panel, so only the
+    rows that do fit are expected at full size."""
+    _layout(repeat_ui_lua, 1920, 1080)
+    scales = _caption_scales(repeat_ui_lua)
+    shrunk = {name: scale for name, scale in scales.items()
+              if scale < 1 and not name.startswith("bbV")}
+    assert not shrunk, shrunk
 
 
 def test_every_caption_is_repositioned_with_its_control() -> None:

@@ -296,6 +296,40 @@ BfBot.Theme._STYLE_PARENTS = {
 BfBot.Theme._SIZE_MULT = { [1] = 0.85, [2] = 1.0, [3] = 1.20 }
 BfBot.Theme._fontSize = 2
 
+-- Per-control caption scale, keyed by the control's name. A footer row that
+-- does not fit narrows every plate in it by one factor; the captions are
+-- separate items drawn at the font's own size and centred, so without this
+-- they keep their width while the plates shrink -- "Down" printed across
+-- "Up" and "Sort", "Delete Preset" ran off the panel, and the click landed
+-- on whatever plate was really under the text. _Layout fills this.
+BfBot.Theme._captionScales = {}
+
+--- The factor an item's text size is multiplied by, 1 when it is not on a
+--- narrowed plate. A caption label is "<control>_t" and the two status
+--- toggles that have to stay text items carry the control's own name, so
+--- both resolve to the same entry.
+--- @param itemName string|nil menu item name
+function BfBot.Theme.CaptionScale(itemName)
+    if type(itemName) ~= "string" then return 1 end
+    local scales = BfBot.Theme._captionScales
+    local scale = scales[itemName]
+    if scale == nil and itemName:sub(-2) == "_t" then
+        scale = scales[itemName:sub(1, -3)]
+    end
+    if type(scale) ~= "number" or scale ~= scale or scale > 1 then return 1 end
+    if scale <= 0 then return 1 end
+    return scale
+end
+
+--- Replace the caption scales. _Layout reports only the controls it narrowed,
+--- so a panel that grows again gives every other caption its size back.
+--- @param scales table|nil control name -> factor in (0, 1]
+function BfBot.Theme.ApplyCaptionScales(scales)
+    local out = {}
+    for name, scale in pairs(scales or {}) do out[name] = scale end
+    BfBot.Theme._captionScales = out
+end
+
 --- Register bb_* custom styles by deep-copying engine styles.
 -- Always re-deep-copies so changes to _STYLE_PARENTS take effect on Lua
 -- reload (the prior `not styles[bbName]` guard would have stuck a stale
@@ -388,7 +422,7 @@ BfBot.Theme._OWNED_MENUS = {
 -- in the BuffBot font→base table and multiplying by the current size mult.
 -- No-op when item lacks a recognized font (skips engine items in unrelated
 -- menus we don't own).
-local function _updateItemPoint(item)
+local function _updateItemPoint(item, itemName)
     local txt = item and item.text
     if not txt or not txt.font then return end
     local ok, fontName = pcall(function() return txt.font:get() end)
@@ -396,7 +430,15 @@ local function _updateItemPoint(item)
     local base = BfBot.Theme._FONT_TO_BASE_POINT[fontName:upper()]
     if not base then return end
     local mult = BfBot.Theme._SIZE_MULT[BfBot.Theme._fontSize] or 1.0
-    txt.point = math.floor(base * mult)
+    -- A caption on a plate the footer had to narrow shrinks with it. This has
+    -- to happen here, in the per-render listener, because the listener is the
+    -- last word on an item's point: writing a scaled point anywhere else is
+    -- overwritten before the next frame is drawn.
+    -- Past six points the panel is simply too small, and an unreadable
+    -- caption on its own plate still beats a readable one printed over its
+    -- neighbour, where the click would land on that one instead.
+    txt.point = math.max(
+        math.floor(base * mult * BfBot.Theme.CaptionScale(itemName)), 6)
 end
 
 --- Walk every text-bearing item in BuffBot's menus and write the scaled
@@ -451,7 +493,13 @@ function BfBot.Theme._RegisterFontRenderListeners()
                 -- Skip border-frame items (their listeners are owned by
                 -- BfBot.UI border render hooks and would be replaced).
                 if not name:match("^bb.*Frame$") then
-                    EEex_Menu_AddBeforeUIItemRenderListener(name, _updateItemPoint)
+                    -- The name is captured here rather than read back from
+                    -- the item each frame: the listener is per name anyway,
+                    -- and the caption scale is looked up by it.
+                    local itemName = name
+                    EEex_Menu_AddBeforeUIItemRenderListener(name, function(it)
+                        _updateItemPoint(it, itemName)
+                    end)
                 end
             end
             -- For lists, register a per-cell render listener that updates

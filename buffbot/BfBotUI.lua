@@ -1338,6 +1338,11 @@ function BfBot.UI._Layout()
     --- the far left, two at the far right and a hand's width of empty
     --- parchment between them.
     local groupGap = 28                 -- the seam between two groups
+    -- A row that does not fit narrows its plates; the captions are separate
+    -- labels and have to narrow with them, or they print over the plate
+    -- beside them and the click lands on that one instead. Collected here
+    -- and applied in one pass once every row is placed.
+    local captionScales = {}
     local function row(y, ...)
         local groups = {}
         local count, widths = 0, 0
@@ -1366,6 +1371,10 @@ function BfBot.UI._Layout()
             local fitted = {}
             for i, item in ipairs(group) do
                 fitted[i] = { item[1], math.max(math.floor(item[2] * scale), 24) }
+                -- The caption follows the plate it actually got, not the
+                -- row's factor: the 24px floor above means a narrow plate
+                -- can keep more width than `scale` asked for.
+                captionScales[item[1]] = fitted[i][2] / item[2]
                 total = total + fitted[i][2] + (i > 1 and gap or 0)
             end
             scaled[index] = fitted
@@ -1429,6 +1438,13 @@ function BfBot.UI._Layout()
 
     -- Reset button in title bar (right-aligned, 50px wide)
     setArea("bbReset", px + pw - 76, py + 5, 64, 24)
+
+    -- One pass over the captions once every plate has its width. It also
+    -- restores the ones this layout did not narrow, so widening the panel
+    -- gives their full size back.
+    if BfBot.Theme and BfBot.Theme.ApplyCaptionScales then
+        BfBot.Theme.ApplyCaptionScales(captionScales)
+    end
 end
 
 -- ============================================================
