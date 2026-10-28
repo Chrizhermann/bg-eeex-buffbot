@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.12.2 (2026-10-29) — the way out of the Summons view
+
+One layout defect, reported from a live game as a panel in which switching
+between Summons and Party worked once and then not again, character tabs that
+did not react, and row labels that did not stay the same while buttons were
+pressed. All of it follows from a single control in the wrong place, and none
+of it depends on the EEex version.
+
+### Fixed
+- **The view toggle sat under the summon row's own controls, so the panel
+  could not leave the Summons view.** The character row is shared by both
+  views: the summon tabs, the paging cluster and the full-width
+  "No allied summons detected" label are all placed inside `rowW`, which is
+  the row's width *minus* the toggle's own slot. v1.11.0 pinned the toggle to
+  that slot at the right edge and nothing could reach it. v1.12.0 moved it
+  left, snug against the last character name, straight in among the controls
+  the other view enables. On a 1075×621 panel the label then covered 81 of the
+  toggle's 100 px with a party of five and all 100 px with a party of one to
+  four, with the paging buttons on top as well — a six-character party was the
+  only one that pushed the toggle back to the right, which is why a full-party
+  lab never saw it. Every other symptom follows: the character tabs are gated
+  on the party view and about twenty handlers return early in the Summons
+  view, so a panel that cannot switch back looks dead throughout, and two
+  enabled text items in one rectangle is also why the row's caption changed
+  under the mouse. The toggle keeps its reserved slot again.
+- **Tab areas went stale when the party or the preset list changed size.**
+  Tab widths are sized for the tabs that exist and a slot past the count is
+  parked on the last real tab, but `_Layout` ran only on open, drag and
+  resize. A companion who joined while the panel was open got a tab still
+  parked on the previous last one — two live tabs stacked, the lower one
+  unclickable. The refresh now notices a changed count and lays the rows out
+  again.
+
+### Testing
+- The full automated suite passes **1579 tests**. New: the view toggle is
+  checked against every item of both views' tabs at five panel sizes and ten
+  party/preset counts, the summon tabs against their paging cluster, and a
+  party or preset list that changes size after the layout must come back with
+  tab areas that do not stack. 37 of the 50 toggle cases fail against v1.12.1.
+- In game, BG2:EE 2.7.3.0 with EEex v1.3.1: the in-game suite passes all 28
+  phases, and the new `tools/lab/lab_rowprobe.lua` measures the row in the
+  running engine and round-trips the switches that live in it. It reports
+  `coversToggle=none` with this release and `coversToggle=bbS1,bbSEmpty` with
+  v1.12.1's module reloaded into the same session, so the check can fail.
+- Not checked in game: a click on the toggle itself. The probe calls
+  `ToggleView` directly, which proves the function and the geometry but not
+  the engine's hit testing; and the six dialogs, whose controls have fixed
+  areas.
+
+Everything else is as in v1.12.1.
+
 ## v1.12.1 (2026-10-27) — the panel's controls, where they belong
 
 Three layout defects, all found after v1.12.0 went out and all reported from

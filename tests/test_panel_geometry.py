@@ -283,3 +283,121 @@ def test_every_caption_is_repositioned_with_its_control() -> None:
         "these captions are never moved with their control: "
         + ", ".join(name + "_t" for name in orphans)
     )
+
+
+# The character row is shared with the Summons view: the summon tabs, the
+# paging cluster and the full-width empty-state label are all placed in it.
+# The view toggle is the one control enabled in BOTH views, so it may not
+# intersect any of them -- v1.12.0 moved it in among them and the panel could
+# no longer be switched back out of the Summons view (#100).
+SUMMONS_ROW = ["bbSEmpty", "bbSPrev", "bbSPage", "bbSNext"] + [
+    f"bbS{index}" for index in range(6)
+]
+
+# Party sizes between the extremes: a six-character party was the only one
+# that pushed the toggle back to the right, which is why a full-party lab
+# never saw #100.
+TOGGLE_COUNTS = [(count, 5) for count in range(1, 7)]
+
+
+@pytest.mark.parametrize(("chars", "presets"), COUNTS + TOGGLE_COUNTS)
+@pytest.mark.parametrize(("width", "height"), SIZES)
+def test_the_view_toggle_is_clear_of_either_view_s_tabs(
+    repeat_ui_lua, width, height, chars, presets
+) -> None:
+    """Nothing in the shared row may cover the control that leaves the view."""
+    areas = _layout(repeat_ui_lua, width, height, chars=chars, presets=presets)
+    toggle = areas["bbView"]
+    for name in [f"bbC{index}" for index in range(6)] + SUMMONS_ROW:
+        rect = areas.get(name)
+        if rect is None:
+            continue
+        assert not _overlaps(toggle, rect), (
+            f"{width}x{height}, {chars} character(s): bbView {toggle} "
+            f"is covered by {name} {rect}"
+        )
+
+
+@pytest.mark.parametrize(("width", "height"), SIZES)
+def test_the_summon_tabs_are_clear_of_their_paging_cluster(
+    repeat_ui_lua, width, height
+) -> None:
+    """Tabs and paging are enabled together once the list overflows a page."""
+    areas = _layout(repeat_ui_lua, width, height)
+    paging = ["bbSPrev", "bbSPage", "bbSNext"]
+    for index in range(6):
+        tab = areas[f"bbS{index}"]
+        for name in paging:
+            assert not _overlaps(tab, areas[name]), (
+                f"{width}x{height}: bbS{index} {tab} overlaps "
+                f"{name} {areas[name]}"
+            )
+
+
+GROW_LUA = """
+local areas = {}
+captionScales = {}
+BfBot.Theme.ApplyCaptionScales = function(scales) end
+Infinity_GetScreenSize = function() return 1920, 1080 end
+Infinity_SetArea = function(name, x, y, w, h) areas[name] = { x, y, w, h } end
+buffbot_presetNames = {}
+for i = 1, %d do buffbot_presetNames[i] = "Preset " .. i end
+buffbot_charNames = {}
+for i = 1, %d do buffbot_charNames[i] = "Character " .. i end
+BfBot.UI._panelX, BfBot.UI._panelY = 100, 50
+BfBot.UI._panelW, BfBot.UI._panelH = 1075, 621
+BfBot.UI._Layout()
+-- The party changes while the panel stays open, the way a companion joining
+-- changes it. Only _Refresh runs then, never _Layout directly.
+buffbot_charNames = {}
+for i = 1, %d do buffbot_charNames[i] = "Character " .. i end
+buffbot_presetNames = {}
+for i = 1, %d do buffbot_presetNames[i] = "Preset " .. i end
+BfBot.UI._RelayoutIfTabCountsChanged()
+return areas
+"""
+
+
+def _grow(lua: LuaRuntime, before: tuple[int, int],
+          after: tuple[int, int]) -> dict[str, tuple[int, ...]]:
+    suppress = sys.platform == "win32" and faulthandler.is_enabled()
+    if suppress:
+        faulthandler.disable()
+    try:
+        areas = lua.execute(
+            GROW_LUA % (before[1], before[0], after[0], after[1])
+        )
+    finally:
+        if suppress:
+            faulthandler.enable()
+    return {
+        name: tuple(int(values[index]) for index in range(1, 5))
+        for name, values in areas.items()
+    }
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [((2, 3), (6, 8)), ((1, 1), (3, 5)), ((6, 8), (2, 3)), ((5, 5), (6, 5))],
+)
+def test_a_party_that_changes_size_gets_fresh_tab_areas(
+    repeat_ui_lua, before, after
+) -> None:
+    """A slot past the count is parked on the last real tab, so a count that
+    moves afterwards would leave two live tabs stacked. _Layout runs only on
+    open, drag and resize, so the refresh has to notice (#100)."""
+    areas = _grow(repeat_ui_lua, before, after)
+    live_chars = [areas[f"bbC{index}"] for index in range(after[0])]
+    for index, rect in enumerate(live_chars):
+        for other_index, other in enumerate(live_chars[index + 1:], index + 1):
+            assert not _overlaps(rect, other), (
+                f"{before} -> {after}: bbC{index} {rect} is stacked on "
+                f"bbC{other_index} {other}"
+            )
+    live_presets = [areas[f"bbP{index}"] for index in range(1, after[1] + 1)]
+    for index, rect in enumerate(live_presets, 1):
+        for other_index, other in enumerate(live_presets[index:], index + 1):
+            assert not _overlaps(rect, other), (
+                f"{before} -> {after}: bbP{index} {rect} is stacked on "
+                f"bbP{other_index} {other}"
+            )

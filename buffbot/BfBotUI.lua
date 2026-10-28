@@ -1128,6 +1128,17 @@ end
 -- Dynamic Layout (user-stored or default 80% of screen)
 -- ============================================================
 
+--- How many of the first `limit` slots carry a name. The tab rows are sized
+--- by this, and the relayout guard below compares against it, so both have to
+--- count the same way. Never below 1: a width is divided by it.
+function BfBot.UI._VisibleCount(names, limit)
+    local count = 0
+    for i = 1, limit do
+        if names and names[i] ~= nil then count = count + 1 end
+    end
+    return math.max(count, 1)
+end
+
 function BfBot.UI._Layout()
     local sw, sh = Infinity_GetScreenSize()
     if not sw or not sh then return end
@@ -1191,20 +1202,14 @@ function BfBot.UI._Layout()
     -- between the characters who are actually in the party: dividing it by
     -- six left a party of three with three tab-widths of empty parchment
     -- between the last name and the Summons toggle. Capped, because one
-    -- companion must not get a tab the width of the panel.
+    -- companion must not get a tab the width of the panel. The row they
+    -- divide is `rowW`, which stops short of the toggle's own slot.
     local charY = py + 40
     local charH = 24
     local charGap = 4
     local viewW = 100
     local rowW = cw - viewW - charGap   -- tab area shared by both views
-    local function visibleCount(names, limit)
-        local count = 0
-        for i = 1, limit do
-            if names and names[i] ~= nil then count = count + 1 end
-        end
-        return math.max(count, 1)
-    end
-    local charCount = visibleCount(buffbot_charNames, 6)
+    local charCount = BfBot.UI._VisibleCount(buffbot_charNames, 6)
     local charW = math.min(math.floor((rowW - (charCount - 1) * charGap) / charCount), 170)
     -- The width is sized for the tabs that exist, but all six slots are
     -- placed, because a slot the party has not filled is only disabled, not
@@ -1216,8 +1221,13 @@ function BfBot.UI._Layout()
         setArea("bbC" .. i, cx + math.min(i, charCount - 1) * (charW + charGap),
             charY, charW, charH)
     end
-    setArea("bbView", math.min(cx + charCount * (charW + charGap), cx + cw - viewW),
-        charY, viewW, charH)
+    -- The toggle keeps the row's reserved right-hand slot, outside `rowW`.
+    -- It is the one control enabled in BOTH views, while the summon tabs, the
+    -- paging cluster and the full-width empty-state label all live inside
+    -- `rowW`. Moved in among them -- snug against the last name, which is how
+    -- v1.12.0 had it -- it ends up under whichever of those is live, and the
+    -- panel can no longer be switched back out of the Summons view (#100).
+    setArea("bbView", cx + cw - viewW, charY, viewW, charH)
 
     -- Summon tabs (summons view; same row) + paging cluster before the toggle
     local pageBtnW = 24
@@ -1245,7 +1255,7 @@ function BfBot.UI._Layout()
     local newW = 62
     local maxP = BfBot.MAX_PRESETS
     local preAvailW = cw - renW - newW - 2 * preGap
-    local preCount = visibleCount(buffbot_presetNames, maxP)
+    local preCount = BfBot.UI._VisibleCount(buffbot_presetNames, maxP)
     local preW = math.min(
         math.floor((preAvailW - (preCount - 1) * preGap) / preCount), 170)
     -- Same slot rule as the character tabs above: sized for the presets that
@@ -1445,6 +1455,26 @@ function BfBot.UI._Layout()
     if BfBot.Theme and BfBot.Theme.ApplyCaptionScales then
         BfBot.Theme.ApplyCaptionScales(captionScales)
     end
+
+    -- What this layout was built for, so a party or preset list that changes
+    -- size afterwards can be noticed. See _RelayoutIfTabCountsChanged.
+    BfBot.UI._laidOutCounts = { chars = charCount, presets = preCount }
+end
+
+--- Re-run the layout when the party or the preset list changed size.
+-- Tab widths are sized for the tabs that exist, and a slot past the count is
+-- parked on the last real tab. Both go stale the moment the count moves: a
+-- companion who joins gets a tab still parked on the previous last one, so two
+-- live tabs sit stacked and the one underneath cannot be clicked. _Layout
+-- otherwise runs only on open, drag and resize, so nothing else notices (#100).
+function BfBot.UI._RelayoutIfTabCountsChanged()
+    local laid = BfBot.UI._laidOutCounts
+    if not laid then return end
+    if BfBot.UI._VisibleCount(buffbot_charNames, 6) ~= laid.chars
+        or BfBot.UI._VisibleCount(buffbot_presetNames, BfBot.MAX_PRESETS)
+            ~= laid.presets then
+        BfBot.UI._Layout()
+    end
 end
 
 -- ============================================================
@@ -1590,7 +1620,14 @@ end
 --- Refresh all UI state from Persist + Scan data.
 -- Called on: panel open, tab switch, spell change listeners.
 -- Tab switches do NOT invalidate scan cache — reads cached data.
+-- The one seam where the tab counts are known to be current, so the relayout
+-- guard hangs here rather than at each of _RefreshState's several exits.
 function BfBot.UI._Refresh()
+    BfBot.UI._RefreshState()
+    BfBot.UI._RelayoutIfTabCountsChanged()
+end
+
+function BfBot.UI._RefreshState()
     BfBot.UI._spellListRefreshPending = nil
     BfBot.UI._RefreshForceRecastCache()
     -- Keep identity canonical across automatic table replacement. The numeric

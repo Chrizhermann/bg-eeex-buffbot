@@ -1034,16 +1034,33 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.1 (2026-10-27) — the panel's controls, where they belong"
+        "v1.12.2 (2026-10-29) — the way out of the Summons view"
     )
+    # The control that was in the wrong place, and the consequence a player
+    # reported, rather than the function that was changed (#100).
+    assert ("the view toggle sat under the summon row's own controls"
+            in current_normalized)
+    assert "could not leave the summons view" in current_normalized
+    assert ("tab areas went stale when the party or the preset list changed"
+            " size" in current_normalized)
+    assert "full automated suite passes **1579 tests**" in current_normalized
+    # The probe has to be able to fail, so the section records both readings.
+    assert "`coverstoggle=none`" in current_normalized
+    assert "`coverstoggle=bbs1,bbsempty`" in current_normalized
+    assert "all 28" in current_normalized
+    assert "not checked in game: a click on the toggle itself" in current_normalized
+
+    layout_release = source.split("\n## v1.12.1 (2026-10-27)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # The three layout defects v1.12.0 shipped with, each named with the
     # symptom a player reported rather than the function that was wrong.
     assert ("captions stayed their own size while their plates shrank"
-            in current_normalized)
-    assert "reserved tab slots left the panel" in current_normalized
-    assert "the quick-preset menu left its captions behind" in current_normalized
-    assert "full automated suite passes **1520 tests**" in current_normalized
-    assert "not checked in game: the six dialogs" in current_normalized
+            in layout_release)
+    assert "reserved tab slots left the panel" in layout_release
+    assert "the quick-preset menu left its captions behind" in layout_release
+    assert "full automated suite passes **1520 tests**" in layout_release
+    assert "not checked in game: the six dialogs" in layout_release
 
     feature_release = source.split("\n## v1.12.0 (2026-10-27)", 1)[1].split(
         "\n## ", 1
