@@ -1326,15 +1326,21 @@ function BfBot.UI._Layout()
     -- The footer is one bar, not four rows of controls pinned to opposite
     -- corners. Pinning looked right at the 550px minimum and fell apart as
     -- the panel grew: the clusters walked to the edges and left a hole the
-    -- width of the parchment between them. The bar therefore has a maximum
-    -- width and is centred in anything wider, so the controls stay a group
-    -- at every size, and every row has a middle zone so the slack lands
-    -- between groups rather than in one gap.
+    -- width of the parchment between them. Every row therefore has a middle
+    -- zone, so the slack lands between groups rather than in one gap.
+    --
+    -- The bar used to be capped at 980px and centred in anything wider,
+    -- which traded that hole for the opposite fault: on a wide panel four
+    -- sparse rows huddled in the middle under a table using the full width,
+    -- and the groups inside them sat a fixed 28px apart, far too little to
+    -- read as groups at all (reported in game: "alles so crammed in der
+    -- Mitte"). The bar now takes the table's width and the slack is spread
+    -- over the seams instead -- see `row` below.
     local btnH = 28
     local gap = 6
     local edge = 12                     -- clear air above the bottom rail
-    local barW = math.min(cw, 980)
-    local bx = cx + math.floor((cw - barW) / 2)
+    local barW = cw
+    local bx = cx
     local bRight = bx + barW
     --- Lay one footer row as a single centred run of groups, scaled to fit.
     ---
@@ -1343,11 +1349,15 @@ function BfBot.UI._Layout()
     --- than the panel's 550px minimum can hold, so a row that does not fit
     --- shrinks every width in it by the same factor -- crowded captions at
     --- the minimum are accepted, controls growing into each other are not.
-    --- And the groups stay together in the middle rather than being pinned
-    --- to the bar's two edges: pinned, a wide panel showed three buttons at
-    --- the far left, two at the far right and a hand's width of empty
-    --- parchment between them.
-    local groupGap = 28                 -- the seam between two groups
+    --- And the room a row does not need is shared out rather than left in
+    --- one place: each seam between two groups takes a full share and each
+    --- of the two outer margins half a share, so the groups separate as the
+    --- panel grows while nothing ends up flush against an edge. A share is
+    --- capped, because an uncapped one puts a hand's width of parchment
+    --- between the only two groups of a short row; past the cap the leftover
+    --- returns to the margins and the run stays centred.
+    local groupGap = 28                 -- the narrowest seam, at the minimum
+    local seamMax = math.max(groupGap, math.floor(barW * 0.22))
     -- A row that does not fit narrows its plates; the captions are separate
     -- labels and have to narrow with them, or they print over the plate
     -- beside them and the click lands on that one instead. Collected here
@@ -1376,7 +1386,7 @@ function BfBot.UI._Layout()
         local budget = barW - (count - #groups) * gap - seams * groupGap
         local scale = (widths > budget and budget > 0) and (budget / widths) or 1
 
-        local total, scaled = seams * groupGap, {}
+        local total, scaled = 0, {}
         for index, group in ipairs(groups) do
             local fitted = {}
             for i, item in ipairs(group) do
@@ -1390,9 +1400,20 @@ function BfBot.UI._Layout()
             scaled[index] = fitted
         end
 
+        -- The share, counting the two outer margins as one seam between
+        -- them. `total` is the controls alone at this point, so a row that
+        -- had to be narrowed has no share left to give and falls back to
+        -- the narrowest seam.
+        local seam = groupGap
+        if seams > 0 then
+            seam = math.floor((barW - total) / (seams + 1))
+            seam = math.max(groupGap, math.min(seam, seamMax))
+        end
+        total = total + seams * seam
+
         local x = bx + math.floor((barW - total) / 2)
         for _, group in ipairs(scaled) do
-            x = cluster(x, y, btnH, gap, group) + groupGap
+            x = cluster(x, y, btnH, gap, group) + seam
         end
     end
 

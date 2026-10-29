@@ -245,9 +245,9 @@ def test_the_minimum_panel_actually_squeezes_something(repeat_ui_lua) -> None:
 
 
 def test_a_panel_wide_enough_leaves_the_normal_rows_alone(repeat_ui_lua) -> None:
-    """The variant row carries one control more than the normal one and sits
-    marginally over the bar's 980px cap even on a large panel, so only the
-    rows that do fit are expected at full size."""
+    """Only the rows that do fit are expected at full size. The variant row
+    carries one control more than the normal one, so it is the first to be
+    narrowed on a panel that cannot hold everything."""
     _layout(repeat_ui_lua, 1920, 1080)
     scales = _caption_scales(repeat_ui_lua)
     shrunk = {name: scale for name, scale in scales.items()
@@ -401,3 +401,80 @@ def test_a_party_that_changes_size_gets_fresh_tab_areas(
                 f"{before} -> {after}: bbP{index} {rect} is stacked on "
                 f"bbP{other_index} {other}"
             )
+
+
+# The footer's groups, in the order _Layout's `row` calls pass them. The seam
+# between two groups is what tells them apart; inside a group the controls sit
+# one `gap` from each other and read as one thing.
+FOOTER_GROUPS = {
+    "add": [["bbAdd", "bbRmv", "bbRepeat"], ["bbExp", "bbImp"]],
+    "edit": [["bbTog", "bbTgt"], ["bbUp", "bbDn", "bbSort", "bbOrder"],
+             ["bbDel"]],
+    "cast": [["bbCast", "bbCastChar", "bbStop"], ["bbQC", "bbClose"]],
+}
+INNER_GAP = 6
+MIN_SEAM = 28
+SEAM_FRACTION = 0.22
+PAD = 10
+
+
+def _row_seams(areas, groups):
+    """(inner gaps, seams between groups, left margin, right margin-ish) for
+    one row, taking the row exactly as it was laid out."""
+    inner, seams = [], []
+    for group in groups:
+        rects = [areas[name] for name in group]
+        for before, after in zip(rects, rects[1:]):
+            inner.append(after[0] - (before[0] + before[2]))
+    for before, after in zip(groups, groups[1:]):
+        last = areas[before[-1]]
+        seams.append(areas[after[0]][0] - (last[0] + last[2]))
+    first = areas[groups[0][0]]
+    last = areas[groups[-1][-1]]
+    return inner, seams, first[0], last[0] + last[2]
+
+
+@pytest.mark.parametrize(("width", "height"), SIZES + [(2560, 1440)])
+@pytest.mark.parametrize("row_name", sorted(FOOTER_GROUPS))
+def test_a_footer_row_keeps_its_groups_apart_and_its_own_controls_together(
+    repeat_ui_lua, width, height, row_name
+) -> None:
+    """What makes a group read as a group is that the air around it is wider
+    than the air inside it. Before v1.12.3 every seam was a flat 28px however
+    wide the panel grew, so four sparse rows huddled in the middle under a
+    table using the full width."""
+    areas = _layout(repeat_ui_lua, width, height)
+    panel_w = areas["bbBg"][2]
+    cap = max(MIN_SEAM, int((panel_w - 2 * PAD) * SEAM_FRACTION))
+
+    inner, seams, left, right = _row_seams(areas, FOOTER_GROUPS[row_name])
+    assert all(value == INNER_GAP for value in inner), (row_name, inner)
+    for seam in seams:
+        assert MIN_SEAM <= seam <= cap, (row_name, seam, cap)
+        assert seam > INNER_GAP, (row_name, seam)
+        # On a panel with room to spare the seam has to use some of it,
+        # or this passes on the flat 28px it is meant to replace.
+        if panel_w - 2 * PAD >= 1200:
+            assert seam > MIN_SEAM, (row_name, seam, panel_w)
+
+    # Centred: the room the seams could not take comes back to both margins
+    # in equal parts, so neither end is flush against the parchment.
+    panel_x = areas["bbBg"][0]
+    margins = (left - (panel_x + PAD), (panel_x + panel_w - PAD) - right)
+    assert abs(margins[0] - margins[1]) <= 1, (row_name, margins)
+    assert margins[0] >= 0 and margins[1] >= 0, (row_name, margins)
+
+
+@pytest.mark.parametrize("row_name", sorted(FOOTER_GROUPS))
+def test_a_wider_panel_gives_the_footer_rows_more_of_it(
+    repeat_ui_lua, row_name
+) -> None:
+    """The complaint this answers: the bar stopped widening at 980px, so on a
+    2048px panel the controls sat in a 980px island with a hand's width of
+    empty parchment either side of every row."""
+    spans = []
+    for width, height in ((1075, 621), (1920, 1080), (2560, 1440)):
+        areas = _layout(repeat_ui_lua, width, height)
+        _inner, _seams, left, right = _row_seams(areas, FOOTER_GROUPS[row_name])
+        spans.append(right - left)
+    assert spans[0] < spans[1] < spans[2], (row_name, spans)

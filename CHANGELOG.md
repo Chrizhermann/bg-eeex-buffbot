@@ -33,6 +33,24 @@
   way round (BG:EE's is blue slate, BG2:EE's is tan), and deriving the mapping
   from engine resources is what got it wrong twice.
 
+### Changed
+- **The footer uses the panel instead of huddling in the middle of it.**
+  Reported from a live playthrough: *"jetzt aktuell ist alles so crammed in
+  der Mitte und ich finde das nicht mehr so übersichtlich"* — the buttons
+  should sit further apart, grouped so that what belongs together looks like
+  it does. The footer bar was capped at 980px and centred, so on a 2048px
+  panel four sparse rows sat in a 980px island under a spell table using the
+  full width, and inside each row the groups were a flat 28px apart however
+  wide the panel grew — too little to read as groups at all. The bar now
+  takes the table's width, and the room a row does not need is shared out:
+  each seam between two groups takes a full share, each of the two outer
+  margins half a share, so the groups separate as the panel grows and
+  nothing ends up flush against the parchment. A share is capped at 22% of
+  the bar, because an uncapped one opens a canyon between the only two
+  groups of a short row; past the cap the leftover returns to the margins
+  and the run stays centred. At the 550px minimum nothing changes: there is
+  no room to share, and the seam falls back to its old 28px.
+
 ## v1.12.3 (2026-10-29) — a friendly mage is not a summon
 
 One detection defect, reported from a live BG2 game: the Summons view handed
