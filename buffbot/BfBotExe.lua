@@ -1830,10 +1830,18 @@ function BfBot.Exec._TryLateJoin(oid)
     if not obj or not EEex_GameObject_IsSprite(obj, false) then return false end
     local sprite = EEex_GameObject_CastUserType(obj)
     if EEex_Sprite_GetPortraitIndex(sprite) ~= -1 then return false end
-    -- Structural filter shared with the area sweep (allied castable summon
-    -- or nil) — never a second detection rule.
-    local e = BfBot.Scan.ClassifySummonSprite(sprite)
-    if not e then return false end
+    -- Structural filter shared with the area sweep (a castable summon or
+    -- clone the party conjured, or nil) — never a second detection rule.
+    local e, why = BfBot.Scan.ClassifySummonSprite(sprite)
+    if not e then
+        -- An "origin" reject is not a verdict here, it can be a TIMING
+        -- artifact: the engine sets the summoner / puppet linkage moments
+        -- after the sprite loads (same window as the name, probe
+        -- 2026-07-14), and this path runs on sprites that JUST loaded.
+        -- Retry within the budget — a creature nobody in the party conjured
+        -- (a quest ally wandering in mid-run) simply exhausts it.
+        return why == "origin"
+    end
     -- Readiness gate: the engine sets name / EA / puppet linkage together
     -- moments after spawn (probe 2026-07-14); an entry still reporting the
     -- "?" name fallback was classified off a half-initialized sprite —
@@ -1867,11 +1875,12 @@ end
 --- Drain the pending late-join list (called from _SafetyTick's running
 --- branch, so rate-limited to its ~2s cadence and only ever active during
 --- a run). Each oid gets _LATEJOIN_MAX_TRIES attempts; _TryLateJoin
---- returning true means "not initialized yet, retry", anything else
---- finishes the oid. A retry-budget exhaustion (the sprite NEVER reported
---- a real name) is WARNed — a summon that mysteriously fails to attach
---- must leave a trace. CHECKED pcall per oid — one broken entry must WARN
---- and be dropped, never wedge the tick or starve the other pending oids.
+--- returning true means "not settled yet, retry", anything else finishes
+--- the oid. A retry-budget exhaustion (the sprite NEVER reported a real
+--- name, or never showed who conjured it) is WARNed — a summon that
+--- mysteriously fails to attach must leave a trace. CHECKED pcall per oid
+--- — one broken entry must WARN and be dropped, never wedge the tick or
+--- starve the other pending oids.
 function BfBot.Exec._ProcessLateJoins()
     -- Defensive: only a RUNNING run may attach casters. The _SafetyTick
     -- call site already gates on state — this covers direct/future callers.
@@ -1887,10 +1896,11 @@ function BfBot.Exec._ProcessLateJoins()
             pending[oid] = tries - 1
         else
             if retry == true then
-                -- budget exhausted while still "not initialized" — loud
-                -- drop; the silent path is only for FINISHED oids
+                -- budget exhausted while still unsettled — loud drop; the
+                -- silent path is only for FINISHED oids
                 BfBot.Exec._LogEntry("WARN", "late-join: summon "
-                    .. tostring(oid) .. " never initialized after "
+                    .. tostring(oid) .. " never initialized or never showed"
+                    .. " a party summoner after "
                     .. tostring(BfBot.Exec._LATEJOIN_MAX_TRIES)
                     .. " tries — dropped")
             end

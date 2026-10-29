@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **BuffBot offered a friendly NPC's spellbook as if he were a summon.**
+  Reported from a live BG2 game in the Underdark: standing next to Vithal, the
+  quest mage of the elemental-portal errand, the Summons view listed him as a
+  caster and cast his spells — Time Stop among them — for a party that cannot
+  command him anywhere else in the game. The detection filter asked four
+  questions (alive, not in the party, allied EA 2–30, at least one castable
+  spell) and never the one that separates a summon from an ally: did anybody
+  in the party conjure this creature? Vithal answers all four the same way a
+  Planetar does. So does a charmed or dominated enemy, whose EA CHARMED(6) and
+  CONTROLLED(5) sit inside the same band. The sweep now requires an engine
+  linkage as well: a clone's `m_nCopyParent` / `m_bInCopy`, or the engine's own
+  SUMMONED_BY object (`m_lSummonedBy.m_Instance`), with EEex's marshalled
+  summoner UUID as the save/load fallback — and the owner chain has to reach a
+  party member, so a Simulacrum's Planetar still counts while an elemental
+  Vithal summoned for himself does not. Where the link cannot be resolved at
+  all (summoner dead, or an engine build that does not expose the fields) the
+  creature is kept: the filter never hides the player's own summons to make a
+  point. A sprite that was conjured moments ago has not had its linkage set
+  yet, so the mid-run late-join path retries such a verdict within its budget
+  instead of dropping the summon.
+
+### Lab
+- **The linkage was measured, not assumed** (`tools/lab_summon_origin.py`,
+  headless lab on 2.7.3.0 + EEex 1.3.1, save "BuffBot Clean Baseline"). The
+  probe casts a summoning spell it discovers in the game's own resources and
+  then spawns the SAME creature file with `CreateCreatureObject`, so the only
+  difference left between the two is the summoning itself. `wizeye.CRE` from
+  SPWI425: summoned → `m_lSummonedBy.m_Instance` = the caster's object id,
+  EEex's UDAux summoner UUID set, owner chain resolves to a portrait slot,
+  accepted as a caster. The same file created → `m_Instance` **-1** (not 0,
+  which is what the first draft expected), no UUID, rejected. Both sit at EA 4
+  with portrait index -1, which is precisely why the EA band could not tell
+  them apart. Party members read -1 as well, so a PC is never mistaken for
+  something conjured. Not separately exercised: an item charge or an HLA as
+  the summoning source (all opcode 67, the same engine path), and surviving a
+  save/load, where the UUID is the fallback.
+
 ## v1.12.2 (2026-10-29) — the way out of the Summons view
 
 One layout defect, reported from a live game as a panel in which switching

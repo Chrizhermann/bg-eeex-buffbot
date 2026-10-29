@@ -39,6 +39,15 @@ ALLOWED_UNDEFINED: dict[str, str] = {
     # closed when it is missing; native 2.7.3.0 / EEex 1.3.1 labs observed the
     # rate actually changing and being restored (docs/validation-fork-qol.md).
     "EEex_CChitin": "EEex.dll binding type; guarded read/write in BfBotFst.lua",
+    # Not a global at all — a UDAux table KEY that EEex v1.3.1 writes itself
+    # (EEex/copy/EEex_scripts/EEex_Marshal.lua sets
+    # EEex_GetUDAux(aiBase)["EEex_SummonerUUID"] whenever SUMMONED_BY is
+    # updated, marshals it, and restores m_lSummonedBy from it after a load).
+    # The scanner cannot tell a key string from a global. BfBotScn.lua reads
+    # it inside a pcall as the save/load fallback of the summon-origin filter
+    # and treats a missing key as "no summoner link", so a renamed or dropped
+    # key costs the fallback, never correctness (#101).
+    "EEex_SummonerUUID": "EEex UDAux key, not a global; guarded read in BfBotScn.lua",
 }
 
 

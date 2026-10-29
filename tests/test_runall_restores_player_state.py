@@ -333,6 +333,10 @@ BfBot.Scan = {
     GetAlliedSummons = function() return {} end,
     ClassifySummonSprite = function() return nil end,
     _SummonIdentity = function() return nil end,
+    -- #101: the phase asks the engine who conjured a sprite. Nobody conjured
+    -- a party member, and a party member's own chain ends at the party.
+    _ReadSummonOrigin = function() return nil, "none" end,
+    _OwnerChainReachesParty = function() return true end,
 }
 """
 

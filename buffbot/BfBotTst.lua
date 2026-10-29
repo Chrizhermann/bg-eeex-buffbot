@@ -3993,6 +3993,24 @@ function BfBot.Test.SummonCasters()
     if leader then
         _check(BfBot.Scan.ClassifySummonSprite(leader) == nil,
             "ClassifySummonSprite(party leader) == nil (party excluded)")
+        -- #101: the allied EA band also holds friendly NPCs and charmed
+        -- creatures, so the filter asks the engine who conjured a sprite.
+        -- Offline tests cover the logic with stubs; only a live sprite can
+        -- show that the linkage fields are READABLE on this engine build.
+        -- A PC was conjured by nobody, so the expected verdict is "none" —
+        -- an "unknown" here means the build hides the fields and the filter
+        -- is running permissive, which is worth failing loudly for.
+        local origin, originWhy = BfBot.Scan._ReadSummonOrigin(leader)
+        _check(origin == nil and originWhy == "none",
+            "_ReadSummonOrigin(party leader): no summoner, fields readable"
+                .. " (why=" .. tostring(originWhy) .. ")")
+        local okLid, leaderId = pcall(function() return leader.m_id end)
+        if okLid and type(leaderId) == "number" then
+            _check(BfBot.Scan._OwnerChainReachesParty(leaderId) == true,
+                "_OwnerChainReachesParty(leader object id) == true")
+        else
+            _nok("no leader object id for the owner-chain check")
+        end
     else
         _nok("no leader sprite in slot 0 for ClassifySummonSprite exclusion check")
     end
