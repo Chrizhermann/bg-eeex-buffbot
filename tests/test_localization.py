@@ -1034,21 +1034,43 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.2 (2026-10-29) — the way out of the Summons view"
+        "v1.12.3 (2026-10-29) — a friendly mage is not a summon"
     )
+    # What a player met, and the question the filter never asked (#101).
+    assert ("buffbot offered a friendly npc's spellbook as if he were a summon"
+            in current_normalized)
+    assert ("never the one that separates a summon from an ally"
+            in current_normalized)
+    # The A/B that settles it belongs in the notes: same creature file, once
+    # summoned and once created, is the whole evidence for the new filter.
+    assert "m_lsummonedby" in current_normalized
+    assert ("spawns the same creature file with `createcreatureobject`"
+            in current_normalized)
+    assert "**-1**" in current_normalized
+    # The deliberate soft edges, so a later change cannot quietly harden them.
+    assert ("the filter never hides the player's own summons"
+            in current_normalized)
+    assert "full automated suite passes **1595 tests**" in current_normalized
+    assert "all 28" in current_normalized
+    assert ("not checked in game: an item charge or an hla"
+            in current_normalized)
+
+    toggle_release = source.split("\n## v1.12.2 (2026-10-29)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # The control that was in the wrong place, and the consequence a player
     # reported, rather than the function that was changed (#100).
     assert ("the view toggle sat under the summon row's own controls"
-            in current_normalized)
-    assert "could not leave the summons view" in current_normalized
+            in toggle_release)
+    assert "could not leave the summons view" in toggle_release
     assert ("tab areas went stale when the party or the preset list changed"
-            " size" in current_normalized)
-    assert "full automated suite passes **1579 tests**" in current_normalized
+            " size" in toggle_release)
+    assert "full automated suite passes **1579 tests**" in toggle_release
     # The probe has to be able to fail, so the section records both readings.
-    assert "`coverstoggle=none`" in current_normalized
-    assert "`coverstoggle=bbs1,bbsempty`" in current_normalized
-    assert "all 28" in current_normalized
-    assert "not checked in game: a click on the toggle itself" in current_normalized
+    assert "`coverstoggle=none`" in toggle_release
+    assert "`coverstoggle=bbs1,bbsempty`" in toggle_release
+    assert "all 28" in toggle_release
+    assert "not checked in game: a click on the toggle itself" in toggle_release
 
     layout_release = source.split("\n## v1.12.1 (2026-10-27)", 1)[1].split(
         "\n## ", 1

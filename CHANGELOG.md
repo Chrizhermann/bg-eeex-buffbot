@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v1.12.3 (2026-10-29) — a friendly mage is not a summon
+
+One detection defect, reported from a live BG2 game: the Summons view handed
+the player a quest NPC's spellbook. The filter knew whether a creature was
+alive, outside the party, friendly and able to cast — but never whether
+anybody in the party had conjured it.
 
 ### Fixed
 - **BuffBot offered a friendly NPC's spellbook as if he were a summon.**
@@ -39,6 +44,12 @@
   something conjured. Not separately exercised: an item charge or an HLA as
   the summoning source (all opcode 67, the same engine path), and surviving a
   save/load, where the UUID is the fallback.
+- The full automated suite passes **1595 tests**, 16 of them new for this
+  filter, and the in-game suite is green headless in the same lab: all 28
+  phases pass, including two new cases that read the linkage off a live party
+  leader — the one thing a stubbed test cannot show.
+- Not checked in game: an item charge or an HLA as the summoning source, and a
+  save/load with a summon standing in the area.
 
 ## v1.12.2 (2026-10-29) — the way out of the Summons view
 
