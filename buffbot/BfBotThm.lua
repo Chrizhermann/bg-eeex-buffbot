@@ -205,11 +205,16 @@ BfBot.Theme._palettes = {
     },
 }
 
--- Active palette reference. It points at the warm parchment every install has
--- shown since v1.0; that panel is BG1's leather, so the pointer follows it to
--- bg1_light rather than leaving the default on a name and quietly turning
--- every existing panel blue-teal (#102).
-BfBot.Theme._active = BfBot.Theme._palettes.bg1_light
+-- The palette an install opens on when it has never chosen one: the warm
+-- parchment every install has shown since v1.0. That panel is BG1's leather,
+-- so the name followed the art in #102 rather than leaving the default on a
+-- name and quietly turning every existing panel blue-teal. It is named once,
+-- here, because the pointer below and the INI fallback in _LoadFromINI are
+-- two chances to disagree, and they did.
+BfBot.Theme.DEFAULT_PALETTE = "bg1_light"
+
+-- Active palette reference.
+BfBot.Theme._active = BfBot.Theme._palettes[BfBot.Theme.DEFAULT_PALETTE]
 
 -- Pre-create BfBot.UI namespace. BfBotThm loads before BfBotUI, so BfBot.UI
 -- doesn't exist yet; the `or {}` guard creates it without stomping if it does.
@@ -554,9 +559,12 @@ end
 -- has bb_* styles to operate on.
 function BfBot.Theme._LoadFromINI()
     local name = BfBot.Persist.GetPref("Theme")
-    -- Defensive coercion: if INI accessor returns a non-string for any reason,
-    -- fall back to the default palette name.
-    if type(name) ~= "string" or name == "" then name = "bg2_light" end
+    -- Defensive coercion: if the INI accessor returns a non-string for any
+    -- reason, or the install has never chosen a scheme, fall back to the one
+    -- default both this and _active are named from.
+    if type(name) ~= "string" or name == "" then
+        name = BfBot.Theme.DEFAULT_PALETTE
+    end
     local palette = BfBot.Theme._palettes[name]
     if palette then
         BfBot.Theme._active = palette

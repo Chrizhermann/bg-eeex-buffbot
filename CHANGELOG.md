@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **An install that had never picked a colour scheme opened on the wrong
+  one.** v1.12.4 moved every scheme's name onto the art it describes and
+  moved the active-palette pointer with it, but the INI fallback kept naming
+  `bg2_light` -- which after the rename is the blue-teal set, not the warm
+  parchment it used to be. A player who had never touched the Color Scheme
+  radio therefore got a blue-teal panel on the next launch, which is the one
+  thing v1.12.4's notes promised would not happen. A saved choice was never
+  affected; only the absence of one was. The default is named once now, as
+  `BfBot.Theme.DEFAULT_PALETTE`, and both the pointer and the fallback read
+  it, so the two cannot drift apart again.
+
 ## v1.12.4 (2026-10-29) — the right names, and room to breathe
 
 Two findings from one live playthrough, both about the panel rather than what

@@ -443,3 +443,40 @@ def test_the_in_game_theming_phase_asserts_the_palette_it_names() -> None:
     assert raw == "{%s, %s, %s}" % (red, green, blue), (
         "the packed assertion and the raw one disagree about the colour"
     )
+
+
+def test_an_install_that_never_chose_a_scheme_opens_on_one_palette() -> None:
+    """Both places that decide the default must name the same palette.
+
+    The pointer and the INI fallback are two chances to disagree, and after
+    #102 they did: the pointer moved to the warm parchment with its art while
+    the fallback still read "bg2_light", which by then meant the blue-teal
+    set. A player who had never touched the Color Scheme radio would have
+    opened a different panel than the one they had always seen. One name now
+    feeds both, and this fails if a second name reappears.
+    """
+    default = re.search(
+        r'BfBot\.Theme\.DEFAULT_PALETTE = "(\w+)"', THEME_SOURCE)
+    assert default, "the default palette is no longer named once"
+    name = default.group(1)
+    assert name in _palettes(), f"the default names {name}, which is not a palette"
+
+    pointer = re.search(
+        r"BfBot\.Theme\._active = BfBot\.Theme\._palettes"
+        r"\[BfBot\.Theme\.DEFAULT_PALETTE\]", THEME_SOURCE)
+    assert pointer, "the active palette no longer starts from DEFAULT_PALETTE"
+
+    loader = THEME_SOURCE.split("function BfBot.Theme._LoadFromINI", 1)[1].split(
+        "\nfunction ", 1)[0]
+    assert "BfBot.Theme.DEFAULT_PALETTE" in loader, (
+        "the INI fallback no longer uses the one default"
+    )
+    assert not re.search(r'name = "(\w+)"', loader), (
+        "the INI fallback names a palette of its own again"
+    )
+
+    # The default is the warm parchment, which is the art every install has
+    # shown since v1.0 -- its pages, not its name, are what must not move.
+    assert _palettes()[name]["bgResref"] == "BFBOTBG", (
+        "the default no longer opens on the parchment installs have always had"
+    )
