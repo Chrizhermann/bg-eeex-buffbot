@@ -154,6 +154,18 @@ local function captionReport()
     return table.concat(parts, " ")
 end
 
+-- The panel's own size, which is nil until something saved geometry: a
+-- profile that has never dragged or resized the panel leaves _panelW unset
+-- and _Layout falls back to 80% of the screen. Reporting that fallback is
+-- the point of the line -- reading the nil was an error that killed the run
+-- before the first shot on any fresh lab profile.
+local panelW, panelH = BfBot.UI._panelW, BfBot.UI._panelH
+if not panelW or not panelH then
+    local screenW, screenH = Infinity_GetScreenSize()
+    panelW = panelW or math.floor((screenW or 0) * 0.8)
+    panelH = panelH or math.floor((screenH or 0) * 0.8)
+end
+
 LabShotReceipt = {
     frame = Infinity_GetFrameCounter(), theme = theme, before = before,
     captions = captionReport(),
@@ -164,12 +176,11 @@ LabShotReceipt = {
     dialog = args.dialog,
     dialogMenu = args.dialog and ({ targets = "BUFFBOT_TARGETS",
         picker = "BUFFBOT_SPELLPICKER", rename = "BUFFBOT_RENAME" })[args.dialog],
-    panel = { BfBot.UI._panelX, BfBot.UI._panelY,
-              BfBot.UI._panelW, BfBot.UI._panelH },
+    panel = { BfBot.UI._panelX, BfBot.UI._panelY, panelW, panelH },
 }
 -- A table comes back from the console as "table: 0x...", so the line that is
 -- worth reading is returned as text. LabShotReceipt stays for probing by hand.
-return "panel=" .. BfBot.UI._panelW .. "x" .. BfBot.UI._panelH
+return "panel=" .. panelW .. "x" .. panelH
     .. " font=" .. tostring(BfBot.Theme._GetFontSize
         and BfBot.Theme._GetFontSize())
     .. " | " .. LabShotReceipt.captions
