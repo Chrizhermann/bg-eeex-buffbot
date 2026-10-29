@@ -99,7 +99,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{150, 135, 115}",
         itemColor    = "{217, 160, 99}",
     },
-    sod_light = {
+    bg1_light = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{226, 226, 232}",
@@ -125,7 +125,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{130, 140, 160}",
         itemColor    = "{206, 142, 78}",
     },
-    sod_dark = {
+    bg1_dark = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{226, 226, 232}",
@@ -151,7 +151,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{130, 145, 165}",
         itemColor    = "{204, 140, 73}",
     },
-    bg1_light = {
+    sod_light = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{236, 224, 190}",
@@ -177,7 +177,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{160, 140, 120}",
         itemColor    = "{214, 138, 84}",
     },
-    bg1_dark = {
+    sod_dark = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{236, 224, 190}",
@@ -648,14 +648,19 @@ end
 -- permission — see ATTRIBUTION.md — so an install can legitimately be without
 -- it. Every caller must degrade to the text markers rather than render blank.
 
---- Skin index into the control art: 0 BG:EE, 1 IWD, 2 SoD, 3 BG2.
--- Read off the art, not assumed: skin 0 is BG:EE's red marble with gold
--- filigree and a round socket, 1 is IWD's plain wood, 2 is SoD's cold steel
--- with a square socket, 3 is BG2's dark stone. The plate cycles and the
--- BFBCHK<skin> files use the same order. BuffBot has no IWD palette; its
--- accents map onto the other three.
+--- Skin index into the control art: 0 SoD, 1 IWD, 2 BG:EE, 3 BG2.
+-- Measured off the art, not read off its file names: skin 0 is a deep red
+-- marble with gold filigree and a round socket, 1 is plain wood, 2 is cold
+-- grey steel with a square socket, 3 is warm dark stone. Which game each one
+-- belongs to is settled by the games' own UI art -- every large GUI*.MOS in
+-- BG:EE averages cooler than its blue channel (r-b about -13) while the same
+-- resources in BG2:EE average warm (r-b +14 to +33), and SoD re-skins BG:EE
+-- in red-brown -- so red is SoD, grey is BG:EE and warm stone is BG2.
+-- Through v1.12.2 SoD and BG:EE were the other way round here (#102).
+-- The plate cycles and the BFBCHK<skin> files use the same order.
+-- BuffBot has no IWD palette; its accents map onto the other three.
 function BfBot.Theme.ControlSkin()
-    return ({ bg1 = 0, sod = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
+    return ({ sod = 0, bg1 = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
 end
 
 --- True once the control art is confirmed present. Cached: a missing resource

@@ -31,9 +31,9 @@ Usage:
         [--width N] [--height N]
 
 Produces (theme modes):
-    SOD:  buffbot/MOS9910.PVRZ .. MOS9913.PVRZ (background slices)
+    BG1:  buffbot/MOS9910.PVRZ .. MOS9913.PVRZ (background slices)
           buffbot/BFBOTFR2.PVRZ                (512x512 9-slice border)
-    BG1:  buffbot/MOS9920.PVRZ .. MOS9923.PVRZ
+    SOD:  buffbot/MOS9920.PVRZ .. MOS9923.PVRZ
           buffbot/BFBOTFR3.PVRZ
 
 The DXT5 compressor here is the same pure-Python implementation used by
@@ -389,17 +389,22 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent
 
 
+# The numbered resrefs are historical: pages 991x and the FR2 atlas were cut
+# for the accent BuffBot then called SoD, 992x and FR3 for the one it called
+# BG1. Those two names were swapped through v1.12.2 (#102) -- BG:EE's own UI is
+# blue-grey and SoD re-skins it red-brown -- so the numbers stay put and the
+# sources moved under them, keeping a rebuild byte-identical to the release.
 THEMES = {
     # name -> {bg_src, border_src, mos_base (first number), border_out}
-    "sod": {
-        "bg_src": "assets/themes/sod_background.png",
-        "border_src": "assets/themes/sod_border.png",
-        "mos_base": 9910,                    # MOS9910..MOS9913
-        "border_out": "buffbot/BFBOTFR2.PVRZ",
-    },
     "bg1": {
         "bg_src": "assets/themes/bg1_background.png",
         "border_src": "assets/themes/bg1_border.png",
+        "mos_base": 9910,                    # MOS9910..MOS9913
+        "border_out": "buffbot/BFBOTFR2.PVRZ",
+    },
+    "sod": {
+        "bg_src": "assets/themes/sod_background.png",
+        "border_src": "assets/themes/sod_border.png",
         "mos_base": 9920,                    # MOS9920..MOS9923
         "border_out": "buffbot/BFBOTFR3.PVRZ",
     },

@@ -23,6 +23,26 @@
   point. A sprite that was conjured moments ago has not had its linkage set
   yet, so the mid-run late-join path retries such a verdict within its budget
   instead of dropping the summon.
+- **BG:EE and Siege of Dragonspear wore each other's colours** (#102).
+  Reported from a live playthrough: picking Siege of Dragonspear in
+  Options → BuffBot gave the panel BG:EE's blue-grey steel, and picking
+  Baldur's Gate gave it SoD's red-brown. BG2 was right. Both asset sets were
+  fine and internally consistent — parchment, 9-slice border and Pecca chrome
+  skin matched within each set — so this was only the game name attached to
+  each set, wrong since the first theme release because the design note of
+  2026-04-24 wrote down "SOD → blue-teal steel" and "BG1 → crimson". The
+  games settle it: read out of their own `chitin.key`, every large `GUI*.MOS`
+  in BG:EE averages cooler than its blue channel (area-weighted r−b −2, the
+  big panels −12 to −15) while the same resources in BG2:EE average warm
+  (+28), and SoD re-skins BG:EE in red-brown. So the red marble is SoD's and
+  the grey steel BG:EE's, which is the other way round from what shipped. The
+  two palettes swap places, `ControlSkin` with them; no shipped asset byte
+  changes, and a saved `[BuffBot]Theme` keeps working and now renders the game
+  it names. The mislabel had been copied into four places, including a test
+  asserting the wrong pairing under a comment claiming it was read off the
+  art, so each accent's text colours, parchment pages and chrome skin are now
+  pinned to one colour temperature together: flipping any one of the three
+  alone fails.
 
 ### Lab
 - **The linkage was measured, not assumed** (`tools/lab_summon_origin.py`,
