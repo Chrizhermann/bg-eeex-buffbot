@@ -42,7 +42,7 @@ BfBot.Theme = BfBot.Theme or {}
 -- Six palettes keyed as <accent>_<mode>.
 -- Each palette is flat; _T(key) reads from the active palette.
 BfBot.Theme._palettes = {
-    bg2_light = {
+    bg1_light = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{235, 222, 196}",
@@ -73,7 +73,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{120, 100, 80}",
         itemColor    = "{205, 127, 50}",
     },
-    bg2_dark = {
+    bg1_dark = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{235, 222, 196}",
@@ -99,7 +99,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{150, 135, 115}",
         itemColor    = "{217, 160, 99}",
     },
-    sod_light = {
+    bg2_light = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{226, 226, 232}",
@@ -125,7 +125,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{130, 140, 160}",
         itemColor    = "{206, 142, 78}",
     },
-    sod_dark = {
+    bg2_dark = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{226, 226, 232}",
@@ -151,7 +151,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{130, 145, 165}",
         itemColor    = "{204, 140, 73}",
     },
-    bg1_light = {
+    sod_light = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{236, 224, 190}",
@@ -177,7 +177,7 @@ BfBot.Theme._palettes = {
         lockInactive = "{160, 140, 120}",
         itemColor    = "{214, 138, 84}",
     },
-    bg1_dark = {
+    sod_dark = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{236, 224, 190}",
@@ -205,8 +205,11 @@ BfBot.Theme._palettes = {
     },
 }
 
--- Active palette reference; defaults to bg2_light (pixel-match current behavior).
-BfBot.Theme._active = BfBot.Theme._palettes.bg2_light
+-- Active palette reference. It points at the warm parchment every install has
+-- shown since v1.0; that panel is BG1's leather, so the pointer follows it to
+-- bg1_light rather than leaving the default on a name and quietly turning
+-- every existing panel blue-teal (#102).
+BfBot.Theme._active = BfBot.Theme._palettes.bg1_light
 
 -- Pre-create BfBot.UI namespace. BfBotThm loads before BfBotUI, so BfBot.UI
 -- doesn't exist yet; the `or {}` guard creates it without stomping if it does.
@@ -648,14 +651,22 @@ end
 -- permission — see ATTRIBUTION.md — so an install can legitimately be without
 -- it. Every caller must degrade to the text markers rather than render blank.
 
---- Skin index into the control art: 0 BG:EE, 1 IWD, 2 SoD, 3 BG2.
--- Read off the art, not assumed: skin 0 is BG:EE's red marble with gold
--- filigree and a round socket, 1 is IWD's plain wood, 2 is SoD's cold steel
--- with a square socket, 3 is BG2's dark stone. The plate cycles and the
--- BFBCHK<skin> files use the same order. BuffBot has no IWD palette; its
--- accents map onto the other three.
+--- Skin index into the control art, by what the art actually looks like:
+-- 0 is deep red marble with a round socket, 1 plain wood, 2 cold grey steel
+-- with a square socket, 3 warm dark stone.
+--
+-- Which accent takes which comes from the games' own identity -- their box
+-- and title art, which is also what BuffBot's three parchments were cut
+-- from: BG1 is brown tooled leather with brass hinges, BG2 is blue-teal
+-- leather with a gold frame, SoD is red. So BG1 takes the warm stone, BG2
+-- the cold steel, SoD the red marble.
+--
+-- Do NOT re-derive this from a UI resource. The in-game side panel
+-- (GUIWLSP) runs the other way -- BG:EE's is blue slate, BG2:EE's is tan --
+-- and reading the mapping off that shipped it backwards twice (#102).
+-- BuffBot has no IWD palette; its accents map onto the other three.
 function BfBot.Theme.ControlSkin()
-    return ({ bg1 = 0, sod = 2, bg2 = 3 })[BfBot.Theme._GetAccentName()] or 3
+    return ({ sod = 0, bg2 = 2, bg1 = 3 })[BfBot.Theme._GetAccentName()] or 3
 end
 
 --- True once the control art is confirmed present. Cached: a missing resource

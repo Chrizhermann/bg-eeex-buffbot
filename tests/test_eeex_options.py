@@ -123,9 +123,11 @@ def test_inventory_item_mode_radio_stages_selection_and_persists_both_choices(op
     [
         # Skin indices are the art's own order; see the mapping test in
         # tests/test_panel_chrome.py.
-        ("bg2_light", 3), ("bg2_dark", 3),
-        ("sod_light", 2), ("sod_dark", 2),
-        ("bg1_light", 0), ("bg1_dark", 0),
+        ("bg1_light", 3), ("bg1_dark", 3),
+        # From the games' own box art: BG1 brown leather, BG2 blue-teal,
+        # SoD red (#102). tests/test_panel_chrome.py pins it to the palettes.
+        ("sod_light", 0), ("sod_dark", 0),
+        ("bg2_light", 2), ("bg2_dark", 2),
     ],
 )
 def test_control_skin_follows_the_accent_and_ignores_dark_mode(
@@ -253,10 +255,10 @@ def test_theme_colors_reach_the_engine_as_packed_numbers(options_lua):
     # style's default and all six palettes rendered the same near-black text.
     facts = options_lua.execute(
         """
-        BfBot.Theme._active = BfBot.Theme._palettes["bg2_light"]
+        BfBot.Theme._active = BfBot.Theme._palettes["bg1_light"]
         local title = BfBot.UI._T("title")
         local raw = BfBot.UI._TRaw("title")
-        BfBot.Theme._active = BfBot.Theme._palettes["bg1_dark"]
+        BfBot.Theme._active = BfBot.Theme._palettes["bg2_dark"]
         return {
             titleType = type(title),
             title = title,

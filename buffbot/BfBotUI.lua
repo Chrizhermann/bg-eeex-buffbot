@@ -681,19 +681,19 @@ end
 -- PVRZ page numbers match the MOS####.PVRZ filename digits in hex
 -- (0x26AC = 9900, 0x26B6 = 9910, 0x26C0 = 9920).
 local BLOCKS_BY_THEME = {
-    BFBOTBG  = {  -- BG2 default: MOS9900-9903
+    BFBOTBG  = {  -- BG1 brown leather: MOS9900-9903
         { page = 0x26AC, w = 1024, h = 1024, ox = 0,    oy = 0    },
         { page = 0x26AD, w = 1024, h = 1024, ox = 1024, oy = 0    },
         { page = 0x26AE, w = 1024, h = 128,  ox = 0,    oy = 1024 },
         { page = 0x26AF, w = 1024, h = 128,  ox = 1024, oy = 1024 },
     },
-    BFBOTBG2 = {  -- SOD: MOS9910-9913
+    BFBOTBG2 = {  -- BG2 blue-teal leather: MOS9910-9913
         { page = 0x26B6, w = 1024, h = 1024, ox = 0,    oy = 0    },
         { page = 0x26B7, w = 1024, h = 1024, ox = 1024, oy = 0    },
         { page = 0x26B8, w = 1024, h = 128,  ox = 0,    oy = 1024 },
         { page = 0x26B9, w = 1024, h = 128,  ox = 1024, oy = 1024 },
     },
-    BFBOTBG3 = {  -- BG1: MOS9920-9923
+    BFBOTBG3 = {  -- SoD red: MOS9920-9923
         { page = 0x26C0, w = 1024, h = 1024, ox = 0,    oy = 0    },
         { page = 0x26C1, w = 1024, h = 1024, ox = 1024, oy = 0    },
         { page = 0x26C2, w = 1024, h = 128,  ox = 0,    oy = 1024 },
@@ -3554,7 +3554,7 @@ end
 -- art is absent, so a partial install keeps a working panel rather than
 -- invisible buttons or IWD:EE's unrelated GUIOSTUL frames.
 --
--- The art is one cycle per skin (0 SoD, 1 IWD, 2 BG1, 3 BG2) with four state
+-- The art is one cycle per skin (0 SoD, 1 IWD, 2 BG2, 3 BG1) with four state
 -- frames inside it. Plain buttons leave `frame` alone and let the engine run
 -- its own hover/press states; a tab forces the frame, because "this tab is
 -- the open one" is not a state the engine knows about.

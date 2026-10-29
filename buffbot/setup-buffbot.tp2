@@ -391,13 +391,13 @@ COPY ~buffbot/BFBOTFR.PVRZ~ ~override~
 COPY ~buffbot/BFBOTAB.BAM~  ~override~
 
 // ---- Theme assets (issue #32) ----
-// SOD theme background + border
+// BG2 theme (blue-teal) background + border
 COPY ~buffbot/MOS9910.PVRZ~ ~override~
 COPY ~buffbot/MOS9911.PVRZ~ ~override~
 COPY ~buffbot/MOS9912.PVRZ~ ~override~
 COPY ~buffbot/MOS9913.PVRZ~ ~override~
 COPY ~buffbot/BFBOTFR2.PVRZ~ ~override~
-// BG1 theme background + border
+// SoD theme (red) background + border
 COPY ~buffbot/MOS9920.PVRZ~ ~override~
 COPY ~buffbot/MOS9921.PVRZ~ ~override~
 COPY ~buffbot/MOS9922.PVRZ~ ~override~

@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Every colour scheme carried the wrong game's name** (#102). Reported from
+  a live playthrough: the scheme called Siege of Dragonspear gave the panel
+  blue-teal leather, and the one called Baldur's Gate gave it red. All three
+  names were on the wrong art, and had been since the first theme release.
+
+  The three parchments are the games' own book covers, which is how the
+  mapping is settled: BG1 is brown tooled leather with brass hinges, BG2 is
+  blue-teal leather in a gold frame, SoD is black and red. So BG1 takes the
+  warm parchment the panel has always worn by default, BG2 the blue-teal set
+  (`BFBOTBG2`/`BFBOTFR2`), SoD the red one (`BFBOTBG3`/`BFBOTFR3`), each with
+  the matching chrome skin — warm stone, cold steel, red marble.
+
+  No shipped asset byte changes and a saved `[BuffBot]Theme` keeps working;
+  it now renders the game it names. The default still opens on the warm
+  parchment every install has shown since v1.0 — that art is BG1's, so the
+  default moved with it rather than turning every existing panel blue-teal.
+
+  **What a player sees:** the look stays, the name under it changes. If you
+  never touched the Color Scheme radio, your panel is the same parchment it
+  always was, but the radio now reads Baldur's Gate where it read Baldur's
+  Gate II. Nothing moved; the label you never picked did. If you *had* picked
+  a scheme, it keeps your choice and finally shows that game's colours.
+
+  The old names had been copied into six places, so each accent's text
+  colours, parchment pages and chrome skin are now pinned together and a
+  comment at the mapping says where the names come from. They do **not** come
+  from the engine's UI art: the in-game side panel `GUIWLSP` runs the other
+  way round (BG:EE's is blue slate, BG2:EE's is tan), and deriving the mapping
+  from engine resources is what got it wrong twice.
+
 ## v1.12.3 (2026-10-29) — a friendly mage is not a summon
 
 One detection defect, reported from a live BG2 game: the Summons view handed

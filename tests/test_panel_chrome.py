@@ -6,8 +6,8 @@ draw rather than naming one, that the helper falls back to the engine art when
 the themed art is absent, and that a tab's "I am the open one" frame is chosen
 by the art in use rather than hard-coded to either number.
 
-The art itself is four cycles — one per skin, 0 SoD / 1 IWD / 2 BG1 / 3 BG2 —
-with four state frames inside each.
+The art itself is four cycles — one per skin, 0 SoD / 1 IWD / 2 BG2 /
+3 BG1 — with four state frames inside each.
 """
 
 from __future__ import annotations
@@ -219,13 +219,87 @@ def test_each_helper_falls_back_to_the_running_games_own_button(
     assert lua.eval(f"BfBot.UI.{helper}()") == THEMED[helper]
 
 
-# The art's own order, read off the rendered BAMs: skin 0 is BG:EE's red
-# marble with gold filigree and a round socket, 1 is IWD's plain wood, 2 is
-# SoD's cold steel with a square socket, 3 is BG2's dark stone. A mapping
-# that drifts from it is not a style choice -- it dresses SoD's panel in
-# BG:EE's red and BG:EE's in SoD's steel, which is how this was first
-# shipped.
-CONTROL_SKINS = {"bg1": 0, "sod": 2, "bg2": 3}
+# The art's own order, rendered and measured: skin 0 is deep red marble with
+# gold filigree and a round socket, 1 is plain wood, 2 is cold grey steel with
+# a square socket, 3 is warm dark stone. Mean colour of each cycle's normal
+# frame in BFBPLAT: 0 = (28, 5, 4), 1 = (28, 16, 9), 2 = (36, 37, 35),
+# 3 = (62, 53, 39).
+#
+# Which accent wears which comes from the games' own box and title art, the
+# same source the three parchments were cut from: BG1 is brown tooled leather
+# with brass hinges, BG2 is blue-teal leather in a gold frame, SoD is red.
+#
+# Do NOT re-derive this from a UI resource. The in-game side panel GUIWLSP
+# runs the other way round -- BG:EE's is blue slate, BG2:EE's is tan -- and
+# reading the mapping off engine art shipped it wrong twice before v1.12.3
+# (#102). The games' identity is the contract; the sidebar is not.
+CONTROL_SKINS = {"sod": 0, "bg2": 2, "bg1": 3}
+
+# True where that skin's art is warm (red > blue above), false where it is
+# cold. The palette that selects a skin has to agree: a warm accent on the
+# grey plates, or a cold one on the red, is the swap this records.
+SKIN_IS_WARM = {0: True, 1: True, 2: False, 3: True}
+
+# The numbered background and border pages, by the look they carry. Measured
+# the same way, off assets/themes: the 991x pages and the FR2 atlas are the
+# blue-grey parchment (mean r-b -11), 992x and FR3 the red-brown one (+32).
+# The unnumbered pair is BG2's warm parchment.
+PARCHMENT_IS_WARM = {
+    ("BFBOTBG", "BFBOTFR"): True,
+    ("BFBOTBG2", "BFBOTFR2"): False,
+    ("BFBOTBG3", "BFBOTFR3"): True,
+}
+
+
+def _palettes() -> dict[str, dict[str, str]]:
+    """Every palette in BfBotThm's table, as flat key -> value strings."""
+    out: dict[str, dict[str, str]] = {}
+    for name, body in re.findall(
+        r"^    (\w+) = \{\n(.*?)^    \},$", THEME_SOURCE, re.S | re.M
+    ):
+        # A value is either a quoted string -- "{R, G, B}" carries commas of
+        # its own, so it cannot be read up to the first one -- or a bare
+        # number.
+        out[name] = {
+            key: quoted or bare
+            for key, quoted, bare in re.findall(
+                r'^\s*(\w+)\s*=\s*(?:"([^"]*)"|([^\s,]+))\s*,', body, re.M
+            )
+        }
+    return out
+
+
+def _warmth(palette: dict[str, str], key: str) -> int:
+    """red minus blue for one "{R, G, B}" entry."""
+    r, _g, b = (
+        int(part) for part in re.findall(r"\d+", palette[key])
+    )
+    return r - b
+
+
+def test_every_accent_wears_its_own_game_s_colours() -> None:
+    """The three things that make up an accent -- its text colours, the
+    parchment and border it names, and the chrome skin it selects -- all have
+    to carry the same temperature. Flipping any one of them alone is what
+    dressed BG:EE in SoD's red for six releases (#102)."""
+    palettes = _palettes()
+    assert set(palettes) == {
+        f"{accent}_{mode}"
+        for accent in CONTROL_SKINS
+        for mode in ("light", "dark")
+    }, sorted(palettes)
+
+    for accent, skin in CONTROL_SKINS.items():
+        warm = SKIN_IS_WARM[skin]
+        for mode in ("light", "dark"):
+            palette = palettes[f"{accent}_{mode}"]
+            pages = (palette["bgResref"], palette["borderResref"])
+            assert PARCHMENT_IS_WARM[pages] is warm, (accent, mode, pages)
+            # title and grip are the two the panel shows largest; a cold
+            # accent must not tint them warm, nor a warm one cold.
+            for key in ("title", "grip", "headerSub"):
+                hot = _warmth(palette, key) > 0
+                assert hot is warm, (accent, mode, key, palette[key])
 
 
 def test_the_skin_index_follows_the_art_and_every_mapped_skin_ships() -> None:

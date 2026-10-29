@@ -23,7 +23,7 @@ PVRZ wire format:
 Usage:
     # Convenience modes — emit all theme PVRZs into buffbot/
     python tools/png_to_pvrz.py --theme sod
-    python tools/png_to_pvrz.py --theme bg1
+    python tools/png_to_pvrz.py --theme bg2
 
     # Single-file mode — resize to --width/--height (must be multiples of 4),
     # default 512x512.
@@ -31,9 +31,9 @@ Usage:
         [--width N] [--height N]
 
 Produces (theme modes):
-    SOD:  buffbot/MOS9910.PVRZ .. MOS9913.PVRZ (background slices)
+    BG2:  buffbot/MOS9910.PVRZ .. MOS9913.PVRZ (background slices)
           buffbot/BFBOTFR2.PVRZ                (512x512 9-slice border)
-    BG1:  buffbot/MOS9920.PVRZ .. MOS9923.PVRZ
+    SOD:  buffbot/MOS9920.PVRZ .. MOS9923.PVRZ
           buffbot/BFBOTFR3.PVRZ
 
 The DXT5 compressor here is the same pure-Python implementation used by
@@ -389,17 +389,23 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent
 
 
+# The numbered resrefs are historical and the accent names on them were wrong
+# until v1.12.3 (#102). The leather textures match the games' box art: brown
+# with brass hinges is BG1 -- that is the unnumbered BFBOTBG set, built by
+# gen_parchment_mos.py -- blue-teal with a gold frame is BG2, red is SoD. The
+# numbers stay put and the sources moved under them, so a rebuild stays
+# byte-identical to the release.
 THEMES = {
     # name -> {bg_src, border_src, mos_base (first number), border_out}
-    "sod": {
-        "bg_src": "assets/themes/sod_background.png",
-        "border_src": "assets/themes/sod_border.png",
+    "bg2": {
+        "bg_src": "assets/themes/bg2_background.png",
+        "border_src": "assets/themes/bg2_border.png",
         "mos_base": 9910,                    # MOS9910..MOS9913
         "border_out": "buffbot/BFBOTFR2.PVRZ",
     },
-    "bg1": {
-        "bg_src": "assets/themes/bg1_background.png",
-        "border_src": "assets/themes/bg1_border.png",
+    "sod": {
+        "bg_src": "assets/themes/sod_background.png",
+        "border_src": "assets/themes/sod_border.png",
         "mos_base": 9920,                    # MOS9920..MOS9923
         "border_out": "buffbot/BFBOTFR3.PVRZ",
     },
