@@ -4,7 +4,7 @@
     python -I tools/build_frame_atlas.py              # write all three
     python -I tools/build_frame_atlas.py --preview out/   # also dump PNGs
 
-One atlas per accent (`BFBOTFR` BG2, `BFBOTFR2` BG:EE, `BFBOTFR3` SoD), each
+One atlas per accent (`BFBOTFR` BG1, `BFBOTFR2` BG2, `BFBOTFR3` SoD), each
 256x128 and laid out the way `BfBot.UI` registers it:
 
     +--------+------------+--------+
@@ -16,9 +16,11 @@ One atlas per accent (`BFBOTFR` BG2, `BFBOTFR2` BG:EE, `BFBOTFR3` SoD), each
     +--------+------------+--------+
 
 Two things here are read off the art rather than assumed, because assuming
-them is what shipped a panel with its bottom corners facing outward, and
-assuming the file names is what shipped BG:EE wearing SoD's wine-red wedge
-for six releases (#102): the red skin is SoD's, the grey one BG:EE's.
+them is what shipped a panel with its bottom corners facing outward. The
+accent names above come from the games' own box and title art, which is what
+the parchments were cut from -- BG1 brown leather, BG2 blue-teal, SoD red.
+Do not re-derive them from a UI resource; that shipped them wrong twice
+(#102).
 
 * **The cycle is the skin**, in the same order every BuffBot BAM uses it --
   0 BG:EE, 1 IWD, 2 SoD, 3 BG2. BuffBot has no IWD accent.
@@ -49,8 +51,8 @@ VISUAL = ROOT / "buffbot" / "visual"
 
 # accent -> (atlas resref, skin cycle)
 ATLASES = {
-    "bg2": ("BFBOTFR", 3),
-    "bg1": ("BFBOTFR2", 2),
+    "bg1": ("BFBOTFR", 3),
+    "bg2": ("BFBOTFR2", 2),
     "sod": ("BFBOTFR3", 0),
 }
 

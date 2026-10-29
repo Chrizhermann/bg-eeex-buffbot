@@ -6,8 +6,8 @@ draw rather than naming one, that the helper falls back to the engine art when
 the themed art is absent, and that a tab's "I am the open one" frame is chosen
 by the art in use rather than hard-coded to either number.
 
-The art itself is four cycles — one per skin, 0 SoD / 1 IWD / 2 BG:EE /
-3 BG2 — with four state frames inside each.
+The art itself is four cycles — one per skin, 0 SoD / 1 IWD / 2 BG2 /
+3 BG1 — with four state frames inside each.
 """
 
 from __future__ import annotations
@@ -225,13 +225,15 @@ def test_each_helper_falls_back_to_the_running_games_own_button(
 # frame in BFBPLAT: 0 = (28, 5, 4), 1 = (28, 16, 9), 2 = (36, 37, 35),
 # 3 = (62, 53, 39).
 #
-# Which game wears which was wrong from the first theme release through
-# v1.12.2 (#102), because the names came off the asset file names rather than
-# off the games. Settled by the games' own UI art: every large GUI*.MOS in
-# BG:EE averages r-b about -13 (blue-grey) while the same resources in BG2:EE
-# average r-b +14 to +33 (warm brown), and SoD re-skins BG:EE in red-brown.
-# So red is SoD's, grey steel is BG:EE's, warm stone is BG2's.
-CONTROL_SKINS = {"sod": 0, "bg1": 2, "bg2": 3}
+# Which accent wears which comes from the games' own box and title art, the
+# same source the three parchments were cut from: BG1 is brown tooled leather
+# with brass hinges, BG2 is blue-teal leather in a gold frame, SoD is red.
+#
+# Do NOT re-derive this from a UI resource. The in-game side panel GUIWLSP
+# runs the other way round -- BG:EE's is blue slate, BG2:EE's is tan -- and
+# reading the mapping off engine art shipped it wrong twice before v1.12.3
+# (#102). The games' identity is the contract; the sidebar is not.
+CONTROL_SKINS = {"sod": 0, "bg2": 2, "bg1": 3}
 
 # True where that skin's art is warm (red > blue above), false where it is
 # cold. The palette that selects a skin has to agree: a warm accent on the
