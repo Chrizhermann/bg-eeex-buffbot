@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Changed
+- **A button you press now looks pressed** (#103). Reported from a live
+  playthrough: *"es wäre schön, wenn alle Buttons ein bisschen mehr
+  responsive wären, so ein bisschen wie die Buttons oben... da geht der
+  Button so rein. Da gibt es so einen Outline und sowas."* The tabs he
+  compared them against force the loud selected frame; the footer buttons
+  declared no frame at all and left the states to the engine, which drew
+  Pecca's pressed frame — a picture that differs from the resting one by at
+  most 62 of 255 on the default skin, against the selected frame's 207 and
+  its bright outline. The press was there all along and too quiet to see.
+
+  Every plate, tab and cast button now decides its own frame, and a held one
+  draws the loud frame with the outline. Which button is held comes from the
+  engine's own per-button counter (`framesHeld`), read through
+  `BfBot.UI._IsHeld`; the `.menu` DSL has nothing that says it, which is why
+  this had to move into Lua. Without Pecca's art the engine's own button BAM
+  is in use and a held button draws its second frame, exactly as before.
+
+  Deciding the frame takes the state machine off the engine, so the panel
+  now owns every state it shows. That is two — held and resting. The
+  engine's disabled frame is not one of them because the engine never drew
+  it here: a footer button whose `clickable` is false keeps its normal plate
+  and greys only its caption, which is BuffBot's own doing. The open tab
+  still outranks a press, so pressing the tab you are already on changes
+  nothing.
+
 ### Fixed
 - **An install that had never picked a colour scheme opened on the wrong
   one.** v1.12.4 moved every scheme's name onto the art it describes and
@@ -13,6 +39,27 @@
   affected; only the absence of one was. The default is named once now, as
   `BfBot.Theme.DEFAULT_PALETTE`, and both the pointer and the fallback read
   it, so the two cannot drift apart again.
+
+### Lab
+- **The press was measured, not assumed** (`tools/lab_press_state.py`,
+  `tools/probe_press_state.lua`, headless lab on BG2:EE 2.7.3.0 + EEex
+  v1.3.1, save "BuffBot Clean Baseline"). A real mouse press cannot be
+  staged — nothing in EEex synthesises one — so the probe makes `_IsHeld`
+  answer "held" and photographs the panel, which exercises the whole path
+  except the counter itself. Each button is compared inside its own
+  rectangle against two shots of an unchanged screen, because a whole-screen
+  diff of a running game is mostly animation; that floor came out at 0.
+  Held, against resting: Add Spell/Item 242 of 255 across 29.5% of its
+  pixels, Cast All 244 / 21.0%, Close 241 / 31.9%, a closed character tab
+  240 / 19.4%, a closed preset tab 240 / 19.4%. The open character tab
+  changed by 0, which is the point — it already wore that frame.
+- The same lab ruled the simpler route out first: writing `item.frame` or
+  `item.sequence` onto a live button from Lua changes **nothing** on screen
+  (0 of 255, 0 pixels), even from a before-render listener. The engine takes
+  the frame from the `.menu` expression, not from the field, which is why
+  all 74 chrome buttons had to declare one.
+- Asking the engine costs 2.7µs per button per rendered frame, 200µs for all
+  74 — and only while the panel is open.
 
 ## v1.12.4 (2026-10-29) — the right names, and room to breathe
 

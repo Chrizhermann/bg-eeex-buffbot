@@ -3631,6 +3631,51 @@ function BfBot.UI._TabFrame(selected)
     return BfBot.Theme.HasChromeArt() and 2 or 1
 end
 
+--- True while the player is holding the named button down.
+-- The engine counts the frames a button has been held and the bindings expose
+-- the counter; nothing in the `.menu` DSL does, which is why the frame has to
+-- be decided in Lua. Every failure answers "not held": a name the menu does
+-- not have, a build whose bindings lack the counter, a panel that is closed.
+function BfBot.UI._IsHeld(name)
+    if not EEex_Menu_GetItem then return false end
+    local ok, held = pcall(function()
+        local item = EEex_Menu_GetItem(name)
+        return item and item.framesHeld or nil
+    end)
+    return ok and type(held) == "number" and held > 0
+end
+
+--- Frame for a chrome button, by what the player is doing to it (#103).
+--
+-- Pecca's pressed frame is almost the picture the normal one is -- on the
+-- default skin it differs by 62 of 255 at its loudest -- so a press on a
+-- footer button was invisible next to a tab, which forces the selected frame
+-- and its bright outline. A held button now draws that same loud frame, which
+-- is the control the report compared it against.
+--
+-- Declaring `frame` at all takes the state machine off the engine, so this
+-- function owns every state the panel actually shows. That is two: a held
+-- button and a resting one. The engine's disabled frame is not among them
+-- because the engine never drew it here -- a button whose `clickable` is
+-- false keeps its normal plate and greys only its caption, which is
+-- BfBot.UI._CaptionColor's doing (lab-measured on 2.7.3.0: the plates of a
+-- clickable and a non-clickable footer button differ by 3 of 255).
+--
+-- `selected` is for the tabs, whose "I am the open one" outranks a press:
+-- the open tab already wears the loud frame, and pressing it must not make
+-- it look like anything else.
+function BfBot.UI._ChromeFrame(name, selected)
+    if selected ~= nil and selected ~= false and selected ~= 0 then
+        return BfBot.UI._TabFrame(true)
+    end
+    if BfBot.UI._IsHeld(name) then
+        -- Without Pecca's art the engine's own button BAM is in use, whose
+        -- second frame is its pressed one.
+        return BfBot.Theme.HasChromeArt() and 2 or 1
+    end
+    return 0
+end
+
 --- Checkbox display: "+" for enabled, empty for disabled.
 -- The checkbox and lock cells render as art when buffbot/visual is installed
 -- and fall back to text markers when it is not (see BfBot.Theme.HasControlArt).

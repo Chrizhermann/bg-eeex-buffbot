@@ -103,6 +103,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(1)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset1')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -126,6 +127,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(2)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset2')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -149,6 +151,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(3)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset3')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -172,6 +175,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(4)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset4')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -195,6 +199,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(5)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset5')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -218,6 +223,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(6)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset6')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -241,6 +247,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(7)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset7')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -264,6 +271,7 @@ menu
 		action "BfBot.UI._CastQuickPreset(8)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbQuickPreset8')"
 		scaleToClip
 		area 0 0 0 0
 	}
@@ -434,7 +442,7 @@ menu
 		action  "BfBot.UI.SetChar(0)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(0))"
+		frame lua "BfBot.UI._ChromeFrame('bbC0', BfBot.UI._IsCharSelected(0))"
 		scaleToClip
 		area 350 90 80 24
 	}
@@ -458,7 +466,7 @@ menu
 		action  "BfBot.UI.SetChar(1)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(1))"
+		frame lua "BfBot.UI._ChromeFrame('bbC1', BfBot.UI._IsCharSelected(1))"
 		scaleToClip
 		area 432 90 80 24
 	}
@@ -482,7 +490,7 @@ menu
 		action  "BfBot.UI.SetChar(2)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(2))"
+		frame lua "BfBot.UI._ChromeFrame('bbC2', BfBot.UI._IsCharSelected(2))"
 		scaleToClip
 		area 514 90 80 24
 	}
@@ -506,7 +514,7 @@ menu
 		action  "BfBot.UI.SetChar(3)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(3))"
+		frame lua "BfBot.UI._ChromeFrame('bbC3', BfBot.UI._IsCharSelected(3))"
 		scaleToClip
 		area 596 90 80 24
 	}
@@ -530,7 +538,7 @@ menu
 		action  "BfBot.UI.SetChar(4)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(4))"
+		frame lua "BfBot.UI._ChromeFrame('bbC4', BfBot.UI._IsCharSelected(4))"
 		scaleToClip
 		area 678 90 80 24
 	}
@@ -554,7 +562,7 @@ menu
 		action  "BfBot.UI.SetChar(5)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsCharSelected(5))"
+		frame lua "BfBot.UI._ChromeFrame('bbC5', BfBot.UI._IsCharSelected(5))"
 		scaleToClip
 		area 760 90 80 24
 	}
@@ -585,7 +593,7 @@ menu
 		action  "BfBot.UI.ToggleView()"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(not BfBot.UI._IsPartyView())"
+		frame lua "BfBot.UI._ChromeFrame('bbView', not BfBot.UI._IsPartyView())"
 		scaleToClip
 		area 760 90 80 24
 	}
@@ -609,7 +617,7 @@ menu
 		action  "BfBot.UI.SetSummon(1)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(1))"
+		frame lua "BfBot.UI._ChromeFrame('bbS0', BfBot.UI._IsSummonSelected(1))"
 		scaleToClip
 		area 350 90 80 24
 	}
@@ -633,7 +641,7 @@ menu
 		action  "BfBot.UI.SetSummon(2)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(2))"
+		frame lua "BfBot.UI._ChromeFrame('bbS1', BfBot.UI._IsSummonSelected(2))"
 		scaleToClip
 		area 432 90 80 24
 	}
@@ -657,7 +665,7 @@ menu
 		action  "BfBot.UI.SetSummon(3)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(3))"
+		frame lua "BfBot.UI._ChromeFrame('bbS2', BfBot.UI._IsSummonSelected(3))"
 		scaleToClip
 		area 514 90 80 24
 	}
@@ -681,7 +689,7 @@ menu
 		action  "BfBot.UI.SetSummon(4)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(4))"
+		frame lua "BfBot.UI._ChromeFrame('bbS3', BfBot.UI._IsSummonSelected(4))"
 		scaleToClip
 		area 596 90 80 24
 	}
@@ -705,7 +713,7 @@ menu
 		action  "BfBot.UI.SetSummon(5)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(5))"
+		frame lua "BfBot.UI._ChromeFrame('bbS4', BfBot.UI._IsSummonSelected(5))"
 		scaleToClip
 		area 678 90 80 24
 	}
@@ -729,7 +737,7 @@ menu
 		action  "BfBot.UI.SetSummon(6)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsSummonSelected(6))"
+		frame lua "BfBot.UI._ChromeFrame('bbS5', BfBot.UI._IsSummonSelected(6))"
 		scaleToClip
 		area 760 90 80 24
 	}
@@ -756,6 +764,7 @@ menu
 		text style "bb_button"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbSPrev')"
 		scaleToClip
 		area 700 90 24 24
 	}
@@ -780,6 +789,7 @@ menu
 		text style "bb_button"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbSNext')"
 		scaleToClip
 		area 772 90 24 24
 	}
@@ -807,7 +817,7 @@ menu
 		action  "BfBot.UI.SetPreset(1)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(1))"
+		frame lua "BfBot.UI._ChromeFrame('bbP1', BfBot.UI._IsPresetSelected(1))"
 		scaleToClip
 		area 350 118 78 24
 	}
@@ -831,7 +841,7 @@ menu
 		action  "BfBot.UI.SetPreset(2)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(2))"
+		frame lua "BfBot.UI._ChromeFrame('bbP2', BfBot.UI._IsPresetSelected(2))"
 		scaleToClip
 		area 431 118 78 24
 	}
@@ -855,7 +865,7 @@ menu
 		action  "BfBot.UI.SetPreset(3)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(3))"
+		frame lua "BfBot.UI._ChromeFrame('bbP3', BfBot.UI._IsPresetSelected(3))"
 		scaleToClip
 		area 512 118 78 24
 	}
@@ -879,7 +889,7 @@ menu
 		action  "BfBot.UI.SetPreset(4)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(4))"
+		frame lua "BfBot.UI._ChromeFrame('bbP4', BfBot.UI._IsPresetSelected(4))"
 		scaleToClip
 		area 593 118 78 24
 	}
@@ -903,7 +913,7 @@ menu
 		action  "BfBot.UI.SetPreset(5)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(5))"
+		frame lua "BfBot.UI._ChromeFrame('bbP5', BfBot.UI._IsPresetSelected(5))"
 		scaleToClip
 		area 674 118 78 24
 	}
@@ -927,7 +937,7 @@ menu
 		action  "BfBot.UI.SetPreset(6)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(6))"
+		frame lua "BfBot.UI._ChromeFrame('bbP6', BfBot.UI._IsPresetSelected(6))"
 		scaleToClip
 		area 674 118 78 24
 	}
@@ -951,7 +961,7 @@ menu
 		action  "BfBot.UI.SetPreset(7)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(7))"
+		frame lua "BfBot.UI._ChromeFrame('bbP7', BfBot.UI._IsPresetSelected(7))"
 		scaleToClip
 		area 674 118 78 24
 	}
@@ -975,7 +985,7 @@ menu
 		action  "BfBot.UI.SetPreset(8)"
 		bam lua "BfBot.UI._TabBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._TabFrame(BfBot.UI._IsPresetSelected(8))"
+		frame lua "BfBot.UI._ChromeFrame('bbP8', BfBot.UI._IsPresetSelected(8))"
 		scaleToClip
 		area 674 118 78 24
 	}
@@ -1000,6 +1010,7 @@ menu
 		action  "BfBot.UI.OpenRename()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbRen')"
 		scaleToClip
 		area 758 118 56 24
 	}
@@ -1024,6 +1035,7 @@ menu
 		action  "BfBot.UI.CreateNewPreset()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbNew')"
 		scaleToClip
 		area 818 118 50 24
 	}
@@ -1078,6 +1090,7 @@ menu
 		action "BfBot.UI.ClearSearch()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbSearchClear')"
 		scaleToClip
 		area 0 0 60 26
 	}
@@ -1100,6 +1113,7 @@ menu
 		tooltip lua "BfBot.UI._FastForwardTooltip()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbSpeed')"
 		scaleToClip
 		area 0 0 130 26
 	}
@@ -1381,6 +1395,7 @@ menu
 		action  "BfBot.UI.OpenSpellPicker()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbAdd')"
 		scaleToClip
 		area 350 402 110 28
 	}
@@ -1406,6 +1421,7 @@ menu
 		action  "BfBot.UI.ExcludeSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbRmv')"
 		scaleToClip
 		area 466 402 100 28
 	}
@@ -1434,6 +1450,7 @@ menu
 		tooltip lua "BfBot.UI._RepeatTooltip()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbRepeat')"
 		scaleToClip
 		area 572 402 90 28
 	}
@@ -1459,6 +1476,7 @@ menu
 		action  "BfBot.UI.ExportConfig()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbExp')"
 		scaleToClip
 		area 704 402 80 28
 	}
@@ -1483,6 +1501,7 @@ menu
 		action  "BfBot.UI.OpenImportPicker()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbImp')"
 		scaleToClip
 		area 790 402 80 28
 	}
@@ -1513,6 +1532,7 @@ menu
 		action  "BfBot.UI.ToggleSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTog')"
 		scaleToClip
 		area 350 434 100 28
 	}
@@ -1538,6 +1558,7 @@ menu
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgt')"
 		scaleToClip
 		area 455 434 130 28
 	}
@@ -1563,6 +1584,7 @@ menu
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbUp')"
 		scaleToClip
 		area 590 434 44 28
 	}
@@ -1588,6 +1610,7 @@ menu
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbDn')"
 		scaleToClip
 		area 638 434 44 28
 	}
@@ -1613,6 +1636,7 @@ menu
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbSort')"
 		scaleToClip
 		area 686 434 44 28
 	}
@@ -1667,6 +1691,7 @@ menu
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbDel')"
 		scaleToClip
 		area 760 434 110 28
 	}
@@ -1696,6 +1721,7 @@ menu
 		action  "BfBot.UI.ToggleSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVTog')"
 		scaleToClip
 		area 350 434 80 28
 	}
@@ -1720,6 +1746,7 @@ menu
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVTgt')"
 		scaleToClip
 		area 434 434 100 28
 	}
@@ -1744,6 +1771,7 @@ menu
 		action  "BfBot.UI.OpenVariantsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVVar')"
 		scaleToClip
 		area 538 434 100 28
 	}
@@ -1769,6 +1797,7 @@ menu
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVUp')"
 		scaleToClip
 		area 642 434 40 28
 	}
@@ -1794,6 +1823,7 @@ menu
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVDn')"
 		scaleToClip
 		area 686 434 40 28
 	}
@@ -1819,6 +1849,7 @@ menu
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVSort')"
 		scaleToClip
 		area 730 434 40 28
 	}
@@ -1872,6 +1903,7 @@ menu
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVDel')"
 		scaleToClip
 		area 780 434 90 28
 	}
@@ -1901,6 +1933,7 @@ menu
 		action  "BfBot.UI.Cast()"
 		bam lua "BfBot.UI._CastBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbCast')"
 		scaleToClip
 		area 350 468 85 28
 	}
@@ -1926,6 +1959,7 @@ menu
 		action  "BfBot.UI.CastCharacter()"
 		bam lua "BfBot.UI._CastBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbCastChar')"
 		scaleToClip
 		area 439 468 115 28
 	}
@@ -1951,6 +1985,7 @@ menu
 		action  "BfBot.UI.Stop()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbStop')"
 		scaleToClip
 		area 558 468 55 28
 	}
@@ -2005,6 +2040,7 @@ menu
 		action  "BfBot.UI.Close()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbClose')"
 		scaleToClip
 		area 800 468 70 28
 	}
@@ -2151,6 +2187,7 @@ menu
 		action  "BfBot.UI.PickerSelf()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgSelf')"
 		scaleToClip
 		area 479 199 95 26
 	}
@@ -2176,6 +2213,7 @@ menu
 		action  "BfBot.UI.PickerAllParty()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgParty')"
 		scaleToClip
 		area 581 199 95 26
 	}
@@ -2464,6 +2502,7 @@ menu
 		action  "BfBot.UI.PickerMoveUp()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgUp')"
 		scaleToClip
 		area 479 403 95 26
 	}
@@ -2488,6 +2527,7 @@ menu
 		action  "BfBot.UI.PickerMoveDown()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgDn')"
 		scaleToClip
 		area 581 403 95 26
 	}
@@ -2512,6 +2552,7 @@ menu
 		action  "BfBot.UI.PickerClear()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgClear')"
 		scaleToClip
 		area 479 435 95 26
 	}
@@ -2535,6 +2576,7 @@ menu
 		action  "BfBot.UI.PickerDone()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgDone')"
 		scaleToClip
 		area 581 435 95 26
 	}
@@ -2559,6 +2601,7 @@ menu
 		action  "BfBot.UI.PickerUnlock()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbTgUnlock')"
 		scaleToClip
 		area 479 467 197 26
 	}
@@ -2661,6 +2704,7 @@ menu
 		action  "BfBot.UI.ConfirmRename(); Infinity_PopMenu('BUFFBOT_RENAME')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbRenOk')"
 		scaleToClip
 		area 460 338 80 24
 	}
@@ -2683,6 +2727,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_RENAME')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbRenCancel')"
 		scaleToClip
 		area 550 338 80 24
 	}
@@ -2773,6 +2818,7 @@ menu
 		action  "BfBot.UI.RunConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbCfmDelete')"
 		scaleToClip
 		area 460 338 80 24
 	}
@@ -2795,6 +2841,7 @@ menu
 		action  "BfBot.UI.CancelConfirm(); Infinity_PopMenu('BUFFBOT_CONFIRM')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbCfmCancel')"
 		scaleToClip
 		area 550 338 80 24
 	}
@@ -2948,6 +2995,7 @@ menu
 		action  "BfBot.UI.AddPickedSpell()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbPickAdd')"
 		scaleToClip
 		area 390 430 180 28
 	}
@@ -2971,6 +3019,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_SPELLPICKER')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbPickCancel')"
 		scaleToClip
 		area 580 430 100 28
 	}
@@ -3087,6 +3136,7 @@ menu
 		action  "BfBot.UI.ImportSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbImpOk')"
 		scaleToClip
 		area 430 390 140 28
 	}
@@ -3110,6 +3160,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_IMPORT')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbImpCancel')"
 		scaleToClip
 		area 580 390 120 28
 	}
@@ -3237,6 +3288,7 @@ menu
 		action  "BfBot.UI.SelectVariant(buffbot_variantSelected)"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVarSelect')"
 		scaleToClip
 		area 430 355 140 28
 	}
@@ -3260,6 +3312,7 @@ menu
 		action  "Infinity_PopMenu('BUFFBOT_VARIANTS')"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbVarCancel')"
 		scaleToClip
 		area 580 355 140 28
 	}

@@ -84,7 +84,7 @@ def lua() -> LuaRuntime:
     # theme and UI modules would drag in the engine's menu globals.
     for source, names in (
         (THEME_SOURCE, ("HasChromeArt", "ControlSkin", "ButtonBam")),
-        (UI_SOURCE, ("_PlateBam", "_TabBam", "_CastBam", "_ChromeSeq", "_TabFrame")),
+        (UI_SOURCE, ("_PlateBam", "_TabBam", "_CastBam", "_ChromeSeq", "_TabFrame", "_IsHeld", "_ChromeFrame")),
     ):
         for name in names:
             pattern = re.compile(
@@ -154,24 +154,123 @@ def test_the_tabs_use_the_tab_plate_and_the_cast_buttons_the_cast_plate():
             assert 'BfBot.UI._PlateBam()' in body, name
 
 
-def test_every_tab_marks_the_open_one_through_the_frame_helper():
-    """Hard-coding frame 1 or 2 would be right for one art set and wrong for
-    the other, and the panel has to work with both."""
+def test_every_chrome_button_decides_its_own_frame(request):
+    """Every plate, tab and cast button asks _ChromeFrame, naming itself.
+
+    Leaving `frame` out used to mean "let the engine run its states", and the
+    engine does run them — it just draws Pecca's pressed frame, which is
+    nearly the picture the normal one is. The frame is decided in Lua now,
+    from the held counter, so every one of these buttons has to declare it.
+
+    The name it passes is its own, because that is the one thing 74 near
+    identical declarations get wrong: a copied button that keeps the name it
+    was copied from reports its neighbour's press, not its own.
+    """
+    seen = 0
+    for name, body in art_buttons():
+        assert "frame lua" in body, f"{name} leaves its frame to the engine"
+        call = re.search(r'frame lua "BfBot\.UI\._ChromeFrame\(([^"]*)\)"', body)
+        assert call, f"{name} does not ask _ChromeFrame for its frame"
+        passed = call.group(1).split(",")[0].strip()
+        assert passed == f"'{name}'", (
+            f"{name} passes {passed} to _ChromeFrame, not its own name"
+        )
+        seen += 1
+    assert seen > 50, f"only {seen} chrome buttons found; the menu scan is wrong"
+
+
+def test_a_tab_still_says_which_one_is_open():
+    """The open tab outranks a press, so a tab passes its own predicate too.
+
+    Hard-coding frame 1 or 2 here would be right for one art set and wrong
+    for the other, which is why the answer stays inside the helper.
+    """
     for name, body in art_buttons():
         if name not in TAB_BUTTONS:
             continue
-        assert "BfBot.UI._TabFrame(" in body, name
+        call = re.search(r'frame lua "BfBot\.UI\._ChromeFrame\(([^"]*)\)"', body)
+        assert call, name
+        arguments = call.group(1).split(",", 1)
+        assert len(arguments) == 2, f"{name} no longer says whether it is open"
+        assert "BfBot.UI." in arguments[1], name
         assert "and 1 or 0" not in body, name
         assert "and 2 or 0" not in body, name
 
 
-def test_no_other_button_forces_a_frame_so_the_engine_keeps_its_states():
-    """A plain button should still light up on hover and sink when pressed —
-    the art has frames for that, and forcing one would freeze it."""
+def test_a_plate_leaves_the_open_question_to_the_tabs():
+    """A footer button is never "the open one", so it passes one argument."""
     for name, body in art_buttons():
         if name in TAB_BUTTONS:
             continue
-        assert "frame lua" not in body, name
+        call = re.search(r'frame lua "BfBot\.UI\._ChromeFrame\(([^"]*)\)"', body)
+        assert call, name
+        assert "," not in call.group(1), (
+            f"{name} is not a tab but claims it can be the open one"
+        )
+
+
+@pytest.mark.parametrize("art", (True, False))
+@pytest.mark.parametrize(
+    ("held", "selected", "withArt", "withoutArt"),
+    (
+        (0, None, 0, 0),      # resting
+        (1, None, 2, 1),      # held: the loud frame, or the engine's pressed one
+        (99, None, 2, 1),     # still held, many frames later
+        (0, True, 2, 1),      # the open tab
+        (3, True, 2, 1),      # the open tab, held: it cannot look like less
+    ),
+)
+def test_a_held_button_draws_the_loud_frame(lua, art, held, selected,
+                                            withArt, withoutArt) -> None:
+    """The whole point of #103: a press has to be visible.
+
+    Pecca's pressed frame differs from its normal one by 62 of 255 at its
+    loudest on the default skin, while the selected frame differs by 207 and
+    carries the outline. A held button draws the selected frame. Without the
+    art the engine's own button BAM is in use, whose pressed frame is its
+    second — that one the engine drew properly all along.
+    """
+    with_art(lua, art)
+    lua.execute(
+        "EEex_Menu_GetItem = function(name)"
+        "  if name ~= 'bbAdd' then return nil end"
+        "  return { framesHeld = %d }"
+        "end" % held
+    )
+    frame = lua.eval(
+        "BfBot.UI._ChromeFrame('bbAdd', %s)"
+        % ("true" if selected else "nil")
+    )
+    assert frame == (withArt if art else withoutArt)
+
+
+def test_a_button_the_engine_cannot_answer_for_is_simply_not_held(lua) -> None:
+    """Every way of not knowing has to read as "resting", never as an error.
+
+    This runs on every build EEex supports and on a panel that may be closed,
+    so the counter can be missing, the name unknown, or the lookup itself
+    absent. A frame expression that raises takes the panel's draw with it.
+    """
+    with_art(lua, True)
+    cases = {
+        "no lookup at all": "EEex_Menu_GetItem = nil",
+        "a name the menu does not have":
+            "EEex_Menu_GetItem = function() return nil end",
+        "a build without the counter":
+            "EEex_Menu_GetItem = function() return {} end",
+        "a counter that is not a number":
+            "EEex_Menu_GetItem = function() return { framesHeld = 'yes' } end",
+        "a lookup that raises":
+            "EEex_Menu_GetItem = function() error('boom') end",
+        "an item that raises when read":
+            "EEex_Menu_GetItem = function()"
+            "  return setmetatable({}, { __index = function() error('boom') end })"
+            "end",
+    }
+    for label, stub in cases.items():
+        lua.execute(stub)
+        assert lua.eval("BfBot.UI._IsHeld('bbAdd')") is False, label
+        assert lua.eval("BfBot.UI._ChromeFrame('bbAdd')") == 0, label
 
 
 def test_every_list_scrolls_with_the_themed_bar():
