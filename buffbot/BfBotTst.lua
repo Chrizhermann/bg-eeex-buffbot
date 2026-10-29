@@ -2954,13 +2954,16 @@ function BfBot.Test.Theming()
     -- _T hands the engine a packed number, not the palette's own string
     check("_T('title') returns a packed number", type(BfBot.UI._T("title")) == "number")
 
-    -- The packing checks assert bg2_light's own title, {50, 30, 10}, so they
-    -- have to run on bg2_light -- not on whatever theme the player (or a lab
-    -- run) last chose. _active is swapped directly and put back: Theme.Apply
-    -- would write the player's theme to the INI as a side effect of a test.
+    -- The packing checks assert the warm parchment's own title, {50, 30, 10},
+    -- so they have to run on the palette that carries it -- not on whatever
+    -- theme the player (or a lab run) last chose. That is bg1_light since
+    -- #102: the colour bodies kept their art and the names moved to the game
+    -- each one looks like, so the warm title travelled from bg2_light to
+    -- bg1_light. _active is swapped directly and put back: Theme.Apply would
+    -- write the player's theme to the INI as a side effect of a test.
     do
         local wasActive = BfBot.Theme._active
-        BfBot.Theme._active = BfBot.Theme._palettes.bg2_light
+        BfBot.Theme._active = BfBot.Theme._palettes.bg1_light
         -- packed as alpha<<24 | blue<<16 | green<<8 | red
         check("_T('title') packs blue and red the engine's way round",
             BfBot.UI._T("title") == (10 * 0x10000) + (30 * 0x100) + 50)

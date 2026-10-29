@@ -409,3 +409,37 @@ def test_the_menu_still_compiles_its_lua_chunks():
     runtime = LuaRuntime(unpack_returned_tuples=True)
     for expression in re.findall(r'(?:bam|sequence|frame) lua "([^"]+)"', MENU):
         assert runtime.eval(f"loadstring({expression!r})") is not None, expression
+
+
+def test_the_in_game_theming_phase_asserts_the_palette_it_names() -> None:
+    """The lab phase pins a title colour by value, so it names its palette.
+
+    `BfBot.Test.RunAll()`'s Theming phase swaps one palette in and asserts its
+    title both packed and raw. Those literals belong to one palette, and #102
+    moved every name onto the art it describes -- the warm title travelled from
+    bg2_light to bg1_light and the phase failed in the lab while the whole
+    offline suite stayed green. Nothing offline read the in-game suite, so this
+    reads it: the palette the phase names must be the one carrying the colour
+    it asserts, whatever the names are next time.
+    """
+    source = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
+    block = re.search(
+        r"BfBot\.Theme\._active = BfBot\.Theme\._palettes\.(\w+)\s*\n"
+        r".*?_T\(\"title\"\) == \((\d+) \* 0x10000\) \+ \((\d+) \* 0x100\) \+ (\d+)\)"
+        r".*?_TRaw\(\"title\"\) == \"(\{[^\"]*\})\"",
+        source,
+        re.S,
+    )
+    assert block, "the Theming phase's packing block is no longer recognisable"
+
+    name, blue, green, red, raw = block.groups()
+    palettes = _palettes()
+    assert name in palettes, f"the Theming phase swaps in {name}, which is gone"
+    assert palettes[name]["title"] == raw, (
+        f"the phase asserts {raw} for {name}'s title, but the palette now"
+        f" carries {palettes[name]['title']}"
+    )
+    # The packed literals are the same three channels, in the engine's order.
+    assert raw == "{%s, %s, %s}" % (red, green, blue), (
+        "the packed assertion and the raw one disagree about the colour"
+    )

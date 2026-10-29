@@ -1034,26 +1034,51 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.3 (2026-10-29) — a friendly mage is not a summon"
+        "v1.12.4 (2026-10-29) — the right names, and room to breathe"
     )
+    # The two defects one playthrough turned up, each named by what the player
+    # saw rather than the function that was wrong (#102).
+    assert ("every colour scheme carried the wrong game's name"
+            in current_normalized)
+    assert ("the footer uses the panel instead of huddling in the middle of it"
+            in current_normalized)
+    # Where the mapping comes from, and the resource it must never be read off
+    # again -- deriving it from the engine's UI art shipped it backwards twice.
+    assert "the games' own book covers" in current_normalized
+    assert "bg:ee's is blue slate, bg2:ee's is tan" in current_normalized
+    # A rename only: the art does not move, and neither does the default.
+    assert "no shipped asset byte changes" in current_normalized
+    assert "the default still opens on the warm" in current_normalized
+    # The footer's own numbers, so a later change cannot quietly re-crowd it.
+    assert "capped at 980px and centred" in current_normalized
+    assert "capped at 22% of" in current_normalized
+    assert "falls back to its old 28px" in current_normalized
+    assert "full automated suite passes **1618 tests**" in current_normalized
+    assert "all 28" in current_normalized
+    assert ("not checked in game: switching the colour scheme"
+            in current_normalized)
+
+    summon_release = source.split("\n## v1.12.3 (2026-10-29)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # What a player met, and the question the filter never asked (#101).
     assert ("buffbot offered a friendly npc's spellbook as if he were a summon"
-            in current_normalized)
+            in summon_release)
     assert ("never the one that separates a summon from an ally"
-            in current_normalized)
+            in summon_release)
     # The A/B that settles it belongs in the notes: same creature file, once
     # summoned and once created, is the whole evidence for the new filter.
-    assert "m_lsummonedby" in current_normalized
+    assert "m_lsummonedby" in summon_release
     assert ("spawns the same creature file with `createcreatureobject`"
-            in current_normalized)
-    assert "**-1**" in current_normalized
+            in summon_release)
+    assert "**-1**" in summon_release
     # The deliberate soft edges, so a later change cannot quietly harden them.
     assert ("the filter never hides the player's own summons"
-            in current_normalized)
-    assert "full automated suite passes **1595 tests**" in current_normalized
-    assert "all 28" in current_normalized
+            in summon_release)
+    assert "full automated suite passes **1595 tests**" in summon_release
+    assert "all 28" in summon_release
     assert ("not checked in game: an item charge or an hla"
-            in current_normalized)
+            in summon_release)
 
     toggle_release = source.split("\n## v1.12.2 (2026-10-29)", 1)[1].split(
         "\n## ", 1

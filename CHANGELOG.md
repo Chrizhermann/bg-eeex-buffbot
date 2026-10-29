@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v1.12.4 (2026-10-29) — the right names, and room to breathe
+
+Two findings from one live playthrough, both about the panel rather than what
+it casts: every colour scheme was named after the wrong game, and the footer
+huddled in the middle of a panel it had room to spread across. No save schema
+change, no shipped asset byte changes, and nothing about casting moves.
 
 ### Fixed
 - **Every colour scheme carried the wrong game's name** (#102). Reported from
@@ -50,6 +55,35 @@
   groups of a short row; past the cap the leftover returns to the margins
   and the run stays centred. At the 550px minimum nothing changes: there is
   no room to share, and the seam falls back to its old 28px.
+
+### Lab
+- **The footer was judged on real shots, not a schematic**
+  (`tools/lab_screenshots.py`, hidden lab on BG2:EE 2.7.3.0 + EEex v1.3.1,
+  2560×1440, panel 2048×1152, save "BuffBot Clean Baseline"). Each footer
+  row was captured under this change and under v1.12.3 for the same panel, so
+  the comparison is one variable wide, and the maintainer signed the result
+  off from those shots.
+  The three colour schemes were captured the same way, each with its chrome,
+  which is how the swapped names were confirmed to be only names: the art in
+  every shot is byte-identical to v1.12.3's.
+- Measured seams on that panel, read off the layout rather than the image:
+  on 2048px the add and cast rows separate their two groups by 446px where
+  they had 28, and the edit row its three by 416px each. At the 550px minimum
+  every one of them is 28px again, and the controls inside a group stay 6px
+  apart at every size.
+- The full automated suite passes **1618 tests**, one of them new for this
+  release and written because the lab caught what the offline suite could not:
+  the in-game Theming phase pins one palette's title colour by its literal
+  value, and the rename moved that colour to another palette. The phase failed
+  headless while all 1617 offline tests were green, so an offline test now
+  reads `BfBotTst.lua` and holds the two together, whatever the names are next
+  time. With the phase corrected the in-game suite is green headless in the
+  same lab: all 28 phases pass, 0 failures.
+- Not checked in game: switching the colour scheme while the panel is already
+  open — every shot was taken on a panel built under its own theme, and a
+  repaint in place is a separate case — and the footer at the 550px minimum,
+  where the fallback to the old 28px seam is the layout's own arithmetic
+  rather than something measured on screen.
 
 ## v1.12.3 (2026-10-29) — a friendly mage is not a summon
 
