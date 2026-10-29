@@ -1034,29 +1034,55 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.4 (2026-10-29) — the right names, and room to breathe"
+        "v1.12.5 (2026-10-30) — a button that answers when you press it"
     )
+    # What the player reported and what the fix had to be about: the press
+    # was there and too quiet to see, not missing (#103).
+    assert "a button you press now looks pressed" in current_normalized
+    assert "still outranks a press" in current_normalized
+    # Where the press is read from. The DSL has nothing that says it, so a
+    # later rewrite that goes looking for a `.menu` answer finds this first.
+    assert "(`framesheld`)" in current_normalized
+    # The route the lab ruled out, pinned so nobody tries it again: the field
+    # is writable and reads back, which makes the dead end look like it worked.
+    assert ("onto a live button from lua changes **nothing** on screen"
+            in current_normalized)
+    # The measurement, and the floor it has to beat -- a whole-screen diff of
+    # a running game is mostly animation.
+    assert "242 of 255 across 29.5% of its" in current_normalized
+    assert "that floor came out at 0" in current_normalized
+    # The regression this release also carries: one name for the default.
+    assert ("an install that had never picked a colour scheme opened on the"
+            " wrong" in current_normalized)
+    assert "`bfbot.theme.default_palette`" in current_normalized
+    assert "full automated suite passes **1631 tests**" in current_normalized
+    assert "all 28" in current_normalized
+    assert "not checked in game: a real mouse press" in current_normalized
+
+    theme_release = source.split("\n## v1.12.4 (2026-10-29)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # The two defects one playthrough turned up, each named by what the player
     # saw rather than the function that was wrong (#102).
     assert ("every colour scheme carried the wrong game's name"
-            in current_normalized)
+            in theme_release)
     assert ("the footer uses the panel instead of huddling in the middle of it"
-            in current_normalized)
+            in theme_release)
     # Where the mapping comes from, and the resource it must never be read off
     # again -- deriving it from the engine's UI art shipped it backwards twice.
-    assert "the games' own book covers" in current_normalized
-    assert "bg:ee's is blue slate, bg2:ee's is tan" in current_normalized
+    assert "the games' own book covers" in theme_release
+    assert "bg:ee's is blue slate, bg2:ee's is tan" in theme_release
     # A rename only: the art does not move, and neither does the default.
-    assert "no shipped asset byte changes" in current_normalized
-    assert "the default still opens on the warm" in current_normalized
+    assert "no shipped asset byte changes" in theme_release
+    assert "the default still opens on the warm" in theme_release
     # The footer's own numbers, so a later change cannot quietly re-crowd it.
-    assert "capped at 980px and centred" in current_normalized
-    assert "capped at 22% of" in current_normalized
-    assert "falls back to its old 28px" in current_normalized
-    assert "full automated suite passes **1618 tests**" in current_normalized
-    assert "all 28" in current_normalized
+    assert "capped at 980px and centred" in theme_release
+    assert "capped at 22% of" in theme_release
+    assert "falls back to its old 28px" in theme_release
+    assert "full automated suite passes **1618 tests**" in theme_release
+    assert "all 28" in theme_release
     assert ("not checked in game: switching the colour scheme"
-            in current_normalized)
+            in theme_release)
 
     summon_release = source.split("\n## v1.12.3 (2026-10-29)", 1)[1].split(
         "\n## ", 1

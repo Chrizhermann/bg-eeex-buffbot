@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## v1.12.5 (2026-10-30) — a button that answers when you press it
+
+One finding from the live playthrough, and one regression found while fixing
+it, both about the panel rather than what it casts: the footer buttons never
+showed that they had been pressed, and v1.12.4's colour-scheme rename left an
+install that had never chosen a scheme opening on the wrong parchment. No save
+schema change, no shipped asset byte changes, and nothing about casting moves.
 
 ### Changed
 - **A button you press now looks pressed** (#103). Reported from a live
@@ -60,6 +66,23 @@
   all 74 chrome buttons had to declare one.
 - Asking the engine costs 2.7µs per button per rendered frame, 200µs for all
   74 — and only while the panel is open.
+- The full automated suite passes **1631 tests**, fifteen of them new for
+  this release and two retired with the design they described: every chrome
+  button is checked to pass its own name to the frame helper, the frame a
+  resting, held and open button draws is pinned for both the Pecca and the
+  engine-art case, six stub cases cover a button the engine cannot answer for
+  at all, and one guard holds the default palette to a single name so the
+  pointer and the INI fallback cannot drift apart again. With those in place
+  the in-game suite is green headless in the same lab: all 28 phases pass,
+  0 failures. That run was taken on this release's Lua before the version
+  string was stamped, which is the only line that differs from the tag and
+  one the suite prints in its banner rather than asserting.
+- Not checked in game: a real mouse press. Nothing in EEex synthesises one, so
+  the lab verified the whole path by making the held check answer "held", and
+  that the engine's counter rises above 0 under an actual finger is the one
+  step only a hand can confirm. A disabled footer button is likewise
+  unverified under this change, because the engine was measured not to draw a
+  disabled plate here in the first place.
 
 ## v1.12.4 (2026-10-29) — the right names, and room to breathe
 
