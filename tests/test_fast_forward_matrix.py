@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from lupa.luajit21 import LuaRuntime
 
+from engine_menus import ENGINE_MENUS
 from test_runtime_compatibility import EXEC_SOURCE, exec_lua
 
 
@@ -20,6 +21,7 @@ FAST_SOURCE = (Path(__file__).resolve().parents[1] / "buffbot/BfBotFst.lua").rea
 
 @pytest.fixture
 def matrix_lua(exec_lua: LuaRuntime) -> LuaRuntime:
+    exec_lua.execute(ENGINE_MENUS)
     exec_lua.execute("""
         bit = require('bit')
         EEex_BAnd = bit.band
@@ -31,7 +33,7 @@ def matrix_lua(exec_lua: LuaRuntime) -> LuaRuntime:
         worldScreen = {}
         e = {GetActiveEngine=function() return worldScreen end}
         EEex_CChitin = {TIMER_UPDATES_PER_SECOND=30}
-        EngineGlobals = {g_pBaldurChitin={
+        EngineGlobals = {numMenus=#uiMenus,menus=engineMenus(),g_pBaldurChitin={
             cNetwork={m_bConnectionEstablished=0},
             m_pObjectGame={m_gameSave={m_inputMode=1},m_worldTime={m_gameTime=500}},
         }}

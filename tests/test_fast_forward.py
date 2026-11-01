@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 from lupa.luajit21 import LuaRuntime
 
+from engine_menus import ALWAYS_ON_STACK, BLOCKING, ENGINE_MENUS
+
 
 SOURCE = (Path(__file__).resolve().parents[1] / "buffbot/BfBotFst.lua").read_text(encoding="utf-8")
 
@@ -11,6 +13,7 @@ SOURCE = (Path(__file__).resolve().parents[1] / "buffbot/BfBotFst.lua").read_tex
 @pytest.fixture
 def lua():
     runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute(ENGINE_MENUS)
     runtime.execute("""
         bit = require('bit')
         wall = 1000
@@ -23,13 +26,17 @@ def lua():
         e = { GetActiveEngine = function() return worldScreen end }
         EEex_CChitin = { TIMER_UPDATES_PER_SECOND = 30 }
         EEex = { UncapFPS_FPSLimit = 144, UncapFPS_FPSLimitEnabled = true }
-        EngineGlobals = { g_pBaldurChitin = {
-            cNetwork = { m_bConnectionEstablished = 0 },
-            m_pObjectGame = {
-                m_gameSave = { m_inputMode = 1 },
-                m_worldTime = { m_gameTime = 500 },
+        EngineGlobals = {
+            numMenus = #uiMenus,
+            menus = engineMenus(),
+            g_pBaldurChitin = {
+                cNetwork = { m_bConnectionEstablished = 0 },
+                m_pObjectGame = {
+                    m_gameSave = { m_inputMode = 1 },
+                    m_worldTime = { m_gameTime = 500 },
+                },
             },
-        } }
+        }
         BfBot = {
             Exec = {
                 GetState = function() return state end,
@@ -374,3 +381,207 @@ def test_invalid_rate_or_multiplier_does_not_mutate(lua, rate, multiplier):
     assert accepted is False
     assert code == "reason.exec.fast_unavailable"
     assert lua.eval("EEex_CChitin.TIMER_UPDATES_PER_SECOND") == rate
+
+
+# --- The guard learns its menus from the running UI (issue #104) -------------
+#
+# It used to name eight. A lab walk of BG2:EE's own menu list found 51 modal
+# menus; two of those eight names (STORE, LOAD_SCREEN) belonged to no menu and
+# could never match, and two more were not modal. The walk replaces the list.
+
+
+@pytest.mark.parametrize("menu", BLOCKING)
+def test_every_menu_the_running_ui_hides_the_world_behind_stops_a_run(lua, menu):
+    lua.execute(f"menus['{menu}'] = 1")
+    accepted, code, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert accepted is False
+    assert code == "reason.exec.fast_unavailable"
+    assert detail["reason"] == "menu"
+    assert lua.eval("EEex_CChitin.TIMER_UPDATES_PER_SECOND") == 30
+
+
+@pytest.mark.parametrize("menu", ALWAYS_ON_STACK)
+def test_the_world_ui_on_the_stack_is_not_a_reason_to_refuse(lua, menu):
+    # These are up whenever a run could start, so refusing on any of them
+    # would mean fast-forward never runs at all.
+    lua.execute(f"menus['{menu}'] = 1")
+    assert lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert lua.eval("EEex_CChitin.TIMER_UPDATES_PER_SECOND") == 60
+
+
+def test_a_modal_no_release_could_have_named_still_stops_a_run(lua):
+    # EEex's own Options menu is in the engine's list because a mod put it
+    # there; the lab walk found it on BG2:EE. A source-side list cannot.
+    lua.execute("menus['EEex_Options'] = 1")
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu"
+
+
+def test_a_modal_added_while_the_game_runs_is_picked_up(lua):
+    assert lua.eval("BfBot.Fast.Start(queue, 2)")
+    lua.execute("BfBot.Fast.Reset('done'); state = 'idle'")
+    lua.execute("""
+        uiMenus[#uiMenus + 1] = { name = 'MOD_CONFIRM', modal = {} }
+        EngineGlobals.numMenus = #uiMenus
+        menus['MOD_CONFIRM'] = 1
+    """)
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu"
+
+
+def test_a_menu_the_ui_stops_declaring_modal_stops_blocking(lua):
+    lua.execute("menus['CHARACTER'] = 1")
+    accepted, _, _ = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert accepted is False
+    lua.execute("""
+        for _, entry in ipairs(uiMenus) do
+            if entry.name == 'CHARACTER' then entry.modal = nil end
+        end
+        -- A UI reload rebuilds the list; the count is what says so.
+        uiMenus[#uiMenus + 1] = { name = 'MOD_SPACER' }
+        EngineGlobals.numMenus = #uiMenus
+    """)
+    assert lua.eval("BfBot.Fast.Start(queue, 2)")
+
+
+def test_the_menu_list_is_read_once_per_ui_not_once_per_check(lua):
+    lua.execute("""
+        walks = 0
+        local real = EngineGlobals.menus.getReference
+        EngineGlobals.menus.getReference = function(self, index)
+            if index == 0 then walks = walks + 1 end
+            return real(self, index)
+        end
+        assert(BfBot.Fast.Start(queue, 2))
+        wall = wall + 100
+        BfBot.Fast.Tick()
+        wall = wall + 100
+        BfBot.Fast.Tick()
+    """)
+    assert lua.eval("walks") == 1
+
+
+def test_a_new_game_does_not_inherit_the_previous_uis_menu_list(lua):
+    lua.execute("""
+        assert(BfBot.Fast.Start(queue, 2))
+        BfBot.Fast.Reset('done'); state = 'idle'
+        callbacks[1]()
+    """)
+    assert lua.eval("BfBot.Fast._blocking == nil")
+    assert lua.eval("BfBot.Fast._blockingFor == nil")
+
+
+@pytest.mark.parametrize("prepare,reason", [
+    ("EngineGlobals.numMenus = nil", "menu list unavailable"),
+    ("EngineGlobals.numMenus = 'many'", "menu list unavailable"),
+    ("EngineGlobals.numMenus = -1", "menu list unavailable"),
+    ("EngineGlobals.menus = nil", "menu list unavailable"),
+    ("EngineGlobals.menus.getReference = function() error('gone') end",
+     "menu list unavailable"),
+    ("EngineGlobals.menus.getReference = function() return nil end",
+     "menu list unavailable"),
+    ("uiMenus[1].name = nil", "menu list unavailable"),
+    ("uiMenus[1].name = 42", "menu list unavailable"),
+    ("Infinity_IsMenuOnStack = function() error('gone') end",
+     "menu state unavailable"),
+])
+def test_a_menu_list_that_cannot_be_read_refuses_rather_than_accelerates(
+        lua, prepare, reason):
+    # An unreadable list is indistinguishable from an empty one, so it has to
+    # fail closed: the alternative is accelerating with no modal guard at all.
+    lua.execute(prepare)
+    accepted, code, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert accepted is False
+    assert code == "reason.exec.fast_unavailable"
+    assert detail["reason"] == reason
+    assert lua.eval("EEex_CChitin.TIMER_UPDATES_PER_SECOND") == 30
+
+
+def test_a_name_wrapper_that_raises_refuses(lua):
+    lua.execute("""
+        local real = EngineGlobals.menus.getReference
+        EngineGlobals.menus.getReference = function(self, index)
+            local menu = real(self, index)
+            if index == 0 then
+                menu.name = { get = function() error('gone') end }
+            end
+            return menu
+        end
+    """)
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu list unavailable"
+
+
+def test_an_unreadable_modal_flag_refuses(lua):
+    lua.execute("""
+        local real = EngineGlobals.menus.getReference
+        EngineGlobals.menus.getReference = function(self, index)
+            local menu = real(self, index)
+            if index == 0 then
+                return setmetatable({ name = menu.name }, {
+                    __index = function(_, key)
+                        if key == 'modal' then error('gone') end
+                        return nil
+                    end,
+                })
+            end
+            return menu
+        end
+    """)
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu list unavailable"
+
+
+def test_a_plain_string_menu_name_is_accepted_too(lua):
+    # The binding wraps names today. A future one that hands back a plain
+    # string must not read as an unreadable list.
+    lua.execute("""
+        local real = EngineGlobals.menus.getReference
+        EngineGlobals.menus.getReference = function(self, index)
+            local menu = real(self, index)
+            menu.name = menu.name:get()
+            return menu
+        end
+        menus['POPUP_TWOBUTTON'] = 1
+    """)
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu"
+
+
+# --- EEex before 1.3.1 binds no popupActive (issue #104) ---------------------
+
+
+def test_fast_forward_runs_on_a_build_without_the_engine_popup_predicate(lua):
+    lua.execute("EngineGlobals.popupActive = nil")
+    assert lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert lua.eval("EEex_CChitin.TIMER_UPDATES_PER_SECOND") == 60
+
+
+@pytest.mark.parametrize("menu", ["POPUP_TWOBUTTON", "CHARACTER",
+                                 "STORE_BUYSELL", "EEex_Options"])
+def test_without_that_predicate_a_modal_still_stops_a_run(lua, menu):
+    # The whole point of #104: the guard has to stand on its own, or an older
+    # install either loses fast-forward or runs it unguarded.
+    lua.execute(f"EngineGlobals.popupActive = nil; menus['{menu}'] = 1")
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu"
+
+
+def test_the_predicate_still_refuses_where_the_walk_would_allow(lua):
+    # It can only add refusals, which is why a build that has it keeps asking:
+    # nothing is on the stack here, and it still says no.
+    lua.execute("EngineGlobals.popupActive = function() return true end")
+    _, _, detail = lua.eval("BfBot.Fast.Start(queue, 2)")
+    assert detail["reason"] == "menu"
+
+
+def test_a_running_fast_forward_stops_when_a_modal_opens(lua):
+    lua.execute("""
+        assert(BfBot.Fast.Start(queue, 2))
+        menus['OPTIONS_GAMEPLAY'] = 1
+        wall = wall + 100
+        BfBot.Fast.Tick()
+    """)
+    assert lua.eval("EEex_CChitin.TIMER_UPDATES_PER_SECOND") == 30
+    assert lua.eval("BfBot.Fast.lastAudit.reason") == "menu"
+    assert lua.eval("stopped") == 1

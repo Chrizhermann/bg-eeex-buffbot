@@ -30,6 +30,78 @@ local function unavailable(reason)
     return false, "reason.exec.fast_unavailable", { reason = reason }
 end
 
+-- Non-modal screens that take the world away from the player anyway, matched
+-- as name prefixes against the UI's own list rather than spelled out: the
+-- exact names differ between BG:EE, BG2:EE and IWD:EE, and the literal
+-- "STORE" this guard used to look for is no menu on BG2:EE at all, where the
+-- shop screens are STORE_BUYSELL, STORE_CHOOSER, STORE_DONATE and so on.
+local BLOCKING_PREFIXES = { "STORE", "WORLD_DIALOG", "LOAD", "SAVE" }
+
+-- The menu names this guard refuses on, derived from the running UI once and
+-- held until that UI changes. Rebuilt whenever the engine reports a different
+-- number of menus, which is what a UI reload or a mod's injection changes.
+F._blocking = nil
+F._blockingFor = nil
+
+--- One menu's name, or nil when the binding will not give it up.
+-- The field is a string wrapper on every build EEex supports, so :get() is the
+-- normal path; a plain string is accepted in case a future binding simplifies.
+local function menuName(menu)
+    local ok, value = pcall(function()
+        local name = menu.name
+        if type(name) == "string" then return name end
+        return name and name:get() or nil
+    end)
+    if not ok or type(value) ~= "string" or value == "" then return nil end
+    return value
+end
+
+--- Every menu the running UI would hide the world behind, by name.
+-- Returns nil when the menu list cannot be read, which has to refuse rather
+-- than accelerate: an unreadable list is indistinguishable from an empty one.
+--
+-- The guard used to name eight menus and additionally ask
+-- EngineGlobals.popupActive(). Both halves were wrong. A lab walk of BG2:EE's
+-- own list found 51 modal menus against those eight, two of which
+-- (STORE, LOAD_SCREEN) were no menu's name and so could never match, while
+-- the engine's options, character-record, level-up and journal screens -- and
+-- EEex's own Options menu, which no release here could have named -- were all
+-- missing. popupActive is not the stronger answer either: with the character
+-- record open it returned false while this walk found CHARACTER on the stack.
+-- It is also unbound before EEex 1.3.1 (#104), which is what stopped
+-- fast-forward working on an older install at all.
+local function blockingMenus()
+    local counted, count = pcall(function() return EngineGlobals.numMenus end)
+    if not counted or type(count) ~= "number" or count < 0 then return nil end
+    if F._blocking and F._blockingFor == count then return F._blocking end
+    local names = {}
+    for index = 0, count - 1 do
+        local read, menu = pcall(function()
+            return EngineGlobals.menus:getReference(index)
+        end)
+        if not read or not menu then return nil end
+        local name = menuName(menu)
+        if not name then return nil end
+        -- `modal` reads as a wrapper object when the menu declares it and nil
+        -- when it does not, so presence is the flag; truth() keeps a future
+        -- numeric 0 from reading as "modal" the way Lua would.
+        local flagged, modal = pcall(function() return menu.modal end)
+        if not flagged then return nil end
+        local blocking = truth(modal)
+        if not blocking then
+            for _, prefix in ipairs(BLOCKING_PREFIXES) do
+                if name:sub(1, #prefix) == prefix then
+                    blocking = true
+                    break
+                end
+            end
+        end
+        if blocking then names[#names + 1] = name end
+    end
+    F._blocking, F._blockingFor = names, count
+    return names
+end
+
 --- Fail closed if the engine cannot be inspected. Called inside pcall by Start
 --- and Tick; no fallback may accelerate an unverified multiplayer/menu state.
 function F.Safe()
@@ -42,8 +114,10 @@ function F.Safe()
     if not e or not worldScreen or e:GetActiveEngine() ~= worldScreen then
         return false, "outside world"
     end
-    -- Current EEex also checks this engine-wide predicate for top-level
-    -- modals. Older bindings retain the input-mode and named-menu guards.
+    -- Where EEex binds it, this engine-wide predicate is asked as well. It is
+    -- not the guard -- the menu walk below covers strictly more, and EEex
+    -- before 1.3.1 does not bind this at all -- but it can only add refusals,
+    -- so a build that offers the second opinion gets to use it.
     if type(EngineGlobals.popupActive) == "function" then
         local popup = EngineGlobals.popupActive()
         if popup == nil then return false, "popup state unavailable" end
@@ -56,10 +130,12 @@ function F.Safe()
         or bit.band(input, 0x801) == 0 or truth(sidebarsGreyed) then
         return false, "dialogue or cutscene"
     end
-    for _, menu in ipairs({ "WORLD_DIALOG", "WORLD_DIALOG_CONFIRM", "STORE",
-        "LOAD_SCREEN", "POPUP_INFO", "POPUP_TWOBUTTON", "POPUP_THREEBUTTON",
-        "POPUP_FOURBUTTON" }) do
-        if truth(Infinity_IsMenuOnStack(menu)) then return false, "menu" end
+    local blocking = blockingMenus()
+    if not blocking then return false, "menu list unavailable" end
+    for _, menu in ipairs(blocking) do
+        local asked, up = pcall(Infinity_IsMenuOnStack, menu)
+        if not asked then return false, "menu state unavailable" end
+        if truth(up) then return false, "menu" end
     end
     local living = 0
     for slot = 0, 5 do
@@ -245,7 +321,13 @@ end
 function F.Init()
     if BfBot._fastListenersRegistered then return true end
     if type(EEex_GameState_AddDestroyedListener) ~= "function" then return false end
-    EEex_GameState_AddDestroyedListener(function() BfBot.Fast.Release("load or exit") end)
+    EEex_GameState_AddDestroyedListener(function()
+        BfBot.Fast.Release("load or exit")
+        -- The next game may bring a different UI up. The menu-count check
+        -- would miss a swap that happens to keep the count, so the cached
+        -- list goes with the game it was read from.
+        BfBot.Fast._blocking, BfBot.Fast._blockingFor = nil, nil
+    end)
     BfBot._fastListenersRegistered = true
     return true
 end

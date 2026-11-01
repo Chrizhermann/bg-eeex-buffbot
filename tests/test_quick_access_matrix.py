@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from engine_menus import ENGINE_MENUS
 from test_ui_selection import ui_lua
 
 
@@ -17,13 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 def shortcut_lua(ui_lua):
     for filename in ("BfBotPer.lua", "BfBotFst.lua"):
         ui_lua.execute((ROOT / "buffbot" / filename).read_text(encoding="utf-8"))
+    ui_lua.execute(ENGINE_MENUS)
     ui_lua.execute("""
         bit=require('bit')
         starts,notices,warnings,party,stack,callbacks={},{},{},{},{WORLD_ACTIONBAR=1},{}
         speed,wall,state=1,1000,'idle'
         worldScreen={}
         e={GetActiveEngine=function() return worldScreen end}
-        EngineGlobals={g_pBaldurChitin={
+        EngineGlobals={numMenus=#uiMenus,menus=engineMenus(),g_pBaldurChitin={
             cNetwork={m_bConnectionEstablished=0},
             m_pObjectGame={m_gameSave={m_inputMode=1},m_worldTime={m_gameTime=500}},
         }}

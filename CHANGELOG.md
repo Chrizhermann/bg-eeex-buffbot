@@ -1,5 +1,90 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Fast-forward refused to run on an older EEex, and its modal guard was
+  mostly looking for menus that do not exist** (#104). Reported from a live
+  playthrough on an EEex 1.2.0 game: the speed-up did nothing. It was
+  refusing on purpose. The guard asked `EngineGlobals.popupActive()` whether
+  a modal window was open, and EEex binds that only from 1.3.1 -- it is one
+  of eleven bindings 1.3.1 adds over 1.2.0 -- so on the older install the
+  check was skipped and the private runtime tail for that game blocked the
+  feature rather than accelerate a live playthrough unguarded.
+
+  The way out was not to name more menus. Walking the running game's own menu
+  list showed the eight names the guard held could not be the modal set:
+  BG2:EE declares **51** modal menus, `STORE` and `LOAD_SCREEN` are no menu's
+  name at all and so could never match anything, and `WORLD_DIALOG` and
+  `WORLD_DIALOG_CONFIRM` are not modal. Four of the eight did real work. The
+  engine's options, character-record, level-up, journal and death screens were
+  all missing, and so was EEex's own Options menu -- a modal that arrived with
+  a mod, which no list written in BuffBot could have known about.
+
+  So the guard now asks the UI instead of remembering. It reads every menu the
+  engine holds, keeps the ones that declare themselves modal, adds the
+  non-modal screens that take the world away anyway by name prefix -- `STORE`,
+  `WORLD_DIALOG`, `LOAD`, `SAVE`, matched against the UI's own names because
+  BG:EE, BG2:EE and IWD:EE spell them differently -- and refuses while any of
+  them is on the stack. On the reference install that is 66 names rather than
+  eight. The list is read once per UI and re-read whenever the engine reports
+  a different number of menus or a game ends, so a mod's modal and a UI reload
+  both land. An unreadable list refuses, because an unreadable list and an
+  empty one look the same and the empty one would accelerate unguarded.
+
+  `popupActive` is still asked where EEex binds it. It is no longer the guard,
+  and it never was the stronger answer: with the character record open it
+  returns false while the walk finds `CHARACTER` on the stack. It can only add
+  refusals, so a build that has it keeps the second opinion.
+
+  **What a player sees:** on EEex 1.2.0 and newer, fast-forward works. On
+  every EEex, it now stops for the options screens, the record screen, a
+  level-up, the journal, a shop and a mod's own dialogs, where before it ran
+  straight through them.
+
+### Lab
+- **The menu set was read off the engine, not reasoned about**
+  (`tools/lab_modal_menus.py`, `tools/probe_modal_menus.lua`, headless lab on
+  BG2:EE 2.7.3.0 + EEex v1.3.1, save "BuffBot Clean Baseline"). The probe
+  walks `EngineGlobals.menus` and reports what the running UI calls modal:
+  151 menus, 51 of them modal. Of the eight names the old guard held, two
+  resolved to no menu and two to non-modal ones.
+- The equivalence that justified dropping `popupActive` was measured, not
+  assumed. A quiet world screen proves nothing -- both answers are "no" there
+  -- so the probe pushes a real modal and reads both. With `POPUP_TWOBUTTON`
+  or `OPTIONS_GAMEPLAY` up, both say yes. With the character record up,
+  `popupActive` says **false** while the walk finds `CHARACTER`: the walk is
+  the stronger guard, not a substitute for a better one.
+- The shipped guard itself was then run against the real engine rather than a
+  test stub: `BfBot.Fast.Safe` permits a quiet world screen, refuses with
+  `menu` while each of three modals is up, and permits again once popped --
+  and gives exactly those answers with `popupActive` removed, which is the
+  state EEex 1.2.0 leaves it in. That is the #104 claim, checked.
+- Reading 151 menus costs ~900us, which is why it happens once per UI and not
+  once per check; the per-check sweep over 66 cached names did not register on
+  the clock. Both only while a run is live.
+- Which EEex binds what was read from the loader's own binding databases
+  rather than release notes: 1.2.0 defines 302 bindings and 1.3.1 defines 313,
+  the eleven new ones include `popupActive`, 1.2.0 drops none, and `menus`,
+  `numMenus` and `uiIsMenuOnStack` -- everything the walk needs -- are present
+  on both. EEex 1.2.0's own `EEex_Menu.lua` already walks the list the same
+  way.
+- Not checked in game: BG:EE/SoD and IWD:EE, whose UI files name their screens
+  differently. Deriving the names at runtime is what is meant to absorb that,
+  and the prefix list is written against the UI's own names for the same
+  reason, but only BG2:EE was walked. Also unchecked on a real EEex 1.2.0
+  install -- there is no 1.2.0 lab, so the older build was reproduced by
+  taking `popupActive` away on 1.3.1, which is what 1.2.0 lacks, and the
+  binding diff is the evidence that nothing else it needs is missing.
+- The full automated suite passes **1676 tests**, 45 of them new for this
+  change: every menu the UI calls modal stops a run, the world UI menus that
+  are always on the stack do not, a modal added while the game runs is picked
+  up, a menu that stops being modal stops blocking, the list is read once per
+  UI, a new game does not inherit the previous one's list, nine ways of
+  failing to read the list all refuse, and the whole guard still refuses on a
+  modal with `popupActive` absent. The in-game suite is green headless in the
+  same lab: all 28 phases pass, 0 failures.
+
 ## v1.12.5 (2026-10-30) — a button that answers when you press it
 
 One finding from the live playthrough, and one regression found while fixing
