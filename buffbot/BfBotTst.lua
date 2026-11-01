@@ -6655,83 +6655,99 @@ function BfBot.Test.PlanModel()
 end
 
 -- ============================================================
--- BfBot.Test.RecipientView — the plan read by recipient, in a live panel
+-- BfBot.Test.PartyTable — the plan as one row per buff, in a live panel
 -- ============================================================
--- The projection itself is covered offline. What is not, and cannot be, is
--- the path from the live party to the rows on screen: Snapshot needs the
--- engine, so nothing offline ever calls _RefreshRecipientRows. Two defects
--- reached a lab through that gap -- the preset index passed as a table, and
--- a layout never re-run for the other reading -- so this phase walks the
--- whole path and looks at what the panel would draw.
-function BfBot.Test.RecipientView()
+-- The projection is covered offline. What is not, and cannot be, is the path
+-- from the live party to the rows on screen: Snapshot needs the engine, so
+-- nothing offline calls _RefreshPartyRows. Three defects reached a lab
+-- through that gap -- a preset index passed as a table, a normalizer whose
+-- result was assigned although it returned nothing, and a colour key no
+-- palette defines -- so this phase walks the whole path and reads back what
+-- the panel would draw.
+function BfBot.Test.PartyTable()
     -- It switches the panel's reading and types in its search box, both of
     -- which are the player's own state, and GetConfig can create a config.
-    return _GuardPhase("Recipient View", function()
-    P("=== Phase: Recipient View (issue #81) ===")
+    return _GuardPhase("Party Table", function()
+    P("=== Phase: Party Table (issue #81) ===")
 
-    if not BfBot.UI or not BfBot.UI._RefreshRecipientRows then
-        _nok("the recipient view is not loaded")
-        return _summary("Recipient View")
+    if not BfBot.UI or not BfBot.UI._RefreshPartyRows then
+        _nok("the party table is not loaded")
+        return _summary("Party Table")
     end
-    -- Checked before anything is touched, not inside the walk: the view is
-    -- a projection of the plan model and has nothing to show without it.
-    if not BfBot.Plan then
-        _nok("BfBot.Plan is not loaded")
-        return _summary("Recipient View")
+    if not BfBot.Plan or not BfBot.Plan.ByGroup then
+        _nok("BfBot.Plan.ByGroup is not loaded")
+        return _summary("Party Table")
     end
 
     local wasPerspective = BfBot.UI._perspective
     local wasSearch = buffbot_searchText
     local wasView = BfBot.UI._view
 
-    -- The reading only applies in the party view, so the phase works there
-    -- and puts the panel back whatever it finds.
     BfBot.UI._view = "party"
     BfBot.UI._perspective = "recipient"
     _check(BfBot.UI._IsRecipientView(), "the panel reports the other reading")
 
-    local okRows, rows = pcall(BfBot.UI._RefreshRecipientRows)
+    local okRows, rows = pcall(BfBot.UI._RefreshPartyRows)
     if not okRows then
-        _nok("_RefreshRecipientRows raised: " .. tostring(rows))
+        _nok("_RefreshPartyRows raised: " .. tostring(rows))
         BfBot.UI._perspective = wasPerspective
         buffbot_searchText = wasSearch
         BfBot.UI._view = wasView
-        return _summary("Recipient View")
+        return _summary("Party Table")
     end
     _check(type(rows) == "table", "the view built a table of rows")
+    buffbot_partyTable = rows
 
-    -- A party exists, so every member is a recipient -- including the ones
-    -- nobody is buffing, which get a header and one explanatory row rather
-    -- than no rows at all.
-    local party = 0
-    for slot = 0, 5 do
-        if EEex_Sprite_GetInPortrait(slot) then party = party + 1 end
-    end
-    local headers, entries, empties = 0, 0, 0
+    local chips, clearable = 0, 0
     for _, row in ipairs(rows) do
-        if row.kind == "recipient" then headers = headers + 1
-        elseif row.kind == "entry" then entries = entries + 1
-        elseif row.kind == "empty" then empties = empties + 1
-        else _nok("a row of unknown kind: " .. tostring(row.kind)) end
+        if type(row.name) ~= "string" or row.name == "" then
+            _nok("a row has no buff name")
+        end
+        chips = chips + #(row.chips or {})
+        if row.clearable == 1 then clearable = clearable + 1 end
+        if #(row.chips or {}) > BfBot.UI.MAX_CHIPS then
+            _nok(row.name .. " has more chips than the table can draw")
+        end
+        -- Clearing has to reach every preset that holds this buff, so the
+        -- row carries an owner per source. A row with chips and no owners
+        -- would offer a Clear that does nothing.
+        if row.clearable == 1 and #(row.owners or {}) == 0 then
+            _nok(row.name .. " offers Clear with nothing to write to")
+        end
+        for _, owner in ipairs(row.owners or {}) do
+            if type(owner.slot) ~= "number" or owner.slot < 0 or owner.slot > 5 then
+                _nok(row.name .. " has an owner outside the portrait slots")
+            end
+            if type(owner.resref) ~= "string" or owner.resref == "" then
+                _nok(row.name .. " has an owner without a resref")
+            end
+        end
     end
-    _check(headers == party,
-        "every party member is a recipient (" .. headers .. " of " .. party .. ")")
-    P("  rows: " .. headers .. " header(s), " .. entries .. " entr(y/ies), "
-        .. empties .. " empty")
+    P("  rows: " .. #rows .. " buff(s), " .. chips .. " chip(s), "
+        .. clearable .. " clearable")
+    _ok("every row names a buff and can be written back")
 
     -- The cells the list widget calls, for every row it would draw and for
     -- rows past the end. A nil reaches the engine as the text "nil".
-    buffbot_recipientTable = rows
     local bad = 0
     for index = 1, #rows + 2 do
-        for _, cell in ipairs({ "Name", "What", "Source", "Count" }) do
-            local fn = BfBot.UI["_RecipientCell" .. cell]
-            local okCell, value = pcall(fn, index)
+        for _, cell in ipairs({ "Icon", "Name", "Sub", "Uses",
+                                "Duration", "Clear" }) do
+            local okCell, value = pcall(BfBot.UI["_PartyCell" .. cell], index)
             if not okCell or type(value) ~= "string" then
                 bad = bad + 1
                 if bad <= 3 then
                     _nok("row " .. index .. " cell " .. cell .. " answered "
                         .. tostring(value))
+                end
+            end
+        end
+        for chip = 1, BfBot.UI.MAX_CHIPS do
+            for _, cell in ipairs({ "Name", "Duration" }) do
+                local okCell, value =
+                    pcall(BfBot.UI["_PartyChip" .. cell], index, chip)
+                if not okCell or type(value) ~= "string" then
+                    bad = bad + 1
                 end
             end
         end
@@ -6742,80 +6758,71 @@ function BfBot.Test.RecipientView()
     -- does not define answers magenta, and that shipped once (#81).
     local magenta = 0
     for index = 1, #rows do
-        for _, fn in ipairs({ BfBot.UI._RecipientNameColor,
-                              BfBot.UI._RecipientWhatColor }) do
-            local okColor, value = pcall(fn, index)
-            if not okColor or type(value) ~= "number" then
-                _nok("row " .. index .. " has no colour: " .. tostring(value))
-            elseif value == 0xFF00FF then
-                magenta = magenta + 1
+        local okName, value = pcall(BfBot.UI._PartyNameColor, index)
+        if not okName or type(value) ~= "number" then
+            _nok("row " .. index .. " has no name colour")
+        elseif value == 0xFF00FF then magenta = magenta + 1 end
+        for chip = 1, BfBot.UI.MAX_CHIPS do
+            for _, fn in ipairs({ BfBot.UI._PartyChipColor,
+                                  BfBot.UI._PartyChipDurationColor }) do
+                local okColor, colour = pcall(fn, index, chip)
+                if not okColor or type(colour) ~= "number" then
+                    _nok("row " .. index .. " chip " .. chip .. " has no colour")
+                elseif colour == 0xFF00FF then magenta = magenta + 1 end
             end
         end
     end
-    _check(magenta == 0, "no row asks for a colour this palette lacks")
+    _check(magenta == 0, "no cell asks for a colour this palette lacks")
 
-    -- A header's summary and an entry's source are what the player reads.
-    for _, row in ipairs(rows) do
-        if row.kind == "recipient" then
-            if type(row.summary) ~= "string" or row.summary == "" then
-                _nok("a recipient header has no coverage summary")
+    -- A party-wide chip shows no portrait and says so instead; a personal
+    -- one names its character. Both are gated, because the chip columns are
+    -- six fixed slots and an unused one must draw nothing at all.
+    for index = 1, #rows do
+        for chip = 1, BfBot.UI.MAX_CHIPS do
+            local exists = BfBot.UI._PartyChipExists(index, chip)
+            local isParty = BfBot.UI._PartyChipIsParty(index, chip)
+            if isParty and not exists then
+                _nok("row " .. index .. " chip " .. chip
+                    .. " is a party chip that does not exist")
             end
-        elseif row.kind == "entry" then
-            if type(row.source) ~= "string" or row.source == "" then
-                _nok("entry " .. tostring(row.name) .. " says nothing about "
-                    .. "where it comes from")
-            end
-            if row.state ~= "planned" and row.state ~= "partial"
-                and row.state ~= "missing" then
-                _nok("entry " .. tostring(row.name) .. " is in no known state")
+            if not exists and BfBot.UI._PartyChipName(index, chip) ~= "" then
+                _nok("row " .. index .. " chip " .. chip
+                    .. " has no slot but draws a name")
             end
         end
     end
-    _ok("every row says what it is and where it comes from")
+    _ok("every chip slot is either filled or silent")
 
     -- The search box filters this reading too, and a query that matches
-    -- nothing empties the table rather than leaving names with no buffs.
-    local firstBuff
-    for _, row in ipairs(rows) do
-        if row.kind == "entry" then firstBuff = row.name break end
-    end
+    -- nothing empties the table rather than leaving rows with no chips.
+    local firstBuff = rows[1] and rows[1].name
     if firstBuff then
         buffbot_searchText = firstBuff
-        local okFiltered, filtered = pcall(BfBot.UI._RefreshRecipientRows)
+        local okFiltered, filtered = pcall(BfBot.UI._RefreshPartyRows)
         _check(okFiltered and type(filtered) == "table",
             "the search rebuilt the rows")
         if okFiltered and type(filtered) == "table" then
-            local kept = 0
-            for _, row in ipairs(filtered) do
-                if row.kind == "entry" then kept = kept + 1 end
-            end
-            _check(kept > 0 and kept <= entries,
-                "searching \"" .. firstBuff .. "\" narrowed the list to "
-                    .. kept .. " of " .. entries)
+            _check(#filtered > 0 and #filtered <= #rows,
+                "searching \"" .. firstBuff .. "\" narrowed the table to "
+                    .. #filtered .. " of " .. #rows)
         end
     else
         _ok("nothing is planned, so there is nothing to search (skipped)")
     end
 
     buffbot_searchText = "zzz-no-such-buff-zzz"
-    local okNone, none = pcall(BfBot.UI._RefreshRecipientRows)
+    local okNone, none = pcall(BfBot.UI._RefreshPartyRows)
     _check(okNone and type(none) == "table" and #none == 0,
         "a query that matches nothing leaves no rows")
-    buffbot_searchText = ""
-
-    -- The empty-state label reads the live table, not the caster list's.
-    buffbot_recipientTable = {}
-    buffbot_searchText = "zzz-no-such-buff-zzz"
+    buffbot_partyTable = {}
     _check(BfBot.UI._SearchFoundNothing() == true,
-        "the empty-state label notices an empty recipient table")
+        "the empty-state label notices an empty table")
     buffbot_searchText = ""
     _check(BfBot.UI._SearchFoundNothing() == false,
         "and says nothing when the box is empty")
 
     -- The layout has to be rebuilt for the other reading: it decides the
-    -- footer's height, the list's row height and which header strip is
-    -- live. Without it the list drew into a rect measured for the caster
-    -- one and lost its bottom row to a half-drawn stripe.
+    -- footer's height, the list's row height and which header strip is live.
     if BfBot.UI._laidOutCounts then
         BfBot.UI._Layout()
         _check(BfBot.UI._laidOutCounts.recipient == true,
@@ -6830,8 +6837,8 @@ function BfBot.Test.RecipientView()
             .. "re-lay (skipped)")
     end
 
-    -- The switch itself: allowed in the party view, inert in the summons
-    -- view, where there are no recipients to group by.
+    -- The switch itself: live in the party view, inert in the summons view,
+    -- where there are no recipients to group by.
     BfBot.UI._view = "summons"
     _check(not BfBot.UI._CanTogglePerspective(),
         "the switch is inert in the summons view")
@@ -6846,7 +6853,7 @@ function BfBot.Test.RecipientView()
     BfBot.UI._Refresh()
     _ok("the panel is back in the reading it was found in")
 
-    return _summary("Recipient View")
+    return _summary("Party Table")
     end)
 end
 
@@ -7255,8 +7262,8 @@ function BfBot.Test.RunAll()
     local planOk = BfBot.Test.PlanModel()
     P("")
 
-    -- Phase: the same plan read by recipient (issue #81)
-    local recipientOk = BfBot.Test.RecipientView()
+    -- Phase: the same plan as one row per buff (issue #81)
+    local recipientOk = BfBot.Test.PartyTable()
     P("")
 
     -- Summary
@@ -7289,7 +7296,7 @@ function BfBot.Test.RunAll()
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
     P("  Plan Model:         " .. (planOk and "PASS" or "FAIL"))
-    P("  Recipient View:     " .. (recipientOk and "PASS" or "FAIL"))
+    P("  Party Table:        " .. (recipientOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 

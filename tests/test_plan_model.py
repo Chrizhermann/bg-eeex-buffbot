@@ -1552,3 +1552,221 @@ def test_the_radial_normalizer_answers_with_the_list_it_was_given(lua):
     lua.execute("empty = BfBot.Plan.NormalizeRadialRequests(snap, {})")
     assert lua.eval("empty ~= nil") is True
     assert lua.eval("#empty") == 0
+
+
+# ============================================================
+# The plan read as one line per buff (issue #81)
+# ============================================================
+#
+# The other way round from ByRecipient, and the reading the panel shows: one
+# line for Haste with everybody on it, rather than Haste repeated under six
+# names. Same decisions underneath, so the two can never disagree.
+
+
+def _by_group(lua, actors, groups, requests, expand=False):
+    lua.execute(
+        """
+        snap = TestSnapshot({ actors = %s, groups = %s })
+        local requests = %s
+        flat = %s
+        plan = BfBot.Plan.Assign(snap, flat)
+        lines = BfBot.Plan.ByGroup(snap, plan)
+        """
+        % (actors, groups, requests,
+           "BfBot.Plan.ExpandRequests(requests)" if expand else "requests")
+    )
+
+
+def test_each_buff_is_one_line_whoever_receives_it(lua):
+    _by_group(
+        lua,
+        '{ { key = "imoen" }, { key = "minsc" }, { key = "jan" } }',
+        '{ { key = "g", name = "Bless", sources = { { actor = "imoen",'
+        ' pool = "p", uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "minsc", on = 1 },'
+        '  { group = "g", target = "jan", on = 1 } }',
+    )
+    assert lua.eval("#lines") == 1
+    assert lua.eval("lines[1].name") == "Bless"
+    assert lua.eval("#lines[1].recipients") == 2
+
+
+def test_the_recipients_read_in_portrait_order(lua):
+    _by_group(
+        lua,
+        '{ { key = "a", slot = 0 }, { key = "b", slot = 1 },'
+        '  { key = "c", slot = 2 } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60 } } } }',
+        '{ { group = "g", target = "c", on = 1 },'
+        '  { group = "g", target = "a", on = 1 } }',
+    )
+    assert [lua.eval(f"lines[1].recipients[{i}].key") for i in (1, 2)] == [
+        "a", "c"]
+
+
+def test_a_party_wide_cast_is_one_recipient_that_says_so(lua):
+    """Six identical chips would read as six casts."""
+    _by_group(
+        lua,
+        '{ { key = "a" }, { key = "b" } }',
+        '{ { key = "chant", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60, aoe = true } } } }',
+        '{ { group = "chant", target = "party", on = 1 } }',
+    )
+    assert lua.eval("#lines[1].recipients") == 1
+    assert lua.eval("lines[1].recipients[1].party") is True
+    assert lua.eval("lines[1].partyWide") is True
+
+
+def test_the_party_chip_leads_whatever_order_the_requests_came_in(lua):
+    _by_group(
+        lua,
+        '{ { key = "a", slot = 0 }, { key = "b", slot = 1 } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60, aoe = true } } } }',
+        '{ { group = "g", target = "a", on = 1 },'
+        '  { group = "g", target = "party", on = 1 } }',
+    )
+    assert lua.eval("lines[1].recipients[1].party") is True
+
+
+def test_lines_come_back_sorted_by_name(lua):
+    """A view, so it writes nothing back and may order for reading."""
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "z", name = "Armor", sources = { { actor = "a",'
+        ' pool = "p", uses = 9, duration = 60 } } },'
+        '  { key = "a", name = "Shield", sources = { { actor = "a",'
+        ' pool = "q", uses = 9, duration = 60 } } } }',
+        '{ { group = "a", target = "a", on = 1 },'
+        '  { group = "z", target = "a", on = 1 } }',
+    )
+    assert [lua.eval(f"lines[{i}].name") for i in (1, 2)] == [
+        "Armor", "Shield"]
+
+
+def test_repeats_collapse_so_three_blesses_are_one_line(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "a", on = 1, rep = 3 } }',
+        expand=True,
+    )
+    assert lua.eval("#plan.decisions") == 3
+    assert lua.eval("#lines") == 1
+    assert lua.eval("#lines[1].recipients") == 1
+    assert lua.eval("lines[1].recipients[1].state") == "planned"
+
+
+def test_a_recipient_nobody_can_supply_is_marked_not_dropped(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" }, { key = "b" } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 1, duration = 60 } } } }',
+        '{ { group = "g", target = "a", on = 1 },'
+        '  { group = "g", target = "b", on = 1 } }',
+    )
+    assert lua.eval("#lines[1].recipients") == 2
+    states = {lua.eval(f"lines[1].recipients[{i}].state") for i in (1, 2)}
+    assert states == {"planned", "missing"}
+    assert lua.eval("lines[1].planned") == 1
+    assert lua.eval("lines[1].short") == 1
+
+
+def test_the_duration_range_spans_what_the_recipients_actually_get(lua):
+    _by_group(
+        lua,
+        '{ { key = "a", slot = 0 }, { key = "b", slot = 1 } }',
+        '{ { key = "g", sources = {'
+        ' { actor = "a", pool = "p", uses = 1, duration = 120 },'
+        ' { actor = "b", pool = "q", uses = 1, duration = 3600 } } } }',
+        '{ { group = "g", target = "a", on = 1 },'
+        '  { group = "g", target = "b", on = 1 } }',
+    )
+    assert lua.eval("lines[1].durationMin") == 120
+    assert lua.eval("lines[1].durationMax") == 3600
+
+
+def test_uses_sum_the_distinct_pools_the_buff_draws_from(lua):
+    """Two clerics with Bless is seven casts, not one of them alone."""
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = {'
+        ' { actor = "a", pool = "p", uses = 4, duration = 60 },'
+        ' { actor = "b", pool = "q", uses = 3, duration = 60 } } } }',
+        '{ { group = "g", target = "a", on = 1 } }',
+    )
+    assert lua.eval("lines[1].uses.total") == 7
+    assert lua.eval("lines[1].uses.free") == 6
+
+
+def test_a_buff_is_self_only_when_no_source_of_it_can_reach_anybody(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60, selfOnly = true } } } }',
+        '{ { group = "g", target = "a", on = 1 } }',
+    )
+    assert lua.eval("lines[1].selfOnly") is True
+
+
+def test_one_source_that_can_reach_others_makes_it_not_self_only(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = {'
+        ' { actor = "a", pool = "p", uses = 9, duration = 60,'
+        ' selfOnly = true },'
+        ' { actor = "b", pool = "q", uses = 9, duration = 60 } } } }',
+        '{ { group = "g", target = "a", on = 1 } }',
+    )
+    assert lua.eval("lines[1].selfOnly") is False
+
+
+def test_a_request_for_somebody_outside_the_party_gets_no_chip(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60 } } } }',
+        '{ { group = "g", target = "khalid", on = 1 } }',
+    )
+    assert lua.eval("#lines") == 1
+    assert lua.eval("#lines[1].recipients") == 0
+    # Assign still recorded why, so the caster view can show it.
+    assert lua.eval("plan.decisions[1].reason") is not None
+
+
+@pytest.mark.parametrize("call", (
+    "BfBot.Plan.ByGroup(nil, nil)",
+    'BfBot.Plan.ByGroup({}, { decisions = {} })',
+    "BfBot.Plan.ByGroup({ order = {} }, {})",
+    'BfBot.Plan.ByGroup("snapshot", { decisions = {} })',
+))
+def test_by_group_answers_nil_to_the_wrong_shape(lua, call):
+    assert lua.eval(call) is None
+
+
+def test_both_readings_see_the_same_plan(lua):
+    """They share the collapse, so a buff cannot be planned in one reading
+    and missing in the other."""
+    _by_group(
+        lua,
+        '{ { key = "a", slot = 0 }, { key = "b", slot = 1 } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 1, duration = 60 } } } }',
+        '{ { group = "g", target = "a", on = 1 },'
+        '  { group = "g", target = "b", on = 1 } }',
+    )
+    lua.execute("recipients = BfBot.Plan.ByRecipient(snap, plan)")
+    chips = {lua.eval(f"lines[1].recipients[{i}].state") for i in (1, 2)}
+    entries = {lua.eval(f"BfBot.Plan.EntryState(recipients[{i}].entries[1])")
+               for i in (1, 2)}
+    assert chips == entries

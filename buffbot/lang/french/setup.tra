@@ -425,32 +425,35 @@
 // ui.view.tooltip_recipient
 @730 = ~Shows what each character receives and what is missing. Click to go back to casting order per character.~
 
-// ui.recipient.covered
-@731 = ~{planned} of {total} covered~
-
-// ui.recipient.nothing_planned
-@732 = ~Nothing planned~
-
-// ui.recipient.from_source
-@733 = ~from {names}~
-
 // ui.recipient.from_party
 @734 = ~whole party~
-
-// ui.recipient.repeat_count
-@735 = ~{planned} of {total}~
 
 // ui.recipient.no_source
 @736 = ~no caster~
 
-// ui.recipient.header.who
-@737 = ~Receives~
+// ui.party.kind_item
+@741 = ~Item~
 
-// ui.recipient.header.what
-@738 = ~Buff~
+// ui.party.self_only
+@742 = ~Self only~
 
-// ui.recipient.header.from
-@739 = ~From~
+// ui.party.whole_party
+@743 = ~Party~
 
-// ui.recipient.header.count
-@740 = ~Times~
+// ui.party.clear
+@744 = ~Clear~
+
+// ui.party.header.name
+@745 = ~Name~
+
+// ui.party.header.uses
+@746 = ~Uses~
+
+// ui.party.header.duration
+@747 = ~Duration~
+
+// ui.party.header.recipients
+@748 = ~Recipients~
+
+// feedback.party_clear_partial
+@749 = ~{name}: {left} character(s) are no longer in the party, so their setting was left alone.~

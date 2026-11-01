@@ -3,23 +3,25 @@
 ## Unreleased
 
 ### Added
-- **The panel can show who receives what** (#81, step 3). A second reading of
-  the same plan, one button away: the character row's right-hand side now
-  carries a By caster / By recipient toggle, and the recipient reading
-  replaces the spell table with one row per character followed by what they
-  receive, where it comes from, and what is missing.
+- **The panel can show the whole party at once** (#81, step 3). A second
+  reading of the same plan, one button away: the character row's right-hand
+  side now carries a By caster / By recipient toggle, and the second reading
+  replaces the per-character spell table with one row per buff -- its icon,
+  what kind of thing it is, how many casts of it are still unspent, how long
+  it lasts, and then everybody receiving it as a chip with their name and
+  their own duration.
+
+  It reads the way the question is asked. "Is Haste covered" is one row with
+  the whole party on it. "What does Minsc get" is one column of chips read
+  downwards, or his name typed into the search box. A party-wide cast is a
+  single chip saying **Party**, never six identical ones -- the point of
+  casting it is that it covers everybody. A character who will not get what
+  the preset promised them is amber and says why, because grey would read as
+  switched off and therefore fine.
 
   It rewrites nothing. Both readings are projections of the one plan, so
   switching is a view change and an edit in either place is the same edit.
   The caster reading stays the default until the other has been lived with.
-
-  Three things the table is careful about. A character with nothing planned
-  gets a header and a sentence saying so, because an empty stretch of
-  parchment reads as a panel that failed to load. A partly planned buff has a
-  tone of its own next to planned and missing -- "2 of 3" is the case a player
-  acts on, and sharing a tone with either neighbour buries it. And a
-  party-wide cast says "whole party" instead of naming whoever happens to
-  cast it, since the point is that it covers everybody.
 
   The toggle has a reserved slot of its own beside the Summons one, which is
   #100's lesson applied rather than relearned: a control squeezed in among
@@ -75,12 +77,23 @@
   the list takes the height back, and the column captions are now the four this
   reading actually has — Receives, Buff, From, Times.
 
-- **The search box works in the recipient reading.** It filtered the caster
-  list only, and sat there doing nothing in the other one. It now asks the same
-  question from the other side: a buff name narrows the list to who is getting
-  it, and a character's own name shows everything they receive. Coverage totals
-  keep counting the whole plan, so a search never quietly rewrites "3 of 6
-  covered".
+- **No party portraits on the chips, and the reason is worth writing down.**
+  The first build put each recipient's face on their chip, which is what the
+  reference UI does. The engine's portrait control cannot live in a list: it
+  is not bounds-checked, so the "draw nothing" value for an unused chip slot
+  crashed the process outright, and it ignores the list's clip rectangle, so
+  the row below the last visible one painted its faces over the footer and
+  scrolling would have done the same over the column headers. Nothing else
+  reaches a party member's portrait resref -- the live sprite keeps only the
+  loaded bitmap -- so the chips carry the name instead, which is what they
+  were there to say. The buff and item icons, which clip correctly, stay.
+
+- **The search box works in the second reading.** It filtered the caster list
+  only, and sat there doing nothing in the other one. It now asks the same
+  question from the other side: a buff name narrows the table to that buff,
+  and a character's own name narrows it to what they receive. The footer's
+  totals keep counting the whole plan, so a search never quietly rewrites how
+  much of the party is covered.
 
 ### Lab
 - **Seen on a screen.** `tools/lab_screenshots.py` grew `--perspective` and
@@ -89,18 +102,21 @@
   chain — requests, normalized, expanded, decisions with their reasons — beside
   the rows the view built. That report is what found the empty plan; a
   screenshot alone would only have shown three characters receiving nothing.
-- A **Recipient View** phase in the in-game suite, 17 checks: that every party
-  member is a recipient, that all four cells answer a string including past the
-  end of the table, that no row asks for a colour the palette lacks, that the
-  search narrows and empties the list, that the layout records and re-runs for
+- A **Party Table** phase in the in-game suite, 17 checks: that every row
+  names a buff and carries what a write needs, that every cell answers a string
+  including past the end of the table, that no cell asks for a colour the
+  palette lacks, that every chip slot is either filled or silent, that the
+  search narrows and empties the table, that the layout records and re-runs for
   the reading, and that the switch is inert in the summons view. It runs inside
   `_GuardPhase` because it writes the player's perspective and search text.
   **29 phases**, green headless.
-- 49 further tests offline: the search filter in this reading, the layout's
-  rect, row height, footer and caption strip, every caster-only control
-  stepping aside, the preset-index contract, the normalizer's return value, and
-  a new `tests/test_palette_keys.py` reading both sides of the colour lookup.
-  **1846 tests** in total.
+- 69 further tests offline: `ByGroup`'s own projection beside `ByRecipient`'s
+  and a check that the two always agree, the search filter in this reading,
+  every cell and chip slot, the layout's rect, row height, footer and caption
+  strip, the chip columns' widths totalling 100 and their indices matching the
+  click handler, every caster-only control stepping aside, the preset-index
+  contract, the normalizer's return value, and a new `tests/test_palette_keys.py`
+  reading both sides of the colour lookup. **1866 tests** in total.
 - 37 further tests for the display layer, all offline: the perspective switch
   including that the summons view remembers it without applying it, every
   cell's text, the three tones, the counts that appear only where they carry

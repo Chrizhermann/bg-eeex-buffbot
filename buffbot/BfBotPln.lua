@@ -569,6 +569,10 @@ function P.ImportLegacy(snapshot, index)
                     return nil, P.REASON.PLAN_TOO_LARGE
                 end
                 requests[#requests + 1] = { group = entry.key, target = target,
+                    -- The resref and the owner's slot, so a view can write
+                    -- this request's config back without a second lookup.
+                    resource = entry.resource, kind = entry.cfg.kind,
+                    sourceSlot = entry.actor.slot,
                     source = entry.actor.key, var = entry.cfg.var,
                     on = 1, rep = BfBot.Persist._NormalizeSpellRepeat(entry.cfg.rep),
                     lock = entry.cfg.lock, tgtUnlock = entry.cfg.tgtUnlock,
@@ -693,17 +697,19 @@ end
 --
 -- Returns nil when the arguments are not a snapshot and an assignment, so a
 -- caller that got them in the wrong order finds out here.
-function P.ByRecipient(snapshot, assignment)
-    if type(snapshot) ~= "table" or type(snapshot.order) ~= "table" then
-        return nil
-    end
+--- PURE: the expanded decisions collapsed back onto the request a player
+--- edits, in the order they were first seen.
+---
+--- `ExpandRequests` fans a repeat count into one decision per cast, and both
+--- readings of the plan have to undo that before they can show a line: three
+--- Blesses are one row saying "3 of 3", not three rows. `origin` is what the
+--- expansion recorded; a request that never went through it is its own origin.
+---
+--- @return list of entries, or nil when the arguments are the wrong shape.
+function P._CollapseDecisions(assignment)
     if type(assignment) ~= "table" or type(assignment.decisions) ~= "table" then
         return nil
     end
-
-    -- Collapse the expanded decisions back onto the request the player edits.
-    -- `origin` is what ExpandRequests recorded; a request that never went
-    -- through it is its own origin.
     local collapsed, order = {}, {}
     for _, decision in ipairs(assignment.decisions) do
         local request = decision.request
@@ -744,6 +750,18 @@ function P.ByRecipient(snapshot, assignment)
     for _, entry in ipairs(order) do
         entry._seenSource, entry._seenReason = nil, nil
     end
+    return order
+end
+
+function P.ByRecipient(snapshot, assignment)
+    if type(snapshot) ~= "table" or type(snapshot.order) ~= "table" then
+        return nil
+    end
+    if type(assignment) ~= "table" or type(assignment.decisions) ~= "table" then
+        return nil
+    end
+
+    local order = P._CollapseDecisions(assignment)
 
     local recipients, byKey = {}, {}
     for _, actor in ipairs(snapshot.order) do
@@ -777,6 +795,138 @@ function P.ByRecipient(snapshot, assignment)
     end
 
     return recipients
+end
+
+--- PURE: the plan as one line per buff, with its recipients hanging off it.
+---
+--- The other way round from `ByRecipient`, and the reading the panel shows:
+--- a player scanning for "is Haste covered" wants one line for Haste with
+--- everybody on it, not Haste repeated under six names. Same decisions
+--- underneath, so the two readings can never disagree.
+---
+--- A party-wide cast is **one** chip saying so, not six identical ones: the
+--- point of casting it is that it covers everybody, and six chips would make
+--- it look like six casts.
+---
+--- Lines come back sorted by display name. This is a view and writes nothing
+--- back, so it does not disturb the player's cast order -- and finding a buff
+--- in a list of forty is what the order of an overview is for.
+---
+--- @return list of lines, or nil when the arguments are the wrong shape.
+function P.ByGroup(snapshot, assignment)
+    if type(snapshot) ~= "table" or type(snapshot.order) ~= "table" then
+        return nil
+    end
+    local entries = P._CollapseDecisions(assignment)
+    if not entries then return nil end
+
+    local byKey = {}
+    for _, actor in ipairs(snapshot.order) do byKey[actor.key] = actor end
+
+    local lines, byGroup = {}, {}
+    for _, entry in ipairs(entries) do
+        local group = snapshot.groups and snapshot.groups[entry.group]
+        local line = byGroup[entry.group]
+        if not line then
+            line = { key = entry.group,
+                name = group and group.name or entry.group,
+                icon = group and group.icon or "",
+                kind = group and group.kind or "spl",
+                recipients = {}, entries = {}, planned = 0, short = 0 }
+            byGroup[entry.group] = line
+            lines[#lines + 1] = line
+            -- Self-only is a property of the buff, not of one request: it is
+            -- true when no source of it can reach anybody else.
+            local sources = group and group.sources or {}
+            line.selfOnly = #sources > 0
+            for _, source in ipairs(sources) do
+                if not source.selfOnly then line.selfOnly = false end
+            end
+            line.uses = P._GroupUses(snapshot, assignment, sources)
+        end
+
+        line.entries[#line.entries + 1] = entry
+        if entry.planned >= entry.repeats and entry.repeats > 0 then
+            line.planned = line.planned + 1
+        else
+            line.short = line.short + 1
+        end
+
+        -- One chip for a party-wide cast; otherwise one per target that is
+        -- still in the party. A target who left belongs to nobody, exactly as
+        -- in the other reading -- Assign has already recorded why.
+        local state = P.EntryState(entry)
+        if entry.partyWide then
+            line.partyWide = true
+            line.recipients[#line.recipients + 1] = {
+                party = true, slot = nil, key = "party",
+                duration = entry.duration, state = state,
+                reason = entry.reasons[1], entry = entry }
+        elseif byKey[entry.target] then
+            local actor = byKey[entry.target]
+            line.recipients[#line.recipients + 1] = {
+                key = actor.key, name = actor.name, slot = actor.slot,
+                duration = entry.duration, state = state,
+                reason = entry.reasons[1], entry = entry }
+        end
+    end
+
+    for _, line in ipairs(lines) do
+        -- The party chip first, then portrait order: the widest statement
+        -- about this buff leads, and the rest read like the portrait bar.
+        table.sort(line.recipients, function(a, b)
+            if (a.party or false) ~= (b.party or false) then return a.party end
+            return (a.slot or 99) < (b.slot or 99)
+        end)
+        local shortest, longest
+        for _, recipient in ipairs(line.recipients) do
+            local duration = recipient.duration
+            if duration then
+                if not shortest or duration < shortest then shortest = duration end
+                if not longest or duration > longest then longest = duration end
+            end
+        end
+        line.durationMin, line.durationMax = shortest, longest
+    end
+
+    table.sort(lines, function(a, b)
+        if a.name ~= b.name then return a.name < b.name end
+        return a.key < b.key
+    end)
+    return lines
+end
+
+--- How a collapsed entry stands: fully planned, partly, or not at all.
+-- Shared by both readings so a buff cannot be amber in one and grey in the
+-- other.
+function P.EntryState(entry)
+    if type(entry) ~= "table" or entry.repeats == nil then return "missing" end
+    if entry.planned >= entry.repeats and entry.repeats > 0 then
+        return "planned"
+    end
+    if entry.planned > 0 then return "partial" end
+    return "missing"
+end
+
+--- PURE: "4 of 7" for a buff -- how many casts of it are still unspent.
+-- A buff can sit in several pools (two clerics, an item charge), so the
+-- counts are summed over the distinct pools its sources draw from. A source
+-- whose pool the snapshot does not know contributes nothing rather than
+-- counting as zero capacity, which would read as "all spent".
+function P._GroupUses(snapshot, assignment, sources)
+    local seen, free, total = {}, 0, 0
+    for _, source in ipairs(sources or {}) do
+        local pool = source.pool
+        local capacity = pool and snapshot.pools and snapshot.pools[pool]
+        if capacity and not seen[pool] then
+            seen[pool] = true
+            local used = (assignment and assignment.used
+                and assignment.used[pool]) or 0
+            total = total + capacity
+            free = free + math.max(capacity - used, 0)
+        end
+    end
+    return { free = free, total = total }
 end
 
 --- One line per recipient for a compact summary: how much is covered.

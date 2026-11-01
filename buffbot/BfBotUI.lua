@@ -421,9 +421,10 @@ buffbot_selectedRow = 0
 -- the preset's order, cast queue, or the indices used by editing actions.
 buffbot_visibleSpells = {}
 buffbot_visibleSelectedRow = 0
--- The recipient view's flat rows, and the selection the widget keeps (#81).
-buffbot_recipientTable = {}
-buffbot_recipientSelectedRow = 0
+-- The party table's rows -- one per buff -- and the selection the widget
+-- keeps (#81).
+buffbot_partyTable = {}
+buffbot_partySelectedRow = 0
 buffbot_searchText = ""
 BfBot.UI._appliedSearchText = ""
 
@@ -714,12 +715,12 @@ function BfBot.UI._SearchTick()
     -- rebuilt here too. Guarded like the refresh's own build: a plan that
     -- cannot be made must not take the search box down with it.
     if BfBot.UI._IsRecipientView() then
-        local ok, rows = pcall(BfBot.UI._RefreshRecipientRows)
-        buffbot_recipientTable = (ok and type(rows) == "table") and rows or {}
-        buffbot_recipientSelectedRow = 0
+        local ok, rows = pcall(BfBot.UI._RefreshPartyRows)
+        buffbot_partyTable = (ok and type(rows) == "table") and rows or {}
+        buffbot_partySelectedRow = 0
     end
     if EEex_Menu_GetItem then
-        for _, name in ipairs({ "bbList", "bbRecipientList" }) do
+        for _, name in ipairs({ "bbList", "bbPartyList" }) do
             local item = EEex_Menu_GetItem(name)
             if item and item.scrollbar then item.scrollbar.top = 0 end
         end
@@ -734,7 +735,7 @@ end
 function BfBot.UI._SearchFoundNothing()
     if buffbot_searchText == "" then return false end
     if BfBot.UI._IsRecipientView() then
-        return #buffbot_recipientTable == 0
+        return #buffbot_partyTable == 0
     end
     return #buffbot_visibleSpells == 0
 end
@@ -1415,10 +1416,10 @@ function BfBot.UI._Layout()
     -- live strip leaves the other one a frame behind after every switch.
     -- The percentages are the list's own column widths (26/40/24/10), so a
     -- caption always stands over the column it names.
-    header("bbRHWho",    0, 26)
-    header("bbRHWhat",  26, 40)
-    header("bbRHFrom",  66, 24)
-    header("bbRHCount", 90, 10)
+    header("bbRHWho",    4, 20)
+    header("bbRHWhat",  24,  5)
+    header("bbRHFrom",  29,  9)
+    header("bbRHCount", 38, 54)
 
     -- Spell list (fills middle area). The footer below is four 28px rows
     -- with 6px between them and 12px of air above the bottom rail; keeping
@@ -1435,13 +1436,17 @@ function BfBot.UI._Layout()
     -- height is not a multiple of `rowheight`, which reads as a spell cut in
     -- half by the parchment. The leftover pixels go above the footer, where
     -- they are just air.
-    -- BuffBot.menu: bbList rowheight 36, bbRecipientList rowheight 34.
-    local rowH = recipient and 34 or 36
+    -- BuffBot.menu: bbList rowheight 36, bbPartyList rowheight 48. The
+    -- party table's row carries a name over a sub-line and a chip with a
+    -- portrait over two lines of text, so it needs the taller row. These two
+    -- numbers have to match the menu's, or the list draws a row it has no
+    -- room for and it spills over the footer.
+    local rowH = recipient and 48 or 36
     local listH = math.max(ph - (hdrY - py) - hdrH - footerH, rowH)
     listH = listH - (listH % rowH)
     -- Both lists get the rect, for the reason both header strips do.
     setArea("bbList", cx, listY, cw, listH)
-    setArea("bbRecipientList", cx, listY, cw, listH)
+    setArea("bbPartyList", cx, listY, cw, listH)
     setArea("bbSearchEmpty", cx + 10, listY + 8, cw - 20, 28)
 
     -- ---------------------------------------------------------------
@@ -1925,12 +1930,12 @@ function BfBot.UI._RefreshState()
     -- plan that cannot be built must leave the panel usable -- the caster
     -- view depends on none of it.
     if BfBot.UI._IsRecipientView() then
-        local ok, rows = pcall(BfBot.UI._RefreshRecipientRows)
+        local ok, rows = pcall(BfBot.UI._RefreshPartyRows)
         if ok and type(rows) == "table" then
-            buffbot_recipientTable = rows
+            buffbot_partyTable = rows
         else
-            buffbot_recipientTable = {}
-            BfBot._Warn("Recipient view: could not build the plan: "
+            buffbot_partyTable = {}
+            BfBot._Warn("Party table: could not build the plan: "
                 .. tostring(rows))
         end
     end
@@ -4222,231 +4227,327 @@ function BfBot.UI.ToggleDebug()
 end
 
 -- ============================================================
--- Recipient view rows (issue #81, step 3)
+-- The party table (issue #81): one row per buff
 -- ============================================================
-
---- How a recipient entry stands: planned, partly planned, or not at all.
--- Three states rather than two, because "2 of 3 Blesses" is the case a
--- player acts on and collapsing it into either yes or no hides the work.
-function BfBot.UI._EntryState(entry)
-    if not entry or entry.repeats == nil then return "missing" end
-    if entry.planned >= entry.repeats and entry.repeats > 0 then
-        return "planned"
-    end
-    if entry.planned > 0 then return "partial" end
-    return "missing"
-end
-
---- Who a planned entry comes from, as the player should read it.
--- A party-wide cast says so rather than naming a caster, because the point
--- is that it covers everybody; a personal cast names its casters; an
--- unplanned one says there is nobody to cast it.
-function BfBot.UI._EntrySourceLabel(entry, snapshot)
-    if not entry then return "" end
-    if entry.partyWide then
-        return BfBot.L10N.Get("ui.recipient.from_party")
-    end
-    local names = {}
-    for _, source in ipairs(entry.sources or {}) do
-        local actor = snapshot and snapshot.actors
-            and snapshot.actors[source.actor]
-        names[#names + 1] = actor and actor.name or source.actor
-    end
-    if #names == 0 then
-        return BfBot.L10N.Get("ui.recipient.no_source")
-    end
-    return BfBot.L10N.Format("ui.recipient.from_source",
-        { names = table.concat(names, ", ") })
-end
-
---- "2 of 3", or nothing when a single cast was asked for and planned.
--- A count on every row would be noise; a count only where it differs is
--- information.
-function BfBot.UI._EntryCountLabel(entry)
-    if not entry or (entry.repeats or 0) <= 1 then return "" end
-    if entry.planned >= entry.repeats then
-        return BfBot.L10N.Format("ui.recipient.repeat_count",
-            { planned = entry.planned, total = entry.repeats })
-    end
-    return BfBot.L10N.Format("ui.recipient.repeat_count",
-        { planned = entry.planned or 0, total = entry.repeats })
-end
-
---- PURE: the recipient view's flat row list, from P.ByRecipient's output.
 --
--- The table widget takes one flat list, so a recipient becomes a header row
--- followed by its entries. A recipient with nothing planned still gets a
--- header and one explanatory row: an empty stretch of table would read as a
--- panel that failed to load rather than a character nobody is buffing.
---
--- `snapshot` is only read for caster names and may be nil, in which case a
--- source falls back to its actor key -- a name is presentation, and a missing
--- one must not cost the row.
---- The search box filters this reading too, and means the same thing.
--- A recipient whose own name matches keeps everything they receive, because
--- "what does Minsc get" is the other question the box is asked. Returns nil
--- for a recipient the query leaves nothing of, so the list never answers a
--- search with a column of names and no buffs.
-function BfBot.UI._RecipientEntries(recipient, snapshot, query)
-    if query == "" then return recipient.entries end
-    if BfBot.UI._SearchName(recipient.name or recipient.key)
-        :find(query, 1, true) then
-        return recipient.entries
+-- The other reading of the plan, and the one the panel shows: a line per
+-- buff with everybody receiving it on that line, rather than the buff
+-- repeated under each of six names. A player asking "is Haste covered" reads
+-- one row; a player asking "what does Minsc get" reads down one column of
+-- chips. The caster view keeps the per-character editing.
+
+--- How many recipient chips a row can show. The party is six, and a
+--- party-wide cast collapses into one chip, so six slots always suffice.
+BfBot.UI.MAX_CHIPS = 6
+
+--- The sub-line under a buff's name: what kind of thing it is.
+-- Short and only where it says something -- a line under every name would be
+-- noise, and the two facts that change how a buff behaves are that it comes
+-- from an item and that it cannot leave its caster.
+function BfBot.UI._PartyRowSub(line)
+    if type(line) ~= "table" then return "" end
+    local parts = {}
+    if line.kind == "itm" then
+        parts[#parts + 1] = BfBot.L10N.Get("ui.party.kind_item")
     end
-    local kept = {}
-    for _, entry in ipairs(recipient.entries) do
-        local group = snapshot and snapshot.groups
-            and snapshot.groups[entry.group]
-        local name = group and group.name or entry.group
-        if BfBot.UI._SearchName(name):find(query, 1, true) then
-            kept[#kept + 1] = entry
-        end
+    if line.selfOnly then
+        parts[#parts + 1] = BfBot.L10N.Get("ui.party.self_only")
     end
-    return #kept > 0 and kept or nil
+    return table.concat(parts, " / ")
 end
 
-function BfBot.UI._BuildRecipientRows(recipients, snapshot, query)
+--- "4/7": casts of this buff still unspent, over what the party holds.
+function BfBot.UI._PartyRowUses(line)
+    if type(line) ~= "table" or not line.uses then return "" end
+    if (line.uses.total or 0) <= 0 then return "" end
+    return tostring(line.uses.free) .. "/" .. tostring(line.uses.total)
+end
+
+--- One duration, or a range when the recipients do not all get the same.
+-- Two clerics of different levels cast the same Bless for different lengths,
+-- and the shorter one is what the player has to plan around -- so the range
+-- is shown rather than an average that is true for nobody.
+function BfBot.UI._PartyRowDuration(line)
+    if type(line) ~= "table" or not line.durationMin then return "" end
+    local low = BfBot.UI._FormatDuration(line.durationMin)
+    if not line.durationMax or line.durationMax == line.durationMin then
+        return low
+    end
+    return low .. "-" .. BfBot.UI._FormatDuration(line.durationMax)
+end
+
+--- PURE: the party table's rows, from ByGroup's output.
+-- `query` filters on the buff's name or on a recipient's, so the one search
+-- box answers both "where is Haste" and "what does Minsc get".
+function BfBot.UI._BuildPartyRows(lines, query)
     local rows = {}
     query = BfBot.UI._SearchName(query or "")
-    for _, recipient in ipairs(recipients or {}) do
-        local entries = BfBot.UI._RecipientEntries(
-            recipient, snapshot, query)
-        if entries then
+    for _, line in ipairs(lines or {}) do
+        local keep = query == ""
+            or BfBot.UI._SearchName(line.name or line.key):find(query, 1, true)
+        if not keep then
+            for _, recipient in ipairs(line.recipients or {}) do
+                local name = recipient.party
+                    and BfBot.L10N.Get("ui.recipient.from_party")
+                    or recipient.name or recipient.key
+                if BfBot.UI._SearchName(name):find(query, 1, true) then
+                    keep = true
+                    break
+                end
+            end
+        end
+        if keep then
+            local chips = {}
+            for index, recipient in ipairs(line.recipients or {}) do
+                if index > BfBot.UI.MAX_CHIPS then break end
+                chips[index] = {
+                    party = recipient.party and 1 or nil,
+                    -- -1, not nil: `portrait lua` is handed a number and a
+                    -- slot outside 0-5 draws nothing.
+                    slot = recipient.slot or -1,
+                    name = recipient.party
+                        and BfBot.L10N.Get("ui.party.whole_party")
+                        or recipient.name or recipient.key,
+                    dur = recipient.duration
+                        and BfBot.UI._FormatDuration(recipient.duration) or "",
+                    state = recipient.state or "missing",
+                    reason = recipient.reason,
+                    key = recipient.key,
+                }
+            end
+            -- What a write needs: the owning character's portrait slot and
+            -- the resref their preset keys this buff under. Slots, never
+            -- sprites -- the click happens frames later and a sprite from
+            -- now may not be the one then.
+            local owners, seen = {}, {}
+            for _, entry in ipairs(line.entries or {}) do
+                local request = entry.request
+                local resource = request and request.resource
+                local slot = request and request.sourceSlot
+                local id = tostring(slot) .. "/" .. tostring(resource)
+                if resource and slot and not seen[id] then
+                    seen[id] = true
+                    owners[#owners + 1] = { slot = slot, resref = resource,
+                        kind = request.kind }
+                end
+            end
             rows[#rows + 1] = {
-                kind = "recipient",
-                key = recipient.key,
-                name = recipient.name,
-                slot = recipient.slot,
-                planned = recipient.planned,
-                short = recipient.short,
-                summary = BfBot.L10N.Format("ui.recipient.covered",
-                    { planned = recipient.planned,
-                      total = recipient.planned + recipient.short }),
+                key = line.key, name = line.name, icon = line.icon or "",
+                owners = owners,
+                sub = BfBot.UI._PartyRowSub(line),
+                uses = BfBot.UI._PartyRowUses(line),
+                dur = BfBot.UI._PartyRowDuration(line),
+                chips = chips,
+                -- Clear only where there is something to clear, so the column
+                -- is a list of what is set rather than a wall of buttons.
+                clearable = #chips > 0 and 1 or nil,
+                short = line.short or 0,
+                planned = line.planned or 0,
             }
-            if #entries == 0 then
-                rows[#rows + 1] = {
-                    kind = "empty",
-                    key = recipient.key,
-                    name = BfBot.L10N.Get("ui.recipient.nothing_planned"),
-                }
-            end
-            for _, entry in ipairs(entries) do
-                local group = snapshot and snapshot.groups
-                    and snapshot.groups[entry.group]
-                rows[#rows + 1] = {
-                    kind = "entry",
-                    key = recipient.key,
-                    group = entry.group,
-                    -- The scan's own name and icon, so the two readings of
-                    -- one plan never disagree about what a buff is called.
-                    name = group and group.name or entry.group,
-                    icon = group and group.icon or "",
-                    entry = entry,
-                    partyWide = entry.partyWide and 1 or nil,
-                    state = BfBot.UI._EntryState(entry),
-                    source = BfBot.UI._EntrySourceLabel(entry, snapshot),
-                    count = BfBot.UI._EntryCountLabel(entry),
-                    duration = entry.duration,
-                    reason = entry.reasons and entry.reasons[1] or nil,
-                }
-            end
         end
     end
     return rows
 end
 
---- The recipient table's cells (issue #81).
--- Each takes the widget's `rowNumber`. Reading a row the table does not have
--- returns an empty string rather than nil: the engine draws whatever it is
--- given, and nil has shown up as the literal text "nil" before.
-function BfBot.UI._RecipientRow(rowNumber)
-    local rows = buffbot_recipientTable
+--- The party table, rebuilt from a fresh plan.
+-- A fresh snapshot every time, for the reason the executor takes one: uses,
+-- equipment, summons and allegiance all move between an edit and a cast.
+function BfBot.UI._RefreshPartyRows()
+    local snapshot = BfBot.Plan.Snapshot()
+    if not snapshot then return {} end
+    local requests, reason, resource =
+        BfBot.Plan.ImportLegacy(snapshot, BfBot.UI._presetIdx)
+    if not requests then
+        BfBot._Warn("Party table: the preset could not be read ("
+            .. tostring(reason) .. ", " .. tostring(resource) .. ")")
+        BfBot.UI._partyTotals = nil
+        return {}
+    end
+    requests = BfBot.Plan.NormalizeRadialRequests(snapshot, requests)
+    local assignment = BfBot.Plan.Assign(snapshot, BfBot.Plan.ExpandRequests(requests))
+    local lines = BfBot.Plan.ByGroup(snapshot, assignment)
+    -- The footer counts the whole plan, never the filtered view: "45 planned
+    -- / 6 unavailable" has to keep meaning the preset.
+    local totals = { planned = 0, short = 0, buffs = 0 }
+    for _, line in ipairs(lines or {}) do
+        totals.buffs = totals.buffs + 1
+        totals.planned = totals.planned + (line.planned or 0)
+        totals.short = totals.short + (line.short or 0)
+    end
+    BfBot.UI._partyTotals = totals
+    return BfBot.UI._BuildPartyRows(lines, buffbot_searchText)
+end
+
+-- ------------------------------------------------------------
+-- The cells the list widget calls. Each takes the widget's `rowNumber`, and
+-- a row the table does not have answers an empty string rather than nil --
+-- the engine draws whatever it is given, and nil has shown up as the literal
+-- text "nil" before.
+-- ------------------------------------------------------------
+
+--- Which column each chip sits in, so a click can be read back. The list
+--- hands its action the clicked `cellNumber`, which is how a chip is made
+--- clickable without a button inside a list row.
+BfBot.UI.PARTY_CHIP_CELL = 5
+BfBot.UI.PARTY_CLEAR_CELL = 11
+
+--- A click in the party table. Chips open the caster choice for that
+--- recipient; the last column clears the buff for everybody.
+function BfBot.UI._OnPartyRowAction(cell)
+    local rowNumber = buffbot_partySelectedRow
+    local row = BfBot.UI._PartyRow(rowNumber)
+    if not row or type(cell) ~= "number" then return end
+    if cell == BfBot.UI.PARTY_CLEAR_CELL then
+        BfBot.UI.ClearPartyRow(rowNumber)
+        return
+    end
+    -- A chip opens the choice of who casts this buff for that recipient.
+    -- That sub-window is the next step of #81; until it exists a chip is
+    -- inert on purpose, rather than wired to a handler that does nothing.
+end
+
+--- Switch a buff off wherever the party has it configured.
+-- The row aggregates every character who could supply it, so clearing it
+-- has to reach each of their presets -- clearing only the one the panel
+-- happens to be showing would leave the row half set and looking cleared.
+function BfBot.UI.ClearPartyRow(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    if not row or #(row.owners or {}) == 0 then return end
+    local cleared, skipped = 0, 0
+    for _, owner in ipairs(row.owners) do
+        local sprite = EEex_Sprite_GetInPortrait(owner.slot)
+        if sprite then
+            BfBot.Persist.SetSpellEnabled(sprite, BfBot.UI._presetIdx,
+                owner.resref, 0, owner.kind)
+            cleared = cleared + 1
+        else
+            skipped = skipped + 1
+        end
+    end
+    -- A character who left between the plan and the click keeps their entry;
+    -- saying so is better than a row that half clears without a word.
+    if skipped > 0 then
+        BfBot._Display(BfBot.L10N.Format("feedback.party_clear_partial",
+            { name = row.name, left = skipped }))
+    end
+    if cleared > 0 then BfBot.UI._Refresh() end
+end
+
+function BfBot.UI._PartyRow(rowNumber)
+    local rows = buffbot_partyTable
     if type(rows) ~= "table" then return nil end
     return rows[rowNumber]
 end
 
-function BfBot.UI._RecipientCellName(rowNumber)
-    local row = BfBot.UI._RecipientRow(rowNumber)
-    -- Only a header row carries the name, so the names form a margin the eye
-    -- can follow instead of repeating beside every buff.
-    if not row or row.kind ~= "recipient" then return "" end
-    return row.name or ""
+function BfBot.UI._PartyCellIcon(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row and row.icon or ""
 end
 
-function BfBot.UI._RecipientCellWhat(rowNumber)
-    local row = BfBot.UI._RecipientRow(rowNumber)
-    if not row then return "" end
-    if row.kind == "recipient" then return row.summary or "" end
-    if row.kind == "empty" then return row.name or "" end
-    -- The group's own name, carried over from the scan when the row was
-    -- built, so a buff reads the same in both views.
-    return row.name or row.group or ""
+function BfBot.UI._PartyCellName(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row and row.name or ""
 end
 
-function BfBot.UI._RecipientCellSource(rowNumber)
-    local row = BfBot.UI._RecipientRow(rowNumber)
-    if not row or row.kind ~= "entry" then return "" end
-    return row.source or ""
+function BfBot.UI._PartyCellSub(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row and row.sub or ""
 end
 
-function BfBot.UI._RecipientCellCount(rowNumber)
-    local row = BfBot.UI._RecipientRow(rowNumber)
-    if not row or row.kind ~= "entry" then return "" end
-    return row.count or ""
+function BfBot.UI._PartyCellUses(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row and row.uses or ""
 end
 
---- A header row's name stands out; nothing else uses this column.
-function BfBot.UI._RecipientNameColor(rowNumber)
-    local row = BfBot.UI._RecipientRow(rowNumber)
-    if row and row.kind == "recipient" and row.short and row.short > 0 then
-        return BfBot.UI._T("lockText")
+function BfBot.UI._PartyCellDuration(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row and row.dur or ""
+end
+
+function BfBot.UI._PartyCellClear(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    if not row or not row.clearable then return "" end
+    return BfBot.L10N.Get("ui.party.clear")
+end
+
+--- The chip in slot `index` of this row, or nil when the row has fewer.
+function BfBot.UI._PartyChip(rowNumber, index)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    if not row or type(row.chips) ~= "table" then return nil end
+    return row.chips[index]
+end
+
+--- Whether this chip is the single "Party" one.
+function BfBot.UI._PartyChipIsParty(rowNumber, index)
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    return chip ~= nil and chip.party == 1
+end
+
+--- Whether this chip slot is used at all.
+-- The portrait label is gated on it: the engine does not bounds-check the
+-- index it is handed, and an unused slot answering -1 took the whole game
+-- down with an access violation (lab, BG2:EE 2.7.3.0).
+function BfBot.UI._PartyChipExists(rowNumber, index)
+    return BfBot.UI._PartyChip(rowNumber, index) ~= nil
+end
+
+--- The chip plate's frame: the quieter face for a chip nobody supplies, so
+--- a gap in the plan reads as a gap and not as another filled slot.
+function BfBot.UI._PartyChipFrame(rowNumber, index)
+    return 0
+end
+
+--- Whether this row has anything to clear, for the button's own plate.
+function BfBot.UI._PartyRowClearable(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row ~= nil and row.clearable == 1
+end
+
+function BfBot.UI._PartyChipName(rowNumber, index)
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    return chip and chip.name or ""
+end
+
+function BfBot.UI._PartyChipDuration(rowNumber, index)
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    if not chip then return "" end
+    if chip.state == "missing" then
+        return BfBot.L10N.Get("ui.recipient.no_source")
     end
-    return BfBot.UI._T("headerSub")
+    return chip.dur or ""
 end
 
---- Three states, three tones: planned, partly planned, not planned.
--- The middle one has its own tone because "2 of 3" is the case a player acts
--- on, and giving it either of the other two tones hides that.
-function BfBot.UI._RecipientWhatColor(rowNumber)
-    local row = BfBot.UI._RecipientRow(rowNumber)
-    if not row then return BfBot.UI._T("text") end
-    if row.kind == "recipient" then return BfBot.UI._T("headerSub") end
-    if row.kind == "empty" then return BfBot.UI._T("textMuted") end
-    if row.state == "planned" then return BfBot.UI._T("text") end
-    if row.state == "partial" then return BfBot.UI._T("lockText") end
+--- The chip's plate, so an empty slot leaves bare parchment rather than an
+--- empty box the eye reads as a missing portrait.
+function BfBot.UI._PartyChipBam(rowNumber, index)
+    if not BfBot.UI._PartyChip(rowNumber, index) then return "" end
+    return BfBot.UI._PlateBam()
+end
+
+--- Three tones, as in the other reading: planned, partly planned, missing.
+function BfBot.UI._PartyChipColor(rowNumber, index)
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    if not chip then return BfBot.UI._T("btnText") end
+    if chip.state == "planned" then return BfBot.UI._T("btnText") end
+    -- Amber for both of the unfinished states, not grey. A grey chip reads
+    -- as switched off and therefore fine; this one is a character the player
+    -- asked to have covered and who will not be, which is the thing the
+    -- table exists to show.
+    return BfBot.UI._T("lockText")
+end
+
+function BfBot.UI._PartyChipDurationColor(rowNumber, index)
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    if chip and chip.state ~= "planned" then return BfBot.UI._T("lockText") end
     return BfBot.UI._T("textMuted")
 end
 
-
---- The recipient view's table, rebuilt from a fresh plan.
--- A fresh snapshot every time, for the same reason the executor takes one:
--- uses, equipment, summons and allegiance all move between an edit and a
--- cast, so a cached plan would show a picture that is no longer true.
-function BfBot.UI._RefreshRecipientRows()
-    local snapshot = BfBot.Plan.Snapshot()
-    if not snapshot then return {} end
-    -- The preset INDEX, which is what ImportLegacy takes; the panel's own
-    -- field is _presetIdx. Passing the wrong one migrates nothing and the
-    -- view reports an empty plan for a preset full of buffs -- which is what
-    -- the first lab capture of this view showed.
-    local requests, reason, resource =
-        BfBot.Plan.ImportLegacy(snapshot, BfBot.UI._presetIdx)
-    if not requests then
-        -- A spell in the preset that the scan can no longer see. The caster
-        -- view shows it as a dead row; here there is nothing to show it on,
-        -- so say so rather than draw an empty panel.
-        BfBot._Warn("Recipient view: the preset could not be read ("
-            .. tostring(reason) .. ", " .. tostring(resource) .. ")")
-        BfBot.UI._recipientTotals = nil
-        return {}
+--- A buff nobody can supply is dimmed whole, so the eye finds the gaps.
+function BfBot.UI._PartyNameColor(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    if row and (row.planned or 0) == 0 and (row.short or 0) > 0 then
+        return BfBot.UI._T("textMuted")
     end
-    requests = BfBot.Plan.NormalizeRadialRequests(snapshot, requests)
-    local flat = BfBot.Plan.ExpandRequests(requests)
-    local assignment = BfBot.Plan.Assign(snapshot, flat)
-    local recipients = BfBot.Plan.ByRecipient(snapshot, assignment)
-    BfBot.UI._recipientTotals = BfBot.Plan.RecipientTotals(recipients)
-    -- The totals count the whole plan, not the filtered view: "3 of 6
-    -- covered" has to keep meaning the party, or a search would quietly
-    -- rewrite the number the player is reading it for.
-    return BfBot.UI._BuildRecipientRows(recipients, snapshot, buffbot_searchText)
+    return BfBot.UI._T("text")
 end
+
