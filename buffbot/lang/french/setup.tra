@@ -22,10 +22,11 @@
 @110 = ~L’assistant LuaJIT de BuffBot n’a pas produit l’état requis du chargeur EEex. Réinstallez EEex avec la prise en charge de LuaJIT / Experimental, puis relancez BuffBot.~
 // installer.component.main
 @111 = ~BuffBot : automatisation des améliorations en jeu~
-// installer.main.luajit_required
-@112 = ~BuffBot nécessite qu’EEex LuaJIT soit actif avant l’installation du composant principal. Installez d’abord "BuffBot : prise en charge d’EEex LuaJIT", ou activez le composant LuaJIT / Experimental d’EEex, puis réinstallez BuffBot. Les utilisateurs de Project Infinity doivent placer le composant LuaJIT avant "BuffBot : automatisation des améliorations en jeu".~
 // installer.catalog_directory
 @113 = ~french~
+
+// installer.main.luajit_optional
+@114 = ~BuffBot is installed without EEex LuaJIT. Everything that casts works. Without the loader there is no file access, so preset export and import, the log files and the file-based parts of the in-game test suite are unavailable, and the panel shows English text whichever language you chose. Install "BuffBot: EEex LuaJIT Support" (recommended) to enable them.~
 
 // common.buffbot
 @300 = ~BuffBot~

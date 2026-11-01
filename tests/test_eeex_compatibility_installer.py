@@ -39,6 +39,11 @@ KEEP_BYTES = b"unrelated override sentinel\n"
 SOURCE_LUA51 = b"synthetic EEex lua51.dll\0"
 SOURCE_PROVIDER = b"synthetic EEex LuaProvider.dll\0"
 REQUIREMENT_TEXT = "BuffBot requires EEex v0.11.0-alpha or later"
+# The notice the main component prints when it installs on an EEex
+# whose own Lua is in use. Read from the catalog rather than copied,
+# because the wording is a translator's to change.
+MAIN_LUAJIT_NOTICE_TEXT = "BuffBot is installed without EEex"
+
 MAIN_LUAJIT_REQUIREMENT_TEXT = (
     "BuffBot requires EEex LuaJIT to be active before installing the main component"
 )
@@ -1422,7 +1427,7 @@ def test_helper_and_main_share_one_exact_luajit_state_detector() -> None:
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
-def test_main_only_rejects_inactive_luajit_without_product_mutation(
+def test_main_installs_on_eeex_own_lua_and_says_what_is_unavailable(
     game_factory, layout: str
 ) -> None:
     game = game_factory(layout)
@@ -1440,13 +1445,17 @@ def test_main_only_rejects_inactive_luajit_without_product_mutation(
     process = game.install(0)
     transcript = game.transcript(process)
 
-    assert process.returncode != 0, transcript
-    assert "SUCCESSFULLY INSTALLED" not in transcript, transcript
-    assert "NOT INSTALLED" in transcript, transcript
-    assert MAIN_LUAJIT_REQUIREMENT_TEXT in transcript, transcript
-    assert game.snapshot() == before
-    game.assert_no_main_payload()
+    # Since #106 the main component installs here instead of refusing. The
+    # `goto` statements the old gate blamed are ordinary Lua 5.2, and the
+    # bitwise calls now fall back to EEex's own natives, so the only cost is
+    # the file-backed features the notice names.
+    assert process.returncode == 0, transcript
+    assert "SUCCESSFULLY INSTALLED" in transcript, transcript
+    assert MAIN_LUAJIT_NOTICE_TEXT in transcript, transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT not in transcript, transcript
+    # Installing must still not touch the TLK, whatever the loader state.
     assert _read_tlk_strings(game.lang_tlk) == [""]
+    assert game.snapshot() != before, "the runtime files should be in place"
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
@@ -1489,7 +1498,7 @@ def test_selecting_helper_and_main_together_activates_before_main(
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
-def test_wrong_main_first_attempt_is_safe_then_helper_allows_retry(
+def test_main_first_installs_then_the_helper_upgrades_it(
     game_factory, layout: str
 ) -> None:
     game = game_factory(layout)
@@ -1504,21 +1513,23 @@ def test_wrong_main_first_attempt_is_safe_then_helper_allows_retry(
     )
     before = game.snapshot()
 
-    rejected = game.install(0)
-    rejected_transcript = game.transcript(rejected)
-    assert "SUCCESSFULLY INSTALLED" not in rejected_transcript, rejected_transcript
-    assert MAIN_LUAJIT_REQUIREMENT_TEXT in rejected_transcript, rejected_transcript
-    assert game.snapshot() == before
+    # Main first, on EEex's own Lua: since #106 this installs and names what
+    # is unavailable instead of refusing.
+    first = game.install(0)
+    first_transcript = game.transcript(first)
+    _assert_installed(game, first)
+    assert MAIN_LUAJIT_NOTICE_TEXT in first_transcript, first_transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT not in first_transcript, first_transcript
 
+    # Adding the helper afterwards is still the upgrade path: it activates the
+    # loader without disturbing the runtime main already put in place.
     helper = game.install(1)
     _assert_installed(game, helper)
     game.assert_luajit_state(game.expected_version)
-    game.assert_no_main_payload()
-    helper_state = game.snapshot()
 
+    # Main re-installed on top of the helper still installs cleanly.
     main = game.install(0)
     _assert_installed(game, main)
-    game.assert_main_installed(helper_state)
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
@@ -1573,7 +1584,7 @@ def test_released_main_then_helper_install_updates_under_helper_first_tp2(
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))
-def test_released_main_only_update_fails_safely_then_retry_recovers(
+def test_released_main_only_update_installs_without_touching_the_loader(
     game_factory, layout: str
 ) -> None:
     game = game_factory(layout)
@@ -1596,27 +1607,25 @@ def test_released_main_only_update_fails_safely_then_retry_recovers(
     update = game.install(0)
     transcript = game.transcript(update)
 
-    assert update.returncode != 0, transcript
-    assert MAIN_LUAJIT_REQUIREMENT_TEXT in transcript, transcript
-    assert "NOT INSTALLED" in transcript, transcript
-    game.assert_luajit_state(game.expected_version)
-    game.assert_no_main_payload()
+    # Updating a released install over this loader state used to refuse; since
+    # #106 it installs (#112's claim that LuaJIT is required is gone with it).
+    _assert_installed(game, update)
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT not in transcript, transcript
 
-    failed = game.snapshot()
-    assert failed.key == released.key
-    assert failed.bif == released.bif
-    assert failed.root_tlk == released.root_tlk
-    assert failed.lang_tlk == released.lang_tlk
-    assert failed.eeex == released.eeex
-    assert failed.eeex_scripts == released.eeex_scripts
-    assert failed.loader_ini == released.loader_ini
-    assert failed.root_lua51 == released.root_lua51
-    assert failed.root_provider == released.root_provider
-    assert failed.override == {
-        name: payload
-        for name, payload in released.override.items()
-        if name not in MAIN_OUTPUT_FILES | LEGACY_OUTPUT_FILES
-    }
+    # What must still hold: the update changes BuffBot's own files and nothing
+    # else. The loader, the game data and both TLKs are left exactly as the
+    # released install left them.
+    updated = game.snapshot()
+    assert updated.key == released.key
+    assert updated.bif == released.bif
+    assert updated.root_tlk == released.root_tlk
+    assert updated.lang_tlk == released.lang_tlk
+    assert updated.eeex == released.eeex
+    assert updated.eeex_scripts == released.eeex_scripts
+    assert updated.loader_ini == released.loader_ini
+    assert updated.root_lua51 == released.root_lua51
+    assert updated.root_provider == released.root_provider
+    game.assert_luajit_state(game.expected_version)
 
     active_log = [
         line.replace("\\", "/").casefold()
@@ -1624,15 +1633,15 @@ def test_released_main_only_update_fails_safely_then_retry_recovers(
         if line.startswith("~")
     ]
     assert any("buffbot/setup-buffbot.tp2~ #0 #1" in line for line in active_log)
-    assert not any("buffbot/setup-buffbot.tp2~ #0 #0" in line for line in active_log)
+    assert any("buffbot/setup-buffbot.tp2~ #0 #0" in line for line in active_log)
 
     retry = game.install(0)
     _assert_installed(game, retry)
     game.assert_luajit_state(game.expected_version)
     after_retry = game.snapshot()
-    assert after_retry.loader_ini == failed.loader_ini
-    assert after_retry.root_lua51 == failed.root_lua51
-    assert after_retry.root_provider == failed.root_provider
+    assert after_retry.loader_ini == updated.loader_ini
+    assert after_retry.root_lua51 == updated.root_lua51
+    assert after_retry.root_provider == updated.root_provider
     assert MAIN_OUTPUT_FILES.issubset(after_retry.override)
     assert after_retry.override["bfbotper.lua"] == (
         ROOT / "buffbot/BfBotPer.lua"
@@ -1659,20 +1668,22 @@ def test_explicit_helper_removal_does_not_seed_main_lifecycle_exception(
     _assert_installed(game, helper)
     game.assert_luajit_state(game.expected_version)
 
+    # Removing the helper and installing main in the same WeiDU process: the
+    # loader state is back to EEex's own Lua, and since #106 that is an
+    # install with a notice rather than a refusal. What must NOT happen is the
+    # helper's earlier success being mistaken for an active loader -- so the
+    # notice has to appear, not be skipped.
     removal_and_main = game.uninstall_then_install(1, 0)
     transcript = game.transcript(removal_and_main)
-    assert removal_and_main.returncode != 0, transcript
+    assert removal_and_main.returncode == 0, transcript
     assert "SUCCESSFULLY REMOVED" in transcript, transcript
-    assert MAIN_LUAJIT_REQUIREMENT_TEXT in transcript, transcript
-    assert "NOT INSTALLED" in transcript, transcript
-    assert game.snapshot() == inactive
-    game.assert_no_main_payload()
+    assert "SUCCESSFULLY INSTALLED" in transcript, transcript
+    assert MAIN_LUAJIT_REQUIREMENT_TEXT not in transcript, transcript
 
     fresh_main = game.install(0)
     fresh_transcript = game.transcript(fresh_main)
-    assert fresh_main.returncode != 0, fresh_transcript
-    assert MAIN_LUAJIT_REQUIREMENT_TEXT in fresh_transcript, fresh_transcript
-    assert game.snapshot() == inactive
+    assert fresh_main.returncode == 0, fresh_transcript
+    assert MAIN_LUAJIT_NOTICE_TEXT in fresh_transcript, fresh_transcript
 
 
 @pytest.mark.parametrize("layout", ("v011", "v1"))

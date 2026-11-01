@@ -25,6 +25,25 @@
   the panel cannot light something nobody touched.
 
 ### Changed
+- **BuffBot installs without the LuaJIT loader** (#106). The main component
+  used to refuse, and the reason it printed was wrong: the `goto` statements
+  it blamed are ordinary Lua 5.2, which EEex's own interpreter runs. With the
+  bitwise calls going through helpers that fall back to EEex's own natives,
+  the only thing the loader still buys is file access -- so the component now
+  installs and names what is unavailable instead of turning the player away.
+
+  Without it: no preset export or import, no log files, the file-backed parts
+  of the in-game test suite are skipped, and the panel shows English whatever
+  language was chosen. Everything that casts works. The LuaJIT component stays
+  and is still what we recommend; it is simply no longer a gate.
+
+  The refusal string is deleted rather than left unused, because a message
+  saying BuffBot requires LuaJIT would be wrong the moment it appeared again.
+  Two of the in-game suite's file helpers that only worked by accident -- they
+  were reached exclusively through a guarded caller -- now check for
+  themselves.
+
+### Changed
 - **The bitwise calls no longer need LuaJIT** (#106, first half). `bit` is
   LuaJIT's library, and 28 `bit.*` calls across the scanner, classifier,
   executor and fast-forward guard were what stopped BuffBot loading on an

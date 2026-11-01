@@ -350,11 +350,16 @@ END
 // helper after it has already succeeded earlier in this same WeiDU process.
 // Accept only that invocation-local proof; fresh main-only runs still require
 // the exact loader state above and helper uninstalls never seed the proof.
+// BuffBot used to refuse here, and the reason it gave was wrong: the `goto`
+// statements it blamed are ordinary Lua 5.2, which EEex's own interpreter
+// runs. What actually needs the loader is `io` -- and since v1.12.7 the
+// bitwise calls go through helpers that fall back to EEex's own natives, so
+// the only cost of installing without it is the features the notice names.
 ACTION_IF (
   luajit_active = 0
   AND bfbot_luajit_helper_succeeded_this_run = 0
 ) BEGIN
-  FAIL @112
+  PRINT @114
 END
 
 // WeiDU 249 restores the previously installed %LANGUAGE% while replaying an

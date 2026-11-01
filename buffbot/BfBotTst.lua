@@ -327,6 +327,7 @@ local function _SaveFiles(paths)
 end
 
 local function _ReadBytes(path)
+    if type(io) ~= "table" or type(io.open) ~= "function" then return false end
     local f = io.open(path, "rb")
     if not f then return false end
     local bytes = f:read("*a")
@@ -1553,7 +1554,10 @@ function BfBot.Test.ExportImport()
         }}},
         opts = { skip = 1 }, ovr = {},
     }
-    local ff = io.open(fakePath, "w")
+    -- Without the LuaJIT loader there is no `io` at all, so this case has
+    -- nothing to import from and is reported rather than raised (#106).
+    local ff = type(io) == "table" and type(io.open) == "function"
+        and io.open(fakePath, "w") or nil
     if ff then
         ff:write("BfBot._import = " .. BfBot.Persist._Serialize(fakeConfig) .. "\n")
         ff:close()

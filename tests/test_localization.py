@@ -89,8 +89,8 @@ CATALOG_SCHEMA = {
     109: "installer.luajit.installed",
     110: "installer.luajit.postcondition_failed",
     111: "installer.component.main",
-    112: "installer.main.luajit_required",
     113: "installer.catalog_directory",
+    114: "installer.main.luajit_optional",
     # Common and static menu labels (300-399)
     300: "common.buffbot",
     301: "common.party",
@@ -913,10 +913,11 @@ def test_installer_localization_contract_copies_selected_catalog_and_writes_no_t
         100: 1,
         101: 2,
         102: 2,
-        **{catalog_id: 1 for catalog_id in range(103, 113)},
+        **{catalog_id: 1 for catalog_id in range(103, 112)},
+        114: 1,
     }
     english, _ = parse_tra(LANG_ROOT / "english" / "setup.tra")
-    for catalog_id in range(100, 113):
+    for catalog_id in list(range(100, 112)) + [114]:
         assert (
             source.count(f"@{catalog_id}")
             == expected_installer_ref_counts[catalog_id]
