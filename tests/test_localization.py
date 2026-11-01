@@ -1035,28 +1035,49 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.6 (2026-11-01) — the guard asks the game now"
+        "v1.12.7 (2026-11-01) — let go and it lets go"
     )
+    # What the player saw, one day after the press feedback shipped (#105).
+    assert "stayed bright after you let go" in current_normalized
+    assert "dem loslassen hell" in current_normalized
+    # The rule that replaced "counter above zero", and why it is bounded: a
+    # real press cannot be staged, so the fix has to hold either way.
+    assert "what counts now is movement" in current_normalized
+    assert "that grace is deliberate" in current_normalized
+    # The requirement the installer dropped, and the reason it was never the
+    # real one -- a later change must not reinstate the gate on that premise.
+    assert "installs without the luajit loader" in current_normalized
+    assert "`goto` statements" in current_normalized
+    # What the player loses without the loader, named rather than implied.
+    assert "no preset export or import" in current_normalized
+    assert "full automated suite passes **1727 tests**" in current_normalized
+    assert "all 28" in current_normalized
+    assert ("not checked in game: the pressed look under a real finger"
+            in current_normalized)
+
+    guard_release = source.split("\n## v1.12.6 (2026-11-01)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # What the player met, and the second defect the fix uncovered (#104).
-    assert "and its modal guard was" in current_normalized
+    assert "and its modal guard was" in guard_release
     # The two names that could never match anything. A release that quietly
     # goes back to naming menus in the source loses this.
-    assert "are no menu's" in current_normalized
-    assert "could have known about" in current_normalized
+    assert "are no menu's" in guard_release
+    assert "could have known about" in guard_release
     # Why popupActive is not the guard, stated with the case that shows it.
-    assert "on the stack. it can only add" in current_normalized
+    assert "on the stack. it can only add" in guard_release
     # The fail-closed rule, so a later change cannot soften it into a skip.
-    assert "would accelerate unguarded" in current_normalized
+    assert "would accelerate unguarded" in guard_release
     # How the non-modal screens are matched, and how many names that leaves.
-    assert "by name prefix" in current_normalized
-    assert "66 names rather than" in current_normalized
+    assert "by name prefix" in guard_release
+    assert "66 names rather than" in guard_release
     # Which EEex binds what, read off the loader rather than release notes.
-    assert "302 bindings and 1.3.1 defines 313" in current_normalized
-    assert "full automated suite passes **1676 tests**" in current_normalized
-    assert "all 28" in current_normalized
-    # Both limits this release ships with, named rather than implied.
-    assert "not checked in game: bg:ee/sod and iwd:ee" in current_normalized
-    assert "there is no 1.2.0 lab" in current_normalized
+    assert "302 bindings and 1.3.1 defines 313" in guard_release
+    assert "full automated suite passes **1676 tests**" in guard_release
+    assert "all 28" in guard_release
+    # Both limits that release shipped with, named rather than implied.
+    assert "not checked in game: bg:ee/sod and iwd:ee" in guard_release
+    assert "there is no 1.2.0 lab" in guard_release
 
     press_release = source.split("\n## v1.12.5 (2026-10-30)", 1)[1].split(
         "\n## ", 1

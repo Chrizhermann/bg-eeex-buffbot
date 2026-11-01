@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v1.12.7 (2026-11-01) — let go and it lets go
+
+A defect the press feedback shipped with one day earlier, and the installer
+finally letting go of a requirement it never really had. No save schema
+change, no shipped asset byte changes, and nothing about casting moves.
 
 ### Fixed
 - **A pressed button stayed bright after you let go** (#105). Reported from a
@@ -70,6 +74,25 @@
   including the four-operand fold, the shift fallback agreeing with LuaJIT
   across every byte-aligned count, and a guard that no shipped module calls
   `bit.*` directly again.
+
+### Lab
+- The full automated suite passes **1727 tests**, 51 of them new for this
+  release: the held-counter rule is driven as a sequence of (clock, counter)
+  readings so a frozen counter, a counter dropping to zero, a button first
+  seen mid-press and two buttons not sharing one press are each pinned, and
+  both bitwise resolution paths run through the real resolver in
+  `BfBotCor.lua`. The four installer tests that drove the old LuaJIT gate end
+  to end through real WeiDU are inverted rather than dropped, so installing
+  without the loader is proved the way refusing used to be. The in-game suite
+  is green headless on BG2:EE 2.7.3.0 + EEex v1.3.1: all 28 phases pass,
+  0 failures.
+- Not checked in game: the pressed look under a real finger. A mouse press
+  cannot be staged headlessly, which is why the fix is built to be correct
+  whether the counter climbs through a hold or freezes at once — but which of
+  those the engine actually does is still unmeasured. Also unchecked:
+  installing on an EEex without the LuaJIT loader in a real game. The
+  installer tests exercise that path through WeiDU against a synthetic game,
+  and no BuffBot lab runs on EEex's own Lua.
 
 ## v1.12.6 (2026-11-01) — the guard asks the game now
 
