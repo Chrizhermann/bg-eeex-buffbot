@@ -635,3 +635,157 @@ function P.BuildQueue(snapshot, requests)
     end
     return queue, plan
 end
+
+-- ============================================================
+-- Recipient projection (issue #81, step 3)
+-- ============================================================
+--
+-- The caster view asks "what will Jaheira do". The recipient view asks "who is
+-- protected, and who is missing something". Both are the same requests seen
+-- from opposite ends, which is why this is a projection and not a second
+-- store: an edit in either view is the same edit, because there is only one
+-- plan underneath.
+
+--- Whether a request protects everybody rather than one character.
+-- `target` is an actor key, or the literal "party" for a radial cast that
+-- lands on the whole group. NormalizeRadialRequests converts a self-cast
+-- aura into exactly that, so a Chant configured on one cleric arrives here as
+-- one party-wide request rather than six per-character ones.
+function P.IsPartyWide(request)
+    return request ~= nil and request.target == "party"
+end
+
+--- The plan grouped by who receives it.
+--
+-- Takes a snapshot and the result of P.Assign over EXPANDED requests, and
+-- returns one entry per actor in portrait order:
+--
+--   { key, name, slot, actor, entries = {...}, planned = n, short = n }
+--
+-- Each entry is one ORIGINAL request -- repeats collapsed back together,
+-- because "Bless x3" is one line a player edits, not three:
+--
+--   { group, request, partyWide, repeats, planned, sources = {...},
+--     duration, reasons = {...} }
+--
+-- `planned` counts the repeats that found a source and `repeats` how many
+-- were asked for, so a partly satisfiable row can say "2 of 3" instead of
+-- collapsing to a yes or a no. `sources` lists the assigned casters in the
+-- order the allocator chose them, deduplicated, because two repeats of the
+-- same buff may legitimately come off two different characters. `reasons`
+-- lists why the unplanned repeats failed, deduplicated and in first-seen
+-- order; it is empty when nothing is short.
+--
+-- A party-wide request appears under EVERY recipient, which is the point of
+-- the view: a character protected by somebody else's Chant is protected. It
+-- carries `partyWide = true` so the view can say where it comes from instead
+-- of offering to cast it again per person.
+--
+-- Disabled requests are included and reported short with the DISABLED reason.
+-- A view that wants to hide them filters; the projection does not decide that,
+-- because "nothing is planned for Minsc" and "everything for Minsc is
+-- switched off" must not look the same.
+--
+-- Returns nil when the arguments are not a snapshot and an assignment, so a
+-- caller that got them in the wrong order finds out here.
+function P.ByRecipient(snapshot, assignment)
+    if type(snapshot) ~= "table" or type(snapshot.order) ~= "table" then
+        return nil
+    end
+    if type(assignment) ~= "table" or type(assignment.decisions) ~= "table" then
+        return nil
+    end
+
+    -- Collapse the expanded decisions back onto the request the player edits.
+    -- `origin` is what ExpandRequests recorded; a request that never went
+    -- through it is its own origin.
+    local collapsed, order = {}, {}
+    for _, decision in ipairs(assignment.decisions) do
+        local request = decision.request
+        if type(request) == "table" then
+            local origin = request.origin or request
+            local entry = collapsed[origin]
+            if not entry then
+                entry = { group = request.group, request = origin,
+                    partyWide = P.IsPartyWide(request), target = request.target,
+                    repeats = 0, planned = 0, sources = {}, reasons = {},
+                    _seenSource = {}, _seenReason = {} }
+                collapsed[origin] = entry
+                order[#order + 1] = entry
+            end
+            entry.repeats = entry.repeats + 1
+            if decision.source then
+                entry.planned = entry.planned + 1
+                local key = decision.source.actor
+                if key ~= nil and not entry._seenSource[key] then
+                    entry._seenSource[key] = true
+                    entry.sources[#entry.sources + 1] = {
+                        actor = key, slot = decision.source.slot,
+                        casterRef = decision.source.casterRef,
+                    }
+                end
+                -- The shortest duration of the repeats is the one a player
+                -- plans around: it is when this buff next needs attention.
+                if decision.duration and (entry.duration == nil
+                        or decision.duration < entry.duration) then
+                    entry.duration = decision.duration
+                end
+            elseif decision.reason and not entry._seenReason[decision.reason] then
+                entry._seenReason[decision.reason] = true
+                entry.reasons[#entry.reasons + 1] = decision.reason
+            end
+        end
+    end
+    for _, entry in ipairs(order) do
+        entry._seenSource, entry._seenReason = nil, nil
+    end
+
+    local recipients, byKey = {}, {}
+    for _, actor in ipairs(snapshot.order) do
+        local recipient = { key = actor.key, name = actor.name,
+            slot = actor.slot, actor = actor,
+            entries = {}, planned = 0, short = 0 }
+        recipients[#recipients + 1] = recipient
+        byKey[actor.key] = recipient
+    end
+
+    for _, entry in ipairs(order) do
+        local targets = {}
+        if entry.partyWide then
+            for _, recipient in ipairs(recipients) do
+                targets[#targets + 1] = recipient
+            end
+        elseif byKey[entry.target] then
+            targets[1] = byKey[entry.target]
+        end
+        -- A request whose target left the party belongs to nobody. It is not
+        -- dropped silently: Assign already recorded its reason, and the
+        -- caster view still shows it.
+        for _, recipient in ipairs(targets) do
+            recipient.entries[#recipient.entries + 1] = entry
+            if entry.planned >= entry.repeats then
+                recipient.planned = recipient.planned + 1
+            else
+                recipient.short = recipient.short + 1
+            end
+        end
+    end
+
+    return recipients
+end
+
+--- One line per recipient for a compact summary: how much is covered.
+-- Returns `{ planned, short, recipients }` over the whole projection, so a
+-- footer can say "4 of 6 characters fully covered" without walking it again.
+function P.RecipientTotals(recipients)
+    local totals = { planned = 0, short = 0, recipients = 0, covered = 0 }
+    for _, recipient in ipairs(recipients or {}) do
+        totals.recipients = totals.recipients + 1
+        totals.planned = totals.planned + recipient.planned
+        totals.short = totals.short + recipient.short
+        if recipient.short == 0 and recipient.planned > 0 then
+            totals.covered = totals.covered + 1
+        end
+    end
+    return totals
+end

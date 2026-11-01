@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **The plan can be read by recipient** (#81, step 3's foundation). The caster
+  view asks what Jaheira will do; the recipient view asks who is protected and
+  who is missing something. `BfBot.Plan.ByRecipient` is that second reading of
+  the same requests -- a projection, not a second store, so an edit in either
+  view is the same edit because there is only one plan underneath.
+
+  Per character in portrait order it reports the entries aimed at them, how
+  many are fully planned and how many fall short. Three things it gets right
+  that a naive grouping would not: a party-wide cast appears under **every**
+  character it lands on, because being protected by somebody else's Chant is
+  being protected, and all of them point at the one shared entry; repeats
+  collapse back into the single line a player edits, so three Blesses read as
+  "3 of 3" rather than three rows; and a switched-off request is listed as
+  short with its reason rather than hidden, because "nothing is planned for
+  Minsc" and "everything for Minsc is off" must not look the same.
+
+  Nothing in the panel uses this yet -- the view itself is the next step.
+
+### Lab
+- 16 new tests, all offline: the projection's portrait order, the party-wide
+  fan-out, repeat collapsing, a partly satisfiable row reporting "2 of 3" with
+  its reason, two repeats off two casters listing both sources once, the
+  shortest repeat's duration being the one reported, a request for somebody
+  outside the party belonging to nobody, and five argument shapes that answer
+  nil rather than rendering an empty plan. **1743 tests** in total.
+
 ## v1.12.7 (2026-11-01) — let go and it lets go
 
 A defect the press feedback shipped with one day earlier, and the installer

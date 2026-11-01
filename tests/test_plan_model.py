@@ -1305,3 +1305,231 @@ def test_an_unreadable_projectile_is_treated_as_an_ordinary_self_cast():
     assert runtime.eval(
         "BfBot.Class.IsRadialParty({ actionType = 5, missileType = 10 })"
     ) is False
+
+
+# ============================================================
+# The recipient projection (issue #81, step 3)
+# ============================================================
+#
+# The caster view asks what Jaheira will do; the recipient view asks who is
+# protected and who is missing something. Both read the same requests, so
+# these tests pin the projection rather than a second store: what a recipient
+# is shown, how repeats collapse back into one editable line, and that a
+# party-wide cast counts for everybody it lands on.
+
+
+def _by_recipient(lua, actors, groups, requests, expand=False):
+    """Project a plan, optionally through ExpandRequests first."""
+    lua.execute(
+        """
+        snap = TestSnapshot({ actors = %s, groups = %s })
+        local requests = %s
+        flat = %s
+        plan = BfBot.Plan.Assign(snap, flat)
+        recipients = BfBot.Plan.ByRecipient(snap, plan)
+        totals = BfBot.Plan.RecipientTotals(recipients)
+        """
+        % (actors, groups, requests,
+           "BfBot.Plan.ExpandRequests(requests)" if expand else "requests")
+    )
+
+
+def test_each_recipient_gets_the_requests_aimed_at_it_in_portrait_order(lua):
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" }, { key = "minsc" }, { key = "jaheira" } }',
+        '{ { key = "g", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "minsc", on = 1 },'
+        '  { group = "g", target = "imoen", on = 1 } }',
+    )
+    assert lua.eval("#recipients") == 3
+    # Portrait order, not the order the requests were written in.
+    assert [lua.eval(f"recipients[{i}].key") for i in (1, 2, 3)] == [
+        "imoen", "minsc", "jaheira"]
+    assert lua.eval("#recipients[1].entries") == 1
+    assert lua.eval("#recipients[2].entries") == 1
+    assert lua.eval("#recipients[3].entries") == 0
+    # A character with nothing planned is not "covered".
+    assert lua.eval("totals.covered") == 2
+    assert lua.eval("totals.recipients") == 3
+
+
+def test_a_party_wide_cast_counts_for_everybody_it_lands_on(lua):
+    """Protected by somebody else's Chant is protected."""
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" }, { key = "minsc" } }',
+        '{ { key = "chant", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 9, duration = 60, aoe = true } } } }',
+        '{ { group = "chant", target = "party", on = 1 } }',
+    )
+    assert lua.eval("#recipients[1].entries") == 1
+    assert lua.eval("#recipients[2].entries") == 1
+    assert lua.eval("recipients[1].entries[1].partyWide") is True
+    assert lua.eval("recipients[2].entries[1].partyWide") is True
+    # One request, so both recipients point at the same entry: editing it in
+    # either place is the same edit, which is the whole design.
+    assert lua.eval("recipients[1].entries[1] == recipients[2].entries[1]")
+    assert lua.eval("totals.covered") == 2
+
+
+def test_repeats_collapse_into_one_line_the_player_edits(lua):
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" } }',
+        '{ { key = "g", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "imoen", on = 1, rep = 3 } }',
+        expand=True,
+    )
+    assert lua.eval("#plan.decisions") == 3
+    assert lua.eval("#recipients[1].entries") == 1
+    entry = "recipients[1].entries[1]"
+    assert lua.eval(f"{entry}.repeats") == 3
+    assert lua.eval(f"{entry}.planned") == 3
+    assert lua.eval("recipients[1].planned") == 1
+    assert lua.eval("recipients[1].short") == 0
+
+
+def test_a_partly_satisfiable_row_says_how_much_of_it_is_planned(lua):
+    """Two of three is neither a yes nor a no, and must not read as either."""
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" } }',
+        '{ { key = "g", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 2, duration = 300 } } } }',
+        '{ { group = "g", target = "imoen", on = 1, rep = 3 } }',
+        expand=True,
+    )
+    entry = "recipients[1].entries[1]"
+    assert lua.eval(f"{entry}.repeats") == 3
+    assert lua.eval(f"{entry}.planned") == 2
+    assert lua.eval(f"#{entry}.reasons") == 1
+    assert lua.eval(f"{entry}.reasons[1]") == "no_unreserved_uses"
+    assert lua.eval("recipients[1].short") == 1
+    assert lua.eval("recipients[1].planned") == 0
+    assert lua.eval("totals.covered") == 0
+
+
+def test_two_repeats_off_two_casters_list_both_sources_once(lua):
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" }, { key = "jan" }, { key = "minsc" } }',
+        '{ { key = "g", sources = {'
+        '   { actor = "imoen", pool = "a", uses = 1, duration = 300 },'
+        '   { actor = "jan", pool = "b", uses = 1, duration = 300 } } } }',
+        '{ { group = "g", target = "minsc", on = 1, rep = 2 } }',
+        expand=True,
+    )
+    entry = "recipients[3].entries[1]"
+    assert lua.eval(f"{entry}.planned") == 2
+    assert lua.eval(f"#{entry}.sources") == 2
+    assert {lua.eval(f"{entry}.sources[1].actor"),
+            lua.eval(f"{entry}.sources[2].actor")} == {"imoen", "jan"}
+
+
+def test_the_same_caster_twice_is_listed_once(lua):
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" }, { key = "minsc" } }',
+        '{ { key = "g", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 2, duration = 300 } } } }',
+        '{ { group = "g", target = "minsc", on = 1, rep = 2 } }',
+        expand=True,
+    )
+    entry = "recipients[2].entries[1]"
+    assert lua.eval(f"{entry}.planned") == 2
+    assert lua.eval(f"#{entry}.sources") == 1
+    assert lua.eval(f"{entry}.sources[1].actor") == "imoen"
+
+
+def test_the_shortest_repeat_duration_is_the_one_reported(lua):
+    """It says when this buff next needs attention."""
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" }, { key = "jan" }, { key = "minsc" } }',
+        '{ { key = "g", sources = {'
+        '   { actor = "imoen", pool = "a", uses = 1, duration = 3600 },'
+        '   { actor = "jan", pool = "b", uses = 1, duration = 120 } } } }',
+        '{ { group = "g", target = "minsc", on = 1, rep = 2 } }',
+        expand=True,
+    )
+    assert lua.eval("recipients[3].entries[1].duration") == 120
+
+
+def test_a_switched_off_request_is_shown_short_not_hidden(lua):
+    """"Nothing planned for Minsc" and "all of it is off" are different."""
+    _by_recipient(
+        lua,
+        '{ { key = "minsc" } }',
+        '{ { key = "g", sources = { { actor = "minsc", pool = "p",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "minsc", on = 0 } }',
+    )
+    assert lua.eval("#recipients[1].entries") == 1
+    assert lua.eval("recipients[1].entries[1].reasons[1]") == "disabled"
+    assert lua.eval("recipients[1].short") == 1
+    assert lua.eval("totals.covered") == 0
+
+
+def test_a_request_for_somebody_outside_the_party_belongs_to_nobody(lua):
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" } }',
+        '{ { key = "g", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "khalid", on = 1 } }',
+    )
+    assert lua.eval("#recipients") == 1
+    assert lua.eval("#recipients[1].entries") == 0
+    # Assign still recorded why, so the caster view can show it.
+    assert lua.eval("plan.decisions[1].reason") is not None
+
+
+@pytest.mark.parametrize("call", (
+    "BfBot.Plan.ByRecipient(nil, nil)",
+    'BfBot.Plan.ByRecipient({}, { decisions = {} })',
+    "BfBot.Plan.ByRecipient({ order = {} }, {})",
+    "BfBot.Plan.ByRecipient({ order = {} }, nil)",
+    'BfBot.Plan.ByRecipient("snapshot", { decisions = {} })',
+))
+def test_arguments_in_the_wrong_shape_answer_nil(lua, call):
+    # A caller that swapped the two finds out here rather than rendering an
+    # empty panel that looks like an empty plan.
+    assert lua.eval(call) is None
+
+
+def test_party_wide_and_personal_entries_live_side_by_side(lua):
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" }, { key = "minsc" } }',
+        '{ { key = "chant", sources = { { actor = "imoen", pool = "a",'
+        ' uses = 9, duration = 60, aoe = true } } },'
+        '  { key = "bless", sources = { { actor = "imoen", pool = "b",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "chant", target = "party", on = 1 },'
+        '  { group = "bless", target = "minsc", on = 1 } }',
+    )
+    assert lua.eval("#recipients[1].entries") == 1
+    assert lua.eval("#recipients[2].entries") == 2
+    assert lua.eval("recipients[1].entries[1].group") == "chant"
+    groups = {lua.eval(f"recipients[2].entries[{i}].group") for i in (1, 2)}
+    assert groups == {"chant", "bless"}
+    assert lua.eval("totals.planned") == 3
+    assert lua.eval("totals.short") == 0
+
+
+def test_the_projection_leaves_no_bookkeeping_on_its_entries(lua):
+    # The dedup sets are an implementation detail; a view that iterates an
+    # entry's fields must not meet them.
+    _by_recipient(
+        lua,
+        '{ { key = "imoen" } }',
+        '{ { key = "g", sources = { { actor = "imoen", pool = "p",'
+        ' uses = 9, duration = 300 } } } }',
+        '{ { group = "g", target = "imoen", on = 1, rep = 2 } }',
+        expand=True,
+    )
+    assert lua.eval("recipients[1].entries[1]._seenSource") is None
+    assert lua.eval("recipients[1].entries[1]._seenReason") is None
