@@ -3631,18 +3631,73 @@ function BfBot.UI._TabFrame(selected)
     return BfBot.Theme.HasChromeArt() and 2 or 1
 end
 
+-- How long a button keeps the pressed look after the engine's counter last
+-- moved. See _IsHeld: this is what bounds the look when the counter turns out
+-- to stand still during a hold, and what keeps it continuous when it does not.
+BfBot.UI._HELD_GRACE_MS = 150
+
+-- Per button: the counter value last seen, and when it last changed.
+BfBot.UI._heldSeen = {}
+
 --- True while the player is holding the named button down.
 -- The engine counts the frames a button has been held and the bindings expose
 -- the counter; nothing in the `.menu` DSL does, which is why the frame has to
 -- be decided in Lua. Every failure answers "not held": a name the menu does
 -- not have, a build whose bindings lack the counter, a panel that is closed.
+--
+-- A non-zero counter is NOT "held" (#105). It keeps its last value after the
+-- button is released -- reported from a live playthrough, where a pressed
+-- footer button stayed bright afterwards, and seen first in Zach Hopkins'
+-- Redux, which dropped the pressed look over it. So what counts is MOVEMENT:
+-- a counter that changed since the previous frame means the button is being
+-- held now, and one that stands still is only held for a short grace period
+-- after its last change.
+--
+-- That grace is what makes this correct without measuring the engine. A real
+-- mouse press cannot be staged headlessly, so whether the counter keeps
+-- climbing through a hold or jumps once and freezes is not established:
+--   * if it climbs, every frame re-arms the grace and the look lasts exactly
+--     as long as the hold, ending the moment the counter stops;
+--   * if it freezes, the look is a brief flash on press instead.
+-- Either way it ends, which is the defect. A counter that drops to zero is a
+-- release and ends the look at once, with no grace at all.
 function BfBot.UI._IsHeld(name)
     if not EEex_Menu_GetItem then return false end
-    local ok, held = pcall(function()
+    local ok, count = pcall(function()
         local item = EEex_Menu_GetItem(name)
         return item and item.framesHeld or nil
     end)
-    return ok and type(held) == "number" and held > 0
+    if not ok or type(count) ~= "number" then return false end
+
+    -- Self-initializing: the chrome tests drive this function on its own, and
+    -- anything that clears the table must not take the panel's draw with it.
+    BfBot.UI._heldSeen = BfBot.UI._heldSeen or {}
+
+    local clockOk, now = pcall(Infinity_GetClockTicks)
+    if not clockOk or type(now) ~= "number" then
+        -- Without a clock there is no grace to measure, so fall back to the
+        -- one reading that cannot stick: movement only.
+        local previous = BfBot.UI._heldSeen[name]
+        BfBot.UI._heldSeen[name] = { value = count }
+        return previous ~= nil and count > 0 and count ~= previous.value
+    end
+
+    local grace = BfBot.UI._HELD_GRACE_MS or 150
+    local seen = BfBot.UI._heldSeen[name]
+    if seen == nil then
+        -- First sight of this button: nothing to compare against, and
+        -- claiming "held" here is what would make a stale counter stick.
+        BfBot.UI._heldSeen[name] = { value = count, moved = nil }
+        return false
+    end
+    if count ~= seen.value then
+        seen.value = count
+        seen.moved = now
+        return count > 0
+    end
+    return count > 0 and seen.moved ~= nil
+        and now >= seen.moved
+        and now - seen.moved <= grace
 end
 
 --- Frame for a chrome button, by what the player is doing to it (#103).

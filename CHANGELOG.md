@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Fixed
+- **A pressed button stayed bright after you let go** (#105). Reported from a
+  live playthrough one day after the press feedback shipped: *"er bleibt nach
+  dem loslassen hell, das ist nicht so geil."* The engine's per-button hold
+  counter keeps its last value after the button is released, so reading
+  "counter above zero" as "being held" left the loud frame on until something
+  else repainted. Zach Hopkins' Redux hit this first and dropped its pressed
+  look over it; thanks for the finding.
+
+  What counts now is movement, not the value: a counter that changed since the
+  previous frame means the button is being held, and one standing still keeps
+  the look for 150 ms after its last change. A counter that drops to zero is a
+  release and ends it at once, with no grace at all.
+
+  That grace is deliberate, because a real mouse press cannot be staged
+  headlessly and so whether the counter climbs through a hold or jumps once
+  and freezes is not established. If it climbs, every frame re-arms the grace
+  and the look lasts exactly as long as the hold. If it freezes, the look is a
+  brief flash on press instead. Either way it ends, which was the defect. A
+  button first seen with a non-zero counter is never held either, so opening
+  the panel cannot light something nobody touched.
+
 ### Changed
 - **The bitwise calls no longer need LuaJIT** (#106, first half). `bit` is
   LuaJIT's library, and 28 `bit.*` calls across the scanner, classifier,

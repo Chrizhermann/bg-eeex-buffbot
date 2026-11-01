@@ -209,39 +209,133 @@ def test_a_plate_leaves_the_open_question_to_the_tabs():
         )
 
 
-@pytest.mark.parametrize("art", (True, False))
-@pytest.mark.parametrize(
-    ("held", "selected", "withArt", "withoutArt"),
-    (
-        (0, None, 0, 0),      # resting
-        (1, None, 2, 1),      # held: the loud frame, or the engine's pressed one
-        (99, None, 2, 1),     # still held, many frames later
-        (0, True, 2, 1),      # the open tab
-        (3, True, 2, 1),      # the open tab, held: it cannot look like less
-    ),
-)
-def test_a_held_button_draws_the_loud_frame(lua, art, held, selected,
-                                            withArt, withoutArt) -> None:
-    """The whole point of #103: a press has to be visible.
+# The engine's counter keeps its last value after the button is released
+# (#105), so these drive it the way a frame sequence would: a list of
+# (clock, counter) readings, one per rendered frame.
+def _press(lua, readings) -> list:
+    """Return the frame drawn at each (clock, counter) reading."""
+    lua.execute("""
+        pressClock, pressCount = 0, 0
+        Infinity_GetClockTicks = function() return pressClock end
+        EEex_Menu_GetItem = function(name)
+            if name ~= 'bbAdd' then return nil end
+            return { framesHeld = pressCount }
+        end
+    """)
+    frames = []
+    for clock, count in readings:
+        lua.execute(f"pressClock, pressCount = {clock}, {count}")
+        frames.append(lua.eval("BfBot.UI._ChromeFrame('bbAdd')"))
+    return frames
 
-    Pecca's pressed frame differs from its normal one by 62 of 255 at its
-    loudest on the default skin, while the selected frame differs by 207 and
-    carries the outline. A held button draws the selected frame. Without the
-    art the engine's own button BAM is in use, whose pressed frame is its
-    second — that one the engine drew properly all along.
+
+@pytest.mark.parametrize("art", (True, False))
+def test_a_counter_that_keeps_moving_stays_pressed(lua, art) -> None:
+    """A counter climbing frame by frame is a button being held right now."""
+    with_art(lua, art)
+    loud = 2 if art else 1
+    # First reading has nothing to compare against, so it cannot claim held.
+    frames = _press(lua, [(1000, 0), (1016, 1), (1032, 2), (1048, 3)])
+    assert frames == [0, loud, loud, loud]
+
+
+@pytest.mark.parametrize("art", (True, False))
+def test_a_counter_that_stops_moving_lets_the_button_go(lua, art) -> None:
+    """The defect: released, the counter freezes and the button stayed bright.
+
+    Reported from a live playthrough — *"er bleibt nach dem loslassen hell,
+    das ist nicht so geil."* A frozen counter keeps the look only for the
+    grace period, then the button is resting again however long it sits there.
     """
     with_art(lua, art)
+    loud = 2 if art else 1
+    frames = _press(lua, [
+        (1000, 0),     # resting
+        (1016, 1),     # pressed
+        (1032, 1),     # frozen, still inside the grace
+        (1100, 1),     # frozen, still inside the grace
+        (1300, 1),     # frozen well past it: resting again
+        (5000, 1),     # and it stays resting, whatever the counter says
+    ])
+    assert frames == [0, loud, loud, loud, 0, 0]
+
+
+@pytest.mark.parametrize("art", (True, False))
+def test_a_counter_dropping_to_zero_releases_at_once(lua, art) -> None:
+    """Where the engine does reset it, there is no grace to wait out."""
+    with_art(lua, art)
+    loud = 2 if art else 1
+    frames = _press(lua, [(1000, 0), (1016, 1), (1032, 2), (1048, 0)])
+    assert frames == [0, loud, loud, 0]
+
+
+@pytest.mark.parametrize("art", (True, False))
+def test_a_button_first_seen_mid_press_does_not_claim_to_be_held(lua, art):
+    """A stale counter must not light a button the player never touched.
+
+    The panel opens, the first render reads whatever the counter happens to
+    hold, and there is no previous value to prove movement.
+    """
+    with_art(lua, art)
+    frames = _press(lua, [(1000, 42), (1016, 42)])
+    assert frames == [0, 0]
+
+
+@pytest.mark.parametrize("art", (True, False))
+def test_without_a_clock_only_movement_counts(lua, art) -> None:
+    """No clock, no grace — the reading that cannot stick is still available."""
+    with_art(lua, art)
+    loud = 2 if art else 1
+    lua.execute("""
+        pressCount = 0
+        Infinity_GetClockTicks = function() error('no clock') end
+        EEex_Menu_GetItem = function(name)
+            if name ~= 'bbAdd' then return nil end
+            return { framesHeld = pressCount }
+        end
+    """)
+    seen = []
+    for count in (0, 1, 2, 2, 2):
+        lua.execute(f"pressCount = {count}")
+        seen.append(lua.eval("BfBot.UI._ChromeFrame('bbAdd')"))
+    assert seen == [0, loud, loud, 0, 0]
+
+
+@pytest.mark.parametrize("art", (True, False))
+@pytest.mark.parametrize("held", (0, 1, 3, 99))
+def test_the_open_tab_outranks_the_counter_entirely(lua, art, held) -> None:
+    """Whatever the counter says, the open tab wears the loud frame."""
+    with_art(lua, art)
     lua.execute(
+        "Infinity_GetClockTicks = function() return 1000 end "
         "EEex_Menu_GetItem = function(name)"
-        "  if name ~= 'bbAdd' then return nil end"
+        "  if name ~= 'bbC0' then return nil end"
         "  return { framesHeld = %d }"
         "end" % held
     )
-    frame = lua.eval(
-        "BfBot.UI._ChromeFrame('bbAdd', %s)"
-        % ("true" if selected else "nil")
-    )
-    assert frame == (withArt if art else withoutArt)
+    assert lua.eval("BfBot.UI._ChromeFrame('bbC0', true)") == (2 if art else 1)
+
+
+@pytest.mark.parametrize("art", (True, False))
+def test_two_buttons_do_not_share_one_press(lua, art) -> None:
+    """Each button carries its own last reading, or one press lights the row."""
+    with_art(lua, art)
+    loud = 2 if art else 1
+    lua.execute("""
+        counts = { bbAdd = 0, bbCast = 7 }
+        clock = 1000
+        Infinity_GetClockTicks = function() return clock end
+        EEex_Menu_GetItem = function(name)
+            if counts[name] == nil then return nil end
+            return { framesHeld = counts[name] }
+        end
+    """)
+    # Prime both, then move only bbAdd.
+    for name in ("bbAdd", "bbCast"):
+        lua.eval(f"BfBot.UI._ChromeFrame('{name}')")
+    lua.execute("clock = 1016; counts.bbAdd = 1")
+    assert lua.eval("BfBot.UI._ChromeFrame('bbAdd')") == loud
+    assert lua.eval("BfBot.UI._ChromeFrame('bbCast')") == 0
 
 
 def test_a_button_the_engine_cannot_answer_for_is_simply_not_held(lua) -> None:
