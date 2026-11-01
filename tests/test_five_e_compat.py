@@ -9,6 +9,7 @@ BuffBot side of the seam; they cannot prove engine behaviour.
 """
 
 from __future__ import annotations
+from bitwise import BITWISE
 
 from pathlib import Path
 import re
@@ -237,6 +238,7 @@ def scan_lua() -> LuaRuntime:
         + FIELDS
         + "}"
     )
+    runtime.execute(BITWISE)
     runtime.execute(CLASS_SOURCE)
     runtime.execute(WORLD)
     runtime.execute(SCAN_SOURCE)
@@ -524,6 +526,7 @@ def test_mapped_spell_uses_delivered_targeting_in_catalog_and_queue(
     cast_target: int, expected_aoe: bool, expected_self: bool,
     target: str, attempts: int,
 ) -> None:
+    scan_lua.execute(BITWISE)
     scan_lua.execute(EXEC_SOURCE)
     facts = scan_lua.eval(
         """function(present, memTarget, castTarget, target)

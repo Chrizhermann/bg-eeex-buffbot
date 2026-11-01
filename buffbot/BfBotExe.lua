@@ -535,8 +535,8 @@ function BfBot.Exec._ConsumeSpellSlot(sprite, resref)
         EEex_Utility_IterateCPtrList(levelList, function(spell)
             if consumed then return true end
             local sid = spell.m_spellId:get()
-            if sid:upper() == resref:upper() and bit.band(spell.m_flags, 1) ~= 0 then
-                spell.m_flags = bit.band(spell.m_flags, bit.bnot(1))
+            if sid:upper() == resref:upper() and BfBot._BAnd(spell.m_flags, 1) ~= 0 then
+                spell.m_flags = BfBot._BAnd(spell.m_flags, BfBot._BNot(1))
                 consumed = true
                 return true
             end

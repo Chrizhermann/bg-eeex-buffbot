@@ -1,5 +1,6 @@
 """Item wrapper discovery and caster-level duration behavior on synthetic graphs."""
 
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,7 @@ def runtime() -> LuaRuntime:
         end
         """
     )
+    lua.execute(BITWISE)
     lua.execute((ROOT / 'buffbot/BfBotCls.lua').read_text(encoding='utf-8'))
     lua.execute(
         """

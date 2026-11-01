@@ -1,4 +1,5 @@
 from __future__ import annotations
+from bitwise import BITWISE
 
 import faulthandler
 from pathlib import Path
@@ -54,6 +55,7 @@ def lua() -> LuaRuntime:
         }
         """
     )
+    runtime.execute(BITWISE)
     runtime.execute(PERSIST_SOURCE)
     return runtime
 
@@ -62,6 +64,7 @@ def lua() -> LuaRuntime:
 def core_lua() -> LuaRuntime:
     runtime = LuaRuntime(unpack_returned_tuples=True)
     runtime.execute("Infinity_DisplayString = function(_) end")
+    runtime.execute(BITWISE)
     runtime.execute(CORE_SOURCE)
     return runtime
 
@@ -102,8 +105,11 @@ def exec_lua() -> LuaRuntime:
         """
     )
     runtime.execute("io = nil")
+    runtime.execute(BITWISE)
     runtime.execute(LOC_SOURCE)
+    runtime.execute(BITWISE)
     runtime.execute(PERSIST_SOURCE)
+    runtime.execute(BITWISE)
     runtime.execute(EXEC_SOURCE)
     runtime.execute(
         """
@@ -161,6 +167,7 @@ def project_image_lua() -> LuaRuntime:
         }
         """
     )
+    runtime.execute(BITWISE)
     runtime.execute(CLASS_SOURCE)
     runtime.execute(
         """
@@ -232,8 +239,11 @@ def ui_test_lua() -> LuaRuntime:
         """
     )
     runtime.execute("io = nil")
+    runtime.execute(BITWISE)
     runtime.execute(LOC_SOURCE)
+    runtime.execute(BITWISE)
     runtime.execute(UI_SOURCE)
+    runtime.execute(BITWISE)
     runtime.execute(TEST_SOURCE)
     return runtime
 
@@ -4388,8 +4398,10 @@ def _config_reader(read: str) -> str:
 def _get_config(source: str) -> dict:
     runtime = LuaRuntime(unpack_returned_tuples=True)
     runtime.execute("Infinity_DisplayString = function(_) end")
+    runtime.execute(BITWISE)
     runtime.execute(CORE_SOURCE)
     runtime.execute(source)
+    runtime.execute(BITWISE)
     runtime.execute(PERSIST_SOURCE)
     # The one path that would overwrite a saved config, counted rather than run.
     runtime.execute("""

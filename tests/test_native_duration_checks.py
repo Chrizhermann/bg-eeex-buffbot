@@ -1,5 +1,6 @@
 """The native recursion smoke check follows installed links and lifetimes."""
 
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,7 @@ def _native_duration_runtime(child_duration):
         header('OHTMPS2', {ability({effect(146, 'MODCHILD', 1, 0)})})
         """
     )
+    lua.execute(BITWISE)
     lua.execute(TEST_SOURCE)
     return lua
 

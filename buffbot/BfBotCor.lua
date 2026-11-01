@@ -22,6 +22,78 @@ BfBot.MAX_REFRESH_BELOW = 86400  -- one game day; upper bound for RefreshBelow
 BfBot.REFRESH_LOW_SECONDS = 300
 
 -- ============================================================
+-- Bitwise helpers (issue #106)
+-- ============================================================
+--
+-- `bit` is LuaJIT's library. EEex's own Lua has no such table, so a bare
+-- `bit.band` anywhere in the shipped code is what stops BuffBot loading on an
+-- install without the LuaJIT loader -- not the `goto` statements the installer
+-- used to blame, which are ordinary Lua 5.2.
+--
+-- The loader registers EEex_BAnd / EEex_BOr / EEex_BNot on every EEex release
+-- BuffBot supports (present in both 1.2.0's and 1.3.1's InfinityLoaderDLL.dll,
+-- which are different builds), so the and/or/not cases need no fallback of
+-- their own. There is no shift native, but every shift here is byte-aligned on
+-- a value read out of memory, so multiplying by a power of two is exact in a
+-- double and is what the fallback does.
+--
+-- Resolved once at load, not per call: these sit in the scanner's and
+-- classifier's inner loops.
+
+local function _resolveBitwise()
+    local lib = rawget(_G, "bit")
+    local band = type(lib) == "table" and lib.band or rawget(_G, "EEex_BAnd")
+    local bor = type(lib) == "table" and lib.bor or rawget(_G, "EEex_BOr")
+    local bnot = type(lib) == "table" and lib.bnot or rawget(_G, "EEex_BNot")
+    local lshift = type(lib) == "table" and lib.lshift or nil
+    if type(lshift) ~= "function" then
+        -- Byte-aligned shifts only; a negative or huge count is a caller bug
+        -- rather than something to paper over, so it is not accepted.
+        lshift = function(value, count)
+            return value * (2 ^ count)
+        end
+    end
+    return band, bor, bnot, lshift
+end
+
+local _band, _bor, _bnot, _lshift = _resolveBitwise()
+
+--- Fold a binary operation over every argument.
+-- LuaJIT's bit.band and bit.bor take any number of operands and EEex's
+-- natives take two, so folding is what makes one call site work on both. It
+-- also has to be a fold rather than a two-argument wrapper: the item
+-- usability check passes four masks at once, and a wrapper that quietly kept
+-- the first two dropped this character's alignment restrictions.
+local function _fold(op, a, b, ...)
+    local result = op(a, b)
+    for index = 1, select("#", ...) do
+        result = op(result, (select(index, ...)))
+    end
+    return result
+end
+
+--- Bitwise AND of every argument. Available with or without LuaJIT.
+function BfBot._BAnd(a, b, ...) return _fold(_band, a, b, ...) end
+
+--- Bitwise OR of every argument.
+function BfBot._BOr(a, b, ...) return _fold(_bor, a, b, ...) end
+
+--- Bitwise NOT.
+function BfBot._BNot(a) return _bnot(a) end
+
+--- Left shift by a byte-aligned count.
+function BfBot._BLShift(value, count) return _lshift(value, count) end
+
+--- True when the bitwise helpers resolved to something callable.
+-- The scanner and classifier cannot work without them, so a loader that
+-- offers neither `bit` nor the EEex natives has to be reported rather than
+-- discovered one nil-call at a time.
+function BfBot._BitwiseAvailable()
+    return type(_band) == "function" and type(_bor) == "function"
+        and type(_bnot) == "function" and type(_lshift) == "function"
+end
+
+-- ============================================================
 -- Logging
 -- ============================================================
 

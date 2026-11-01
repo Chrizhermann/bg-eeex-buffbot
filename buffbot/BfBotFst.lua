@@ -126,8 +126,8 @@ function F.Safe()
     local input = engine.m_pObjectGame.m_gameSave.m_inputMode
     if type(input) ~= "number" then return false, "input state unavailable" end
     -- EEex's keyboard-scroll guard excludes dialogue and cutscene input modes.
-    if bit.band(input - 0x1016E, 0xFFFDFFFF) == 0
-        or bit.band(input, 0x801) == 0 or truth(sidebarsGreyed) then
+    if BfBot._BAnd(input - 0x1016E, 0xFFFDFFFF) == 0
+        or BfBot._BAnd(input, 0x801) == 0 or truth(sidebarsGreyed) then
         return false, "dialogue or cutscene"
     end
     local blocking = blockingMenus()

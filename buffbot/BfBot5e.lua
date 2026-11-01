@@ -344,7 +344,7 @@ function BfBot.FiveE._WrapperMeta(map, wrapper)
             if res and candidates[res] then cast = res end
         end
         local rawTiming = fb[BfBot._fields.fb_timing]
-        local timing = type(rawTiming) == "number" and bit.band(rawTiming, 0xFF) or -1
+        local timing = type(rawTiming) == "number" and BfBot._BAnd(rawTiming, 0xFF) or -1
         -- Delayed modes: 3 = delay/limited, 4 = delay/permanent,
         -- 5 = delay/while equipped. The duration field is the delay.
         if timing == 3 or timing == 4 or timing == 5 then

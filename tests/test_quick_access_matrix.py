@@ -3,6 +3,7 @@
 The engine and final execution action are mocked. These tests establish queue
 and dispatch contracts, not native casting time, visuals or resource use.
 """
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def shortcut_lua(ui_lua):
     for filename in ("BfBotPer.lua", "BfBotFst.lua"):
+        ui_lua.execute(BITWISE)
         ui_lua.execute((ROOT / "buffbot" / filename).read_text(encoding="utf-8"))
     ui_lua.execute(ENGINE_MENUS)
     ui_lua.execute("""

@@ -4,6 +4,7 @@ These tests exercise real module boundaries. They do not simulate native cast
 timing, action completion, resource consumption, or rendering.
 """
 
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -79,6 +80,7 @@ def runtime():
     # Replace the inventory fixture's scoring/duration stubs with the actual
     # classifier. Only pointer traversal is replaced by synthetic records.
     for module in ('BfBotCls.lua', 'BfBotLoc.lua', 'BfBotPer.lua', 'BfBotExe.lua'):
+        lua.execute(BITWISE)
         lua.execute((ROOT / 'buffbot' / module).read_text(encoding='utf-8'))
     lua.execute("""
         BfBot.Class._GetFeatureBlock = function(_, a, index) return a.effects[index+1] end

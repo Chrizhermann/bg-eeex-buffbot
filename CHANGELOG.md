@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **The bitwise calls no longer need LuaJIT** (#106, first half). `bit` is
+  LuaJIT's library, and 28 `bit.*` calls across the scanner, classifier,
+  executor and fast-forward guard were what stopped BuffBot loading on an
+  EEex install without the LuaJIT loader -- not the `goto` statements the
+  installer blamed, which are ordinary Lua 5.2 and which Zach Hopkins' Redux
+  has 39 of while installing on plain EEex. `BfBotCor.lua` now resolves four
+  helpers once at load: to `bit` where it exists, to the loader's own
+  `EEex_BAnd` / `EEex_BOr` / `EEex_BNot` where it does not, with a
+  multiplication fallback for the byte-aligned shifts. Those natives are
+  present in both EEex 1.2.0's and 1.3.1's `InfinityLoaderDLL.dll`.
+
+  The helpers fold over every operand rather than taking two, because the
+  item usability check ANDs a class, race, ethic and moral mask in one call
+  and the first version of this change kept only the first two -- which let a
+  restricted item through, and which the item tests caught.
+
+  Nothing changes for a player yet: the installer still requires LuaJIT. The
+  file-access half of #106 -- export/import, the logs and the embedded
+  language catalog -- comes next.
+
+### Lab
+- The full automated suite passes **1717 tests**, 41 of them new: both
+  resolution paths are driven through the real resolver in `BfBotCor.lua`,
+  including the four-operand fold, the shift fallback agreeing with LuaJIT
+  across every byte-aligned count, and a guard that no shipped module calls
+  `bit.*` directly again.
+
 ## v1.12.6 (2026-11-01) — the guard asks the game now
 
 One defect from the live playthrough, and a second one found while fixing it

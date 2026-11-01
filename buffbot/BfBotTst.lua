@@ -472,9 +472,9 @@ function BfBot.Test.CheckFields()
         _ok("Ability." .. flagsName .. " = " .. tostring(flagsVal)
             .. " (flags)")
         BfBot._fields.friendly_flags = flagsName
-        local friendly = bit.band(flagsVal, 0x0400) ~= 0
+        local friendly = BfBot._BAnd(flagsVal, 0x0400) ~= 0
         P("       -> Friendly bit10: " .. tostring(friendly))
-        local friendlyByte = bit.band(flagsVal, 0x04) ~= 0
+        local friendlyByte = BfBot._BAnd(flagsVal, 0x04) ~= 0
         P("       -> Friendly bit2:  " .. tostring(friendlyByte))
     else
         _warning("Flags field not found (tried: type, flags)")
@@ -726,7 +726,7 @@ function BfBot.Test.Classify(resref)
     local flagsVal = ability[flagsField]
     if flagsVal then
         P("  Flags (" .. flagsField .. "): " .. tostring(flagsVal)
-            .. " -> friendly=" .. tostring(bit.band(flagsVal, 0x0400) ~= 0))
+            .. " -> friendly=" .. tostring(BfBot._BAnd(flagsVal, 0x0400) ~= 0))
     end
 
     local fbCount = ability[BfBot._fields.fb_count]
@@ -802,7 +802,7 @@ function BfBot.Test.DumpFeatureBlocks(resref)
     BfBot.Class._IterateFeatureBlocks(header, ability, function(fb, i)
         local opcode = fb[BfBot._fields.fb_opcode] or -1
         local rawTiming = fb[BfBot._fields.fb_timing] or -1
-        local timing = rawTiming >= 0 and bit.band(rawTiming, 0xFF) or -1
+        local timing = rawTiming >= 0 and BfBot._BAnd(rawTiming, 0xFF) or -1
         local duration = fb[BfBot._fields.fb_duration] or 0
         local target = fb[BfBot._fields.fb_target] or -1
         local param1 = fb[BfBot._fields.fb_param1] or 0

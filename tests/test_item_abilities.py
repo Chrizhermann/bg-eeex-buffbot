@@ -1,5 +1,6 @@
 """Item catalog behavior using engine-layout memory and independent item powers."""
 
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -99,6 +100,7 @@ def _runtime() -> LuaRuntime:
         EEex_Sprite_GetKnownInnateSpellsWithAbilityIterator = emptyIterator
         """
     )
+    lua.execute(BITWISE)
     lua.execute((ROOT / "buffbot/BfBotCls.lua").read_text(encoding="utf-8"))
     lua.execute((ROOT / "buffbot/BfBotScn.lua").read_text(encoding="utf-8"))
     lua.execute(

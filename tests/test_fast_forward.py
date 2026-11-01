@@ -1,4 +1,5 @@
 """Behavioral tests for temporary native-speed casting; no engine timing claims."""
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -75,6 +76,7 @@ def lua():
         EEex_GameState_AddDestroyedListener = function(fn) table.insert(callbacks, fn) end
         queue = { { spell = 'A', cheat = 1 }, { spell = 'B', cheat = true } }
     """)
+    runtime.execute(BITWISE)
     runtime.execute(SOURCE)
     return runtime
 
@@ -352,6 +354,7 @@ def test_rejected_native_start_preserves_its_reason(lua):
 
 def test_destroyed_listener_restores_once_and_survives_module_reload(lua):
     lua.execute("assert(BfBot.Fast.Start(queue, 2)); BfBot.Fast.Init()")
+    lua.execute(BITWISE)
     lua.execute(SOURCE)
     lua.execute("BfBot.Fast.Init(); callbacks[1]()")
     assert lua.eval("#callbacks") == 1

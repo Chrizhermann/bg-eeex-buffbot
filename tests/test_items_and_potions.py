@@ -1,4 +1,5 @@
 from __future__ import annotations
+from bitwise import BITWISE
 
 from pathlib import Path
 import re
@@ -29,7 +30,9 @@ def _persist_runtime() -> LuaRuntime:
         """
     )
     lua.execute("io = nil")
+    lua.execute(BITWISE)
     lua.execute(LOC_SOURCE)
+    lua.execute(BITWISE)
     lua.execute(PERSIST_SOURCE)
     return lua
 
@@ -172,6 +175,7 @@ def test_spell_and_item_resref_collisions_use_separate_classifier_caches() -> No
         }
         """
     )
+    lua.execute(BITWISE)
     lua.execute(CLASS_SOURCE)
     facts = lua.execute(
         """
@@ -309,6 +313,7 @@ def test_backpack_copy_does_not_hide_preferred_equipped_copy() -> None:
         }
         """
     )
+    lua.execute(BITWISE)
     lua.execute(SCAN_SOURCE)
     found = lua.execute(
         """
@@ -370,6 +375,7 @@ def test_quickslot_scrolls_and_wands_remain_deferred() -> None:
         }
         """
     )
+    lua.execute(BITWISE)
     lua.execute(SCAN_SOURCE)
     facts = lua.execute(
         """
@@ -429,6 +435,7 @@ def test_excluded_buff_item_remains_in_catalog_for_picker_recovery() -> None:
         }
         """
     )
+    lua.execute(BITWISE)
     lua.execute(SCAN_SOURCE)
     found = lua.execute(
         """
@@ -481,6 +488,7 @@ def test_item_catalog_sums_multiple_eligible_stacks() -> None:
         }
         """
     )
+    lua.execute(BITWISE)
     lua.execute(SCAN_SOURCE)
     count = lua.execute(
         """
@@ -581,7 +589,9 @@ def _identification_runtime() -> LuaRuntime:
         BfBot.Class.GetDurationCategory = function() return "short" end
         """
     )
+    lua.execute(BITWISE)
     lua.execute(SCAN_SOURCE)
+    lua.execute(BITWISE)
     lua.execute(UI_SOURCE)
     lua.execute(
         """
@@ -722,8 +732,11 @@ def test_absent_imported_items_stay_persisted_but_hidden_from_rows() -> None:
         """
     )
     lua.execute("io = nil")
+    lua.execute(BITWISE)
     lua.execute(LOC_SOURCE)
+    lua.execute(BITWISE)
     lua.execute(PERSIST_SOURCE)
+    lua.execute(BITWISE)
     lua.execute(UI_SOURCE)
     facts = lua.execute(
         """
@@ -760,6 +773,7 @@ def test_item_picker_recovery_requires_this_characters_exclusion() -> None:
         BfBot._Print = function(_) end
         """
     )
+    lua.execute(BITWISE)
     lua.execute(UI_SOURCE)
     facts = lua.execute(
         """
@@ -810,6 +824,7 @@ def test_picker_sections_sort_headers_and_item_colors() -> None:
         BfBot._Print = function(_) end
         """
     )
+    lua.execute(BITWISE)
     lua.execute(UI_SOURCE)
     facts = lua.execute(
         """
@@ -904,6 +919,7 @@ def test_item_toggle_routes_party_kind_and_summon_direct_write() -> None:
         BfBot._Print = function(_) end
         """
     )
+    lua.execute(BITWISE)
     lua.execute(UI_SOURCE)
     facts = lua.execute(
         """

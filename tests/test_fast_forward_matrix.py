@@ -5,6 +5,7 @@ chain callbacks are real Lua. Only the native engine boundary and scan inventory
 are synthetic. These tests cannot establish actual game-clock speed or fairness.
 """
 
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -125,6 +126,7 @@ def matrix_lua(exec_lua: LuaRuntime) -> LuaRuntime:
             return table.concat(result,';')
         end
     """)
+    exec_lua.execute(BITWISE)
     exec_lua.execute(FAST_SOURCE)
     return exec_lua
 

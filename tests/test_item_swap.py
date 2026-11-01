@@ -1,5 +1,6 @@
 """Queued engine simulation for inventory item use and reversible equipment swaps."""
 
+from bitwise import BITWISE
 from pathlib import Path
 
 import pytest
@@ -132,6 +133,7 @@ def _runtime() -> LuaRuntime:
         """
     )
     for name in ("BfBotScn.lua", "BfBotPer.lua", "BfBotExe.lua"):
+        lua.execute(BITWISE)
         lua.execute((ROOT / "buffbot" / name).read_text(encoding="utf-8"))
     lua.execute(
         """

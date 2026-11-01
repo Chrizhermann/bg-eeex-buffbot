@@ -338,21 +338,21 @@ function BfBot.Scan._CanWearItem(sprite, header)
             if not _itemClassMasks[cls] or not _itemRaceMasks[race] or not ethic or not moral then
                 return false, "unknown item usability"
             end
-            if bit.band(restrictions, bit.bor(_itemClassMasks[cls],
+            if BfBot._BAnd(restrictions, BfBot._BOr(_itemClassMasks[cls],
                 _itemRaceMasks[race], ethic, moral)) ~= 0 then
                 return false, "item cannot be worn by this character"
             end
         end
-        local kits = bit.bor(bit.lshift(EEex_ReadU8(ptr + 0x29), 24),
-            bit.lshift(EEex_ReadU8(ptr + 0x2B), 16),
-            bit.lshift(EEex_ReadU8(ptr + 0x2D), 8), EEex_ReadU8(ptr + 0x2F))
+        local kits = BfBot._BOr(BfBot._BLShift(EEex_ReadU8(ptr + 0x29), 24),
+            BfBot._BLShift(EEex_ReadU8(ptr + 0x2B), 16),
+            BfBot._BLShift(EEex_ReadU8(ptr + 0x2D), 8), EEex_ReadU8(ptr + 0x2F))
         if kits ~= 0 then
             local kit = sprite:getStat(152)
             -- TRUECLASS / MAGESCHOOL_GENERALIST has no KITLIST row. Its
             -- usability mask is still 0x4000 (ITM 0x2D bit 6: no kit), so
             -- recognizing it must not bypass explicitly restricted items.
             if kit == 0x4000 then
-                if bit.band(kits, 0x4000) ~= 0 then
+                if BfBot._BAnd(kits, 0x4000) ~= 0 then
                     return false, "item kit restriction"
                 end
             else
@@ -364,7 +364,7 @@ function BfBot.Scan._CanWearItem(sprite, header)
                 for y = 0, rows - 1 do
                     if tonumber(table2da:getAtPoint(idCol, y)) == kit then
                         local mask = tonumber(table2da:getAtPoint(maskCol, y))
-                        if not mask or bit.band(kits, mask) ~= 0 then
+                        if not mask or BfBot._BAnd(kits, mask) ~= 0 then
                             return false, "item kit restriction"
                         end
                         found = true
@@ -452,8 +452,8 @@ function BfBot.Scan._PlanItemSwap(sprite, row)
     local source = arr:get(row.itemSlot)
     if not source or source.pRes.resref:get() ~= row.itemResref then return nil, "item moved" end
     local function movable(item, hdr)
-        return bit.band(item.m_flags, 8) == 0
-            and bit.band(EEex_ReadU32(EEex_UDToPtr(hdr) + 0x18), 0x10) == 0
+        return BfBot._BAnd(item.m_flags, 8) == 0
+            and BfBot._BAnd(EEex_ReadU32(EEex_UDToPtr(hdr) + 0x18), 0x10) == 0
     end
     if not movable(source, header) then return nil, "cursed or undroppable item" end
     -- Prefer a free ring/weapon slot to disturbing another piece of gear.
@@ -472,13 +472,13 @@ function BfBot.Scan._PlanItemSwap(sprite, row)
         -- Do not replace an off-hand while a two-handed weapon is selected,
         -- or select a two-handed backpack weapon while using an off-hand.
         if destination >= 35 and arr:get(9)
-            and bit.band(EEex_ReadU32(EEex_UDToPtr(header) + 0x18), 2) ~= 0 then
+            and BfBot._BAnd(EEex_ReadU32(EEex_UDToPtr(header) + 0x18), 2) ~= 0 then
             goto nextDestination
         end
         if destination == 9 then
             local selected = arr:get(sprite.m_equipment.m_selectedWeapon)
             local selectedHeader = selected and EEex_Resource_Demand(selected.pRes.resref:get(), "ITM")
-            if selectedHeader and bit.band(EEex_ReadU32(EEex_UDToPtr(selectedHeader) + 0x18), 2) ~= 0 then
+            if selectedHeader and BfBot._BAnd(EEex_ReadU32(EEex_UDToPtr(selectedHeader) + 0x18), 2) ~= 0 then
                 goto nextDestination
             end
         end
@@ -525,7 +525,7 @@ local function _itemEffectSignatures(header, ability)
         BfBot.Class._IterateFeatureBlocks(header, ability, function(fb)
             local op = fb[f.fb_opcode]
             local score = BfBot.Class._OPCODE_SCORES[op] or 0
-            local timing = bit.band(fb[f.fb_timing], 0xFF)
+            local timing = BfBot._BAnd(fb[f.fb_timing], 0xFF)
             if score > 0 and op ~= 17 and op ~= 171
                 and op ~= 318 and op ~= 324 and op ~= 282 and op ~= 328
                 and (timing == 0 or timing == 3 or timing == 4 or timing == 5) then
@@ -666,7 +666,7 @@ function BfBot.Scan._BuildItemCatalog(sprite)
                     BfBot._Warn("Item identification flags unavailable in slot " .. slot)
                     goto nextItem
                 end
-                if bit.band(flags, 0x1) == 0 then goto nextItem end
+                if BfBot._BAnd(flags, 0x1) == 0 then goto nextItem end
 
                 local resref = nil
                 pcall(function() resref = it.pRes.resref:get() end)

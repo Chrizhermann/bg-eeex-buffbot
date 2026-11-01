@@ -365,7 +365,7 @@ function BfBot.Class.ScoreTargeting(ability)
     local flagsField = BfBot._fields.friendly_flags
     local flagsVal = ability[flagsField]
     if flagsVal and type(flagsVal) == "number" then
-        friendlyFlag = bit.band(flagsVal, 0x0400) ~= 0
+        friendlyFlag = BfBot._BAnd(flagsVal, 0x0400) ~= 0
         if friendlyFlag then
             score = score + 5
         end
@@ -569,7 +569,7 @@ function BfBot.Class._ScoreItemOpcodes(header, ability, resref)
                 edges[parent] = edges[parent] or {}
                 edges[parent][key] = true
             end
-            local timing = bit.band(fb[BfBot._fields.fb_timing] or 0, 0xFF)
+            local timing = BfBot._BAnd(fb[BfBot._fields.fb_timing] or 0, 0xFF)
             if not key or node.path[key]
                 or (timing ~= 0 and timing ~= 1 and timing ~= 9) then
                 extras.analysisIncomplete = true
@@ -790,7 +790,7 @@ function BfBot.Class.GetDuration(header, ability, _depth, _visited, _leafs, cast
         if not rawTiming then return end
         -- EEex reads durationType as a word/dword; actual timing mode
         -- is the low byte only (IESDP: 1 byte at offset 0x000C)
-        local timing = bit.band(rawTiming, 0xFF)
+        local timing = BfBot._BAnd(rawTiming, 0xFF)
 
         if timing == 1 or timing == 4 or timing == 9 then
             -- Permanent (until dispelled, or absolute permanent)
@@ -883,7 +883,7 @@ function BfBot.Class.IsRadialParty(ability)
         local ptr = EEex_UDToPtr(pro)
         local flags = EEex_ReadU16(ptr + 0x1F8)
         local radius = EEex_ReadU16(ptr + 0x1FC)
-        return radius > 0 and bit.band(flags, 0xC0) == 0xC0
+        return radius > 0 and BfBot._BAnd(flags, 0xC0) == 0xC0
     end)
     C._radialProjectiles[missile] = ok and party == true
     return C._radialProjectiles[missile]
