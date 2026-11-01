@@ -192,6 +192,16 @@ local _registry = {
     ["ui.order.duration"] = { id = 724, fallback = [=[Order: Duration]=] },
     ["ui.order.tooltip_manual"] = { id = 725, fallback = [=[Casts in the order you set. Click to cast the longest-lasting buffs first instead; your own order is kept and comes back when you switch off.]=] },
     ["ui.order.tooltip_duration"] = { id = 726, fallback = [=[Casts the longest-lasting buffs first. Locked rows keep their place. Click to go back to your own order.]=] },
+    ["ui.view.caster"] = { id = 727, fallback = [=[By caster]=] },
+    ["ui.view.recipient"] = { id = 728, fallback = [=[By recipient]=] },
+    ["ui.view.tooltip_caster"] = { id = 729, fallback = [=[Shows what each character will cast. Click to see who receives what instead; it is the same plan, read the other way round.]=] },
+    ["ui.view.tooltip_recipient"] = { id = 730, fallback = [=[Shows what each character receives and what is missing. Click to go back to casting order per character.]=] },
+    ["ui.recipient.covered"] = { id = 731, fallback = [=[{planned} of {total} covered]=] },
+    ["ui.recipient.nothing_planned"] = { id = 732, fallback = [=[Nothing planned]=] },
+    ["ui.recipient.from_source"] = { id = 733, fallback = [=[from {names}]=] },
+    ["ui.recipient.from_party"] = { id = 734, fallback = [=[whole party]=] },
+    ["ui.recipient.repeat_count"] = { id = 735, fallback = [=[{planned} of {total}]=] },
+    ["ui.recipient.no_source"] = { id = 736, fallback = [=[no caster]=] },
     ["options.refresh_below_1h"] = { id = 722, fallback = [=[Under 1 hour left]=] },
 }
 

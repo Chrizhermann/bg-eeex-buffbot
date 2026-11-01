@@ -3,6 +3,30 @@
 ## Unreleased
 
 ### Added
+- **The panel can show who receives what** (#81, step 3). A second reading of
+  the same plan, one button away: the character row's right-hand side now
+  carries a By caster / By recipient toggle, and the recipient reading
+  replaces the spell table with one row per character followed by what they
+  receive, where it comes from, and what is missing.
+
+  It rewrites nothing. Both readings are projections of the one plan, so
+  switching is a view change and an edit in either place is the same edit.
+  The caster reading stays the default until the other has been lived with.
+
+  Three things the table is careful about. A character with nothing planned
+  gets a header and a sentence saying so, because an empty stretch of
+  parchment reads as a panel that failed to load. A partly planned buff has a
+  tone of its own next to planned and missing -- "2 of 3" is the case a player
+  acts on, and sharing a tone with either neighbour buries it. And a
+  party-wide cast says "whole party" instead of naming whoever happens to
+  cast it, since the point is that it covers everybody.
+
+  The toggle has a reserved slot of its own beside the Summons one, which is
+  #100's lesson applied rather than relearned: a control squeezed in among
+  the summon tabs, the paging cluster and the full-width empty-state label
+  ends up underneath whichever of them is live, and then cannot be clicked.
+  Reserving costs tab width; sharing costs the button.
+
 - **The plan can be read by recipient** (#81, step 3's foundation). The caster
   view asks what Jaheira will do; the recipient view asks who is protected and
   who is missing something. `BfBot.Plan.ByRecipient` is that second reading of
@@ -22,7 +46,13 @@
   Nothing in the panel uses this yet -- the view itself is the next step.
 
 ### Lab
-- 16 new tests, all offline: the projection's portrait order, the party-wide
+- 37 further tests for the display layer, all offline: the perspective switch
+  including that the summons view remembers it without applying it, every
+  cell's text, the three tones, the counts that appear only where they carry
+  information, four out-of-range rows drawing nothing rather than the literal
+  text "nil", and a check that every Lua name the new list declares exists in
+  the module. **1780 tests** in total.
+- 16 tests for the projection, all offline: the projection's portrait order, the party-wide
   fan-out, repeat collapsing, a partly satisfiable row reporting "2 of 3" with
   its reason, two repeats off two casters listing both sources once, the
   shortest repeat's duration being the one reported, a request for somebody

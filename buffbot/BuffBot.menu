@@ -598,6 +598,36 @@ menu
 		area 760 90 80 24
 	}
 
+	-- Caster or recipient: which end of the plan the panel reads from
+	-- (#81). The same requests either way -- there is one plan underneath --
+	-- so switching rewrites nothing. Only the party view has recipients to
+	-- group by, so this is disabled in the summons view rather than moved.
+	button
+	{
+		name    "bbPersp"
+		enabled "buffbot_isOpen"
+		clickable lua "BfBot.UI._CanTogglePerspective()"
+		action  "BfBot.UI.TogglePerspective()"
+		tooltip lua "BfBot.UI._PerspectiveBtnTooltip()"
+		bam lua "BfBot.UI._TabBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbPersp', BfBot.UI._IsRecipientView())"
+		scaleToClip
+		area 656 90 100 24
+	}
+
+	label
+	{
+		name    "bbPersp_t"
+		enabled "buffbot_isOpen"
+		text lua "BfBot.UI._PerspectiveBtnLabel()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanTogglePerspective())"
+		ignoreEvents
+		area 656 90 100 24
+	}
+
 	label
 	{
 		name    "bbView_t"
@@ -1361,10 +1391,87 @@ menu
 		area 350 148 520 250
 		name    "bbList"
 		action      "BfBot.UI._OnVisibleSpellRowAction(cellNumber)"
-		enabled     "buffbot_isOpen"
+		-- The recipient table sits on the same rect, so exactly one of the
+		-- two is enabled at any time (#81).
+		enabled     "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		table       "buffbot_visibleSpells"
 		var         "buffbot_visibleSelectedRow"
 		rowheight   36
+		scrollbar   "BFBSCRL"
+	}
+
+	-- The same plan read by recipient (#81). One flat list: a character's
+	-- header row followed by what they receive, because the widget takes one
+	-- table. A character with nothing planned still gets a header and one
+	-- explanatory row -- an empty stretch of parchment reads as a panel that
+	-- failed to load, not as somebody nobody is buffing.
+	list
+	{
+		-- Column 1: who. Filled on a header row, blank under it, so the
+		-- names form a left margin the eye can follow down the list.
+		column
+		{
+			width 26
+			label
+			{
+				area 4 0 -1 34
+				text lua "BfBot.UI._RecipientCellName(rowNumber)"
+				text style "bb_normal_parchment"
+				text align left center
+				text color lua "BfBot.UI._RecipientNameColor(rowNumber)"
+			}
+		}
+
+		-- Column 2: what. The buff on an entry row, the coverage summary on
+		-- a header row, the empty-state sentence where there is nothing.
+		column
+		{
+			width 40
+			label
+			{
+				area 0 0 -1 34
+				text lua "BfBot.UI._RecipientCellWhat(rowNumber)"
+				text style "bb_normal_parchment"
+				text align left center
+				text color lua "BfBot.UI._RecipientWhatColor(rowNumber)"
+			}
+		}
+
+		-- Column 3: where it comes from -- a caster's name, or that the
+		-- whole party is covered by one cast.
+		column
+		{
+			width 24
+			label
+			{
+				area 0 0 -1 34
+				text lua "BfBot.UI._RecipientCellSource(rowNumber)"
+				text style "bb_normal_parchment"
+				text align left center
+				text color lua "BfBot.UI._T('textDim')"
+			}
+		}
+
+		-- Column 4: "2 of 3", only where it differs from one.
+		column
+		{
+			width 10
+			label
+			{
+				area 0 0 -1 34
+				text lua "BfBot.UI._RecipientCellCount(rowNumber)"
+				text style "bb_normal_parchment"
+				text align right center
+				text color lua "BfBot.UI._RecipientWhatColor(rowNumber)"
+			}
+		}
+
+		area 350 148 520 250
+		name    "bbRecipientList"
+		enabled     "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		table       "buffbot_recipientTable"
+		var         "buffbot_recipientSelectedRow"
+		rowheight   34
 		scrollbar   "BFBSCRL"
 	}
 

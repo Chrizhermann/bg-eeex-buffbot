@@ -412,3 +412,33 @@
 @725 = ~Lancia nell'ordine che hai impostato. Clicca per lanciare prima i potenziamenti più duraturi; il tuo ordine resta salvato e torna quando disattivi.~
 // ui.order.tooltip_duration
 @726 = ~Lancia prima i potenziamenti più duraturi. Le righe bloccate mantengono il loro posto. Clicca per tornare al tuo ordine.~
+
+// ui.view.caster
+@727 = ~By caster~
+
+// ui.view.recipient
+@728 = ~By recipient~
+
+// ui.view.tooltip_caster
+@729 = ~Shows what each character will cast. Click to see who receives what instead; it is the same plan, read the other way round.~
+
+// ui.view.tooltip_recipient
+@730 = ~Shows what each character receives and what is missing. Click to go back to casting order per character.~
+
+// ui.recipient.covered
+@731 = ~{planned} of {total} covered~
+
+// ui.recipient.nothing_planned
+@732 = ~Nothing planned~
+
+// ui.recipient.from_source
+@733 = ~from {names}~
+
+// ui.recipient.from_party
+@734 = ~whole party~
+
+// ui.recipient.repeat_count
+@735 = ~{planned} of {total}~
+
+// ui.recipient.no_source
+@736 = ~no caster~

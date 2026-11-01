@@ -29,7 +29,11 @@ TAB_BUTTONS = (
     {f"bbC{i}" for i in range(6)}
     | {f"bbS{i}" for i in range(6)}
     | {f"bbP{i}" for i in range(1, 9)}
-    | {"bbView"}
+    # Both view toggles are drawn as tabs on purpose: each is a two-state
+    # control saying which reading is active, which is what the tab plate's
+    # selected frame means. bbView switches the caster set (party or
+    # summons), bbPersp which end of the plan is read (#81).
+    | {"bbView", "bbPersp"}
 )
 CAST_BUTTONS = {"bbCast", "bbCastChar"}
 # The HUD toggle lives on the actionbar, not in the panel. It carries
@@ -371,8 +375,12 @@ def test_every_list_scrolls_with_the_themed_bar():
     """`scrollbar` takes a literal resref — it has no Lua form — so this is
     the one place the art is named directly. The release builder and the
     installer both require BFBSCRL, which is what makes that safe."""
-    assert MENU.count('scrollbar') == 4
-    assert MENU.count('scrollbar   "BFBSCRL"') == 4
+    # Counted against the lists that exist rather than a fixed number, so
+    # adding a list cannot pass by leaving its bar unthemed.
+    lists = len(re.findall(r"(?m)^	list$", MENU))
+    assert lists > 0
+    assert MENU.count("scrollbar") == lists
+    assert MENU.count('scrollbar   "BFBSCRL"') == lists
     assert "GUISCRC" not in MENU
 
     builder = (ROOT / "tools/build-release.sh").read_text(encoding="utf-8")

@@ -259,6 +259,68 @@ function BfBot.UI._ViewBtnLabel()
     return BfBot.L10N.Get("common.party")
 end
 
+-- ============================================================
+-- Caster / recipient perspective (issue #81, step 3)
+-- ============================================================
+--
+-- `_view` says WHICH casters the panel is about -- the party or its summons.
+-- `_perspective` says from which END the party's plan is read. They are two
+-- axes, not three values of one: the recipient reading is the same requests
+-- grouped by who receives them, so it only makes sense where there are
+-- recipients to group by, and the summons view keeps its own caster list.
+--
+-- The caster perspective opens by default and stays the default until the
+-- recipient one has been lived with. Switching is a view change and nothing
+-- else: no request is rewritten, because there is one plan underneath and
+-- both readings are projections of it.
+BfBot.UI._perspective = "caster"
+
+--- True while the panel shows the per-caster reading.
+function BfBot.UI._IsCasterPerspective()
+    return BfBot.UI._perspective ~= "recipient"
+end
+
+--- True while the recipient reading is both chosen and applicable.
+-- The summons view has no recipient grouping of its own, so the perspective
+-- is remembered but not applied there -- leaving it means a player who
+-- switches to summons and back finds the panel as they left it.
+function BfBot.UI._IsRecipientView()
+    return BfBot.UI._perspective == "recipient" and BfBot.UI._IsPartyView()
+end
+
+--- Whether the perspective button does anything right now.
+function BfBot.UI._CanTogglePerspective()
+    return BfBot.UI._IsPartyView()
+end
+
+--- Caption for the perspective button: what clicking it switches TO.
+function BfBot.UI._PerspectiveBtnLabel()
+    if BfBot.UI._IsCasterPerspective() then
+        return BfBot.L10N.Get("ui.view.recipient")
+    end
+    return BfBot.L10N.Get("ui.view.caster")
+end
+
+--- Tooltip for the perspective button: what the panel shows NOW.
+function BfBot.UI._PerspectiveBtnTooltip()
+    if BfBot.UI._IsCasterPerspective() then
+        return BfBot.L10N.Get("ui.view.tooltip_caster")
+    end
+    return BfBot.L10N.Get("ui.view.tooltip_recipient")
+end
+
+--- Switch which end of the plan the panel reads from.
+function BfBot.UI.TogglePerspective()
+    if not BfBot.UI._CanTogglePerspective() then return end
+    BfBot.UI._ClearSpellSelection()
+    if BfBot.UI._perspective == "recipient" then
+        BfBot.UI._perspective = "caster"
+    else
+        BfBot.UI._perspective = "recipient"
+    end
+    BfBot.UI._Refresh()
+end
+
 --- Toggle between party and summons view. Preset index is a shared axis and
 --- survives the switch; the summon list is re-swept on every switch.
 function BfBot.UI.ToggleView()
@@ -359,6 +421,9 @@ buffbot_selectedRow = 0
 -- the preset's order, cast queue, or the indices used by editing actions.
 buffbot_visibleSpells = {}
 buffbot_visibleSelectedRow = 0
+-- The recipient view's flat rows, and the selection the widget keeps (#81).
+buffbot_recipientTable = {}
+buffbot_recipientSelectedRow = 0
 buffbot_searchText = ""
 BfBot.UI._appliedSearchText = ""
 
@@ -1208,7 +1273,14 @@ function BfBot.UI._Layout()
     local charH = 24
     local charGap = 4
     local viewW = 100
-    local rowW = cw - viewW - charGap   -- tab area shared by both views
+    -- The perspective button gets a reserved slot of its OWN beside the view
+    -- toggle, and `rowW` stops short of both. #100 is the reason this is not
+    -- squeezed in next to the last character name: a control placed among the
+    -- summon tabs, the paging cluster or the full-width empty-state label
+    -- ends up underneath whichever of them is live, and then cannot be
+    -- clicked at all. Reserving costs tab width; sharing costs the button.
+    local perspW = 100
+    local rowW = cw - viewW - perspW - 2 * charGap
     local charCount = BfBot.UI._VisibleCount(buffbot_charNames, 6)
     local charW = math.min(math.floor((rowW - (charCount - 1) * charGap) / charCount), 170)
     -- The width is sized for the tabs that exist, but all six slots are
@@ -1228,6 +1300,12 @@ function BfBot.UI._Layout()
     -- v1.12.0 had it -- it ends up under whichever of those is live, and the
     -- panel can no longer be switched back out of the Summons view (#100).
     setArea("bbView", cx + cw - viewW, charY, viewW, charH)
+    -- Caster/recipient, left of the view toggle. Enabled only in the party
+    -- view, where there are recipients to group by; in the summons view it is
+    -- parked on its own slot and disabled rather than moved, so the row never
+    -- reflows under the player.
+    setArea("bbPersp", cx + cw - viewW - perspW - charGap, charY,
+        perspW, charH)
 
     -- Summon tabs (summons view; same row) + paging cluster before the toggle
     local pageBtnW = 24
@@ -1776,6 +1854,22 @@ function BfBot.UI._RefreshState()
 
     -- 7. Build spell table from preset config, cross-ref with scan data
     buffbot_spellTable = BfBot.UI._BuildSpellRows(sprite, preset, castable, config.ovr)
+
+    -- 7b. The same plan read by recipient (#81). Built only while that
+    -- reading is showing: it costs a fresh snapshot and a full allocation,
+    -- not worth paying for a table nobody is looking at. Guarded, because a
+    -- plan that cannot be built must leave the panel usable -- the caster
+    -- view depends on none of it.
+    if BfBot.UI._IsRecipientView() then
+        local ok, rows = pcall(BfBot.UI._RefreshRecipientRows)
+        if ok and type(rows) == "table" then
+            buffbot_recipientTable = rows
+        else
+            buffbot_recipientTable = {}
+            BfBot._Warn("Recipient view: could not build the plan: "
+                .. tostring(rows))
+        end
+    end
 
     -- 8. Update title, cast labels, status
     buffbot_title = BfBot.L10N.Format("ui.title.preset", {
@@ -4061,4 +4155,189 @@ function BfBot.UI.ToggleDebug()
     BfBot._debugMode = (BfBot._debugMode == 1) and 0 or 1
     Infinity_SetINIValue("BuffBot", "Debug", BfBot._debugMode)
     BfBot._Display("BuffBot: Debug mode " .. (BfBot._debugMode == 1 and "ON" or "OFF"))
+end
+
+-- ============================================================
+-- Recipient view rows (issue #81, step 3)
+-- ============================================================
+
+--- How a recipient entry stands: planned, partly planned, or not at all.
+-- Three states rather than two, because "2 of 3 Blesses" is the case a
+-- player acts on and collapsing it into either yes or no hides the work.
+function BfBot.UI._EntryState(entry)
+    if not entry or entry.repeats == nil then return "missing" end
+    if entry.planned >= entry.repeats and entry.repeats > 0 then
+        return "planned"
+    end
+    if entry.planned > 0 then return "partial" end
+    return "missing"
+end
+
+--- Who a planned entry comes from, as the player should read it.
+-- A party-wide cast says so rather than naming a caster, because the point
+-- is that it covers everybody; a personal cast names its casters; an
+-- unplanned one says there is nobody to cast it.
+function BfBot.UI._EntrySourceLabel(entry, snapshot)
+    if not entry then return "" end
+    if entry.partyWide then
+        return BfBot.L10N.Get("ui.recipient.from_party")
+    end
+    local names = {}
+    for _, source in ipairs(entry.sources or {}) do
+        local actor = snapshot and snapshot.actors
+            and snapshot.actors[source.actor]
+        names[#names + 1] = actor and actor.name or source.actor
+    end
+    if #names == 0 then
+        return BfBot.L10N.Get("ui.recipient.no_source")
+    end
+    return BfBot.L10N.Format("ui.recipient.from_source",
+        { names = table.concat(names, ", ") })
+end
+
+--- "2 of 3", or nothing when a single cast was asked for and planned.
+-- A count on every row would be noise; a count only where it differs is
+-- information.
+function BfBot.UI._EntryCountLabel(entry)
+    if not entry or (entry.repeats or 0) <= 1 then return "" end
+    if entry.planned >= entry.repeats then
+        return BfBot.L10N.Format("ui.recipient.repeat_count",
+            { planned = entry.planned, total = entry.repeats })
+    end
+    return BfBot.L10N.Format("ui.recipient.repeat_count",
+        { planned = entry.planned or 0, total = entry.repeats })
+end
+
+--- PURE: the recipient view's flat row list, from P.ByRecipient's output.
+--
+-- The table widget takes one flat list, so a recipient becomes a header row
+-- followed by its entries. A recipient with nothing planned still gets a
+-- header and one explanatory row: an empty stretch of table would read as a
+-- panel that failed to load rather than a character nobody is buffing.
+--
+-- `snapshot` is only read for caster names and may be nil, in which case a
+-- source falls back to its actor key -- a name is presentation, and a missing
+-- one must not cost the row.
+function BfBot.UI._BuildRecipientRows(recipients, snapshot)
+    local rows = {}
+    for _, recipient in ipairs(recipients or {}) do
+        rows[#rows + 1] = {
+            kind = "recipient",
+            key = recipient.key,
+            name = recipient.name,
+            slot = recipient.slot,
+            planned = recipient.planned,
+            short = recipient.short,
+            summary = BfBot.L10N.Format("ui.recipient.covered",
+                { planned = recipient.planned,
+                  total = recipient.planned + recipient.short }),
+        }
+        if #recipient.entries == 0 then
+            rows[#rows + 1] = {
+                kind = "empty",
+                key = recipient.key,
+                name = BfBot.L10N.Get("ui.recipient.nothing_planned"),
+            }
+        end
+        for _, entry in ipairs(recipient.entries) do
+            local group = snapshot and snapshot.groups
+                and snapshot.groups[entry.group]
+            rows[#rows + 1] = {
+                kind = "entry",
+                key = recipient.key,
+                group = entry.group,
+                -- The scan's own name and icon, so the two readings of one
+                -- plan never disagree about what a buff is called.
+                name = group and group.name or entry.group,
+                icon = group and group.icon or "",
+                entry = entry,
+                partyWide = entry.partyWide and 1 or nil,
+                state = BfBot.UI._EntryState(entry),
+                source = BfBot.UI._EntrySourceLabel(entry, snapshot),
+                count = BfBot.UI._EntryCountLabel(entry),
+                duration = entry.duration,
+                reason = entry.reasons and entry.reasons[1] or nil,
+            }
+        end
+    end
+    return rows
+end
+
+--- The recipient table's cells (issue #81).
+-- Each takes the widget's `rowNumber`. Reading a row the table does not have
+-- returns an empty string rather than nil: the engine draws whatever it is
+-- given, and nil has shown up as the literal text "nil" before.
+function BfBot.UI._RecipientRow(rowNumber)
+    local rows = buffbot_recipientTable
+    if type(rows) ~= "table" then return nil end
+    return rows[rowNumber]
+end
+
+function BfBot.UI._RecipientCellName(rowNumber)
+    local row = BfBot.UI._RecipientRow(rowNumber)
+    -- Only a header row carries the name, so the names form a margin the eye
+    -- can follow instead of repeating beside every buff.
+    if not row or row.kind ~= "recipient" then return "" end
+    return row.name or ""
+end
+
+function BfBot.UI._RecipientCellWhat(rowNumber)
+    local row = BfBot.UI._RecipientRow(rowNumber)
+    if not row then return "" end
+    if row.kind == "recipient" then return row.summary or "" end
+    if row.kind == "empty" then return row.name or "" end
+    -- The group's own name, carried over from the scan when the row was
+    -- built, so a buff reads the same in both views.
+    return row.name or row.group or ""
+end
+
+function BfBot.UI._RecipientCellSource(rowNumber)
+    local row = BfBot.UI._RecipientRow(rowNumber)
+    if not row or row.kind ~= "entry" then return "" end
+    return row.source or ""
+end
+
+function BfBot.UI._RecipientCellCount(rowNumber)
+    local row = BfBot.UI._RecipientRow(rowNumber)
+    if not row or row.kind ~= "entry" then return "" end
+    return row.count or ""
+end
+
+--- A header row's name stands out; nothing else uses this column.
+function BfBot.UI._RecipientNameColor(rowNumber)
+    local row = BfBot.UI._RecipientRow(rowNumber)
+    if row and row.kind == "recipient" and row.short and row.short > 0 then
+        return BfBot.UI._T("lockText")
+    end
+    return BfBot.UI._T("headerSub")
+end
+
+--- Three states, three tones: planned, partly planned, not planned.
+-- The middle one has its own tone because "2 of 3" is the case a player acts
+-- on, and giving it either of the other two tones hides that.
+function BfBot.UI._RecipientWhatColor(rowNumber)
+    local row = BfBot.UI._RecipientRow(rowNumber)
+    if not row then return BfBot.UI._T("text") end
+    if row.kind == "recipient" then return BfBot.UI._T("headerSub") end
+    if row.kind == "empty" then return BfBot.UI._T("textMuted") end
+    if row.state == "planned" then return BfBot.UI._T("text") end
+    if row.state == "partial" then return BfBot.UI._T("lockText") end
+    return BfBot.UI._T("textMuted")
+end
+
+
+--- The recipient view's table, rebuilt from a fresh plan.
+-- A fresh snapshot every time, for the same reason the executor takes one:
+-- uses, equipment, summons and allegiance all move between an edit and a
+-- cast, so a cached plan would show a picture that is no longer true.
+function BfBot.UI._RefreshRecipientRows()
+    local snapshot = BfBot.Plan.Snapshot()
+    if not snapshot then return {} end
+    local requests = BfBot.Plan.ImportLegacy(snapshot, BfBot.UI._preset)
+    requests = BfBot.Plan.NormalizeRadialRequests(snapshot, requests or {})
+    local flat = BfBot.Plan.ExpandRequests(requests)
+    local assignment = BfBot.Plan.Assign(snapshot, flat)
+    local recipients = BfBot.Plan.ByRecipient(snapshot, assignment)
+    BfBot.UI._recipientTotals = BfBot.Plan.RecipientTotals(recipients)
+    return BfBot.UI._BuildRecipientRows(recipients, snapshot)
 end

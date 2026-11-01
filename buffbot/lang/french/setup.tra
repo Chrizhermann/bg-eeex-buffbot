@@ -412,3 +412,33 @@
 @725 = ~Lance les sorts dans l'ordre que vous avez défini. Cliquez pour lancer d'abord les bénédictions les plus longues ; votre ordre est conservé et revient si vous désactivez.~
 // ui.order.tooltip_duration
 @726 = ~Lance d'abord les bénédictions les plus longues. Les lignes verrouillées gardent leur place. Cliquez pour revenir à votre ordre.~
+
+// ui.view.caster
+@727 = ~By caster~
+
+// ui.view.recipient
+@728 = ~By recipient~
+
+// ui.view.tooltip_caster
+@729 = ~Shows what each character will cast. Click to see who receives what instead; it is the same plan, read the other way round.~
+
+// ui.view.tooltip_recipient
+@730 = ~Shows what each character receives and what is missing. Click to go back to casting order per character.~
+
+// ui.recipient.covered
+@731 = ~{planned} of {total} covered~
+
+// ui.recipient.nothing_planned
+@732 = ~Nothing planned~
+
+// ui.recipient.from_source
+@733 = ~from {names}~
+
+// ui.recipient.from_party
+@734 = ~whole party~
+
+// ui.recipient.repeat_count
+@735 = ~{planned} of {total}~
+
+// ui.recipient.no_source
+@736 = ~no caster~
