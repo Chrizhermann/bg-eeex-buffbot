@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## v1.12.6 (2026-11-01) — the guard asks the game now
+
+One defect from the live playthrough, and a second one found while fixing it
+that was larger: fast-forward refused to run on an older EEex, and the modal
+guard it was refusing on behalf of had been looking for menus that do not
+exist. No save schema change, no shipped asset byte changes, and nothing about
+casting moves.
 
 ### Fixed
 - **Fast-forward refused to run on an older EEex, and its modal guard was

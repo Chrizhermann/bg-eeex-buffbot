@@ -1034,30 +1034,54 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     current_normalized = current_release.casefold()
 
     assert current_release.startswith(
-        "v1.12.5 (2026-10-30) — a button that answers when you press it"
+        "v1.12.6 (2026-11-01) — the guard asks the game now"
     )
+    # What the player met, and the second defect the fix uncovered (#104).
+    assert "and its modal guard was" in current_normalized
+    # The two names that could never match anything. A release that quietly
+    # goes back to naming menus in the source loses this.
+    assert "are no menu's" in current_normalized
+    assert "could have known about" in current_normalized
+    # Why popupActive is not the guard, stated with the case that shows it.
+    assert "on the stack. it can only add" in current_normalized
+    # The fail-closed rule, so a later change cannot soften it into a skip.
+    assert "would accelerate unguarded" in current_normalized
+    # How the non-modal screens are matched, and how many names that leaves.
+    assert "by name prefix" in current_normalized
+    assert "66 names rather than" in current_normalized
+    # Which EEex binds what, read off the loader rather than release notes.
+    assert "302 bindings and 1.3.1 defines 313" in current_normalized
+    assert "full automated suite passes **1676 tests**" in current_normalized
+    assert "all 28" in current_normalized
+    # Both limits this release ships with, named rather than implied.
+    assert "not checked in game: bg:ee/sod and iwd:ee" in current_normalized
+    assert "there is no 1.2.0 lab" in current_normalized
+
+    press_release = source.split("\n## v1.12.5 (2026-10-30)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # What the player reported and what the fix had to be about: the press
     # was there and too quiet to see, not missing (#103).
-    assert "a button you press now looks pressed" in current_normalized
-    assert "still outranks a press" in current_normalized
+    assert "a button you press now looks pressed" in press_release
+    assert "still outranks a press" in press_release
     # Where the press is read from. The DSL has nothing that says it, so a
     # later rewrite that goes looking for a `.menu` answer finds this first.
-    assert "(`framesheld`)" in current_normalized
+    assert "(`framesheld`)" in press_release
     # The route the lab ruled out, pinned so nobody tries it again: the field
     # is writable and reads back, which makes the dead end look like it worked.
     assert ("onto a live button from lua changes **nothing** on screen"
-            in current_normalized)
+            in press_release)
     # The measurement, and the floor it has to beat -- a whole-screen diff of
     # a running game is mostly animation.
-    assert "242 of 255 across 29.5% of its" in current_normalized
-    assert "that floor came out at 0" in current_normalized
-    # The regression this release also carries: one name for the default.
+    assert "242 of 255 across 29.5% of its" in press_release
+    assert "that floor came out at 0" in press_release
+    # The regression that release also carried: one name for the default.
     assert ("an install that had never picked a colour scheme opened on the"
-            " wrong" in current_normalized)
-    assert "`bfbot.theme.default_palette`" in current_normalized
-    assert "full automated suite passes **1631 tests**" in current_normalized
-    assert "all 28" in current_normalized
-    assert "not checked in game: a real mouse press" in current_normalized
+            " wrong" in press_release)
+    assert "`bfbot.theme.default_palette`" in press_release
+    assert "full automated suite passes **1631 tests**" in press_release
+    assert "all 28" in press_release
+    assert "not checked in game: a real mouse press" in press_release
 
     theme_release = source.split("\n## v1.12.4 (2026-10-29)", 1)[1].split(
         "\n## ", 1
