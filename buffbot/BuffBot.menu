@@ -1167,7 +1167,7 @@ menu
 	label
 	{
 		name "bbSearchEmpty"
-		enabled "buffbot_isOpen and buffbot_searchText ~= '' and #buffbot_visibleSpells == 0"
+		enabled "BfBot.UI._SearchFoundNothing()"
 		text lua "BfBot.L10N.Get('ui.search.no_matches')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('textMuted')"
@@ -1183,7 +1183,7 @@ menu
 	label
 	{
 		name "bbHName"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('ui.header.spell')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('headerSub')"
@@ -1193,7 +1193,7 @@ menu
 	label
 	{
 		name "bbHDur"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('ui.header.duration')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('headerSub')"
@@ -1203,7 +1203,7 @@ menu
 	label
 	{
 		name "bbHUses"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('ui.header.uses')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('headerSub')"
@@ -1213,7 +1213,7 @@ menu
 	label
 	{
 		name "bbHRep"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('ui.header.repeats')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('headerSub')"
@@ -1223,7 +1223,7 @@ menu
 	label
 	{
 		name "bbHTgt"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('ui.header.target')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('headerSub')"
@@ -1233,11 +1233,55 @@ menu
 	label
 	{
 		name "bbHLock"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('ui.header.lock')"
 		text style "bb_normal_parchment"
 		text color lua "BfBot.UI._T('headerSub')"
 		text align center center
+		area 0 0 100 20
+	}
+
+	-- The recipient reading's own column captions. A separate strip, not
+	-- a reworded one: both are placed every layout and exactly one is
+	-- enabled, so neither has to be rebuilt when the player switches.
+	label
+	{
+		name "bbRHWho"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		text lua "BfBot.L10N.Get('ui.recipient.header.who')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align left center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbRHWhat"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		text lua "BfBot.L10N.Get('ui.recipient.header.what')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align left center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbRHFrom"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		text lua "BfBot.L10N.Get('ui.recipient.header.from')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align left center
+		area 0 0 100 20
+	}
+	label
+	{
+		name "bbRHCount"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		text lua "BfBot.L10N.Get('ui.recipient.header.count')"
+		text style "bb_normal_parchment"
+		text color lua "BfBot.UI._T('headerSub')"
+		text align right center
 		area 0 0 100 20
 	}
 
@@ -1448,7 +1492,7 @@ menu
 				text lua "BfBot.UI._RecipientCellSource(rowNumber)"
 				text style "bb_normal_parchment"
 				text align left center
-				text color lua "BfBot.UI._T('textDim')"
+				text color lua "BfBot.UI._T('textMuted')"
 			}
 		}
 
@@ -1498,7 +1542,7 @@ menu
 	button
 	{
 		name    "bbAdd"
-		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView() and not BfBot.UI._IsRecipientView()"
 		action  "BfBot.UI.OpenSpellPicker()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1510,7 +1554,7 @@ menu
 	label
 	{
 		name    "bbAdd_t"
-		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView() and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.add_spell')"
 		text style "bb_caption"
 		text align center center
@@ -1523,7 +1567,7 @@ menu
 	button
 	{
 		name    "bbRmv"
-		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView() and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ExcludeSelected()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1536,7 +1580,7 @@ menu
 	label
 	{
 		name    "bbRmv_t"
-		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView() and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.remove')"
 		text style "bb_caption"
 		text align center center
@@ -1550,7 +1594,7 @@ menu
 	button
 	{
 		name    "bbRepeat"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.StepSelectedRepeat(1)"
 		actionAlt "BfBot.UI.StepSelectedRepeat(-1)"
@@ -1565,7 +1609,7 @@ menu
 	label
 	{
 		name    "bbRepeat_t"
-		enabled "buffbot_isOpen"
+		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.UI._RepeatButtonText()"
 		text style "bb_caption"
 		text align center center
@@ -1634,7 +1678,7 @@ menu
 	button
 	{
 		name    "bbTog"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.ToggleSelected()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1647,7 +1691,7 @@ menu
 	label
 	{
 		name    "bbTog_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.UI._ToggleBtnText()"
 		text style "bb_caption"
 		text align center center
@@ -1660,7 +1704,7 @@ menu
 	button
 	{
 		name    "bbTgt"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1673,7 +1717,7 @@ menu
 	label
 	{
 		name    "bbTgt_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.UI._TargetBtnText()"
 		text style "bb_caption"
 		text align center center
@@ -1686,7 +1730,7 @@ menu
 	button
 	{
 		name    "bbUp"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1699,7 +1743,7 @@ menu
 	label
 	{
 		name    "bbUp_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_caption"
 		text align center center
@@ -1712,7 +1756,7 @@ menu
 	button
 	{
 		name    "bbDn"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1725,7 +1769,7 @@ menu
 	label
 	{
 		name    "bbDn_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_caption"
 		text align center center
@@ -1738,7 +1782,7 @@ menu
 	button
 	{
 		name    "bbSort"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1751,7 +1795,7 @@ menu
 	label
 	{
 		name    "bbSort_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_caption"
 		text align center center
@@ -1766,7 +1810,7 @@ menu
 	label
 	{
 		name    "bbOrder_b"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
@@ -1777,7 +1821,7 @@ menu
 	text
 	{
 		name    "bbOrder"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ToggleAutoOrder()"
 		text lua "BfBot.UI._AutoOrderLabel()"
@@ -1824,7 +1868,7 @@ menu
 	button
 	{
 		name    "bbVTog"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		action  "BfBot.UI.ToggleSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1836,7 +1880,7 @@ menu
 	label
 	{
 		name    "bbVTog_t"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.UI._ToggleBtnText()"
 		text style "bb_caption"
 		text align center center
@@ -1849,7 +1893,7 @@ menu
 	button
 	{
 		name    "bbVTgt"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		action  "BfBot.UI.OpenTargetsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1861,7 +1905,7 @@ menu
 	label
 	{
 		name    "bbVTgt_t"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.UI._TargetBtnText()"
 		text style "bb_caption"
 		text align center center
@@ -1874,7 +1918,7 @@ menu
 	button
 	{
 		name    "bbVVar"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		action  "BfBot.UI.OpenVariantsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -1886,7 +1930,7 @@ menu
 	label
 	{
 		name    "bbVVar_t"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.UI._VariantBtnText()"
 		text style "bb_caption"
 		text align center center
@@ -1899,7 +1943,7 @@ menu
 	button
 	{
 		name    "bbVUp"
-		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1912,7 +1956,7 @@ menu
 	label
 	{
 		name    "bbVUp_t"
-		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._CanMoveUp() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_caption"
 		text align center center
@@ -1925,7 +1969,7 @@ menu
 	button
 	{
 		name    "bbVDn"
-		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1938,7 +1982,7 @@ menu
 	label
 	{
 		name    "bbVDn_t"
-		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1"
+		enabled "BfBot.UI._CanMoveDown() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_caption"
 		text align center center
@@ -1951,7 +1995,7 @@ menu
 	button
 	{
 		name    "bbVSort"
-		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
+		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -1964,7 +2008,7 @@ menu
 	label
 	{
 		name    "bbVSort_t"
-		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1"
+		enabled "buffbot_isOpen and #buffbot_spellTable > 1 and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_caption"
 		text align center center
@@ -1979,7 +2023,7 @@ menu
 	label
 	{
 		name    "bbVOrder_b"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
@@ -1990,7 +2034,7 @@ menu
 	text
 	{
 		name    "bbVOrder"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
 		clickable lua "BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ToggleAutoOrder()"
 		text lua "BfBot.UI._AutoOrderLabel()"

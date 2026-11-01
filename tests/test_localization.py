@@ -100,6 +100,10 @@ CATALOG_SCHEMA = {
     734: "ui.recipient.from_party",
     735: "ui.recipient.repeat_count",
     736: "ui.recipient.no_source",
+    737: "ui.recipient.header.who",
+    738: "ui.recipient.header.what",
+    739: "ui.recipient.header.from",
+    740: "ui.recipient.header.count",
     114: "installer.main.luajit_optional",
     # Common and static menu labels (300-399)
     300: "common.buffbot",

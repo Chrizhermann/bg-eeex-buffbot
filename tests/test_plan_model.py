@@ -1533,3 +1533,22 @@ def test_the_projection_leaves_no_bookkeeping_on_its_entries(lua):
     )
     assert lua.eval("recipients[1].entries[1]._seenSource") is None
     assert lua.eval("recipients[1].entries[1]._seenReason") is None
+
+
+def test_the_radial_normalizer_answers_with_the_list_it_was_given(lua):
+    """It rewrites in place; a caller that chains must not lose the plan."""
+    lua.execute(
+        """
+        snap = TestSnapshot({ actors = { { key = "a" } },
+            groups = { { key = "g", sources = { { actor = "a", pool = "p",
+                uses = 1, duration = 60 } } } } })
+        requests = { { group = "g", target = "a", on = 1 } }
+        answered = BfBot.Plan.NormalizeRadialRequests(snap, requests)
+        """
+    )
+    assert lua.eval("answered == requests")
+    assert lua.eval("#answered") == 1
+    # And with nothing to normalize it still answers a list, not nil.
+    lua.execute("empty = BfBot.Plan.NormalizeRadialRequests(snap, {})")
+    assert lua.eval("empty ~= nil") is True
+    assert lua.eval("#empty") == 0

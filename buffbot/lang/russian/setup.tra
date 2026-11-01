@@ -442,3 +442,15 @@
 
 // ui.recipient.no_source
 @736 = ~no caster~
+
+// ui.recipient.header.who
+@737 = ~Receives~
+
+// ui.recipient.header.what
+@738 = ~Buff~
+
+// ui.recipient.header.from
+@739 = ~From~
+
+// ui.recipient.header.count
+@740 = ~Times~

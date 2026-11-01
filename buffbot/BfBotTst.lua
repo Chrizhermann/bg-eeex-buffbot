@@ -6655,6 +6655,202 @@ function BfBot.Test.PlanModel()
 end
 
 -- ============================================================
+-- BfBot.Test.RecipientView — the plan read by recipient, in a live panel
+-- ============================================================
+-- The projection itself is covered offline. What is not, and cannot be, is
+-- the path from the live party to the rows on screen: Snapshot needs the
+-- engine, so nothing offline ever calls _RefreshRecipientRows. Two defects
+-- reached a lab through that gap -- the preset index passed as a table, and
+-- a layout never re-run for the other reading -- so this phase walks the
+-- whole path and looks at what the panel would draw.
+function BfBot.Test.RecipientView()
+    -- It switches the panel's reading and types in its search box, both of
+    -- which are the player's own state, and GetConfig can create a config.
+    return _GuardPhase("Recipient View", function()
+    P("=== Phase: Recipient View (issue #81) ===")
+
+    if not BfBot.UI or not BfBot.UI._RefreshRecipientRows then
+        _nok("the recipient view is not loaded")
+        return _summary("Recipient View")
+    end
+    -- Checked before anything is touched, not inside the walk: the view is
+    -- a projection of the plan model and has nothing to show without it.
+    if not BfBot.Plan then
+        _nok("BfBot.Plan is not loaded")
+        return _summary("Recipient View")
+    end
+
+    local wasPerspective = BfBot.UI._perspective
+    local wasSearch = buffbot_searchText
+    local wasView = BfBot.UI._view
+
+    -- The reading only applies in the party view, so the phase works there
+    -- and puts the panel back whatever it finds.
+    BfBot.UI._view = "party"
+    BfBot.UI._perspective = "recipient"
+    _check(BfBot.UI._IsRecipientView(), "the panel reports the other reading")
+
+    local okRows, rows = pcall(BfBot.UI._RefreshRecipientRows)
+    if not okRows then
+        _nok("_RefreshRecipientRows raised: " .. tostring(rows))
+        BfBot.UI._perspective = wasPerspective
+        buffbot_searchText = wasSearch
+        BfBot.UI._view = wasView
+        return _summary("Recipient View")
+    end
+    _check(type(rows) == "table", "the view built a table of rows")
+
+    -- A party exists, so every member is a recipient -- including the ones
+    -- nobody is buffing, which get a header and one explanatory row rather
+    -- than no rows at all.
+    local party = 0
+    for slot = 0, 5 do
+        if EEex_Sprite_GetInPortrait(slot) then party = party + 1 end
+    end
+    local headers, entries, empties = 0, 0, 0
+    for _, row in ipairs(rows) do
+        if row.kind == "recipient" then headers = headers + 1
+        elseif row.kind == "entry" then entries = entries + 1
+        elseif row.kind == "empty" then empties = empties + 1
+        else _nok("a row of unknown kind: " .. tostring(row.kind)) end
+    end
+    _check(headers == party,
+        "every party member is a recipient (" .. headers .. " of " .. party .. ")")
+    P("  rows: " .. headers .. " header(s), " .. entries .. " entr(y/ies), "
+        .. empties .. " empty")
+
+    -- The cells the list widget calls, for every row it would draw and for
+    -- rows past the end. A nil reaches the engine as the text "nil".
+    buffbot_recipientTable = rows
+    local bad = 0
+    for index = 1, #rows + 2 do
+        for _, cell in ipairs({ "Name", "What", "Source", "Count" }) do
+            local fn = BfBot.UI["_RecipientCell" .. cell]
+            local okCell, value = pcall(fn, index)
+            if not okCell or type(value) ~= "string" then
+                bad = bad + 1
+                if bad <= 3 then
+                    _nok("row " .. index .. " cell " .. cell .. " answered "
+                        .. tostring(value))
+                end
+            end
+        end
+    end
+    _check(bad == 0, "every cell answers a string, including past the end")
+
+    -- Colours, which the engine wants as packed numbers. A key the palette
+    -- does not define answers magenta, and that shipped once (#81).
+    local magenta = 0
+    for index = 1, #rows do
+        for _, fn in ipairs({ BfBot.UI._RecipientNameColor,
+                              BfBot.UI._RecipientWhatColor }) do
+            local okColor, value = pcall(fn, index)
+            if not okColor or type(value) ~= "number" then
+                _nok("row " .. index .. " has no colour: " .. tostring(value))
+            elseif value == 0xFF00FF then
+                magenta = magenta + 1
+            end
+        end
+    end
+    _check(magenta == 0, "no row asks for a colour this palette lacks")
+
+    -- A header's summary and an entry's source are what the player reads.
+    for _, row in ipairs(rows) do
+        if row.kind == "recipient" then
+            if type(row.summary) ~= "string" or row.summary == "" then
+                _nok("a recipient header has no coverage summary")
+            end
+        elseif row.kind == "entry" then
+            if type(row.source) ~= "string" or row.source == "" then
+                _nok("entry " .. tostring(row.name) .. " says nothing about "
+                    .. "where it comes from")
+            end
+            if row.state ~= "planned" and row.state ~= "partial"
+                and row.state ~= "missing" then
+                _nok("entry " .. tostring(row.name) .. " is in no known state")
+            end
+        end
+    end
+    _ok("every row says what it is and where it comes from")
+
+    -- The search box filters this reading too, and a query that matches
+    -- nothing empties the table rather than leaving names with no buffs.
+    local firstBuff
+    for _, row in ipairs(rows) do
+        if row.kind == "entry" then firstBuff = row.name break end
+    end
+    if firstBuff then
+        buffbot_searchText = firstBuff
+        local okFiltered, filtered = pcall(BfBot.UI._RefreshRecipientRows)
+        _check(okFiltered and type(filtered) == "table",
+            "the search rebuilt the rows")
+        if okFiltered and type(filtered) == "table" then
+            local kept = 0
+            for _, row in ipairs(filtered) do
+                if row.kind == "entry" then kept = kept + 1 end
+            end
+            _check(kept > 0 and kept <= entries,
+                "searching \"" .. firstBuff .. "\" narrowed the list to "
+                    .. kept .. " of " .. entries)
+        end
+    else
+        _ok("nothing is planned, so there is nothing to search (skipped)")
+    end
+
+    buffbot_searchText = "zzz-no-such-buff-zzz"
+    local okNone, none = pcall(BfBot.UI._RefreshRecipientRows)
+    _check(okNone and type(none) == "table" and #none == 0,
+        "a query that matches nothing leaves no rows")
+    buffbot_searchText = ""
+
+    -- The empty-state label reads the live table, not the caster list's.
+    buffbot_recipientTable = {}
+    buffbot_searchText = "zzz-no-such-buff-zzz"
+    _check(BfBot.UI._SearchFoundNothing() == true,
+        "the empty-state label notices an empty recipient table")
+    buffbot_searchText = ""
+    _check(BfBot.UI._SearchFoundNothing() == false,
+        "and says nothing when the box is empty")
+
+    -- The layout has to be rebuilt for the other reading: it decides the
+    -- footer's height, the list's row height and which header strip is
+    -- live. Without it the list drew into a rect measured for the caster
+    -- one and lost its bottom row to a half-drawn stripe.
+    if BfBot.UI._laidOutCounts then
+        BfBot.UI._Layout()
+        _check(BfBot.UI._laidOutCounts.recipient == true,
+            "the layout records which reading it was built for")
+        BfBot.UI._perspective = "caster"
+        BfBot.UI._RelayoutIfStale()
+        _check(BfBot.UI._laidOutCounts.recipient == false,
+            "switching back lays the panel out again")
+        BfBot.UI._perspective = "recipient"
+    else
+        _ok("the panel has never been laid out, so there is nothing to "
+            .. "re-lay (skipped)")
+    end
+
+    -- The switch itself: allowed in the party view, inert in the summons
+    -- view, where there are no recipients to group by.
+    BfBot.UI._view = "summons"
+    _check(not BfBot.UI._CanTogglePerspective(),
+        "the switch is inert in the summons view")
+    _check(not BfBot.UI._IsRecipientView(),
+        "and that view keeps its own caster list")
+    BfBot.UI._view = "party"
+    _check(BfBot.UI._CanTogglePerspective(), "and live again in the party view")
+
+    BfBot.UI._perspective = wasPerspective
+    buffbot_searchText = wasSearch
+    BfBot.UI._view = wasView
+    BfBot.UI._Refresh()
+    _ok("the panel is back in the reading it was found in")
+
+    return _summary("Recipient View")
+    end)
+end
+
+-- ============================================================
 -- BfBot.Test.RunAll — Full test suite
 -- ============================================================
 -- Remaining-duration threshold / force re-cast (issue #84)
@@ -7059,6 +7255,10 @@ function BfBot.Test.RunAll()
     local planOk = BfBot.Test.PlanModel()
     P("")
 
+    -- Phase: the same plan read by recipient (issue #81)
+    local recipientOk = BfBot.Test.RecipientView()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -7089,10 +7289,11 @@ function BfBot.Test.RunAll()
     P("  Multiplayer: " .. (mpOk and "PASS" or "FAIL"))
     P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
     P("  Plan Model:         " .. (planOk and "PASS" or "FAIL"))
+    P("  Recipient View:     " .. (recipientOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk and recipientOk
     end)
 
     for _, problem in ipairs(problems) do

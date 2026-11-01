@@ -709,11 +709,34 @@ function BfBot.UI._SearchTick()
     if not buffbot_isOpen or buffbot_searchText == BfBot.UI._appliedSearchText then return false end
     BfBot.UI._PrepareSpellSelectionForRebuild()
     BfBot.UI._RestoreSpellSelection()
+    -- The other reading of the plan filters on the same query, and it is
+    -- built in _Refresh rather than from the canonical rows, so it has to be
+    -- rebuilt here too. Guarded like the refresh's own build: a plan that
+    -- cannot be made must not take the search box down with it.
+    if BfBot.UI._IsRecipientView() then
+        local ok, rows = pcall(BfBot.UI._RefreshRecipientRows)
+        buffbot_recipientTable = (ok and type(rows) == "table") and rows or {}
+        buffbot_recipientSelectedRow = 0
+    end
     if EEex_Menu_GetItem then
-        local item = EEex_Menu_GetItem("bbList")
-        if item and item.scrollbar then item.scrollbar.top = 0 end
+        for _, name in ipairs({ "bbList", "bbRecipientList" }) do
+            local item = EEex_Menu_GetItem(name)
+            if item and item.scrollbar then item.scrollbar.top = 0 end
+        end
     end
     return false
+end
+
+--- Whether the search found nothing in whichever list is showing.
+-- The empty-state label is one label over both tables, so it has to ask the
+-- live one; pinned to the caster list it stayed silent in the other reading
+-- and claimed an empty result in it while the caster list was filtered.
+function BfBot.UI._SearchFoundNothing()
+    if buffbot_searchText == "" then return false end
+    if BfBot.UI._IsRecipientView() then
+        return #buffbot_recipientTable == 0
+    end
+    return #buffbot_visibleSpells == 0
 end
 
 function BfBot.UI.ClearSearch()
@@ -1354,6 +1377,10 @@ function BfBot.UI._Layout()
     -- the right. The bar ends where Clear begins, computed from the two
     -- widths rather than from a stack of literals that had to be kept in
     -- step across four lines.
+    -- Which reading is showing changes the footer's height, and through it
+    -- the list's, so it is read once here rather than at each use.
+    local recipient = BfBot.UI._IsRecipientView()
+
     local searchY, searchH = py + 98, 26
     local speedW, clearW, labelW = 148, 76, 70
     local clearX = cx + cw - speedW - gapS - clearW
@@ -1382,20 +1409,39 @@ function BfBot.UI._Layout()
     header("bbHTgt",  70, 24)
     header("bbHLock", 94,  6)
 
+    -- The recipient reading has four columns of its own, and both strips are
+    -- placed every layout rather than only the live one: an element that is
+    -- merely disabled keeps the area it was last given, so sizing only the
+    -- live strip leaves the other one a frame behind after every switch.
+    -- The percentages are the list's own column widths (26/40/24/10), so a
+    -- caption always stands over the column it names.
+    header("bbRHWho",    0, 26)
+    header("bbRHWhat",  26, 40)
+    header("bbRHFrom",  66, 24)
+    header("bbRHCount", 90, 10)
+
     -- Spell list (fills middle area). The footer below is four 28px rows
     -- with 6px between them and 12px of air above the bottom rail; keeping
     -- that arithmetic in one place is what stops the list from growing into
     -- the buttons when a row is added or a height changes.
     local listY = hdrY + hdrH
-    local footerH = 12 + 4 * 28 + 3 * 6 + 8   -- edge + rows + gaps + breathing
+    -- The recipient reading edits no caster row, so the footer row that does
+    -- is not drawn there and the list takes the height back -- three rows
+    -- instead of four. A row of controls that cannot do anything is worse
+    -- than no row: it reads as a panel that has stopped responding.
+    local footerRows = recipient and 3 or 4
+    local footerH = 12 + footerRows * 28 + (footerRows - 1) * 6 + 8
     -- Whole rows only. The list draws a partial row at the bottom when its
     -- height is not a multiple of `rowheight`, which reads as a spell cut in
     -- half by the parchment. The leftover pixels go above the footer, where
     -- they are just air.
-    local rowH = 36                           -- BuffBot.menu: bbList rowheight
-    local listH = math.max(ph - 130 - hdrH - footerH, rowH)
+    -- BuffBot.menu: bbList rowheight 36, bbRecipientList rowheight 34.
+    local rowH = recipient and 34 or 36
+    local listH = math.max(ph - (hdrY - py) - hdrH - footerH, rowH)
     listH = listH - (listH % rowH)
+    -- Both lists get the rect, for the reason both header strips do.
     setArea("bbList", cx, listY, cw, listH)
+    setArea("bbRecipientList", cx, listY, cw, listH)
     setArea("bbSearchEmpty", cx + 10, listY + 8, cw - 20, 28)
 
     -- ---------------------------------------------------------------
@@ -1500,23 +1546,33 @@ function BfBot.UI._Layout()
     local r5Y = r6Y - btnH - gap         -- Spell actions
     local r4Y = r5Y - btnH - gap         -- Add / Remove / Export / Import
 
-    row(r4Y,
-        { { "bbAdd", 150 }, { "bbRmv", 110 }, { "bbRepeat", 100 } },
-        nil,
-        { { "bbExp", 92 }, { "bbImp", 92 } })
+    if recipient then
+        -- One row where the caster reading has two: what is left once the
+        -- per-row controls are gone is preset-wide, and it belongs together.
+        row(r5Y,
+            { { "bbExp", 92 }, { "bbImp", 92 } },
+            nil,
+            { { "bbDel", 142 } })
+    else
+        row(r4Y,
+            { { "bbAdd", 150 }, { "bbRmv", 110 }, { "bbRepeat", 100 } },
+            nil,
+            { { "bbExp", 92 }, { "bbImp", 92 } })
 
-    -- Normal layout: reorder and sort sit in the middle, which is what
-    -- fills the row instead of leaving Sort stranded left of a long gap.
-    row(r5Y,
-        { { "bbTog", 112 }, { "bbTgt", 142 } },
-        { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } },
-        { { "bbDel", 142 } })
+        -- Normal layout: reorder and sort sit in the middle, which is what
+        -- fills the row instead of leaving Sort stranded left of a long gap.
+        row(r5Y,
+            { { "bbTog", 112 }, { "bbTgt", 142 } },
+            { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } },
+            { { "bbDel", 142 } })
 
-    -- Variant layout: the same shape with the Variant picker beside Target.
-    row(r5Y,
-        { { "bbVTog", 112 }, { "bbVTgt", 142 }, { "bbVVar", 142 } },
-        { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } },
-        { { "bbVDel", 142 } })
+        -- Variant layout: the same shape with the Variant picker beside
+        -- Target.
+        row(r5Y,
+            { { "bbVTog", 112 }, { "bbVTgt", 142 }, { "bbVVar", 142 } },
+            { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } },
+            { { "bbVDel", 142 } })
+    end
 
     row(r6Y,
         { { "bbCast", 98 }, { "bbCastChar", 152 }, { "bbStop", 70 } },
@@ -1555,9 +1611,10 @@ function BfBot.UI._Layout()
         BfBot.Theme.ApplyCaptionScales(captionScales)
     end
 
-    -- What this layout was built for, so a party or preset list that changes
-    -- size afterwards can be noticed. See _RelayoutIfTabCountsChanged.
-    BfBot.UI._laidOutCounts = { chars = charCount, presets = preCount }
+    -- What this layout was built for, so anything that changes it afterwards
+    -- can be noticed. See _RelayoutIfStale.
+    BfBot.UI._laidOutCounts = { chars = charCount, presets = preCount,
+        recipient = recipient }
 end
 
 --- Re-run the layout when the party or the preset list changed size.
@@ -1566,12 +1623,19 @@ end
 -- companion who joins gets a tab still parked on the previous last one, so two
 -- live tabs sit stacked and the one underneath cannot be clicked. _Layout
 -- otherwise runs only on open, drag and resize, so nothing else notices (#100).
-function BfBot.UI._RelayoutIfTabCountsChanged()
+--
+-- The reading the panel is in belongs here for the same reason: it decides
+-- the footer's height, the list's row height and which header strip is live,
+-- and switching it is a refresh, not a resize. Without this the recipient
+-- list drew into a rect measured for the caster one and lost its bottom row
+-- to a half-drawn stripe (#81, lab-verified on BG2:EE 2.7.3.0).
+function BfBot.UI._RelayoutIfStale()
     local laid = BfBot.UI._laidOutCounts
     if not laid then return end
     if BfBot.UI._VisibleCount(buffbot_charNames, 6) ~= laid.chars
         or BfBot.UI._VisibleCount(buffbot_presetNames, BfBot.MAX_PRESETS)
-            ~= laid.presets then
+            ~= laid.presets
+        or BfBot.UI._IsRecipientView() ~= laid.recipient then
         BfBot.UI._Layout()
     end
 end
@@ -1723,7 +1787,7 @@ end
 -- guard hangs here rather than at each of _RefreshState's several exits.
 function BfBot.UI._Refresh()
     BfBot.UI._RefreshState()
-    BfBot.UI._RelayoutIfTabCountsChanged()
+    BfBot.UI._RelayoutIfStale()
 end
 
 function BfBot.UI._RefreshState()
@@ -4218,46 +4282,74 @@ end
 -- `snapshot` is only read for caster names and may be nil, in which case a
 -- source falls back to its actor key -- a name is presentation, and a missing
 -- one must not cost the row.
-function BfBot.UI._BuildRecipientRows(recipients, snapshot)
-    local rows = {}
-    for _, recipient in ipairs(recipients or {}) do
-        rows[#rows + 1] = {
-            kind = "recipient",
-            key = recipient.key,
-            name = recipient.name,
-            slot = recipient.slot,
-            planned = recipient.planned,
-            short = recipient.short,
-            summary = BfBot.L10N.Format("ui.recipient.covered",
-                { planned = recipient.planned,
-                  total = recipient.planned + recipient.short }),
-        }
-        if #recipient.entries == 0 then
-            rows[#rows + 1] = {
-                kind = "empty",
-                key = recipient.key,
-                name = BfBot.L10N.Get("ui.recipient.nothing_planned"),
-            }
+--- The search box filters this reading too, and means the same thing.
+-- A recipient whose own name matches keeps everything they receive, because
+-- "what does Minsc get" is the other question the box is asked. Returns nil
+-- for a recipient the query leaves nothing of, so the list never answers a
+-- search with a column of names and no buffs.
+function BfBot.UI._RecipientEntries(recipient, snapshot, query)
+    if query == "" then return recipient.entries end
+    if BfBot.UI._SearchName(recipient.name or recipient.key)
+        :find(query, 1, true) then
+        return recipient.entries
+    end
+    local kept = {}
+    for _, entry in ipairs(recipient.entries) do
+        local group = snapshot and snapshot.groups
+            and snapshot.groups[entry.group]
+        local name = group and group.name or entry.group
+        if BfBot.UI._SearchName(name):find(query, 1, true) then
+            kept[#kept + 1] = entry
         end
-        for _, entry in ipairs(recipient.entries) do
-            local group = snapshot and snapshot.groups
-                and snapshot.groups[entry.group]
+    end
+    return #kept > 0 and kept or nil
+end
+
+function BfBot.UI._BuildRecipientRows(recipients, snapshot, query)
+    local rows = {}
+    query = BfBot.UI._SearchName(query or "")
+    for _, recipient in ipairs(recipients or {}) do
+        local entries = BfBot.UI._RecipientEntries(
+            recipient, snapshot, query)
+        if entries then
             rows[#rows + 1] = {
-                kind = "entry",
+                kind = "recipient",
                 key = recipient.key,
-                group = entry.group,
-                -- The scan's own name and icon, so the two readings of one
-                -- plan never disagree about what a buff is called.
-                name = group and group.name or entry.group,
-                icon = group and group.icon or "",
-                entry = entry,
-                partyWide = entry.partyWide and 1 or nil,
-                state = BfBot.UI._EntryState(entry),
-                source = BfBot.UI._EntrySourceLabel(entry, snapshot),
-                count = BfBot.UI._EntryCountLabel(entry),
-                duration = entry.duration,
-                reason = entry.reasons and entry.reasons[1] or nil,
+                name = recipient.name,
+                slot = recipient.slot,
+                planned = recipient.planned,
+                short = recipient.short,
+                summary = BfBot.L10N.Format("ui.recipient.covered",
+                    { planned = recipient.planned,
+                      total = recipient.planned + recipient.short }),
             }
+            if #entries == 0 then
+                rows[#rows + 1] = {
+                    kind = "empty",
+                    key = recipient.key,
+                    name = BfBot.L10N.Get("ui.recipient.nothing_planned"),
+                }
+            end
+            for _, entry in ipairs(entries) do
+                local group = snapshot and snapshot.groups
+                    and snapshot.groups[entry.group]
+                rows[#rows + 1] = {
+                    kind = "entry",
+                    key = recipient.key,
+                    group = entry.group,
+                    -- The scan's own name and icon, so the two readings of
+                    -- one plan never disagree about what a buff is called.
+                    name = group and group.name or entry.group,
+                    icon = group and group.icon or "",
+                    entry = entry,
+                    partyWide = entry.partyWide and 1 or nil,
+                    state = BfBot.UI._EntryState(entry),
+                    source = BfBot.UI._EntrySourceLabel(entry, snapshot),
+                    count = BfBot.UI._EntryCountLabel(entry),
+                    duration = entry.duration,
+                    reason = entry.reasons and entry.reasons[1] or nil,
+                }
+            end
         end
     end
     return rows
@@ -4333,11 +4425,28 @@ end
 function BfBot.UI._RefreshRecipientRows()
     local snapshot = BfBot.Plan.Snapshot()
     if not snapshot then return {} end
-    local requests = BfBot.Plan.ImportLegacy(snapshot, BfBot.UI._preset)
-    requests = BfBot.Plan.NormalizeRadialRequests(snapshot, requests or {})
+    -- The preset INDEX, which is what ImportLegacy takes; the panel's own
+    -- field is _presetIdx. Passing the wrong one migrates nothing and the
+    -- view reports an empty plan for a preset full of buffs -- which is what
+    -- the first lab capture of this view showed.
+    local requests, reason, resource =
+        BfBot.Plan.ImportLegacy(snapshot, BfBot.UI._presetIdx)
+    if not requests then
+        -- A spell in the preset that the scan can no longer see. The caster
+        -- view shows it as a dead row; here there is nothing to show it on,
+        -- so say so rather than draw an empty panel.
+        BfBot._Warn("Recipient view: the preset could not be read ("
+            .. tostring(reason) .. ", " .. tostring(resource) .. ")")
+        BfBot.UI._recipientTotals = nil
+        return {}
+    end
+    requests = BfBot.Plan.NormalizeRadialRequests(snapshot, requests)
     local flat = BfBot.Plan.ExpandRequests(requests)
     local assignment = BfBot.Plan.Assign(snapshot, flat)
     local recipients = BfBot.Plan.ByRecipient(snapshot, assignment)
     BfBot.UI._recipientTotals = BfBot.Plan.RecipientTotals(recipients)
-    return BfBot.UI._BuildRecipientRows(recipients, snapshot)
+    -- The totals count the whole plan, not the filtered view: "3 of 6
+    -- covered" has to keep meaning the party, or a search would quietly
+    -- rewrite the number the player is reading it for.
+    return BfBot.UI._BuildRecipientRows(recipients, snapshot, buffbot_searchText)
 end

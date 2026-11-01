@@ -45,7 +45,62 @@
 
   Nothing in the panel uses this yet -- the view itself is the next step.
 
+### Fixed
+- **The recipient view, the first time it was looked at.** It had never been on
+  a screen: offline tests cover the projection and the cells, and all 1780 of
+  them were green, but nothing offline can reach `Plan.Snapshot`, so nothing
+  ran the path from the live party to the rows. A lab capture on BG2:EE
+  2.7.3.0 found four defects at once, all now fixed and all now covered.
+
+  The list drew at the coordinates written in the `.menu` file — straight over
+  the title, the tabs and the search box — because `_Layout` had never heard of
+  it. It now gets the caster list's rect, and the reading the panel is in has
+  become layout state: the switch is a refresh, not a resize, so the staleness
+  guard that already watched the tab counts watches it too.
+
+  Every character read "Nothing planned" for a preset holding ten buffs,
+  because the view handed `ImportLegacy` a field no module defines where a
+  preset index belongs, and then assigned the result of a normalizer that
+  rewrites in place and answered nothing. The normalizer now returns its list,
+  so the trap is closed rather than stepped around.
+
+  The source column — "from Jaheira", "no caster" — was bright magenta in all
+  six palettes. That is `_T`'s deliberate signal for a colour key that does not
+  exist, and `textDim` is not one. Every key the panel asks for is now checked
+  against every palette offline.
+
+  And the footer still carried the row that edits a caster's spell: Enable,
+  Target, Up, Down, Sort, Order, Add and Remove, none of which have anything to
+  act on in a reading that has no caster row selected. That row is gone there,
+  the list takes the height back, and the column captions are now the four this
+  reading actually has — Receives, Buff, From, Times.
+
+- **The search box works in the recipient reading.** It filtered the caster
+  list only, and sat there doing nothing in the other one. It now asks the same
+  question from the other side: a buff name narrows the list to who is getting
+  it, and a character's own name shows everything they receive. Coverage totals
+  keep counting the whole plan, so a search never quietly rewrites "3 of 6
+  covered".
+
 ### Lab
+- **Seen on a screen.** `tools/lab_screenshots.py` grew `--perspective` and
+  `--targets`, so a run can capture either reading of a preset with real party
+  targets, and `tools/lab/lab_shot.lua` now reports the plan along the whole
+  chain — requests, normalized, expanded, decisions with their reasons — beside
+  the rows the view built. That report is what found the empty plan; a
+  screenshot alone would only have shown three characters receiving nothing.
+- A **Recipient View** phase in the in-game suite, 17 checks: that every party
+  member is a recipient, that all four cells answer a string including past the
+  end of the table, that no row asks for a colour the palette lacks, that the
+  search narrows and empties the list, that the layout records and re-runs for
+  the reading, and that the switch is inert in the summons view. It runs inside
+  `_GuardPhase` because it writes the player's perspective and search text.
+  **29 phases**, green headless.
+- 49 further tests offline: the search filter in this reading, the layout's
+  rect, row height, footer and caption strip, every caster-only control
+  stepping aside, the preset-index contract, the normalizer's return value, and
+  a new `tests/test_palette_keys.py` reading both sides of the colour lookup.
+  **1846 tests** in total.
 - 37 further tests for the display layer, all offline: the perspective switch
   including that the summons view remembers it without applying it, every
   cell's text, the three tones, the counts that appear only where they carry

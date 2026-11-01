@@ -334,6 +334,11 @@ function P.NormalizeRadialRequests(snapshot, requests)
             end
         end
     end
+    -- The same list it was given, so a caller may chain through it. It
+    -- rewrites requests in place and used to answer nothing, which read as a
+    -- normalizer that returns the normalized list -- assigning its result
+    -- silently emptied the plan (#81, caught in the lab).
+    return requests
 end
 
 -- ============================================================

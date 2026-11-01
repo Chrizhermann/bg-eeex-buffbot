@@ -32,6 +32,9 @@ EXTRACTED = (
     "_IsCasterPerspective", "_IsRecipientView", "_CanTogglePerspective",
     "_PerspectiveBtnLabel", "_PerspectiveBtnTooltip", "TogglePerspective",
     "_EntryState", "_EntrySourceLabel", "_EntryCountLabel",
+    # The search box filters this reading too, through the same name
+    # normalizer the caster list uses.
+    "_SearchName", "_RecipientEntries",
     "_BuildRecipientRows", "_RecipientCellName", "_RecipientCellWhat",
     "_RecipientCellSource", "_RecipientCellCount", "_RecipientRow",
     "_RecipientNameColor", "_RecipientWhatColor",
@@ -73,11 +76,12 @@ def lua() -> LuaRuntime:
     return runtime
 
 
-def _project(lua: LuaRuntime, recipients: str, snapshot: str = "nil") -> None:
+def _project(lua: LuaRuntime, recipients: str, snapshot: str = "nil",
+             query: str = "") -> None:
     """Build the table from a literal ByRecipient-shaped result."""
     lua.execute(
-        "buffbot_recipientTable = BfBot.UI._BuildRecipientRows(%s, %s)"
-        % (recipients, snapshot)
+        "buffbot_recipientTable = BfBot.UI._BuildRecipientRows(%s, %s, [[%s]])"
+        % (recipients, snapshot, query)
     )
 
 
@@ -349,3 +353,256 @@ def test_the_perspective_button_has_a_reserved_slot_of_its_own():
     assert "local perspW" in UI_SOURCE
     # rowW, the tab area, must stop short of BOTH reserved slots.
     assert "local rowW = cw - viewW - perspW - 2 * charGap" in UI_SOURCE
+
+
+# ---------------------------------------------------------------------------
+# The search box, in this reading
+# ---------------------------------------------------------------------------
+#
+# One box over two readings of one plan. The caster list filters by spell
+# name; this one has to answer the same question from the other side, and the
+# first lab shot of the view was taken with the box doing nothing here at all.
+
+
+TWO_RECIPIENTS = """{ { key = "a", name = "Minsc", slot = 0, planned = 2,
+        short = 0, entries = {
+            { group = "bless", repeats = 1, planned = 1, sources = {},
+              reasons = {} },
+            { group = "haste", repeats = 1, planned = 1, sources = {},
+              reasons = {} } } },
+    { key = "b", name = "Jaheira", slot = 1, planned = 1, short = 0,
+      entries = {
+            { group = "bless", repeats = 1, planned = 1, sources = {},
+              reasons = {} } } } }"""
+
+NAMED = """{ groups = { bless = { name = "Bless" },
+    haste = { name = "Haste" } } }"""
+
+
+def test_an_empty_query_keeps_every_recipient_and_every_entry(lua):
+    _project(lua, TWO_RECIPIENTS, NAMED, "")
+    assert lua.eval("#buffbot_recipientTable") == 5
+
+
+def test_a_query_keeps_only_the_buffs_that_match(lua):
+    _project(lua, TWO_RECIPIENTS, NAMED, "haste")
+    # Minsc's header plus the one buff; Jaheira has none and is gone whole.
+    assert lua.eval("#buffbot_recipientTable") == 2
+    assert lua.eval("buffbot_recipientTable[1].name") == "Minsc"
+    assert lua.eval("buffbot_recipientTable[2].name") == "Haste"
+
+
+def test_a_recipient_whose_own_name_matches_keeps_everything(lua):
+    """"What does Minsc get" is the other question the box is asked."""
+    _project(lua, TWO_RECIPIENTS, NAMED, "jaheira")
+    assert lua.eval("#buffbot_recipientTable") == 2
+    assert lua.eval("buffbot_recipientTable[1].name") == "Jaheira"
+    assert lua.eval("buffbot_recipientTable[2].kind") == "entry"
+
+
+def test_a_query_that_matches_nothing_leaves_an_empty_table(lua):
+    # Not a list of names with no buffs under them: the empty-state label is
+    # what says there was nothing, and it needs the table to be empty.
+    _project(lua, TWO_RECIPIENTS, NAMED, "stoneskin")
+    assert lua.eval("#buffbot_recipientTable") == 0
+
+
+def test_the_query_ignores_case_the_way_the_caster_list_does(lua):
+    _project(lua, TWO_RECIPIENTS, NAMED, "BLESS")
+    assert lua.eval("#buffbot_recipientTable") == 4
+
+
+def test_a_filtered_recipient_still_reports_the_whole_plan_in_its_header(lua):
+    """A search must not quietly rewrite "2 of 2 covered"."""
+    _project(lua, TWO_RECIPIENTS, NAMED, "haste")
+    assert lua.eval("buffbot_recipientTable[1].planned") == 2
+    assert lua.eval("buffbot_recipientTable[1].short") == 0
+
+
+def test_a_group_with_no_name_is_matched_by_its_resref(lua):
+    _project(lua, TWO_RECIPIENTS, "nil", "haste")
+    assert lua.eval("#buffbot_recipientTable") == 2
+    assert lua.eval("buffbot_recipientTable[2].name") == "haste"
+
+
+def test_the_empty_state_asks_whichever_list_is_showing():
+    """One label over two tables; pinned to one it lies about the other."""
+    source = re.search(
+        r"^function BfBot\.UI\._SearchFoundNothing\(\).*?^end$",
+        UI_SOURCE, re.S | re.M)
+    assert source, "_SearchFoundNothing is missing"
+    body = source.group(0)
+    assert "_IsRecipientView()" in body
+    assert "buffbot_recipientTable" in body
+    assert "buffbot_visibleSpells" in body
+    menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+    assert 'enabled "BfBot.UI._SearchFoundNothing()"' in menu
+    # And the caster list's own count must no longer be the label's test.
+    assert "#buffbot_visibleSpells == 0" not in menu
+
+
+def test_a_changed_query_rebuilds_this_reading_too():
+    """It is built in _Refresh, so the search tick has to ask for it again."""
+    tick = re.search(r"^function BfBot\.UI\._SearchTick\(\).*?^end$",
+                     UI_SOURCE, re.S | re.M)
+    assert tick, "_SearchTick is missing"
+    body = tick.group(0)
+    assert "_IsRecipientView()" in body
+    assert "_RefreshRecipientRows" in body
+    # Both scrollbars go back to the top, not only the caster list's.
+    assert "bbRecipientList" in body
+
+
+# ---------------------------------------------------------------------------
+# What the panel looks like in this reading
+# ---------------------------------------------------------------------------
+#
+# The first lab capture of the view found the list drawn at its .menu
+# coordinates straight over the title and the tabs, because _Layout had never
+# heard of it. These pin the three things that fixed it.
+
+
+def _layout() -> str:
+    match = re.search(r"function BfBot\.UI\._Layout\(\).*?\n^end$",
+                      UI_SOURCE, re.S | re.M)
+    assert match, "_Layout is missing"
+    return match.group(0)
+
+
+def test_the_recipient_list_is_given_the_same_rect_as_the_caster_list():
+    layout = _layout()
+    assert 'setArea("bbList", cx, listY, cw, listH)' in layout
+    assert 'setArea("bbRecipientList", cx, listY, cw, listH)' in layout
+
+
+def test_the_list_height_is_whole_rows_of_whichever_list_is_live():
+    """34 and 36 are the two rowheights; a leftover draws half a row."""
+    layout = _layout()
+    assert "local rowH = recipient and 34 or 36" in layout
+    assert "listH = listH - (listH % rowH)" in layout
+    menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+    assert "rowheight   34" in menu and "rowheight   36" in menu
+
+
+def test_this_reading_drops_the_footer_row_that_edits_a_caster_row():
+    layout = _layout()
+    assert "local footerRows = recipient and 3 or 4" in layout
+    # And the height the list gets back follows from that, rather than from
+    # the literal the four-row footer used to hard-code.
+    assert "ph - (hdrY - py) - hdrH - footerH" in layout
+
+
+def test_the_recipient_footer_keeps_only_what_applies_to_a_preset():
+    layout = _layout()
+    start = layout.index("if recipient then")
+    branch = layout[start:layout.index("\n    else", start)]
+    for name in ("bbExp", "bbImp", "bbDel"):
+        assert f'"{name}"' in branch, name
+    for name in ("bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt",
+                 "bbUp", "bbDn", "bbSort", "bbOrder"):
+        assert f'"{name}"' not in branch, name
+
+
+def test_the_recipient_strip_has_a_caption_over_every_column():
+    layout = _layout()
+    menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+    # The caption percentages are the list's column widths, in order.
+    assert 'header("bbRHWho",    0, 26)' in layout
+    assert 'header("bbRHWhat",  26, 40)' in layout
+    assert 'header("bbRHFrom",  66, 24)' in layout
+    assert 'header("bbRHCount", 90, 10)' in layout
+    for name in ("bbRHWho", "bbRHWhat", "bbRHFrom", "bbRHCount"):
+        assert f'name "{name}"' in menu, name
+
+
+def test_both_header_strips_are_placed_every_layout():
+    """A disabled element keeps its last area, so one strip would lag."""
+    layout = _layout()
+    for name in ("bbHName", "bbHLock", "bbRHWho", "bbRHCount"):
+        assert f'header("{name}"' in layout, name
+
+
+CASTER_ONLY = (
+    "bbHName", "bbHDur", "bbHUses", "bbHRep", "bbHTgt", "bbHLock",
+    "bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt", "bbUp", "bbDn", "bbSort",
+    "bbOrder", "bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort",
+    "bbVOrder",
+)
+
+
+@pytest.mark.parametrize("name", CASTER_ONLY)
+def test_everything_that_edits_a_caster_row_steps_aside(name: str) -> None:
+    """They act on a selection this reading does not have."""
+    menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+    for element in (name, name + "_t", name + "_b"):
+        block = re.search(
+            r'name\s+"' + re.escape(element) + r'"(?:(?!\n\t\}).)*',
+            menu, re.S)
+        if not block:
+            continue
+        body = block.group(0)
+        if "enabled" not in body:
+            continue
+        assert "not BfBot.UI._IsRecipientView()" in body, element
+
+
+@pytest.mark.parametrize("name", ("bbCast", "bbCastChar", "bbStop", "bbClose",
+                                  "bbView", "bbPersp", "bbRen", "bbNew"))
+def test_what_still_applies_is_left_alone(name: str) -> None:
+    """Casting, the tabs and the switch itself work in both readings."""
+    menu = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
+    block = re.search(
+        r'name\s+"' + re.escape(name) + r'"(?:(?!\n\t\}).)*', menu, re.S)
+    assert block, name
+    assert "not BfBot.UI._IsRecipientView()" not in block.group(0), name
+
+
+def test_the_refresher_asks_for_the_preset_the_panel_is_showing():
+    """It takes an index, and the panel's field is _presetIdx.
+
+    Passing `_preset` -- a field no module defines -- migrated nothing, and
+    the view reported every character empty for a preset holding ten buffs.
+    Nothing offline ran that path, so this pins the name.
+    """
+    source = re.search(
+        r"^function BfBot\.UI\._RefreshRecipientRows\(\).*?^end$",
+        UI_SOURCE, re.S | re.M)
+    assert source, "_RefreshRecipientRows is missing"
+    body = source.group(0)
+    assert "BfBot.UI._presetIdx" in body
+    assert "BfBot.UI._preset," not in body and "BfBot.UI._preset)" not in body
+    # ImportLegacy answers nil plus a reason when a configured spell is gone.
+    # Treating that as "no requests" would draw an empty plan for a preset
+    # the player can see is full.
+    assert "if not requests then" in body
+    assert "_Warn" in body
+
+
+def test_the_refresher_asks_the_plan_model_for_everything_it_shows():
+    """No second store: the view is a projection, end to end."""
+    source = re.search(
+        r"^function BfBot\.UI\._RefreshRecipientRows\(\).*?^end$",
+        UI_SOURCE, re.S | re.M).group(0)
+    for call in ("Snapshot", "ImportLegacy", "NormalizeRadialRequests",
+                 "ExpandRequests", "Assign", "ByRecipient", "RecipientTotals"):
+        assert f"BfBot.Plan.{call}(" in source, call
+
+
+def test_switching_the_reading_relays_the_panel_out():
+    """The reading decides the footer's height and the list's row height.
+
+    _Layout runs on open, drag, resize and theme change -- a perspective
+    switch is none of those. Without this the recipient list drew into a
+    rect measured for the caster one and lost its bottom row to a stripe.
+    """
+    layout = _layout()
+    assert "recipient = recipient" in layout
+    guard = re.search(r"^function BfBot\.UI\._RelayoutIfStale\(\).*?^end$",
+                      UI_SOURCE, re.S | re.M)
+    assert guard, "_RelayoutIfStale is missing"
+    body = guard.group(0)
+    assert "BfBot.UI._IsRecipientView() ~= laid.recipient" in body
+    # It hangs off the refresh, which is what a switch runs.
+    refresh = re.search(r"^function BfBot\.UI\._Refresh\(\).*?^end$",
+                        UI_SOURCE, re.S | re.M)
+    assert refresh and "_RelayoutIfStale()" in refresh.group(0)

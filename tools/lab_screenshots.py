@@ -235,6 +235,9 @@ def capture(console: Console, shot: Path, scrnshot: Path, out: Path, theme: str,
     label = theme if panel is None else f"{theme}-{panel[0]}x{panel[1]}"
     if font_size is not None:
         label += f"-font{font_size}"
+    # Without this a caster and a recipient run of one theme share a filename.
+    if "perspective='recipient'" in prepare_args:
+        label += "-recipient"
     size = "" if panel is None else f",panelW={panel[0]},panelH={panel[1]}"
     font = "" if font_size is None else f",fontSize={font_size}"
     receipt = console.call(f"prepare-{label}", shot,
@@ -268,6 +271,10 @@ def main() -> int:
     parser.add_argument("--order", type=int, choices=(0, 1),
                         help="the preset's cast-order toggle: 0 manual, 1 by duration")
     parser.add_argument("--query", default="")
+    parser.add_argument("--targets", default="",
+                        help="row:target pairs, e.g. 1:p,2:Minsc -- p party, s self")
+    parser.add_argument("--perspective", default="", choices=("", "caster", "recipient"),
+                        help="which end of the plan the panel reads from (#81)")
     parser.add_argument("--dialog", default="", choices=("", "targets", "picker", "rename"),
                         help="open one of BuffBot's dialogs on top of the panel")
     parser.add_argument("--dialog-row", type=int, default=1,
@@ -363,8 +370,13 @@ def main() -> int:
         order = f",order={args.order}" if args.order is not None else ""
         dialog = (f",dialog='{args.dialog}',dialogRow={args.dialog_row}"
                   if args.dialog else "")
+        perspective = (f",perspective='{args.perspective}'"
+                       if args.perspective else "")
+        pairs = [p.strip() for p in args.targets.split(",") if p.strip()]
+        targets = (",targets={" + ",".join(f"[[{p}]]" for p in pairs) + "}"
+                   if pairs else "")
         prepare_args = (f"slot={args.slot},preset={args.preset},enable={enable}{lock}"
-                        f"{order},query=[[{args.query}]]{dialog}")
+                        f"{order},query=[[{args.query}]]{dialog}{perspective}{targets}")
         panels: list[tuple[int, int] | None] = [None]
         if args.panels:
             panels = [tuple(int(n) for n in size.lower().split("x"))

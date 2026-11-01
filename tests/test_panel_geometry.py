@@ -353,7 +353,7 @@ buffbot_charNames = {}
 for i = 1, %d do buffbot_charNames[i] = "Character " .. i end
 buffbot_presetNames = {}
 for i = 1, %d do buffbot_presetNames[i] = "Preset " .. i end
-BfBot.UI._RelayoutIfTabCountsChanged()
+BfBot.UI._RelayoutIfStale()
 return areas
 """
 

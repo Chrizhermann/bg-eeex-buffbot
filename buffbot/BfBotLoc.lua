@@ -202,6 +202,10 @@ local _registry = {
     ["ui.recipient.from_party"] = { id = 734, fallback = [=[whole party]=] },
     ["ui.recipient.repeat_count"] = { id = 735, fallback = [=[{planned} of {total}]=] },
     ["ui.recipient.no_source"] = { id = 736, fallback = [=[no caster]=] },
+    ["ui.recipient.header.who"] = { id = 737, fallback = [=[Receives]=] },
+    ["ui.recipient.header.what"] = { id = 738, fallback = [=[Buff]=] },
+    ["ui.recipient.header.from"] = { id = 739, fallback = [=[From]=] },
+    ["ui.recipient.header.count"] = { id = 740, fallback = [=[Times]=] },
     ["options.refresh_below_1h"] = { id = 722, fallback = [=[Under 1 hour left]=] },
 }
 

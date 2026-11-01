@@ -100,6 +100,19 @@ if args.lock then
     if entry.lock ~= 1 then BfBot.UI.ToggleLock(args.lock) end
 end
 
+-- Targets for the rows just switched on, as "row:target" pairs -- "p" for the
+-- whole party, "s" for the caster, or a character's name. Without them every
+-- row keeps the classifier's own verdict, and a preset of self-only buffs has
+-- exactly one recipient to show.
+for _, pair in ipairs(args.targets or {}) do
+    local row, target = pair:match("^(%d+):(.+)$")
+    assert(row, "SHOT_BAD_TARGET_PAIR:" .. tostring(pair))
+    local entry = rows[tonumber(row)]
+    assert(entry, "SHOT_TARGET_ROW_MISSING:" .. row)
+    BfBot.UI._SetSpellTargetForView(sprite, entry.resref, target)
+end
+if args.targets and #args.targets > 0 then BfBot.UI._Refresh() end
+
 local visible = {}
 for index, entry in ipairs(buffbot_visibleSpells or {}) do
     if index <= 12 then
@@ -107,6 +120,21 @@ for index, entry in ipairs(buffbot_visibleSpells or {}) do
         visible[index] = { row = canonical, resref = entry.resref, name = entry.name,
                            on = entry.on or 0, lock = entry.lock or 0 }
     end
+end
+
+-- The caster / recipient perspective, so one run can show both readings of
+-- the same preset. The rows above were enabled through the caster view's own
+-- table, so the switch comes after them -- buffbot_spellTable is the caster
+-- view's list and the recipient view does not build it.
+if args.perspective then
+    assert(args.perspective == "caster" or args.perspective == "recipient",
+        "SHOT_UNKNOWN_PERSPECTIVE:" .. tostring(args.perspective))
+    assert(not args.dialog, "SHOT_DIALOG_IS_CASTER_VIEW_ONLY")
+    if BfBot.UI._perspective ~= args.perspective then
+        BfBot.UI.TogglePerspective()
+    end
+    assert(BfBot.UI._perspective == args.perspective,
+        "SHOT_PERSPECTIVE_REFUSED:" .. tostring(args.perspective))
 end
 
 -- One of BuffBot's own dialogs on top of the panel, so the shot covers the
@@ -154,6 +182,72 @@ local function captionReport()
     return table.concat(parts, " ")
 end
 
+-- What the recipient view ended up with, as text: a screenshot shows whether
+-- the columns fit, and this shows whether they say the right thing. Totals
+-- first, then one line per row, so a wrong tone or a missing source is
+-- readable without reading pixels.
+local function recipientReport()
+    if not BfBot.UI._IsRecipientView() then return "caster-view" end
+    local rows = buffbot_recipientTable or {}
+    local totals = BfBot.UI._recipientTotals or {}
+    -- Where a plan with nothing in it lost its requests: the first lab run
+    -- of this view reported every recipient empty while the preset held ten
+    -- rows, and only the counts along the chain say which step dropped them.
+    local chain = "chain=?"
+    local enabled = 0
+    for _, row in ipairs(buffbot_spellTable or {}) do
+        if row.on == 1 then enabled = enabled + 1 end
+    end
+    local traced, trace = pcall(function()
+        local snapshot = BfBot.Plan.Snapshot()
+        if not snapshot then return "snapshot=nil" end
+        local requests = BfBot.Plan.ImportLegacy(snapshot, BfBot.UI._presetIdx)
+        local normal = BfBot.Plan.NormalizeRadialRequests(snapshot, requests or {})
+        local flat = BfBot.Plan.ExpandRequests(normal)
+        local plan = BfBot.Plan.Assign(snapshot, flat)
+        local reasons = {}
+        for _, decision in ipairs(plan.decisions or {}) do
+            local key = tostring(decision.reason or "ok")
+            reasons[key] = (reasons[key] or 0) + 1
+        end
+        local said = {}
+        for key, n in pairs(reasons) do said[#said + 1] = key .. "x" .. n end
+        table.sort(said)
+        return "on=" .. enabled .. " preset=" .. tostring(BfBot.UI._presetIdx)
+            .. " actors=" .. #(snapshot.order or {})
+            .. " groups=" .. (function()
+                local n = 0
+                for _ in pairs(snapshot.groups or {}) do n = n + 1 end
+                return n
+            end)()
+            .. " casters=" .. #(snapshot.casters or {})
+            .. " req=" .. #(requests or {}) .. " norm=" .. #(normal or {})
+            .. " flat=" .. #(flat or {}) .. " dec=" .. #(plan.decisions or {})
+            .. " [" .. table.concat(said, ",") .. "]"
+    end)
+    chain = traced and trace or ("chain-error=" .. tostring(trace))
+    local parts = { chain, "covered=" .. tostring(totals.covered)
+        .. "/" .. tostring(totals.recipients)
+        .. " planned=" .. tostring(totals.planned)
+        .. " short=" .. tostring(totals.short)
+        .. " rows=" .. #rows }
+    for index, row in ipairs(rows) do
+        if index > 14 then parts[#parts + 1] = "..." break end
+        if row.kind == "recipient" then
+            parts[#parts + 1] = "[" .. tostring(row.name) .. " "
+                .. tostring(row.summary) .. "]"
+        elseif row.kind == "empty" then
+            parts[#parts + 1] = "(" .. tostring(row.name) .. ")"
+        else
+            parts[#parts + 1] = tostring(row.name or row.group)
+                .. "/" .. tostring(row.state)
+                .. "/" .. tostring(row.source)
+                .. (row.count ~= "" and ("/" .. tostring(row.count)) or "")
+        end
+    end
+    return table.concat(parts, " ")
+end
+
 -- The panel's own size, which is nil until something saved geometry: a
 -- profile that has never dragged or resized the panel leaves _panelW unset
 -- and _Layout falls back to 80% of the screen. Reporting that fallback is
@@ -171,6 +265,7 @@ LabShotReceipt = {
     captions = captionReport(),
     fontSize = BfBot.Theme._GetFontSize and BfBot.Theme._GetFontSize(),
     slot = BfBot.UI._charSlot, preset = BfBot.UI._presetIdx, view = BfBot.UI._view,
+    perspective = BfBot.UI._perspective, recipients = recipientReport(),
     owner = BfBot._GetName(sprite), rows = #rows, visible = visible,
     screen = { Infinity_GetScreenSize() },
     dialog = args.dialog,
@@ -181,6 +276,10 @@ LabShotReceipt = {
 -- A table comes back from the console as "table: 0x...", so the line that is
 -- worth reading is returned as text. LabShotReceipt stays for probing by hand.
 return "panel=" .. panelW .. "x" .. panelH
+    .. " casterRows=" .. #rows
+    .. " view=" .. tostring(BfBot.UI._view)
+    .. "/" .. tostring(BfBot.UI._perspective)
+    .. " | " .. LabShotReceipt.recipients
     .. " font=" .. tostring(BfBot.Theme._GetFontSize
         and BfBot.Theme._GetFontSize())
     .. " | " .. LabShotReceipt.captions
