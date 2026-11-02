@@ -88,6 +88,13 @@ buffbot_searchText = args.query or ""
 BfBot.UI._SearchTick()
 assert(on("BUFFBOT_MAIN") and buffbot_isOpen, "SHOT_PANEL_DID_NOT_OPEN")
 
+-- Which rows the party table lists, so one run can show a filter at work.
+if args.filter then
+    assert(BfBot.UI.PARTY_FILTERS, "SHOT_NO_PARTY_FILTER")
+    BfBot.UI._partyFilter = args.filter
+    BfBot.UI._Refresh()
+end
+
 -- Rows are addressed canonically, the way the list's own handlers do.
 local rows = buffbot_spellTable or {}
 for _, row in ipairs(args.enable or {}) do

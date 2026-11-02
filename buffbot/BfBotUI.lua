@@ -1427,12 +1427,20 @@ function BfBot.UI._Layout()
 
     local searchY, searchH = py + 98, 26
     local speedW, clearW, labelW = 148, 76, 70
+    -- The filter sits in the search row because that is where a player goes
+    -- to narrow the table, and it is only there in the reading that has
+    -- something to narrow.
+    local filterW = recipient and 124 or 0
+    local filterGap = recipient and gapS or 0
     local clearX = cx + cw - speedW - gapS - clearW
+    local filterX = clearX - filterGap - filterW
     local barX = cx + labelW + gapS
     setArea("bbSearchLabel", cx, searchY, labelW, searchH)
-    setArea("bbSearchBg", barX, searchY, math.max(clearX - gapS - barX, 40), searchH)
+    local barRight = filterX - gapS
+    setArea("bbSearchBg", barX, searchY, math.max(barRight - barX, 40), searchH)
     setArea("bbSearch", barX + 8, searchY + 3,
-        math.max(clearX - gapS - barX - 16, 24), searchH - 6)
+        math.max(barRight - barX - 16, 24), searchH - 6)
+    setArea("bbPartyFilter", filterX, searchY, math.max(filterW, 1), searchH)
     setArea("bbSearchClear", clearX, searchY, clearW, searchH)
     setArea("bbSpeed", cx + cw - speedW, searchY, speedW, searchH)
     -- Column headers sit in their own strip directly above the list, aligned
@@ -4351,16 +4359,77 @@ function BfBot.UI._PartyRowDuration(line)
     return low .. "-" .. BfBot.UI._FormatDuration(line.durationMax)
 end
 
+-- ------------------------------------------------------------
+-- Which rows the party table shows (issue #111)
+-- ------------------------------------------------------------
+--
+-- Four positions, not two. "Open" is the one Chris asked for -- "eine
+-- Checkbox, die die noch nicht gewählten ausblendet" -- and "Problems" is
+-- the one that earns its place beside it: a buff that is ticked and will
+-- not happen is the only thing in a forty-row table the eye cannot find.
+BfBot.UI.PARTY_FILTERS = { "all", "planned", "open", "problems" }
+BfBot.UI._partyFilter = "all"
+
+--- Step to the next filter. A cycling button rather than four, because the
+--- search row has room for one control and the states are a sequence, not a
+--- set of independent switches.
+function BfBot.UI.CyclePartyFilter()
+    local filters = BfBot.UI.PARTY_FILTERS
+    local at = 1
+    for index, name in ipairs(filters) do
+        if name == BfBot.UI._partyFilter then at = index break end
+    end
+    BfBot.UI._partyFilter = filters[(at % #filters) + 1]
+    BfBot.UI._Refresh()
+end
+
+function BfBot.UI._PartyFilterLabel()
+    local filter = BfBot.UI._partyFilter
+    if filter == "planned" then
+        return BfBot.L10N.Get("ui.party.filter.planned")
+    elseif filter == "open" then
+        return BfBot.L10N.Get("ui.party.filter.open")
+    elseif filter == "problems" then
+        return BfBot.L10N.Get("ui.party.filter.problems")
+    end
+    return BfBot.L10N.Get("ui.party.filter.all")
+end
+
+function BfBot.UI._PartyFilterTooltip()
+    return BfBot.L10N.Get("ui.party.filter.tooltip")
+end
+
+--- PURE: whether one line survives the current filter.
+-- `planned` and `open` are opposites over the same question -- has the
+-- player chosen this buff for anybody -- so a row is in exactly one of them,
+-- and `problems` cuts across both of the chosen ones.
+function BfBot.UI._PartyRowPassesFilter(line, filter)
+    if filter == nil or filter == "all" then return true end
+    local chosen, problem = false, false
+    for _, recipient in ipairs(line.recipients or {}) do
+        if BfBot.Plan.IsChosen(recipient.state) then chosen = true end
+        if BfBot.Plan.IsProblem(recipient.state) then problem = true end
+    end
+    if filter == "planned" then return chosen end
+    if filter == "open" then return not chosen end
+    if filter == "problems" then return problem end
+    return true
+end
+
 --- PURE: the party table's rows, from ByGroup's output.
 -- `query` filters on the buff's name or on a recipient's, so the one search
 -- box answers both "where is Haste" and "what does Minsc get".
 function BfBot.UI._BuildPartyRows(lines, query)
     local rows = {}
     query = BfBot.UI._SearchName(query or "")
+    local filter = BfBot.UI._partyFilter
     for _, line in ipairs(lines or {}) do
-        local keep = query == ""
-            or BfBot.UI._SearchName(line.name or line.key):find(query, 1, true)
-        if not keep then
+        local keep = BfBot.UI._PartyRowPassesFilter(line, filter)
+            and (query == ""
+                or BfBot.UI._SearchName(line.name or line.key)
+                    :find(query, 1, true))
+        if not keep and query ~= ""
+            and BfBot.UI._PartyRowPassesFilter(line, filter) then
             for _, recipient in ipairs(line.recipients or {}) do
                 local name = recipient.party
                     and BfBot.L10N.Get("ui.recipient.from_party")

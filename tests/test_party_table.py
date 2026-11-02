@@ -34,7 +34,8 @@ EXTRACTED = (
     "_PerspectiveBtnLabel", "_PerspectiveBtnTooltip", "TogglePerspective",
     "_SearchName", "_FormatDuration",
     "_PartyRowSub", "_PartyRowUses", "_PartyRowUsesTooltip",
-    "_PartyRowDuration", "_BuildPartyRows",
+    "_PartyRowDuration", "_PartyRowPassesFilter", "_PartyFilterLabel",
+    "CyclePartyFilter", "_BuildPartyRows",
     "_PartyRow", "_PartyCellIcon", "_PartyCellName", "_PartyCellSub",
     "_PartyCellUses", "_PartyCellUsesTooltip", "_PartyCellDuration",
     "_PartyCellClear",
@@ -88,6 +89,9 @@ def lua() -> LuaRuntime:
     glyphs = re.search(r"BfBot\.UI\.CELL_GLYPH = \{.*?\n\}", UI_SOURCE, re.S)
     assert glyphs, "CELL_GLYPH is missing"
     runtime.execute(glyphs.group(0))
+    runtime.execute('BfBot.UI.PARTY_FILTERS = '
+                    '{ "all", "planned", "open", "problems" }')
+    runtime.execute('BfBot.UI._partyFilter = "all"')
     runtime.execute('BfBot.UI._perspective = "caster"')
     runtime.execute("BfBot.UI.MAX_CHIPS = 6")
     runtime.execute("buffbot_partyTable = {}")
@@ -775,3 +779,83 @@ def test_the_two_view_switches_have_a_colour_nothing_else_uses():
         assert "_SwitchCaptionColor" in block, name
     # And it greys when the switch cannot be used, like every other caption.
     assert '_T("textMuted")' in source.group(0)
+
+
+# ---------------------------------------------------------------------------
+# Which rows the table shows
+# ---------------------------------------------------------------------------
+
+
+FILTER_LINES = """{
+    { key = "chosen", name = "Chosen", recipients = {
+        { key = "a", state = "planned" }, { key = "b", state = "open" } } },
+    { key = "untouched", name = "Untouched", recipients = {
+        { key = "a", state = "open" }, { key = "b", state = "impossible" } } },
+    { key = "broken", name = "Broken", recipients = {
+        { key = "a", state = "problem" }, { key = "b", state = "open" } } },
+    { key = "partly", name = "Partly", recipients = {
+        { key = "a", state = "partial" } } } }"""
+
+
+def _names(lua):
+    return [lua.eval(f"buffbot_partyTable[{i}].name")
+            for i in range(1, lua.eval("#buffbot_partyTable") + 1)]
+
+
+@pytest.mark.parametrize("filter_name,expected", [
+    ("all", ["Chosen", "Untouched", "Broken", "Partly"]),
+    ("planned", ["Chosen", "Broken", "Partly"]),
+    ("open", ["Untouched"]),
+    ("problems", ["Broken", "Partly"]),
+])
+def test_the_filter_narrows_the_table(lua, filter_name, expected):
+    lua.execute(f'BfBot.UI._partyFilter = "{filter_name}"')
+    _build(lua, FILTER_LINES)
+    assert _names(lua) == expected
+
+
+def test_planned_and_open_are_opposites_over_the_same_question(lua):
+    """A row is in exactly one of them: has anybody been chosen for it."""
+    for filter_name in ("planned", "open"):
+        lua.execute(f'BfBot.UI._partyFilter = "{filter_name}"')
+        _build(lua, FILTER_LINES)
+        globals().setdefault("_seen", {})[filter_name] = set(_names(lua))
+    assert _seen["planned"].isdisjoint(_seen["open"])
+    assert _seen["planned"] | _seen["open"] == {
+        "Chosen", "Untouched", "Broken", "Partly"}
+
+
+def test_the_filter_cycles_through_its_four_positions(lua):
+    seen = []
+    for _ in range(5):
+        seen.append(lua.eval("BfBot.UI._partyFilter"))
+        lua.execute("BfBot.UI.CyclePartyFilter()")
+    assert seen == ["all", "planned", "open", "problems", "all"]
+
+
+def test_each_position_says_what_it_shows(lua):
+    labels = []
+    for _ in range(4):
+        labels.append(lua.eval("BfBot.UI._PartyFilterLabel()"))
+        lua.execute("BfBot.UI.CyclePartyFilter()")
+    assert labels == ["Show: all", "Show: planned", "Show: not chosen",
+                      "Show: problems"]
+
+
+def test_the_search_still_applies_inside_a_filter(lua):
+    """They narrow together; one does not override the other."""
+    lua.execute('BfBot.UI._partyFilter = "planned"')
+    _build(lua, FILTER_LINES, query="broken")
+    assert _names(lua) == ["Broken"]
+    _build(lua, FILTER_LINES, query="untouched")
+    assert _names(lua) == []
+
+
+def test_the_filter_only_exists_where_there_is_something_to_narrow():
+    """It is a control of the party table, not of the caster view."""
+    block = re.search(r'name\s+"bbPartyFilter"(?:(?!\n\t\}).)*',
+                      MENU, re.S).group(0)
+    assert 'enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"' in block
+    layout = _layout()
+    assert "local filterW = recipient and 124 or 0" in layout
+    assert 'setArea("bbPartyFilter"' in layout

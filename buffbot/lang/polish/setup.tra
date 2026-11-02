@@ -505,3 +505,18 @@
 
 // ui.recipient.repeat_count
 @765 = ~{planned} of {total}~
+
+// ui.party.filter.all
+@766 = ~Show: all~
+
+// ui.party.filter.planned
+@767 = ~Show: planned~
+
+// ui.party.filter.open
+@768 = ~Show: not chosen~
+
+// ui.party.filter.problems
+@769 = ~Show: problems~
+
+// ui.party.filter.tooltip
+@770 = ~Which buffs the table lists: all of them, the ones this preset plans, the ones nobody is set to receive yet, or the ones that are set but will not happen.~

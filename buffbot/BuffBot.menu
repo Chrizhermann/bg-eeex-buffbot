@@ -1137,6 +1137,29 @@ menu
 	}
 	button
 	{
+		name    "bbPartyFilter"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		action  "BfBot.UI.CyclePartyFilter()"
+		tooltip lua "BfBot.UI._PartyFilterTooltip()"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbPartyFilter')"
+		scaleToClip
+		area 0 0 124 26
+	}
+	label
+	{
+		name    "bbPartyFilter_t"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		text lua "BfBot.UI._PartyFilterLabel()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
+		area 0 0 124 26
+	}
+	button
+	{
 		name "bbSearchClear"
 		clickable lua "buffbot_searchText ~= ''"
 		action "BfBot.UI.ClearSearch()"
