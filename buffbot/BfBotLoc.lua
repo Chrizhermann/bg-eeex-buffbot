@@ -207,6 +207,7 @@ local _registry = {
     ["ui.party.header.duration"] = { id = 747, fallback = [=[Duration]=] },
     ["ui.party.header.recipients"] = { id = 748, fallback = [=[Recipients]=] },
     ["feedback.party_clear_partial"] = { id = 749, fallback = [=[{name}: {left} character(s) are no longer in the party, so their setting was left alone.]=] },
+    ["ui.party.uses_tooltip"] = { id = 750, fallback = [=[{free} of {total} still unspent by this preset.]=] },
     ["options.refresh_below_1h"] = { id = 722, fallback = [=[Under 1 hour left]=] },
 }
 

@@ -457,3 +457,6 @@
 
 // feedback.party_clear_partial
 @749 = ~{name}: {left} character(s) are no longer in the party, so their setting was left alone.~
+
+// ui.party.uses_tooltip
+@750 = ~{free} of {total} still unspent by this preset.~

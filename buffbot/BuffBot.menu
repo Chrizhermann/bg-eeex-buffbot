@@ -1495,6 +1495,7 @@ menu
 			{
 				area 0 0 -1 48
 				text lua "BfBot.UI._PartyCellUses(rowNumber)"
+				tooltip lua "BfBot.UI._PartyCellUsesTooltip(rowNumber)"
 				text style "bb_normal_parchment"
 				text align center center
 				text color lua "BfBot.UI._T('textMuted')"

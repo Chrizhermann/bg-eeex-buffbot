@@ -105,6 +105,7 @@ CATALOG_SCHEMA = {
     747: "ui.party.header.duration",
     748: "ui.party.header.recipients",
     749: "feedback.party_clear_partial",
+    750: "ui.party.uses_tooltip",
     114: "installer.main.luajit_optional",
     # Common and static menu labels (300-399)
     300: "common.buffbot",
@@ -1048,27 +1049,50 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
         releases = releases[1:]
     current_release = releases[0]
     current_normalized = current_release.casefold()
+    # Wrapped at 78 columns, so a phrase worth pinning often spans two
+    # lines; `flat` is the same text with its line breaks collapsed.
+    flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.12.7 (2026-11-01) — let go and it lets go"
+        "v1.12.8 (2026-11-02) — the whole party on one page"
     )
+    # The reading the release is named for, and the two things it is careful
+    # about. A later change that quietly fans a party-wide cast into one chip
+    # per character, or hides a recipient nobody can supply, loses both.
+    assert "one row per buff" in flat
+    assert "single chip saying **party**" in flat
+    assert "amber and says why" in flat
+    # Why the use count is a plain number. The fraction is not to come back
+    # on the grounds that it was more informative -- it was, and it misread.
+    assert "a column headed uses is read as how many you have" in flat
+    # The palette rule the parchment theme broke, stated so it cannot be
+    # "fixed" again by lightening the quiet tone.
+    assert "quiet tone was *lighter* than its body text" in flat
+    # What was tried and does not work, so nobody spends the day again.
+    assert "the engine's portrait control cannot live in a list" in flat
+    assert "ignores the list's clip rectangle" in flat
+    # The defect that 1780 green offline tests could not see, and why.
+    assert "nothing offline can reach" in flat
+    press_release = source.split("\n## v1.12.7 (2026-11-01)", 1)[1].split(
+        "\n## ", 1
+    )[0].casefold()
     # What the player saw, one day after the press feedback shipped (#105).
-    assert "stayed bright after you let go" in current_normalized
-    assert "dem loslassen hell" in current_normalized
+    assert "stayed bright after you let go" in press_release
+    assert "dem loslassen hell" in press_release
     # The rule that replaced "counter above zero", and why it is bounded: a
     # real press cannot be staged, so the fix has to hold either way.
-    assert "what counts now is movement" in current_normalized
-    assert "that grace is deliberate" in current_normalized
+    assert "what counts now is movement" in press_release
+    assert "that grace is deliberate" in press_release
     # The requirement the installer dropped, and the reason it was never the
     # real one -- a later change must not reinstate the gate on that premise.
-    assert "installs without the luajit loader" in current_normalized
-    assert "`goto` statements" in current_normalized
+    assert "installs without the luajit loader" in press_release
+    assert "`goto` statements" in press_release
     # What the player loses without the loader, named rather than implied.
-    assert "no preset export or import" in current_normalized
-    assert "full automated suite passes **1727 tests**" in current_normalized
-    assert "all 28" in current_normalized
+    assert "no preset export or import" in press_release
+    assert "full automated suite passes **1727 tests**" in press_release
+    assert "all 28" in press_release
     assert ("not checked in game: the pressed look under a real finger"
-            in current_normalized)
+            in press_release)
 
     guard_release = source.split("\n## v1.12.6 (2026-11-01)", 1)[1].split(
         "\n## ", 1

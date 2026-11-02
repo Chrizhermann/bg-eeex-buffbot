@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.12.8 (2026-11-02) — the whole party on one page
 
 ### Added
 - **The panel can show the whole party at once** (#81, step 3). A second
@@ -48,6 +48,28 @@
   Nothing in the panel uses this yet -- the view itself is the next step.
 
 ### Fixed
+- **Uses says how many there are.** It said "8/9" for nine potions, which is
+  true -- eight of them are still unspent once the preset has claimed one --
+  and reads like charges on a potion that has none ("das verstehe ich nicht",
+  reported in game). A column headed Uses is read as how many you have, so
+  that is what it shows now: **9**. What the preset reserves moved into the
+  cell's tooltip, where it costs nobody a second look, and the shortage was
+  never only in that number anyway -- a character the preset cannot reach has
+  an amber chip saying why.
+
+- **The parchment theme is readable again.** BG1's is the one colour scheme
+  whose panel is light, and its quiet tone was *lighter* than its body text,
+  which is backwards: the use count and the line under each buff's name
+  washed out into the parchment. That tone is now darker than the text rather
+  than lighter. The other two light schemes were never affected -- their
+  panels are dark stone, whatever their names say. Quiet text that sits on a
+  chrome plate got a colour of its own (`btnTextDim`), because a plate is
+  dark in every scheme and one value could never suit both.
+
+- **Reset no longer sits on the frame's corner.** The corner piece is 38
+  pixels wide and sits on the panel's own corner; the button ran 26 of them
+  into it, so the boss drew over its right-hand edge.
+
 - **The recipient view, the first time it was looked at.** It had never been on
   a screen: offline tests cover the projection and the cells, and all 1780 of
   them were green, but nothing offline can reach `Plan.Snapshot`, so nothing
@@ -116,7 +138,7 @@
   strip, the chip columns' widths totalling 100 and their indices matching the
   click handler, every caster-only control stepping aside, the preset-index
   contract, the normalizer's return value, and a new `tests/test_palette_keys.py`
-  reading both sides of the colour lookup. **1866 tests** in total.
+  reading both sides of the colour lookup. **1870 tests** in total.
 - 37 further tests for the display layer, all offline: the perspective switch
   including that the summons view remembers it without applying it, every
   cell's text, the three tones, the counts that appear only where they carry

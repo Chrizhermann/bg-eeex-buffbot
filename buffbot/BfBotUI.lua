@@ -1607,7 +1607,11 @@ function BfBot.UI._Layout()
     setArea("bbResizeHandle", px + pw - 80, py + ph - 48, 80, 48)
 
     -- Reset button in title bar (right-aligned, 50px wide)
-    setArea("bbReset", px + pw - 76, py + 5, 64, 24)
+    -- Clear of the frame's corner piece, which is 38 wide and sits on the
+    -- panel's own corner: the button used to run 26px into it and the boss
+    -- drew over its right-hand edge.
+    local cornerW = 38
+    setArea("bbReset", px + pw - cornerW - 6 - 64, py + 5, 64, 24)
 
     -- One pass over the captions once every plate has its width. It also
     -- restores the ones this layout did not narrow, so widening the panel
@@ -4256,11 +4260,27 @@ function BfBot.UI._PartyRowSub(line)
     return table.concat(parts, " / ")
 end
 
---- "4/7": casts of this buff still unspent, over what the party holds.
+--- How many casts or charges of this buff the party has at all.
+-- The plain count, not "8 of 9 unspent": a column headed Uses is read as
+-- "how many have I got", and the fraction read like charges on a potion
+-- that has none (reported in game). What the preset reserves is already
+-- visible -- a character it cannot reach has an amber chip saying why --
+-- so the number only has to answer the ceiling. The reservation goes in
+-- the tooltip, where it costs nobody a second look.
 function BfBot.UI._PartyRowUses(line)
     if type(line) ~= "table" or not line.uses then return "" end
-    if (line.uses.total or 0) <= 0 then return "" end
-    return tostring(line.uses.free) .. "/" .. tostring(line.uses.total)
+    local total = line.uses.total or 0
+    if total <= 0 then return "" end
+    return tostring(total)
+end
+
+--- "8 of 9 still unspent", or nothing when the preset reserves none.
+function BfBot.UI._PartyRowUsesTooltip(line)
+    if type(line) ~= "table" or not line.uses then return "" end
+    local total, free = line.uses.total or 0, line.uses.free or 0
+    if total <= 0 or free >= total then return "" end
+    return BfBot.L10N.Format("ui.party.uses_tooltip",
+        { free = free, total = total })
 end
 
 --- One duration, or a range when the recipients do not all get the same.
@@ -4336,6 +4356,7 @@ function BfBot.UI._BuildPartyRows(lines, query)
                 owners = owners,
                 sub = BfBot.UI._PartyRowSub(line),
                 uses = BfBot.UI._PartyRowUses(line),
+                usesTooltip = BfBot.UI._PartyRowUsesTooltip(line),
                 dur = BfBot.UI._PartyRowDuration(line),
                 chips = chips,
                 -- Clear only where there is something to clear, so the column
@@ -4459,6 +4480,11 @@ function BfBot.UI._PartyCellUses(rowNumber)
     return row and row.uses or ""
 end
 
+function BfBot.UI._PartyCellUsesTooltip(rowNumber)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    return row and row.usesTooltip or ""
+end
+
 function BfBot.UI._PartyCellDuration(rowNumber)
     local row = BfBot.UI._PartyRow(rowNumber)
     return row and row.dur or ""
@@ -4539,7 +4565,7 @@ end
 function BfBot.UI._PartyChipDurationColor(rowNumber, index)
     local chip = BfBot.UI._PartyChip(rowNumber, index)
     if chip and chip.state ~= "planned" then return BfBot.UI._T("lockText") end
-    return BfBot.UI._T("textMuted")
+    return BfBot.UI._T("btnTextDim")
 end
 
 --- A buff nobody can supply is dimmed whole, so the eye finds the gaps.

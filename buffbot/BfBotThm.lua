@@ -46,6 +46,7 @@ BfBot.Theme._palettes = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{235, 222, 196}",
+        btnTextDim   = "{168, 155, 132}",
         btnTextOff   = "{142, 128, 104}",
         overlay      = 0,
         borderResref = "BFBOTFR",
@@ -53,7 +54,11 @@ BfBot.Theme._palettes = {
         -- Generic
         title        = "{50, 30, 10}",
         text         = "{50, 30, 10}",
-        textMuted    = "{140, 130, 120}",
+        -- Darker than the body text would be wrong, lighter than the
+        -- parchment is invisible: this sits between them. The only palette
+        -- where muted has to go DOWN in brightness, because it is the only
+        -- one whose panel is light.
+        textMuted    = "{118, 98, 72}",
         textAccent   = "{40, 80, 160}",
         -- Specific menu regions
         grip         = "{120, 100, 70}",
@@ -77,6 +82,7 @@ BfBot.Theme._palettes = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{235, 222, 196}",
+        btnTextDim   = "{168, 155, 132}",
         btnTextOff   = "{142, 128, 104}",
         overlay      = 160,
         borderResref = "BFBOTFR",
@@ -103,6 +109,7 @@ BfBot.Theme._palettes = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{226, 226, 232}",
+        btnTextDim   = "{158, 158, 166}",
         btnTextOff   = "{132, 134, 146}",
         overlay      = 60,
         borderResref = "BFBOTFR2",
@@ -129,6 +136,7 @@ BfBot.Theme._palettes = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{226, 226, 232}",
+        btnTextDim   = "{158, 158, 166}",
         btnTextOff   = "{132, 134, 146}",
         overlay      = 180,
         borderResref = "BFBOTFR2",
@@ -155,6 +163,7 @@ BfBot.Theme._palettes = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{236, 224, 190}",
+        btnTextDim   = "{166, 157, 133}",
         btnTextOff   = "{176, 154, 124}",
         overlay      = 60,
         borderResref = "BFBOTFR3",
@@ -181,6 +190,7 @@ BfBot.Theme._palettes = {
         -- Caption on a chrome plate. Pecca's art is dark in every
         -- skin, so this follows the plate, not the parchment.
         btnText      = "{236, 224, 190}",
+        btnTextDim   = "{166, 157, 133}",
         btnTextOff   = "{176, 154, 124}",
         overlay      = 180,
         borderResref = "BFBOTFR3",

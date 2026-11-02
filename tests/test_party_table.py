@@ -33,9 +33,11 @@ EXTRACTED = (
     "_IsCasterPerspective", "_IsRecipientView", "_CanTogglePerspective",
     "_PerspectiveBtnLabel", "_PerspectiveBtnTooltip", "TogglePerspective",
     "_SearchName", "_FormatDuration",
-    "_PartyRowSub", "_PartyRowUses", "_PartyRowDuration", "_BuildPartyRows",
+    "_PartyRowSub", "_PartyRowUses", "_PartyRowUsesTooltip",
+    "_PartyRowDuration", "_BuildPartyRows",
     "_PartyRow", "_PartyCellIcon", "_PartyCellName", "_PartyCellSub",
-    "_PartyCellUses", "_PartyCellDuration", "_PartyCellClear",
+    "_PartyCellUses", "_PartyCellUsesTooltip", "_PartyCellDuration",
+    "_PartyCellClear",
     "_PartyRowClearable", "_PartyChip", "_PartyChipIsParty",
     "_PartyChipExists", "_PartyChipName", "_PartyChipDuration",
     "_PartyChipBam", "_PartyChipFrame", "_PartyChipColor",
@@ -185,9 +187,39 @@ def test_the_sub_line_covers_the_four_combinations(lua, kind, self_only,
         % (kind, self_only)) == expected
 
 
-def test_uses_read_as_unspent_over_what_the_party_holds(lua):
+def test_uses_says_how_many_the_party_has(lua):
+    """Not "4 of 7 unspent": a column headed Uses is read as how many
+    there are, and the fraction read like charges on a potion with none."""
     _build(lua)
-    assert lua.eval("BfBot.UI._PartyCellUses(1)") == "4/7"
+    assert lua.eval("BfBot.UI._PartyCellUses(1)") == "7"
+
+
+def test_what_the_preset_reserves_goes_in_the_tooltip(lua):
+    _build(lua)
+    assert lua.eval("BfBot.UI._PartyCellUsesTooltip(1)") == (
+        "4 of 7 still unspent by this preset.")
+
+
+def test_no_tooltip_where_the_preset_reserves_nothing(lua):
+    assert lua.eval(
+        "BfBot.UI._PartyRowUsesTooltip({ uses = { free = 7, total = 7 } })"
+    ) == ""
+    assert lua.eval("BfBot.UI._PartyRowUsesTooltip({})") == ""
+
+
+def test_chip_text_on_a_plate_never_takes_a_parchment_colour(lua):
+    """bg1_light is the one palette with a light panel, so its muted tone
+    is dark -- and a chip plate is dark in every theme."""
+    _build(lua)
+    assert lua.eval("BfBot.UI._PartyChipDurationColor(1, 1)") == "btnTextDim"
+    assert lua.eval("BfBot.UI._PartyChipColor(1, 1)") == "btnText"
+
+
+def test_reset_clears_the_frames_corner_piece():
+    """The corner boss is 38 wide and sits on the panel's own corner."""
+    layout = _layout()
+    assert "local cornerW = 38" in layout
+    assert 'setArea("bbReset", px + pw - cornerW - 6 - 64, py + 5, 64, 24)'         in layout
 
 
 def test_a_buff_nothing_supplies_shows_no_use_count(lua):
