@@ -1355,8 +1355,12 @@ function BfBot.UI._Layout()
     local preGap = 3
     local renW = 78
     local newW = 62
+    -- Delete sits with the other two that act on the preset rather than two
+    -- rows below among the spell controls. It takes width from the tabs, so
+    -- it uses the compact caption: at eight presets a tab loses 14px.
+    local delW = 92
     local maxP = BfBot.MAX_PRESETS
-    local preAvailW = cw - renW - newW - 2 * preGap
+    local preAvailW = cw - renW - newW - delW - 3 * preGap
     local preCount = BfBot.UI._VisibleCount(buffbot_presetNames, maxP)
     local preW = math.min(
         math.floor((preAvailW - (preCount - 1) * preGap) / preCount), 170)
@@ -1371,6 +1375,7 @@ function BfBot.UI._Layout()
     local renX = cx + preCount * (preW + preGap)
     setArea("bbRen", renX, preY, renW, preH)
     setArea("bbNew", renX + renW + preGap, preY, newW, preH)
+    setArea("bbDel", renX + renW + newW + 2 * preGap, preY, delW, preH)
 
     -- Search stays separate from preset order. Casting speed belongs beside
     -- it as a global run preference, leaving per-preset Quick Cast below.
@@ -1554,10 +1559,7 @@ function BfBot.UI._Layout()
     if recipient then
         -- One row where the caster reading has two: what is left once the
         -- per-row controls are gone is preset-wide, and it belongs together.
-        row(r5Y,
-            { { "bbExp", 92 }, { "bbImp", 92 } },
-            nil,
-            { { "bbDel", 142 } })
+        row(r5Y, { { "bbExp", 92 }, { "bbImp", 92 } })
     else
         row(r4Y,
             { { "bbAdd", 150 }, { "bbRmv", 110 }, { "bbRepeat", 100 } },
@@ -1568,15 +1570,13 @@ function BfBot.UI._Layout()
         -- fills the row instead of leaving Sort stranded left of a long gap.
         row(r5Y,
             { { "bbTog", 112 }, { "bbTgt", 142 } },
-            { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } },
-            { { "bbDel", 142 } })
+            { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 }, { "bbOrder", 162 } })
 
         -- Variant layout: the same shape with the Variant picker beside
         -- Target.
         row(r5Y,
             { { "bbVTog", 112 }, { "bbVTgt", 142 }, { "bbVVar", 142 } },
-            { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } },
-            { { "bbVDel", 142 } })
+            { { "bbVUp", 66 }, { "bbVDn", 66 }, { "bbVSort", 66 }, { "bbVOrder", 162 } })
     end
 
     row(r6Y,

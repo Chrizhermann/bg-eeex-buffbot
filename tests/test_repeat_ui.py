@@ -908,8 +908,8 @@ def test_repeat_footer_binding_is_selection_only_and_supports_both_directions() 
 def test_static_minimum_layout_keeps_all_footer_controls_in_bounds() -> None:
     groups = [
         ["bbAdd", "bbRmv", "bbRepeat", "bbExp", "bbImp"],
-        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort", "bbDel"],
-        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVDel"],
+        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort"],
+        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort"],
         ["bbCast", "bbCastChar", "bbStop", "bbQC", "bbClose"],
     ]
     areas = {name: _static_area(name) for group in groups for name in group}
@@ -962,8 +962,8 @@ def test_dynamic_minimum_layout_keeps_list_and_all_footer_rows_valid(
 
     groups = [
         ["bbAdd", "bbRmv", "bbRepeat", "bbExp", "bbImp"],
-        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort", "bbDel"],
-        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVDel"],
+        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort"],
+        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort"],
         ["bbCast", "bbCastChar", "bbStop", "bbQC", "bbClose"],
     ]
 
@@ -1064,8 +1064,8 @@ def test_footer_rows_shrink_instead_of_overlapping_at_every_panel_width(
 
     rows = [
         ["bbAdd", "bbRmv", "bbRepeat", "bbExp", "bbImp"],
-        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort", "bbDel"],
-        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVDel"],
+        ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort"],
+        ["bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort"],
         ["bbCast", "bbCastChar", "bbStop", "bbQC", "bbClose"],
     ]
     areas = {name: area(name) for row in rows for name in row}

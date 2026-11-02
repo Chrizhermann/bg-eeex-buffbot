@@ -106,6 +106,8 @@ CATALOG_SCHEMA = {
     748: "ui.party.header.recipients",
     749: "feedback.party_clear_partial",
     750: "ui.party.uses_tooltip",
+    751: "options.text_size_tiny",
+    752: "options.text_size_huge",
     114: "installer.main.luajit_optional",
     # Common and static menu labels (300-399)
     300: "common.buffbot",
@@ -1054,25 +1056,38 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.12.8 (2026-11-02) — the whole party on one page"
+        "v1.12.9 (2026-11-02) — the frame meets its corners"
     )
+    # Why the corners were open, stated so the rail cannot go back to being
+    # laid only between the corner cells.
+    assert "covers 27x25 of its cell" in flat
+    assert "the rails now run the whole edge" in flat
+    # The scale grew without renumbering, which is what keeps an upgrade from
+    # resizing somebody's panel.
+    assert "keep the numbers they are stored under" in flat
+    # Delete Preset moved but kept the footer's rule.
+    assert "greys out rather than leaving a hole" in flat
+    # The portrait finding, so the day is not spent again.
+    assert "measured, and not possible" in flat
+    party_release = " ".join(source.split("\n## v1.12.8 (2026-11-02)", 1)[1]
+                             .split("\n## ", 1)[0].casefold().split())
     # The reading the release is named for, and the two things it is careful
     # about. A later change that quietly fans a party-wide cast into one chip
     # per character, or hides a recipient nobody can supply, loses both.
-    assert "one row per buff" in flat
-    assert "single chip saying **party**" in flat
-    assert "amber and says why" in flat
+    assert "one row per buff" in party_release
+    assert "single chip saying **party**" in party_release
+    assert "amber and says why" in party_release
     # Why the use count is a plain number. The fraction is not to come back
     # on the grounds that it was more informative -- it was, and it misread.
-    assert "a column headed uses is read as how many you have" in flat
+    assert "a column headed uses is read as how many you have" in party_release
     # The palette rule the parchment theme broke, stated so it cannot be
     # "fixed" again by lightening the quiet tone.
-    assert "quiet tone was *lighter* than its body text" in flat
+    assert "quiet tone was *lighter* than its body text" in party_release
     # What was tried and does not work, so nobody spends the day again.
-    assert "the engine's portrait control cannot live in a list" in flat
-    assert "ignores the list's clip rectangle" in flat
+    assert "the engine's portrait control cannot live in a list" in party_release
+    assert "ignores the list's clip rectangle" in party_release
     # The defect that 1780 green offline tests could not see, and why.
-    assert "nothing offline can reach" in flat
+    assert "nothing offline can reach" in party_release
     press_release = source.split("\n## v1.12.7 (2026-11-01)", 1)[1].split(
         "\n## ", 1
     )[0].casefold()
@@ -1566,9 +1581,11 @@ def test_known_player_display_sinks_use_localization_not_raw_reason_codes():
 
 def test_all_eeex_options_strings_come_from_runtime_localization():
     source = THEME_PATH.read_text(encoding="utf-8")
-    expected = {
-        CATALOG_SCHEMA[catalog_id] for catalog_id in range(700, 723)
-    }
+    # Every `options.*` key in the catalog, not a fixed id range: an option
+    # added later lands at the next free id, which is nowhere near the block
+    # the first ones took.
+    expected = {key for key in CATALOG_SCHEMA.values()
+                if key.startswith("options.")}
     assignments = re.findall(
         r"uiStrings\.[A-Za-z0-9_]+\s*=\s*"
         r"BfBot\.L10N\.Get\(\s*['\"]([a-z][a-z0-9_.]*)['\"]\s*\)",

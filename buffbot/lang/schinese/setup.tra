@@ -460,3 +460,9 @@
 
 // ui.party.uses_tooltip
 @750 = ~{free} of {total} still unspent by this preset.~
+
+// options.text_size_tiny
+@751 = ~Tiny~
+
+// options.text_size_huge
+@752 = ~Huge~

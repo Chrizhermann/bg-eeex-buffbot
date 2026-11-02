@@ -37,13 +37,14 @@ SIZES = [(550, 350), (700, 480), (1075, 621), (1400, 900), (1920, 1080)]
 # the two are never compared against each other.
 NORMAL_ROWS = [
     ["bbAdd", "bbRmv", "bbRepeat", "bbExp", "bbImp"],
-    ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort", "bbOrder", "bbDel"],
+    # Delete Preset left this row for the preset row, where the other two
+    # buttons that act on a preset already were.
+    ["bbTog", "bbTgt", "bbUp", "bbDn", "bbSort", "bbOrder"],
     ["bbCast", "bbCastChar", "bbStop", "bbQC", "bbClose"],
     ["bbStatus", "bbForce"],
 ]
 VARIANT_ROW = [
     "bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVOrder",
-    "bbVDel",
 ]
 
 LAYOUT_LUA = """
@@ -408,8 +409,8 @@ def test_a_party_that_changes_size_gets_fresh_tab_areas(
 # one `gap` from each other and read as one thing.
 FOOTER_GROUPS = {
     "add": [["bbAdd", "bbRmv", "bbRepeat"], ["bbExp", "bbImp"]],
-    "edit": [["bbTog", "bbTgt"], ["bbUp", "bbDn", "bbSort", "bbOrder"],
-             ["bbDel"]],
+    # Delete Preset moved to the preset row, so this row is two groups.
+    "edit": [["bbTog", "bbTgt"], ["bbUp", "bbDn", "bbSort", "bbOrder"]],
     "cast": [["bbCast", "bbCastChar", "bbStop"], ["bbQC", "bbClose"]],
 }
 INNER_GAP = 6

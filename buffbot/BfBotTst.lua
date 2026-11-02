@@ -3004,9 +3004,19 @@ function BfBot.Test.Theming()
     BfBot.Theme._SetFontSize(3)
     check("SetFontSize(3) stores large", BfBot.Theme._GetFontSize() == 3)
     BfBot.Theme._SetFontSize(99)
-    check("SetFontSize(99) clamps to 3", BfBot.Theme._GetFontSize() == 3)
+    check("SetFontSize(99) clamps to the largest",
+        BfBot.Theme._GetFontSize() == BfBot.Theme.MAX_FONT_SIZE)
     BfBot.Theme._SetFontSize(0)
     check("SetFontSize(0) clamps to 1", BfBot.Theme._GetFontSize() == 1)
+    -- The two steps added later keep their own multipliers, and 1-3 keep the
+    -- meanings every existing install already stores.
+    for size, mult in pairs({ [1] = 0.85, [2] = 1.0, [3] = 1.20,
+                              [4] = 0.70, [5] = 1.40 }) do
+        BfBot.Theme._SetFontSize(size)
+        check("size " .. size .. " scales by " .. mult,
+            BfBot.Theme._GetFontSize() == size
+                and BfBot.Theme._SIZE_MULT[size] == mult)
+    end
     BfBot.Theme._SetFontSize(2)  -- restore default
 
     -- bb_* style point size reflects font size setting

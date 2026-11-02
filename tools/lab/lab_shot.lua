@@ -62,7 +62,7 @@ assert(BfBot.Theme.Apply(theme), "SHOT_THEME_DID_NOT_APPLY")
 -- sizes and a larger font is exactly where a caption outgrows its plate. The
 -- lab profile's own value applies when nothing is asked for.
 if args.fontSize then
-    -- _SetFontSize clamps to [1,3] and returns nothing, so the size is read
+    -- _SetFontSize clamps to [1,MAX] and returns nothing, so the size is read
     -- back rather than trusted: a typo would otherwise shoot the default.
     BfBot.Theme._SetFontSize(args.fontSize)
     assert(BfBot.Theme._GetFontSize() == args.fontSize,

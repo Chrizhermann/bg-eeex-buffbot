@@ -179,6 +179,8 @@ local _registry = {
     ["options.text_size_small"] = { id = 710, fallback = [=[Small]=] },
     ["options.text_size_medium"] = { id = 711, fallback = [=[Medium]=] },
     ["options.text_size_large"] = { id = 712, fallback = [=[Large]=] },
+    ["options.text_size_tiny"] = { id = 751, fallback = [=[Tiny]=] },
+    ["options.text_size_huge"] = { id = 752, fallback = [=[Huge]=] },
     ["options.item_use_mode"] = { id = 713, fallback = [=[Inventory item use]=] },
     ["options.item_use_mode_description"] = { id = 714, fallback = [=[Choose how BuffBot uses items carried by this character. Equip mode temporarily equips wearable gear, uses it, then restores the previous equipment. Chest armor and unusable items are not automatically swapped.]=] },
     ["options.item_use_inventory"] = { id = 715, fallback = [=[Use from inventory]=] },

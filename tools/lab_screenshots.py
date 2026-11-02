@@ -282,7 +282,7 @@ def main() -> int:
     parser.add_argument("--panels", default="",
                         help="panel sizes to shoot per theme, e.g. 560x420,900x650; "
                              "empty keeps whatever size the lab profile saved")
-    parser.add_argument("--font-size", type=int, choices=(1, 2, 3),
+    parser.add_argument("--font-size", type=int, choices=(1, 2, 3, 4, 5),
                         help="BuffBot's text size (1 small, 2 medium, 3 large); "
                              "the lab profile's own value when omitted")
     parser.add_argument("--resolution", default="1920x1080",

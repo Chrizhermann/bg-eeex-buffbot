@@ -1,5 +1,54 @@
 # Changelog
 
+## v1.12.9 (2026-11-02) — the frame meets its corners
+
+### Added
+- **Five text sizes instead of three.** BuffBot's section of the Options menu
+  now offers Tiny and Huge beside Small, Medium and Large -- Tiny is 70% and
+  Huge 140% of the engine's own size, where Small was already 85%. The three
+  old steps keep the numbers they are stored under, so nobody's panel resizes
+  itself on upgrade; the column simply lists them smallest to largest.
+
+### Changed
+- **Delete Preset sits with Rename and New.** It acted on the preset and sat
+  two rows below among the controls for spells, which is where it was looked
+  for and not found ("der Delete-Preset-Button nicht bei Rename oder New",
+  reported in game). It takes its width from the preset tabs, so it uses the
+  compact caption and a tab loses 14 pixels at eight presets. It still greys
+  out rather than leaving a hole where it was, which is the rule the footer
+  has always followed. The variant row's second copy is gone with it -- there
+  is one Delete now, in a row that does not change shape.
+
+### Fixed
+- **The frame meets its corners.** Each corner of the panel showed a short
+  break between the diagonal ornament and the straight rail, and the rails
+  "nicht abschließend mit den Ecken" was exactly right. A corner cell in the
+  9-slice atlas is 38x28, but the art inside it is not: BG2's top-left boss
+  covers 27x25 of its cell, flush with the outer corner, so laying the rail
+  only *between* the corner cells left the frame open for the 11 columns and
+  3 rows of padding. The rails now run the whole edge and the corners are
+  composited over them, which costs nothing where a corner is opaque and
+  closes the frame where it is not. The registered slices did not change.
+
+### Lab
+- 7 further tests offline: every text-size step and its multiplier, Delete
+  Preset's new home and that it still greys rather than vanishes, and both
+  frame properties the corner fix is about -- all four atlas edges closed, and
+  the centre still clear so the panel shows through. **1877 tests** in total,
+  in-game suite green headless at 29 phases.
+- **Party portraits on the recipient chips: measured, and not possible.** The
+  third attempt settled it. The engine's portrait control is not bounds-checked
+  (the "draw nothing" value for an unused chip crashed the process), it ignores
+  the list's clip rectangle (the row below the last visible one painted its
+  faces over the footer) and it ignores declaration order, so nothing drawn
+  later can cover them. A party member's portrait resref is not reachable
+  either: the live sprite keeps only the loaded bitmap. And the scroll offset
+  cannot be read or written from Lua -- a list item's `top` and its
+  scrollbar's both accept a value and move nothing -- so the visible window
+  cannot be used to suppress the faces of a partly visible row. All of it is
+  in the knowledge base rather than only in a commit message, and it turned up
+  one latent defect of our own, filed as #110.
+
 ## v1.12.8 (2026-11-02) — the whole party on one page
 
 ### Added

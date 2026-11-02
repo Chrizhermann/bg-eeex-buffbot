@@ -2122,7 +2122,7 @@ menu
 	button
 	{
 		name    "bbDel"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
 		clickable lua "BfBot.UI._CanDeletePreset()"
 		action  "BfBot.UI.DeleteCurrentPreset()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -2135,8 +2135,8 @@ menu
 	label
 	{
 		name    "bbDel_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and BfBot.UI._IsPartyView()"
-		text lua "BfBot.L10N.Get('common.delete_preset')"
+		enabled "buffbot_isOpen and BfBot.UI._IsPartyView()"
+		text lua "BfBot.L10N.Get('common.delete_preset_compact')"
 		text style "bb_caption"
 		text align center center
 		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanDeletePreset())"
@@ -2332,29 +2332,7 @@ menu
 
 
 	-- Delete Preset (variant layout)
-	button
-	{
-		name    "bbVDel"
-		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1 and BfBot.UI._IsPartyView()"
-		action  "BfBot.UI.DeleteCurrentPreset()"
-		bam lua "BfBot.UI._PlateBam()"
-		sequence lua "BfBot.UI._ChromeSeq()"
-		frame lua "BfBot.UI._ChromeFrame('bbVDel')"
-		scaleToClip
-		area 780 434 90 28
-	}
 
-	label
-	{
-		name    "bbVDel_t"
-		enabled "BfBot.UI._CanDeletePreset() and buffbot_selectedHasVariants == 1 and BfBot.UI._IsPartyView()"
-		text lua "BfBot.L10N.Get('common.delete_preset_compact')"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._T('btnText')"
-		ignoreEvents
-		area 780 434 90 28
-	}
 
 	-- ======================================================
 	-- Action buttons + status

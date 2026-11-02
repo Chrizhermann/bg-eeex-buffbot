@@ -311,7 +311,18 @@ BfBot.Theme._STYLE_PARENTS = {
     bb_caption          = "normal",
 }
 -- Font size multiplier: 1=small, 2=medium (default), 3=large
-BfBot.Theme._SIZE_MULT = { [1] = 0.85, [2] = 1.0, [3] = 1.20 }
+-- 1-3 are the sizes BuffBot shipped with and keep their meaning: a stored
+-- preference must not resize somebody's panel because a scale grew. The two
+-- additions take the next free numbers, and the Options column lists them in
+-- reading order regardless.
+BfBot.Theme._SIZE_MULT = {
+    [1] = 0.85,   -- Small
+    [2] = 1.0,    -- Medium
+    [3] = 1.20,   -- Large
+    [4] = 0.70,   -- Tiny
+    [5] = 1.40,   -- Huge
+}
+BfBot.Theme.MAX_FONT_SIZE = 5
 BfBot.Theme._fontSize = 2
 
 -- Per-control caption scale, keyed by the control's name. A footer row that
@@ -549,13 +560,13 @@ end
 function BfBot.Theme._SetFontSize(n)
     n = tonumber(n) or 2
     if n < 1 then n = 1 end
-    if n > 3 then n = 3 end
+    if n > BfBot.Theme.MAX_FONT_SIZE then n = BfBot.Theme.MAX_FONT_SIZE end
     BfBot.Theme._fontSize = n
     BfBot.Theme._RefreshStyles()
     BfBot.Theme._ApplyFontSizesToMenus()
 end
 
---- Get current font size (1-3).
+--- Get current font size (1-5; see _SIZE_MULT for which is which).
 function BfBot.Theme._GetFontSize()
     return BfBot.Theme._fontSize
 end
@@ -781,7 +792,9 @@ local function _populateUiStrings()
     uiStrings.BuffBot_TextSize_Desc = BfBot.L10N.Get("options.text_size_description")
     uiStrings.BuffBot_TextSize_Small = BfBot.L10N.Get("options.text_size_small")
     uiStrings.BuffBot_TextSize_Medium = BfBot.L10N.Get("options.text_size_medium")
+    uiStrings.BuffBot_TextSize_Tiny = BfBot.L10N.Get("options.text_size_tiny")
     uiStrings.BuffBot_TextSize_Large = BfBot.L10N.Get("options.text_size_large")
+    uiStrings.BuffBot_TextSize_Huge = BfBot.L10N.Get("options.text_size_huge")
     uiStrings.BuffBot_ItemUseMode = BfBot.L10N.Get("options.item_use_mode")
     uiStrings.BuffBot_ItemUseMode_Desc = BfBot.L10N.Get("options.item_use_mode_description")
     uiStrings.BuffBot_ItemUseMode_Inventory = BfBot.L10N.Get("options.item_use_inventory")
@@ -960,7 +973,18 @@ function BfBot.Theme._RegisterOptionsTab()
             }),
         }),
     }
+    -- Listed smallest to largest; the numbers behind them are not in that
+    -- order, because 1-3 are what every existing install already stores.
     local sizeEntries = {
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_TextSize",
+            ["label"]       = "BuffBot_TextSize_Tiny",
+            ["description"] = "BuffBot_TextSize_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 4,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
         EEex_Options_DisplayEntry.new({
             ["optionID"]    = "BuffBot_TextSize",
             ["label"]       = "BuffBot_TextSize_Small",
@@ -985,6 +1009,15 @@ function BfBot.Theme._RegisterOptionsTab()
             ["description"] = "BuffBot_TextSize_Desc",
             ["widget"]      = EEex_Options_ToggleWidget.new({
                 ["toggleValue"]       = 3,
+                ["disallowToggleOff"] = true,
+            }),
+        }),
+        EEex_Options_DisplayEntry.new({
+            ["optionID"]    = "BuffBot_TextSize",
+            ["label"]       = "BuffBot_TextSize_Huge",
+            ["description"] = "BuffBot_TextSize_Desc",
+            ["widget"]      = EEex_Options_ToggleWidget.new({
+                ["toggleValue"]       = 5,
                 ["disallowToggleOff"] = true,
             }),
         }),
@@ -1060,7 +1093,7 @@ function BfBot.Theme._RegisterOptionsTab()
         },
         -- Column 2: Color Scheme (3 toggles sharing BuffBot_Accent option)
         accentEntries,
-        -- Column 3: Text Size (3 toggles sharing BuffBot_TextSize option)
+        -- Column 3: Text Size (5 toggles sharing BuffBot_TextSize option)
         sizeEntries,
     } end)
 

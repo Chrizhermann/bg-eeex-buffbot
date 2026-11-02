@@ -132,6 +132,41 @@ def repair_stray(piece: Image.Image) -> Image.Image:
 def build(cycle: int) -> Image.Image:
     atlas = Image.new("RGBA", (ATLAS_W, ATLAS_H), (0, 0, 0, 0))
 
+    # The rails run the WHOLE edge, corner cells included, and the corners
+    # are pasted over them. A corner frame is 38x28, but the art inside it
+    # is not: BG2's top-left boss covers 27x25 of its frame, flush with the
+    # outer corner, so laying the rail only between the corner cells left
+    # the frame open for the 11 columns and 3 rows of padding -- "an den
+    # Ecken die Ränder nicht abschließend mit den Ecken", reported in game.
+    # Drawing the line first costs nothing where a corner is opaque and
+    # closes the frame where it is not. The registered slices are unchanged:
+    # `top` still samples pure rail between the corners.
+    horizontal = frames_of("BFBRAH", cycle)[0]
+    start = (horizontal.width - ATLAS_W) // 2
+    if start >= 0:
+        line = horizontal.crop((start, RAIL_AT.start, start + ATLAS_W, RAIL_AT.stop))
+    else:
+        # A rail narrower than the atlas is tiled; it is a uniform line, so
+        # where the repeat falls does not show.
+        line = Image.new("RGBA", (ATLAS_W, RAIL), (0, 0, 0, 0))
+        strip = horizontal.crop((0, RAIL_AT.start, horizontal.width, RAIL_AT.stop))
+        for x in range(0, ATLAS_W, strip.width):
+            line.paste(strip, (x, 0))
+    atlas.paste(line, (0, 0))
+    atlas.paste(line.transpose(Image.FLIP_TOP_BOTTOM), (0, ATLAS_H - RAIL))
+
+    vertical = frames_of("BFBRAV", cycle)[0]
+    start = (vertical.height - ATLAS_H) // 2
+    if start >= 0:
+        line = vertical.crop((RAIL_AT.start, start, RAIL_AT.stop, start + ATLAS_H))
+    else:
+        line = Image.new("RGBA", (RAIL, ATLAS_H), (0, 0, 0, 0))
+        strip = vertical.crop((RAIL_AT.start, 0, RAIL_AT.stop, vertical.height))
+        for y in range(0, ATLAS_H, strip.height):
+            line.paste(strip, (0, y))
+    atlas.paste(line, (0, 0))
+    atlas.paste(line.transpose(Image.FLIP_LEFT_RIGHT), (ATLAS_W - RAIL, 0))
+
     top_left, bottom_right = (repair_stray(f) for f in frames_of("BFBCORN", cycle))
     for piece, xy in (
         (top_left, (0, 0)),
@@ -142,24 +177,9 @@ def build(cycle: int) -> Image.Image:
         if piece.size != (CORNER_W, CORNER_H):
             raise SystemExit(f"BFBCORN cycle {cycle}: expected a "
                              f"{CORNER_W}x{CORNER_H} corner, got {piece.size}")
-        atlas.paste(piece, xy)
-
-    # A slice from the middle of each rail: they are uniform, and the engine
-    # stretches whatever is here across the edge anyway.
-    edge_w = ATLAS_W - 2 * CORNER_W
-    edge_h = ATLAS_H - 2 * CORNER_H
-
-    horizontal = frames_of("BFBRAH", cycle)[0]
-    start = (horizontal.width - edge_w) // 2
-    line = horizontal.crop((start, RAIL_AT.start, start + edge_w, RAIL_AT.stop))
-    atlas.paste(line, (CORNER_W, 0))
-    atlas.paste(line.transpose(Image.FLIP_TOP_BOTTOM), (CORNER_W, ATLAS_H - RAIL))
-
-    vertical = frames_of("BFBRAV", cycle)[0]
-    start = (vertical.height - edge_h) // 2
-    line = vertical.crop((RAIL_AT.start, start, RAIL_AT.stop, start + edge_h))
-    atlas.paste(line, (0, CORNER_H))
-    atlas.paste(line.transpose(Image.FLIP_LEFT_RIGHT), (ATLAS_W - RAIL, CORNER_H))
+        # alpha_composite, not paste: a corner's transparent padding must
+        # leave the rail underneath visible rather than erase it.
+        atlas.alpha_composite(piece, xy)
 
     return atlas
 

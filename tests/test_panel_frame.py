@@ -172,3 +172,49 @@ def test_the_resize_hint_yields_to_the_corner_boss() -> None:
     # The click target is unaffected: it is its own, larger, handle.
     handle = MENU_SOURCE[MENU_SOURCE.index('name       "bbResizeHandle"') :]
     assert "_HasFrameArt" not in handle[: handle.index("}")]
+
+
+@pytest.mark.parametrize("accent", sorted(builder.ATLASES))
+def test_the_frame_closes_at_every_corner(accent: str) -> None:
+    """A corner frame is 38x28; the art inside it is not.
+
+    BG2's top-left boss covers 27x25 of its frame, flush with the outer
+    corner, so a rail laid only between the corner cells left the frame open
+    for the 11 columns and 3 rows of padding -- visible in game as a border
+    that stops short of the corner ornament. The rails now run the whole
+    edge and the corners sit on top of them.
+    """
+    resref, _cycle = builder.ATLASES[accent]
+    atlas = bam.decode_pvrz((ROOT / "buffbot" / f"{resref}.PVRZ").read_bytes())
+    pixels = atlas.convert("RGBA").load()
+
+    def opaque(x: int, y: int) -> bool:
+        return pixels[x, y][3] > 16
+
+    gaps = [x for x in range(builder.ATLAS_W) if not opaque(x, 0)]
+    assert not gaps, f"{resref}: top edge open at {gaps}"
+    gaps = [x for x in range(builder.ATLAS_W)
+            if not opaque(x, builder.ATLAS_H - 1)]
+    assert not gaps, f"{resref}: bottom edge open at {gaps}"
+    gaps = [y for y in range(builder.ATLAS_H) if not opaque(0, y)]
+    assert not gaps, f"{resref}: left edge open at {gaps}"
+    gaps = [y for y in range(builder.ATLAS_H)
+            if not opaque(builder.ATLAS_W - 1, y)]
+    assert not gaps, f"{resref}: right edge open at {gaps}"
+
+
+@pytest.mark.parametrize("accent", sorted(builder.ATLASES))
+def test_the_centre_slice_stays_empty(accent: str) -> None:
+    """The rails cover the edges only; the panel shows through the middle."""
+    resref, _cycle = builder.ATLASES[accent]
+    atlas = bam.decode_pvrz((ROOT / "buffbot" / f"{resref}.PVRZ").read_bytes())
+    pixels = atlas.convert("RGBA").load()
+    inner = [
+        (x, y)
+        for y in range(builder.CORNER_H + builder.RAIL,
+                       builder.ATLAS_H - builder.CORNER_H - builder.RAIL)
+        for x in range(builder.CORNER_W + builder.RAIL,
+                       builder.ATLAS_W - builder.CORNER_W - builder.RAIL)
+        if pixels[x, y][3] > 16
+    ]
+    assert not inner, f"{resref}: {len(inner)} opaque pixels in the centre"

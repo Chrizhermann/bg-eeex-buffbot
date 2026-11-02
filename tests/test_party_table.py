@@ -464,11 +464,29 @@ def test_the_party_footer_keeps_only_what_applies_to_a_preset():
     layout = _layout()
     start = layout.index("if recipient then")
     branch = layout[start:layout.index("\n    else", start)]
-    for name in ("bbExp", "bbImp", "bbDel"):
+    for name in ("bbExp", "bbImp"):
         assert f'"{name}"' in branch, name
+    # Delete Preset is not here: it sits in the preset row, which both
+    # readings share.
     for name in ("bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt",
-                 "bbUp", "bbDn", "bbSort", "bbOrder"):
+                 "bbUp", "bbDn", "bbSort", "bbOrder", "bbDel"):
         assert f'"{name}"' not in branch, name
+    layout_text = layout
+    assert 'setArea("bbDel", renX + renW + newW + 2 * preGap, preY, delW, preH)'         in layout_text
+
+
+def test_delete_preset_sits_with_rename_and_new():
+    """It acts on the preset, and sat two rows away among the spell controls."""
+    layout = _layout()
+    assert "local delW = 92" in layout
+    assert "cw - renW - newW - delW - 3 * preGap" in layout
+    # And it greys out rather than leaving a hole where it was.
+    block = re.search(r'name\s+"bbDel"(?:(?!\n\t\}).)*', MENU, re.S).group(0)
+    assert 'clickable lua "BfBot.UI._CanDeletePreset()"' in block
+    enabled = re.search(r'\benabled\s+"([^"]*)"', block).group(1)
+    assert "_CanDeletePreset" not in enabled
+    # One Delete now, not one per footer shape.
+    assert "bbVDel" not in MENU
 
 
 def test_the_captions_stand_over_the_columns_they_name():
