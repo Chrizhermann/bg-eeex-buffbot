@@ -683,3 +683,21 @@ def test_the_totals_count_the_whole_plan_not_the_filtered_view():
     totals = source.index("_partyTotals")
     filtered = source.index("_BuildPartyRows")
     assert totals < filtered, "the totals are counted after the filter"
+
+
+def test_the_two_view_switches_have_a_colour_nothing_else_uses():
+    """They are the only controls that change what the panel is about."""
+    source = re.search(r"^function BfBot\.UI\._SwitchCaptionColor\(.*?^end$",
+                       UI_SOURCE, re.S | re.M)
+    assert source, "_SwitchCaptionColor is missing"
+    assert '_T("switchText")' in source.group(0)
+    # Both switches, and only those two.
+    users = re.findall(r'text color lua "BfBot\.UI\._SwitchCaptionColor\([^"]*\)"',
+                       MENU)
+    assert len(users) == 2, users
+    for name in ("bbPersp_t", "bbView_t"):
+        block = re.search(
+            r'name\s+"' + name + r'"(?:(?!\n\t\}).)*', MENU, re.S).group(0)
+        assert "_SwitchCaptionColor" in block, name
+    # And it greys when the switch cannot be used, like every other caption.
+    assert '_T("textMuted")' in source.group(0)

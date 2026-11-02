@@ -293,6 +293,17 @@ function BfBot.UI._CanTogglePerspective()
     return BfBot.UI._IsPartyView()
 end
 
+--- The caption colour for a control that changes what the panel is about.
+-- Only the two view switches use it. Everything else in the panel acts on a
+-- row or on the preset, so giving these two a colour nothing else has is what
+-- makes them findable as switches rather than as two more buttons.
+function BfBot.UI._SwitchCaptionColor(usable)
+    if usable == nil or usable == false or usable == 0 then
+        return BfBot.UI._T("textMuted")
+    end
+    return BfBot.UI._T("switchText")
+end
+
 --- Caption for the perspective button: what clicking it switches TO.
 function BfBot.UI._PerspectiveBtnLabel()
     if BfBot.UI._IsCasterPerspective() then

@@ -623,7 +623,7 @@ menu
 		text lua "BfBot.UI._PerspectiveBtnLabel()"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._CaptionColor(BfBot.UI._CanTogglePerspective())"
+		text color lua "BfBot.UI._SwitchCaptionColor(BfBot.UI._CanTogglePerspective())"
 		ignoreEvents
 		area 656 90 100 24
 	}
@@ -635,7 +635,7 @@ menu
 		text lua "BfBot.UI._ViewBtnLabel()"
 		text style "bb_caption"
 		text align center center
-		text color lua "BfBot.UI._T('btnText')"
+		text color lua "BfBot.UI._SwitchCaptionColor(true)"
 		ignoreEvents
 		area 760 90 80 24
 	}
