@@ -719,6 +719,10 @@ function P._CollapseDecisions(assignment)
             if not entry then
                 entry = { group = request.group, request = origin,
                     partyWide = P.IsPartyWide(request), target = request.target,
+                    -- Carried so a view can say "locked" rather than let a
+                    -- click look like it did something; `lock` is the config
+                    -- schema's own field, only ever 1.
+                    locked = (origin.lock == 1) or nil,
                     repeats = 0, planned = 0, sources = {}, reasons = {},
                     _seenSource = {}, _seenReason = {} }
                 collapsed[origin] = entry
@@ -797,6 +801,52 @@ function P.ByRecipient(snapshot, assignment)
     return recipients
 end
 
+--- PURE: what one recipient's cell says about one buff.
+---
+--- Six states, where the plan has four. `partial` is ours because repeats are
+--- ours -- three Blesses with two casts available is neither done nor
+--- missing, and it is the case a player acts on. `locked` is ours because
+--- `lock = 1` is in the config schema, and a cell that silently refuses a
+--- click is worse than one that says why.
+---
+--- `entry` is the collapsed request aimed at this recipient, or nil when the
+--- player has not chosen this buff for them. `sources` is the group's.
+--- @return state, reason
+function P.CellState(entry, snapshot, sources, target)
+    if entry then
+        if entry.locked then return "locked", nil end
+        if entry.repeats and entry.planned >= entry.repeats
+            and entry.repeats > 0 then
+            return "planned", nil
+        end
+        if (entry.planned or 0) > 0 then
+            return "partial", entry.reasons and entry.reasons[1] or nil
+        end
+        return "problem", entry.reasons and entry.reasons[1] or nil
+    end
+    -- Not chosen: could it be? Ask the same gate the planner asks, so the
+    -- table never offers a tick the plan would then refuse.
+    local probe = { target = target, on = 1 }
+    local reason = P.REASON.NO_ELIGIBLE_SOURCE
+    for _, source in ipairs(sources or {}) do
+        local ok, why = P.SourceAllowed(snapshot, source, probe)
+        if ok then return "open", nil end
+        reason = why or reason
+    end
+    return "impossible", reason
+end
+
+--- Whether a state means the player has chosen this buff for this recipient.
+function P.IsChosen(state)
+    return state == "planned" or state == "partial"
+        or state == "problem" or state == "locked" or state == "covered"
+end
+
+--- Whether a state means it is chosen and will not fully happen.
+function P.IsProblem(state)
+    return state == "partial" or state == "problem"
+end
+
 --- PURE: the plan as one line per buff, with its recipients hanging off it.
 ---
 --- The other way round from `ByRecipient`, and the reading the panel shows:
@@ -820,64 +870,99 @@ function P.ByGroup(snapshot, assignment)
     local entries = P._CollapseDecisions(assignment)
     if not entries then return nil end
 
-    local byKey = {}
-    for _, actor in ipairs(snapshot.order) do byKey[actor.key] = actor end
-
-    local lines, byGroup = {}, {}
+    -- What the player has chosen, found by group and by target.
+    local chosen = {}
     for _, entry in ipairs(entries) do
-        local group = snapshot.groups and snapshot.groups[entry.group]
-        local line = byGroup[entry.group]
-        if not line then
-            line = { key = entry.group,
-                name = group and group.name or entry.group,
-                icon = group and group.icon or "",
-                kind = group and group.kind or "spl",
-                recipients = {}, entries = {}, planned = 0, short = 0 }
-            byGroup[entry.group] = line
-            lines[#lines + 1] = line
-            -- Self-only is a property of the buff, not of one request: it is
-            -- true when no source of it can reach anybody else.
-            local sources = group and group.sources or {}
-            line.selfOnly = #sources > 0
-            for _, source in ipairs(sources) do
-                if not source.selfOnly then line.selfOnly = false end
-            end
-            line.uses = P._GroupUses(snapshot, assignment, sources)
+        local byTarget = chosen[entry.group]
+        if not byTarget then
+            byTarget = {}
+            chosen[entry.group] = byTarget
         end
-
-        line.entries[#line.entries + 1] = entry
-        if entry.planned >= entry.repeats and entry.repeats > 0 then
-            line.planned = line.planned + 1
-        else
-            line.short = line.short + 1
-        end
-
-        -- One chip for a party-wide cast; otherwise one per target that is
-        -- still in the party. A target who left belongs to nobody, exactly as
-        -- in the other reading -- Assign has already recorded why.
-        local state = P.EntryState(entry)
-        if entry.partyWide then
-            line.partyWide = true
-            line.recipients[#line.recipients + 1] = {
-                party = true, slot = nil, key = "party",
-                duration = entry.duration, state = state,
-                reason = entry.reasons[1], entry = entry }
-        elseif byKey[entry.target] then
-            local actor = byKey[entry.target]
-            line.recipients[#line.recipients + 1] = {
-                key = actor.key, name = actor.name, slot = actor.slot,
-                duration = entry.duration, state = state,
-                reason = entry.reasons[1], entry = entry }
-        end
+        byTarget[entry.partyWide and "party" or entry.target] = entry
     end
 
-    for _, line in ipairs(lines) do
-        -- The party chip first, then portrait order: the widest statement
-        -- about this buff leads, and the rest read like the portrait bar.
-        table.sort(line.recipients, function(a, b)
-            if (a.party or false) ~= (b.party or false) then return a.party end
-            return (a.slot or 99) < (b.slot or 99)
-        end)
+    local lines = {}
+    for key, group in pairs(snapshot.groups or {}) do
+        local sources = group.sources or {}
+        local line = { key = key, name = group.name or key,
+            icon = group.icon or "", kind = group.kind or "spl",
+            recipients = {}, entries = {}, planned = 0, short = 0, open = 0 }
+        -- Self-only is a property of the buff, not of one request: it is true
+        -- when no source of it can reach anybody else.
+        line.selfOnly = #sources > 0
+        for _, source in ipairs(sources) do
+            if not source.selfOnly then line.selfOnly = false end
+        end
+        line.uses = P._GroupUses(snapshot, assignment, sources)
+
+        -- A cell for the party and one for every member, whether or not the
+        -- player has chosen this buff for them: an unchosen cell is what
+        -- there is to tick, and a buff with no cell at all cannot be added.
+        -- A party-wide cast governs every member: being protected by
+        -- somebody else's Chant is being protected, so their own cells say
+        -- so and do not offer a second, redundant tick.
+        local partyEntry = (chosen[key] or {})["party"]
+
+        -- The members first, because the Party cell is a statement about
+        -- them: ticking it means "everybody gets this". For an area buff
+        -- that is one cast and the planner takes the `party` target; for a
+        -- single-target one it fans into a request each, which is what
+        -- `tgt = "p"` has always meant in the config. So the Party cell is
+        -- open whenever at least one member's is, and the plan model's own
+        -- refusal to aim a single-target buff at "party" does not reach it.
+        local members = {}
+        local anyOpen = false
+        for _, actor in ipairs(snapshot.order) do
+            local entry = (chosen[key] or {})[actor.key]
+            local state, reason
+            if partyEntry then
+                state, reason = "covered", nil
+            else
+                state, reason =
+                    P.CellState(entry, snapshot, sources, actor.key)
+            end
+            if state == "open" then anyOpen = true end
+            members[#members + 1] = { key = actor.key, name = actor.name,
+                slot = actor.slot, state = state, reason = reason,
+                entry = entry }
+        end
+
+        local partyState, partyReason =
+            P.CellState(partyEntry, snapshot, sources, "party")
+        if not partyEntry and partyState ~= "open" and anyOpen then
+            partyState, partyReason = "open", nil
+        end
+
+        local targets = { { key = "party", party = true,
+            state = partyState, reason = partyReason, entry = partyEntry } }
+        for _, member in ipairs(members) do
+            targets[#targets + 1] = member
+        end
+
+        for _, target in ipairs(targets) do
+            local entry, state, reason = target.entry, target.state, target.reason
+            line.recipients[#line.recipients + 1] = {
+                key = target.key, name = target.name, slot = target.slot,
+                party = target.party or nil,
+                state = state, reason = reason,
+                duration = entry and entry.duration or nil,
+                planned = entry and entry.planned or 0,
+                repeats = entry and entry.repeats or 0,
+                entry = entry }
+            if entry then
+                line.entries[#line.entries + 1] = entry
+                if state == "planned" or state == "locked"
+                    or state == "covered" then
+                    line.planned = line.planned + 1
+                else
+                    line.short = line.short + 1
+                end
+                if target.party then line.partyWide = true end
+            elseif state == "open" then
+                line.open = line.open + 1
+            end
+        end
+
         local shortest, longest
         for _, recipient in ipairs(line.recipients) do
             local duration = recipient.duration
@@ -887,8 +972,12 @@ function P.ByGroup(snapshot, assignment)
             end
         end
         line.durationMin, line.durationMax = shortest, longest
+        lines[#lines + 1] = line
     end
 
+    -- `pairs` over the group table has no order, so the sort is what makes
+    -- the table stable: by display name, then by key for two buffs that
+    -- share one.
     table.sort(lines, function(a, b)
         if a.name ~= b.name then return a.name < b.name end
         return a.key < b.key

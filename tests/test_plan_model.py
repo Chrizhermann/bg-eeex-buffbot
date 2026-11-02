@@ -1588,7 +1588,13 @@ def test_each_buff_is_one_line_whoever_receives_it(lua):
     )
     assert lua.eval("#lines") == 1
     assert lua.eval("lines[1].name") == "Bless"
-    assert lua.eval("#lines[1].recipients") == 2
+    # A cell for the party and one for each of the three members, whether or
+    # not the player has chosen this buff for them: an unchosen cell is what
+    # there is to tick.
+    assert lua.eval("#lines[1].recipients") == 4
+    chosen = [i for i in range(1, 5)
+              if lua.eval(f"BfBot.Plan.IsChosen(lines[1].recipients[{i}].state)")]
+    assert len(chosen) == 2
 
 
 def test_the_recipients_read_in_portrait_order(lua):
@@ -1601,8 +1607,9 @@ def test_the_recipients_read_in_portrait_order(lua):
         '{ { group = "g", target = "c", on = 1 },'
         '  { group = "g", target = "a", on = 1 } }',
     )
-    assert [lua.eval(f"lines[1].recipients[{i}].key") for i in (1, 2)] == [
-        "a", "c"]
+    assert [lua.eval(f"lines[1].recipients[{i}].key")
+            for i in range(1, 5)] == ["party", "a", "b", "c"]
+    assert lua.eval("lines[1].recipients[1].party") is True
 
 
 def test_a_party_wide_cast_is_one_recipient_that_says_so(lua):
@@ -1614,9 +1621,14 @@ def test_a_party_wide_cast_is_one_recipient_that_says_so(lua):
         ' uses = 9, duration = 60, aoe = true } } } }',
         '{ { group = "chant", target = "party", on = 1 } }',
     )
-    assert lua.eval("#lines[1].recipients") == 1
+    assert lua.eval("#lines[1].recipients") == 3
     assert lua.eval("lines[1].recipients[1].party") is True
+    assert lua.eval("lines[1].recipients[1].state") == "planned"
     assert lua.eval("lines[1].partyWide") is True
+    # Being protected by somebody else's Chant is being protected: the
+    # members say so and do not offer a second, redundant tick.
+    for index in (2, 3):
+        assert lua.eval(f"lines[1].recipients[{index}].state") == "covered"
 
 
 def test_the_party_chip_leads_whatever_order_the_requests_came_in(lua):
@@ -1658,8 +1670,11 @@ def test_repeats_collapse_so_three_blesses_are_one_line(lua):
     )
     assert lua.eval("#plan.decisions") == 3
     assert lua.eval("#lines") == 1
-    assert lua.eval("#lines[1].recipients") == 1
-    assert lua.eval("lines[1].recipients[1].state") == "planned"
+    # party + the one member
+    assert lua.eval("#lines[1].recipients") == 2
+    assert lua.eval("lines[1].recipients[2].state") == "planned"
+    assert lua.eval("lines[1].recipients[2].repeats") == 3
+    assert lua.eval("lines[1].recipients[2].planned") == 3
 
 
 def test_a_recipient_nobody_can_supply_is_marked_not_dropped(lua):
@@ -1671,9 +1686,9 @@ def test_a_recipient_nobody_can_supply_is_marked_not_dropped(lua):
         '{ { group = "g", target = "a", on = 1 },'
         '  { group = "g", target = "b", on = 1 } }',
     )
-    assert lua.eval("#lines[1].recipients") == 2
-    states = {lua.eval(f"lines[1].recipients[{i}].state") for i in (1, 2)}
-    assert states == {"planned", "missing"}
+    assert lua.eval("#lines[1].recipients") == 3
+    states = {lua.eval(f"lines[1].recipients[{i}].state") for i in (2, 3)}
+    assert states == {"planned", "problem"}
     assert lua.eval("lines[1].planned") == 1
     assert lua.eval("lines[1].short") == 1
 
@@ -1739,7 +1754,11 @@ def test_a_request_for_somebody_outside_the_party_gets_no_chip(lua):
         '{ { group = "g", target = "khalid", on = 1 } }',
     )
     assert lua.eval("#lines") == 1
-    assert lua.eval("#lines[1].recipients") == 0
+    # party + the one member who is still here; Khalid has no cell because
+    # he has no portrait slot to put one on.
+    assert lua.eval("#lines[1].recipients") == 2
+    keys = {lua.eval(f"lines[1].recipients[{i}].key") for i in (1, 2)}
+    assert keys == {"party", "a"}
     # Assign still recorded why, so the caster view can show it.
     assert lua.eval("plan.decisions[1].reason") is not None
 
@@ -1766,7 +1785,137 @@ def test_both_readings_see_the_same_plan(lua):
         '  { group = "g", target = "b", on = 1 } }',
     )
     lua.execute("recipients = BfBot.Plan.ByRecipient(snap, plan)")
-    chips = {lua.eval(f"lines[1].recipients[{i}].state") for i in (1, 2)}
+    # recipients[1] is the party cell; the members are 2 and 3.
+    cells = {lua.eval(f"lines[1].recipients[{i}].state") for i in (2, 3)}
     entries = {lua.eval(f"BfBot.Plan.EntryState(recipients[{i}].entries[1])")
                for i in (1, 2)}
-    assert chips == entries
+    # The projections name the unfinished state differently -- a cell says
+    # `problem` where an entry says `missing` -- so compare what they mean.
+    assert {"planned", "problem"} == cells
+    assert {"planned", "missing"} == entries
+
+
+# ---------------------------------------------------------------------------
+# A cell for everybody, chosen or not (issue #111)
+# ---------------------------------------------------------------------------
+#
+# The table used to be a reading of the plan, so a buff nobody had chosen had
+# no row and there was nothing to tick. It is a reading of what the party CAN
+# cast now, with the plan laid over it.
+
+
+def test_a_buff_nobody_has_chosen_still_gets_a_line(lua):
+    """Otherwise there is no way to add it."""
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", name = "Bless", sources = { { actor = "a",'
+        ' pool = "p", uses = 9, duration = 60 } } } }',
+        "{}",
+    )
+    assert lua.eval("#lines") == 1
+    assert lua.eval("lines[1].name") == "Bless"
+    assert lua.eval("lines[1].open") > 0
+
+
+def test_an_unchosen_cell_the_party_could_fill_reads_open(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60 } } } }',
+        "{}",
+    )
+    states = {lua.eval(f"lines[1].recipients[{i}].state") for i in (1, 2)}
+    assert states == {"open"}
+    assert lua.eval("BfBot.Plan.IsChosen(\"open\")") is False
+
+
+def test_a_cell_nobody_could_fill_reads_impossible_with_its_reason(lua):
+    """A self-only buff cannot reach anybody else, and says which."""
+    _by_group(
+        lua,
+        '{ { key = "a", slot = 0 }, { key = "b", slot = 1 } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 9, duration = 60, selfOnly = true } } } }',
+        "{}",
+    )
+    by_key = {lua.eval(f"lines[1].recipients[{i}].key"): i
+              for i in range(1, 4)}
+    assert lua.eval(f"lines[1].recipients[{by_key['a']}].state") == "open"
+    assert lua.eval(f"lines[1].recipients[{by_key['b']}].state") == "impossible"
+    assert lua.eval(f"lines[1].recipients[{by_key['b']}].reason") == "self_only"
+    assert lua.eval("BfBot.Plan.IsChosen(\"impossible\")") is False
+
+
+def test_a_partly_supplied_cell_is_neither_done_nor_missing(lua):
+    """Three Blesses with two casts is the case a player acts on."""
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g", sources = { { actor = "a", pool = "p",'
+        ' uses = 2, duration = 60 } } } }',
+        '{ { group = "g", target = "a", on = 1, rep = 3 } }',
+        expand=True,
+    )
+    cell = next(i for i in range(1, 3)
+                if lua.eval(f"lines[1].recipients[{i}].key") == "a")
+    assert lua.eval(f"lines[1].recipients[{cell}].state") == "partial"
+    assert lua.eval(f"lines[1].recipients[{cell}].planned") == 2
+    assert lua.eval(f"lines[1].recipients[{cell}].repeats") == 3
+    assert lua.eval("BfBot.Plan.IsProblem(\"partial\")") is True
+    assert lua.eval("BfBot.Plan.IsChosen(\"partial\")") is True
+
+
+def test_a_locked_cell_says_so_rather_than_refusing_a_click(lua):
+    lua.execute(
+        """
+        snap = TestSnapshot({ actors = { { key = "a" } },
+            groups = { { key = "g", sources = { { actor = "a", pool = "p",
+                uses = 9, duration = 60 } } } } })
+        local requests = { { group = "g", target = "a", on = 1, lock = 1 } }
+        plan = BfBot.Plan.Assign(snap, requests)
+        lines = BfBot.Plan.ByGroup(snap, plan)
+        """
+    )
+    cell = next(i for i in range(1, 3)
+                if lua.eval(f"lines[1].recipients[{i}].key") == "a")
+    assert lua.eval(f"lines[1].recipients[{cell}].state") == "locked"
+    assert lua.eval("BfBot.Plan.IsChosen(\"locked\")") is True
+    assert lua.eval("BfBot.Plan.IsProblem(\"locked\")") is False
+
+
+@pytest.mark.parametrize("state,chosen,problem", [
+    ("planned", True, False),
+    ("partial", True, True),
+    ("problem", True, True),
+    ("locked", True, False),
+    ("covered", True, False),
+    ("open", False, False),
+    ("impossible", False, False),
+])
+def test_the_six_states_classify_consistently(lua, state, chosen, problem):
+    assert lua.eval(f'BfBot.Plan.IsChosen("{state}")') is chosen
+    assert lua.eval(f'BfBot.Plan.IsProblem("{state}")') is problem
+
+
+def test_the_table_never_offers_a_tick_the_plan_would_refuse(lua):
+    """`open` is decided by the same gate the planner asks."""
+    source = (ROOT / "buffbot/BfBotPln.lua").read_text(encoding="utf-8")
+    body = re.search(r"^function P\.CellState\(.*?^end$", source,
+                     re.S | re.M).group(0)
+    assert "P.SourceAllowed(snapshot, source, probe)" in body
+
+
+def test_every_castable_buff_gets_a_line_even_with_an_empty_plan(lua):
+    _by_group(
+        lua,
+        '{ { key = "a" } }',
+        '{ { key = "g1", name = "Armor", sources = { { actor = "a",'
+        ' pool = "p", uses = 1, duration = 60 } } },'
+        '  { key = "g2", name = "Bless", sources = { { actor = "a",'
+        ' pool = "q", uses = 1, duration = 60 } } } }',
+        "{}",
+    )
+    assert lua.eval("#lines") == 2
+    assert [lua.eval(f"lines[{i}].name") for i in (1, 2)] == ["Armor", "Bless"]
