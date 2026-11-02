@@ -101,3 +101,32 @@ The script refuses the run and names what is missing. In short:
 `~/OneDrive/Documents/BuffBot Dev`, BG2:EE 2.7.3.0 + EEex 1.3.1, four prepared
 saves. Those are the script's defaults. `000000010-BuffBot Clean Baseline` has a
 three-caster party; portrait slot 0 is a mage with ten rows in preset 1.
+
+## `lab_invisible_target.py` — does a force-cast reach a state-blocked recipient?
+
+Answers the question #113 was filed for and closed on: BuffBot queues
+`ReallyForceSpellRES(res, PlayerN)` rather than clicking a target, so the
+engine's selector restrictions may not apply to it at all.
+
+    python -I tools/lab_invisible_target.py --out docs/shots/invisible-target \
+        --state-a improved --state-b sanctuary
+
+`--state-a` / `--state-b` name the states tested on the first and second clean
+recipient (`invisible`, `improved`, `sanctuary`; `--state-b ""` for one only).
+A three-member save has one caster and two clean slots, so two applied states
+per run — an applied state is never removed, because then the confirmation read
+could no longer tell whether the next application took.
+
+How it keeps itself honest, each rule paid for by a run that got it wrong:
+
+- The state is applied by casting the **engine's own spell**
+  (`ApplySpellRES`), chosen by checking that its feature blocks really carry
+  the opcode, and then **read back** off the sprite. A hand-built
+  `EEex_GameObject_ApplyEffect` whose `dWFlags = 1` was ignored once reported
+  LANDED for improved invisibility while the sprite was only plainly invisible.
+- A trial whose state did not change reports **NO VERDICT**, never a reading.
+- `BfBotProbe113_SweepFor` finds a spell by opcode when the named candidates
+  do not carry it (Sanctuary: neither `SPPR104` nor `SPPR103` does).
+- Plain reads only inside a command. See `bg-labs.md` on the poll budget.
+- A trivial `return "alive"` runs first, so a timeout on the real command is
+  the command and not the poll host.
