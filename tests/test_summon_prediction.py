@@ -438,6 +438,324 @@ def test_a_casting_level_is_never_below_one(lua: LuaRuntime) -> None:
 
 
 # ----------------------------------------------------------------------
+# What a row creates (step B)
+# ----------------------------------------------------------------------
+#
+# `Discover` walks installed data, so these tests supply it: a fake resource
+# layer with SPL/ITM/EFF headers whose feature blocks are plain tables. That is
+# the whole point of the walk being structural -- it can be driven without a
+# game, and a mod's wrapper chain is just another table here.
+
+_DISCOVER_WORLD = """
+-- Each resource is { casting = {blocks}, abilities = { {blocks}, ... } }.
+function TestResources(spec)
+    local demanded = {}
+    EEex_Resource_Demand = function(res, kind)
+        local entry = spec[kind .. ":" .. res:upper()]
+        demanded[#demanded + 1] = kind .. ":" .. res:upper()
+        if not entry then return nil end
+        if kind == "EFF" then
+            return { m_effectId = entry.opcode, m_dWFlags = entry.param2,
+                     m_res = entry.res }
+        end
+        local header = {
+            castingStartingEffect = 0,
+            castingEffectCount = entry.casting and #entry.casting or 0,
+            _casting = entry.casting or {},
+            _abilities = entry.abilities or {},
+        }
+        function header:getAbilityForLevel(_)
+            return self._abilities[1] and { _blocks = self._abilities[1] } or nil
+        end
+        return header
+    end
+    BfBot.Scan = BfBot.Scan or {}
+    BfBot.Scan._GetItemAbility = function(header, index)
+        local blocks = header._abilities[(index or 0) + 1]
+        return blocks and { _blocks = blocks } or nil
+    end
+    -- The shared iterator, standing in for the classifier's: it is handed
+    -- either an ability (our fake, carrying _blocks) or the synthetic casting
+    -- ability, whose keys come from the field map.
+    BfBot.Class = BfBot.Class or {}
+    BfBot.Class._IterateFeatureBlocks = function(header, ability, fn)
+        local blocks = ability._blocks
+        if not blocks then
+            local count = ability[BfBot._fields.fb_count] or 0
+            if count > 0 then blocks = header._casting end
+        end
+        for index, block in ipairs(blocks or {}) do
+            if fn(block, index - 1) then return end
+        end
+    end
+    return demanded
+end
+
+function TestBlock(opcode, param2, res)
+    return { [BfBot._fields.fb_opcode] = opcode,
+             [BfBot._fields.fb_param2] = param2,
+             [BfBot._fields.fb_res] = res }
+end
+
+function TestFound(list)
+    local parts = {}
+    for _, d in ipairs(list) do
+        parts[#parts + 1] = d.kind == "clone"
+            and ("clone/" .. d.image)
+            or (d.resource .. "/" .. d.opcode)
+    end
+    return table.concat(parts, " ")
+end
+"""
+
+
+@pytest.fixture()
+def world(lua: LuaRuntime) -> LuaRuntime:
+    lua.execute(_DISCOVER_WORLD)
+    return lua
+
+
+def test_a_project_image_spell_is_found_by_its_opcode(world: LuaRuntime) -> None:
+    world.eval("TestResources({['SPL:SPWI714'] = {abilities = {"
+               "{TestBlock(236, 2, nil)}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='SPWI714'})")
+    assert world.eval("TestFound(...)", found) == "clone/2"
+
+
+def test_a_simulacrum_is_image_type_three(world: LuaRuntime) -> None:
+    world.eval("TestResources({['SPL:SPWI713'] = {abilities = {"
+               "{TestBlock(236, 3, nil)}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='SPWI713'})")
+    assert world.eval("TestFound(...)", found) == "clone/3"
+
+
+def test_mislead_is_not_a_planned_caster(world: LuaRuntime) -> None:
+    """Image type 1 copies no spellbook, so there is nothing to predict."""
+    world.eval("TestResources({['SPL:SPWI613'] = {abilities = {"
+               "{TestBlock(236, 1, nil)}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='SPWI613'})")
+    assert world.eval("TestFound(...)", found) == ""
+
+
+def test_both_summon_opcodes_report_their_creature(world: LuaRuntime) -> None:
+    world.eval("TestResources({['SPL:SPPR701'] = {abilities = {"
+               "{TestBlock(67, 0, 'planetar'), TestBlock(127, 0, 'deva')}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='SPPR701'})")
+    assert world.eval("TestFound(...)", found) == "PLANETAR/67 DEVA/127"
+
+
+def test_a_wrapper_spell_is_followed_through_op146(world: LuaRuntime) -> None:
+    world.eval("TestResources({"
+               "['SPL:WRAP'] = {abilities = {{TestBlock(146, 0, 'inner')}}},"
+               "['SPL:INNER'] = {abilities = {{TestBlock(236, 2, nil)}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='WRAP'})")
+    assert world.eval("TestFound(...)", found) == "clone/2"
+
+
+def test_an_eff_file_is_followed_through_op177(world: LuaRuntime) -> None:
+    world.eval("TestResources({"
+               "['SPL:VIAEFF'] = {abilities = {{TestBlock(177, 0, 'theeff')}}},"
+               "['EFF:THEEFF'] = {opcode = 67, param2 = 0, res = 'planetar'}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='VIAEFF'})")
+    assert world.eval("TestFound(...)", found) == "PLANETAR/67"
+
+
+def test_a_spells_casting_effects_are_walked_too(world: LuaRuntime) -> None:
+    """A wrapper can deliver the creation from the casting block."""
+    world.eval("TestResources({['SPL:ATCAST'] = {"
+               "casting = {TestBlock(236, 3, nil)}, abilities = {{}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='ATCAST'})")
+    assert world.eval("TestFound(...)", found) == "clone/3"
+
+
+def test_an_item_power_can_create_a_caster(world: LuaRuntime) -> None:
+    """A borrowed helm is a creation mechanic like any other."""
+    world.eval("TestResources({['ITM:HELM'] = {abilities = {"
+               "{TestBlock(0, 0, nil)}, {TestBlock(236, 3, nil)}}}})")
+    found = world.eval(
+        "BfBot.Summon.Discover({kind='itm', itemResref='HELM', abilityIdx=1})")
+    assert world.eval("TestFound(...)", found) == "clone/3"
+
+
+def test_a_cycle_cannot_run_away(world: LuaRuntime) -> None:
+    world.eval("TestResources({"
+               "['SPL:LOOPA'] = {abilities = {{TestBlock(146, 0, 'loopb')}}},"
+               "['SPL:LOOPB'] = {abilities = {{TestBlock(146, 0, 'loopa')}}}})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='LOOPA'})")
+    assert world.eval("TestFound(...)", found) == ""
+
+
+def test_the_walk_stops_at_depth_four(world: LuaRuntime) -> None:
+    """Five links deep is past the limit, so the clone at the end is not seen.
+
+    The limit is what keeps a mod's deep wrapper chain from costing the panel
+    a frame; a creation that far down is not reported rather than guessed at.
+    """
+    spec = ["['SPL:L0'] = {abilities = {{TestBlock(146, 0, 'l1')}}}"]
+    for index in range(1, 5):
+        spec.append(
+            f"['SPL:L{index}'] = {{abilities = {{{{TestBlock(146, 0, "
+            f"'l{index + 1}')}}}}}}")
+    spec.append("['SPL:L5'] = {abilities = {{TestBlock(236, 2, nil)}}}")
+    world.eval("TestResources({" + ",".join(spec) + "})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='L0'})")
+    assert world.eval("TestFound(...)", found) == ""
+
+
+def test_a_missing_resource_is_not_an_error(world: LuaRuntime) -> None:
+    world.eval("TestResources({})")
+    found = world.eval("BfBot.Summon.Discover({kind='spl', resref='GONE'})")
+    assert world.eval("TestFound(...)", found) == ""
+
+
+# ----------------------------------------------------------------------
+# Which creations are worth planning for
+# ----------------------------------------------------------------------
+
+
+_CREATORS_WORLD = """
+function TestCreatureBooks(books)
+    BfBot.Summon.ClearCaches()
+    BfBot.Summon.ReadCreature = function(resource)
+        local entry = books[resource:upper()]
+        if not entry then return nil, 'absent' end
+        return entry.profile
+    end
+    BfBot.Summon.BuildRows = function(profile)
+        return (books[tostring(profile.resource):upper()] or {}).rows or {}
+    end
+    BfBot.Plan = BfBot.Plan or {}
+    BfBot.Plan.IsAutomaticBuff = function(row) return row.buff == 1 end
+end
+"""
+
+
+@pytest.fixture()
+def creators(world: LuaRuntime) -> LuaRuntime:
+    world.execute(_CREATORS_WORLD)
+    return world
+
+
+def test_a_clone_always_counts(creators: LuaRuntime) -> None:
+    """Its book is the owner's, so there is nothing to look up."""
+    creators.eval("TestResources({['SPL:PI'] = {abilities = {"
+                  "{TestBlock(236, 2, nil)}}}})")
+    creators.eval("TestCreatureBooks({})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='PI', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == "clone/2"
+    assert creators.eval(
+        "BfBot.Summon.IsCreator({kind='spl', resref='PI', casterLevel=12})")
+
+
+def test_a_summon_with_a_usable_buff_counts(creators: LuaRuntime) -> None:
+    creators.eval("TestResources({['SPL:CALL'] = {abilities = {"
+                  "{TestBlock(67, 0, 'planetar')}}}})")
+    creators.eval("TestCreatureBooks({PLANETAR = {"
+                  "profile = {resource = 'PLANETAR'},"
+                  "rows = {HASTE = {count = 2, buff = 1, isSelfOnly = 0}}}})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='CALL', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == "PLANETAR/67"
+
+
+def test_a_summon_whose_buffs_are_all_spent_does_not_count(
+        creators: LuaRuntime) -> None:
+    creators.eval("TestResources({['SPL:CALL'] = {abilities = {"
+                  "{TestBlock(67, 0, 'planetar')}}}})")
+    creators.eval("TestCreatureBooks({PLANETAR = {"
+                  "profile = {resource = 'PLANETAR'},"
+                  "rows = {HASTE = {count = 0, buff = 1, isSelfOnly = 0}}}})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='CALL', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == ""
+
+
+def test_a_summon_that_can_only_buff_itself_does_not_count(
+        creators: LuaRuntime) -> None:
+    """A caster that reaches nobody is not a caster worth offering."""
+    creators.eval("TestResources({['SPL:CALL'] = {abilities = {"
+                  "{TestBlock(67, 0, 'brute')}}}})")
+    creators.eval("TestCreatureBooks({BRUTE = {"
+                  "profile = {resource = 'BRUTE'},"
+                  "rows = {RAGE = {count = 2, buff = 1, isSelfOnly = 1,"
+                  " isAoE = 0}}}})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='CALL', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == ""
+
+
+def test_a_self_only_area_cast_still_counts(creators: LuaRuntime) -> None:
+    """A radial aura is cast on self and lands on everybody."""
+    creators.eval("TestResources({['SPL:CALL'] = {abilities = {"
+                  "{TestBlock(67, 0, 'chanter')}}}})")
+    creators.eval("TestCreatureBooks({CHANTER = {"
+                  "profile = {resource = 'CHANTER'},"
+                  "rows = {CHANT = {count = 1, buff = 1, isSelfOnly = 1,"
+                  " isAoE = 1}}}})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='CALL', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == "CHANTER/67"
+
+
+def test_a_summon_whose_spells_are_not_buffs_does_not_count(
+        creators: LuaRuntime) -> None:
+    creators.eval("TestResources({['SPL:CALL'] = {abilities = {"
+                  "{TestBlock(67, 0, 'archer')}}}})")
+    creators.eval("TestCreatureBooks({ARCHER = {"
+                  "profile = {resource = 'ARCHER'},"
+                  "rows = {ARROW = {count = 9, buff = 0, isSelfOnly = 0}}}})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='CALL', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == ""
+
+
+def test_an_unreadable_creature_is_not_guessed_at(creators: LuaRuntime) -> None:
+    """A CRE that cannot be read yields no caster, never a assumed book."""
+    creators.eval("TestResources({['SPL:CALL'] = {abilities = {"
+                  "{TestBlock(67, 0, 'mystery')}}}})")
+    creators.eval("TestCreatureBooks({})")
+    found = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='CALL', casterLevel=12})")
+    assert creators.eval("TestFound(...)", found) == ""
+
+
+def test_a_selected_variant_is_what_gets_inspected(
+        creators: LuaRuntime) -> None:
+    """The parent is a selection wrapper; the variant is what is cast."""
+    creators.eval("TestResources({"
+                  "['SPL:PARENT'] = {abilities = {{TestBlock(214, 0, nil)}}},"
+                  "['SPL:CHOSEN'] = {abilities = {{TestBlock(236, 3, nil)}}}})")
+    creators.eval("TestCreatureBooks({})")
+    plain = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='PARENT', casterLevel=12})")
+    assert creators.eval("TestFound(...)", plain) == ""
+    chosen = creators.eval(
+        "BfBot.Summon.Creators({kind='spl', resref='PARENT', casterLevel=12},"
+        " 'CHOSEN')")
+    assert creators.eval("TestFound(...)", chosen) == "clone/3"
+
+
+def test_the_answer_is_cached_per_row_and_caster_level(
+        creators: LuaRuntime) -> None:
+    """The panel asks this per row per frame; the walk must not repeat."""
+    demanded = creators.eval("TestResources({['SPL:PI'] = {abilities = {"
+                             "{TestBlock(236, 2, nil)}}}})")
+    creators.eval("TestCreatureBooks({})")
+    row = "{kind='spl', resref='PI', casterLevel=12}"
+    creators.eval(f"BfBot.Summon.Creators({row})")
+    first = len(demanded)
+    creators.eval(f"BfBot.Summon.Creators({row})")
+    assert len(demanded) == first
+
+    # A different caster level is a different question: the ability a spell
+    # uses can change with level, so the cache key has to carry it.
+    creators.eval("BfBot.Summon.Creators({kind='spl', resref='PI',"
+                  " casterLevel=20})")
+    assert len(demanded) > first
+
+
+# ----------------------------------------------------------------------
 # Source hygiene
 # ----------------------------------------------------------------------
 
