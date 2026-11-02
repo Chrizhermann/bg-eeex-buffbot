@@ -341,6 +341,9 @@ end
 function BfBot.UI.TogglePerspective()
     if not BfBot.UI._CanTogglePerspective() then return end
     BfBot.UI._ClearSpellSelection()
+    -- The caster reading uses the tabs for something else, so the narrowing
+    -- goes with the reading it belongs to.
+    BfBot.UI._partyRecipient = nil
     if BfBot.UI._perspective == "recipient" then
         BfBot.UI._perspective = "caster"
     else
@@ -2351,7 +2354,16 @@ end
 -- Tab Switching (no cache invalidation)
 -- ============================================================
 
+--- A character tab. What it means depends on which reading is showing: in
+--- the caster view it picks whose spellbook is being edited, in the party
+--- table it narrows the table to what that character receives. Routing it
+--- here rather than in the menu keeps one place to reason about, and the
+--- tabs were live-but-inert in the party table before this (#111).
 function BfBot.UI.SetChar(slot)
+    if BfBot.UI._IsRecipientView() then
+        BfBot.UI.SetPartyRecipient(slot)
+        return
+    end
     BfBot.UI._ClearSpellSelection()
     BfBot.UI._view = "party"  -- portrait tabs always land in party view
     BfBot.UI._charSlot = slot
@@ -3107,6 +3119,11 @@ end
 --- In the summons view no portrait tab is selected (hand-off 2).
 function BfBot.UI._IsCharSelected(slot)
     if BfBot.UI._view == "summons" then return false end
+    -- In the party table a lit tab means "the table is narrowed to this
+    -- character", not "this character's spellbook is open".
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI._partyRecipient == slot
+    end
     return BfBot.UI._charSlot == slot
 end
 
@@ -4359,6 +4376,56 @@ function BfBot.UI._PartyRowDuration(line)
     return low .. "-" .. BfBot.UI._FormatDuration(line.durationMax)
 end
 
+--- Which recipient the party table is narrowed to, or nil for all of them.
+--- A tab index, not a name: the party changes between a click and a refresh,
+--- and the slot is what the tab row is built from anyway.
+BfBot.UI._partyRecipient = nil
+
+--- Narrow the party table to one character, or widen it again.
+--- Clicking the tab a second time clears it, so the way back is the control
+--- the player just used rather than a seventh tab they have to find.
+function BfBot.UI.SetPartyRecipient(slot)
+    if BfBot.UI._partyRecipient == slot then
+        BfBot.UI._partyRecipient = nil
+    else
+        BfBot.UI._partyRecipient = slot
+    end
+    BfBot.UI._Refresh()
+end
+
+--- Whether a character tab is the one the table is narrowed to.
+function BfBot.UI._IsPartyRecipient(slot)
+    return BfBot.UI._IsRecipientView()
+        and BfBot.UI._partyRecipient == slot
+end
+
+--- PURE: the cells of one line that the recipient filter leaves.
+--- The Party cell always stays: a cast that covers everybody covers the one
+--- character being looked at too, and hiding it would make a row look
+--- unplanned when it is the best-planned kind there is.
+function BfBot.UI._CellsForRecipient(chips, slot)
+    if slot == nil then return chips end
+    local kept = {}
+    for _, chip in ipairs(chips or {}) do
+        if chip.party or chip.slot == slot then kept[#kept + 1] = chip end
+    end
+    return kept
+end
+
+--- PURE: whether a line says anything about the character being looked at.
+--- A buff nobody could ever give them is not part of their answer; one they
+--- could have is, because "what else could this character get" is the other
+--- half of the question.
+function BfBot.UI._LineMentionsRecipient(line, slot)
+    if slot == nil then return true end
+    for _, recipient in ipairs(line.recipients or {}) do
+        if recipient.party or recipient.slot == slot then
+            if recipient.state ~= "impossible" then return true end
+        end
+    end
+    return false
+end
+
 -- ------------------------------------------------------------
 -- Which rows the party table shows (issue #111)
 -- ------------------------------------------------------------
@@ -4423,8 +4490,10 @@ function BfBot.UI._BuildPartyRows(lines, query)
     local rows = {}
     query = BfBot.UI._SearchName(query or "")
     local filter = BfBot.UI._partyFilter
+    local onlyFor = BfBot.UI._partyRecipient
     for _, line in ipairs(lines or {}) do
-        local keep = BfBot.UI._PartyRowPassesFilter(line, filter)
+        local keep = BfBot.UI._LineMentionsRecipient(line, onlyFor)
+            and BfBot.UI._PartyRowPassesFilter(line, filter)
             and (query == ""
                 or BfBot.UI._SearchName(line.name or line.key)
                     :find(query, 1, true))
@@ -4442,7 +4511,8 @@ function BfBot.UI._BuildPartyRows(lines, query)
         end
         if keep then
             local chips = {}
-            for index, recipient in ipairs(line.recipients or {}) do
+            for index, recipient in ipairs(
+                BfBot.UI._CellsForRecipient(line.recipients, onlyFor)) do
                 if index > BfBot.UI.MAX_CHIPS then break end
                 chips[index] = {
                     party = recipient.party and 1 or nil,

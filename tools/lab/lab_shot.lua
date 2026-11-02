@@ -88,6 +88,12 @@ buffbot_searchText = args.query or ""
 BfBot.UI._SearchTick()
 assert(on("BUFFBOT_MAIN") and buffbot_isOpen, "SHOT_PANEL_DID_NOT_OPEN")
 
+-- Narrow the party table to one character's own answer.
+if args.recipient then
+    BfBot.UI._partyRecipient = args.recipient
+    BfBot.UI._Refresh()
+end
+
 -- Which rows the party table lists, so one run can show a filter at work.
 if args.filter then
     assert(BfBot.UI.PARTY_FILTERS, "SHOT_NO_PARTY_FILTER")

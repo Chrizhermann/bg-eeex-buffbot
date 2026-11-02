@@ -35,7 +35,8 @@ EXTRACTED = (
     "_SearchName", "_FormatDuration",
     "_PartyRowSub", "_PartyRowUses", "_PartyRowUsesTooltip",
     "_PartyRowDuration", "_PartyRowPassesFilter", "_PartyFilterLabel",
-    "CyclePartyFilter", "_BuildPartyRows",
+    "CyclePartyFilter", "SetPartyRecipient", "_IsPartyRecipient",
+    "_CellsForRecipient", "_LineMentionsRecipient", "_BuildPartyRows",
     "_PartyRow", "_PartyCellIcon", "_PartyCellName", "_PartyCellSub",
     "_PartyCellUses", "_PartyCellUsesTooltip", "_PartyCellDuration",
     "_PartyCellClear",
@@ -92,6 +93,7 @@ def lua() -> LuaRuntime:
     runtime.execute('BfBot.UI.PARTY_FILTERS = '
                     '{ "all", "planned", "open", "problems" }')
     runtime.execute('BfBot.UI._partyFilter = "all"')
+    runtime.execute("BfBot.UI._partyRecipient = nil")
     runtime.execute('BfBot.UI._perspective = "caster"')
     runtime.execute("BfBot.UI.MAX_CHIPS = 6")
     runtime.execute("buffbot_partyTable = {}")
@@ -859,3 +861,90 @@ def test_the_filter_only_exists_where_there_is_something_to_narrow():
     layout = _layout()
     assert "local filterW = recipient and 124 or 0" in layout
     assert 'setArea("bbPartyFilter"' in layout
+
+
+# ---------------------------------------------------------------------------
+# The character tabs, in this reading
+# ---------------------------------------------------------------------------
+#
+# Chris's own idea, which the fork does not have: it dropped per-character
+# views entirely ("one party dashboard; no character-filter views"). Here a
+# tab stops meaning "whose spellbook am I editing" and starts meaning "show
+# me what this character receives" -- which is also what fixes the part that
+# confused him, the tabs being live and inert at the same time.
+
+
+RECIPIENT_LINES = """{
+    { key = "both", name = "Both", recipients = {
+        { key = "party", party = true, state = "open" },
+        { key = "a", slot = 0, name = "Minsc", state = "planned" },
+        { key = "b", slot = 1, name = "Jaheira", state = "open" } } },
+    { key = "onlyb", name = "OnlyB", recipients = {
+        { key = "party", party = true, state = "impossible" },
+        { key = "a", slot = 0, name = "Minsc", state = "impossible" },
+        { key = "b", slot = 1, name = "Jaheira", state = "planned" } } },
+    { key = "wide", name = "Wide", recipients = {
+        { key = "party", party = true, state = "planned" },
+        { key = "a", slot = 0, name = "Minsc", state = "covered" },
+        { key = "b", slot = 1, name = "Jaheira", state = "covered" } } } }"""
+
+
+def test_without_a_tab_the_table_is_the_whole_party(lua):
+    _build(lua, RECIPIENT_LINES)
+    assert _names(lua) == ["Both", "OnlyB", "Wide"]
+    assert lua.eval("#buffbot_partyTable[1].chips") == 3
+
+
+def test_a_tab_narrows_the_table_to_what_that_character_receives(lua):
+    lua.execute("BfBot.UI._partyRecipient = 0")
+    _build(lua, RECIPIENT_LINES)
+    # OnlyB can never reach Minsc, so it is not part of his answer.
+    assert _names(lua) == ["Both", "Wide"]
+    # And each row shows the Party cell and his own, nobody else's.
+    keys = [lua.eval(f"buffbot_partyTable[1].chips[{i}].name")
+            for i in (1, 2)]
+    assert keys == ["Party", "Minsc"]
+    assert lua.eval("#buffbot_partyTable[1].chips") == 2
+
+
+def test_the_party_cell_stays_whoever_is_being_looked_at(lua):
+    """A cast that covers everybody covers this character too; hiding it
+    would make the best-planned kind of row look unplanned."""
+    lua.execute("BfBot.UI._partyRecipient = 1")
+    _build(lua, RECIPIENT_LINES)
+    assert lua.eval("buffbot_partyTable[1].chips[1].party") == 1
+
+
+def test_a_buff_that_could_reach_them_stays_even_unchosen(lua):
+    """"What else could this character get" is the other half of it."""
+    lua.execute("BfBot.UI._partyRecipient = 1")
+    _build(lua, RECIPIENT_LINES)
+    assert "Both" in _names(lua)
+
+
+def test_clicking_the_same_tab_again_widens_it_back(lua):
+    """The way back is the control just used, not a seventh tab to find."""
+    lua.execute('BfBot.UI._perspective = "recipient"')
+    lua.execute("BfBot.UI.SetPartyRecipient(2)")
+    assert lua.eval("BfBot.UI._partyRecipient") == 2
+    lua.execute("BfBot.UI.SetPartyRecipient(2)")
+    assert lua.eval("BfBot.UI._partyRecipient") is None
+
+
+def test_a_tab_means_different_things_in_the_two_readings():
+    """One place decides, rather than six pairs of menu expressions."""
+    source = re.search(r"^function BfBot\.UI\.SetChar\(.*?^end$",
+                       UI_SOURCE, re.S | re.M).group(0)
+    assert "_IsRecipientView()" in source
+    assert "SetPartyRecipient(slot)" in source
+    lit = re.search(r"^function BfBot\.UI\._IsCharSelected\(.*?^end$",
+                    UI_SOURCE, re.S | re.M).group(0)
+    assert "_partyRecipient == slot" in lit
+
+
+def test_leaving_the_reading_clears_the_narrowing(lua):
+    """The caster view uses the tabs for something else."""
+    lua.execute('BfBot.UI._perspective = "recipient"')
+    lua.execute("BfBot.UI._partyRecipient = 3")
+    lua.execute("BfBot.UI.TogglePerspective()")
+    assert lua.eval("BfBot.UI._partyRecipient") is None

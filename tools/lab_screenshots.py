@@ -242,6 +242,9 @@ def capture(console: Console, shot: Path, scrnshot: Path, out: Path, theme: str,
     match = re.search(r"filter='(\w+)'", prepare_args)
     if match:
         label += "-" + match.group(1)
+    match = re.search(r"recipient=(\d+)", prepare_args)
+    if match:
+        label += "-slot" + match.group(1)
     size = "" if panel is None else f",panelW={panel[0]},panelH={panel[1]}"
     font = "" if font_size is None else f",fontSize={font_size}"
     receipt = console.call(f"prepare-{label}", shot,
@@ -275,6 +278,8 @@ def main() -> int:
     parser.add_argument("--order", type=int, choices=(0, 1),
                         help="the preset's cast-order toggle: 0 manual, 1 by duration")
     parser.add_argument("--query", default="")
+    parser.add_argument("--recipient", type=int, choices=range(6),
+                        help="narrow the party table to this portrait slot")
     parser.add_argument("--filter", default="",
                         choices=("", "all", "planned", "open", "problems"),
                         help="which rows the party table lists")
@@ -380,11 +385,13 @@ def main() -> int:
         perspective = (f",perspective='{args.perspective}'"
                        if args.perspective else "")
         row_filter = f",filter='{args.filter}'" if args.filter else ""
+        recipient = (f",recipient={args.recipient}"
+                     if args.recipient is not None else "")
         pairs = [p.strip() for p in args.targets.split(",") if p.strip()]
         targets = (",targets={" + ",".join(f"[[{p}]]" for p in pairs) + "}"
                    if pairs else "")
         prepare_args = (f"slot={args.slot},preset={args.preset},enable={enable}{lock}"
-                        f"{order},query=[[{args.query}]]{dialog}{perspective}{targets}{row_filter}")
+                        f"{order},query=[[{args.query}]]{dialog}{perspective}{targets}{row_filter}{recipient}")
         panels: list[tuple[int, int] | None] = [None]
         if args.panels:
             panels = [tuple(int(n) for n in size.lower().split("x"))
