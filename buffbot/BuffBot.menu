@@ -1468,7 +1468,7 @@ menu
 		-- caster. Nothing else earns a second line.
 		column
 		{
-			width 20
+			width 22
 			label
 			{
 				area 0 6 -1 20
@@ -1490,7 +1490,7 @@ menu
 		-- How many casts of it are still unspent, over what the party holds.
 		column
 		{
-			width 5
+			width 4
 			label
 			{
 				area 0 0 -1 48
@@ -1506,7 +1506,7 @@ menu
 		-- different ones -- the short end is what has to be planned around.
 		column
 		{
-			width 9
+			width 7
 			label
 			{
 				area 0 0 -1 48
@@ -1517,22 +1517,19 @@ menu
 			}
 		}
 
-		-- Recipient chip 1. One chip per character receiving this buff,
-		-- or a single "Party" chip where one cast covers everybody. The
-		-- chip is its own column so the list's `cellNumber` says which one
-		-- was clicked -- a button inside a list row does not survive the
+		-- Recipient cell 1: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
 		-- widget's own hit handling, and this needs no button.
 		--
-		-- No portrait. The engine's own portrait control draws outside the
-		-- list's clip rect: the row below the last visible one still painted
-		-- its faces, over the footer, and scrolling would do the same over
-		-- the column headers (lab-verified, BG2:EE 2.7.3.0). Nothing else
-		-- reaches a party member's portrait resref -- CGameSprite keeps only
-		-- the loaded bitmap, `m_vbPortraitSmall` -- so the chip carries the
-		-- name instead, which is what it was there to say.
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
 		column
 		{
-			width 9
+			width 8
 			label
 			{
 				area 1 3 -1 42
@@ -1546,7 +1543,7 @@ menu
 				area 4 9 -1 17
 				text lua "BfBot.UI._PartyChipName(rowNumber, 1)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipColor(rowNumber, 1)"
 			}
 			label
@@ -1554,27 +1551,24 @@ menu
 				area 4 25 -1 15
 				text lua "BfBot.UI._PartyChipDuration(rowNumber, 1)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 1)"
 			}
 		}
 
-		-- Recipient chip 2. One chip per character receiving this buff,
-		-- or a single "Party" chip where one cast covers everybody. The
-		-- chip is its own column so the list's `cellNumber` says which one
-		-- was clicked -- a button inside a list row does not survive the
+		-- Recipient cell 2: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
 		-- widget's own hit handling, and this needs no button.
 		--
-		-- No portrait. The engine's own portrait control draws outside the
-		-- list's clip rect: the row below the last visible one still painted
-		-- its faces, over the footer, and scrolling would do the same over
-		-- the column headers (lab-verified, BG2:EE 2.7.3.0). Nothing else
-		-- reaches a party member's portrait resref -- CGameSprite keeps only
-		-- the loaded bitmap, `m_vbPortraitSmall` -- so the chip carries the
-		-- name instead, which is what it was there to say.
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
 		column
 		{
-			width 9
+			width 8
 			label
 			{
 				area 1 3 -1 42
@@ -1588,7 +1582,7 @@ menu
 				area 4 9 -1 17
 				text lua "BfBot.UI._PartyChipName(rowNumber, 2)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipColor(rowNumber, 2)"
 			}
 			label
@@ -1596,27 +1590,24 @@ menu
 				area 4 25 -1 15
 				text lua "BfBot.UI._PartyChipDuration(rowNumber, 2)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 2)"
 			}
 		}
 
-		-- Recipient chip 3. One chip per character receiving this buff,
-		-- or a single "Party" chip where one cast covers everybody. The
-		-- chip is its own column so the list's `cellNumber` says which one
-		-- was clicked -- a button inside a list row does not survive the
+		-- Recipient cell 3: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
 		-- widget's own hit handling, and this needs no button.
 		--
-		-- No portrait. The engine's own portrait control draws outside the
-		-- list's clip rect: the row below the last visible one still painted
-		-- its faces, over the footer, and scrolling would do the same over
-		-- the column headers (lab-verified, BG2:EE 2.7.3.0). Nothing else
-		-- reaches a party member's portrait resref -- CGameSprite keeps only
-		-- the loaded bitmap, `m_vbPortraitSmall` -- so the chip carries the
-		-- name instead, which is what it was there to say.
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
 		column
 		{
-			width 9
+			width 8
 			label
 			{
 				area 1 3 -1 42
@@ -1630,7 +1621,7 @@ menu
 				area 4 9 -1 17
 				text lua "BfBot.UI._PartyChipName(rowNumber, 3)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipColor(rowNumber, 3)"
 			}
 			label
@@ -1638,27 +1629,24 @@ menu
 				area 4 25 -1 15
 				text lua "BfBot.UI._PartyChipDuration(rowNumber, 3)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 3)"
 			}
 		}
 
-		-- Recipient chip 4. One chip per character receiving this buff,
-		-- or a single "Party" chip where one cast covers everybody. The
-		-- chip is its own column so the list's `cellNumber` says which one
-		-- was clicked -- a button inside a list row does not survive the
+		-- Recipient cell 4: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
 		-- widget's own hit handling, and this needs no button.
 		--
-		-- No portrait. The engine's own portrait control draws outside the
-		-- list's clip rect: the row below the last visible one still painted
-		-- its faces, over the footer, and scrolling would do the same over
-		-- the column headers (lab-verified, BG2:EE 2.7.3.0). Nothing else
-		-- reaches a party member's portrait resref -- CGameSprite keeps only
-		-- the loaded bitmap, `m_vbPortraitSmall` -- so the chip carries the
-		-- name instead, which is what it was there to say.
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
 		column
 		{
-			width 9
+			width 8
 			label
 			{
 				area 1 3 -1 42
@@ -1672,7 +1660,7 @@ menu
 				area 4 9 -1 17
 				text lua "BfBot.UI._PartyChipName(rowNumber, 4)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipColor(rowNumber, 4)"
 			}
 			label
@@ -1680,27 +1668,24 @@ menu
 				area 4 25 -1 15
 				text lua "BfBot.UI._PartyChipDuration(rowNumber, 4)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 4)"
 			}
 		}
 
-		-- Recipient chip 5. One chip per character receiving this buff,
-		-- or a single "Party" chip where one cast covers everybody. The
-		-- chip is its own column so the list's `cellNumber` says which one
-		-- was clicked -- a button inside a list row does not survive the
+		-- Recipient cell 5: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
 		-- widget's own hit handling, and this needs no button.
 		--
-		-- No portrait. The engine's own portrait control draws outside the
-		-- list's clip rect: the row below the last visible one still painted
-		-- its faces, over the footer, and scrolling would do the same over
-		-- the column headers (lab-verified, BG2:EE 2.7.3.0). Nothing else
-		-- reaches a party member's portrait resref -- CGameSprite keeps only
-		-- the loaded bitmap, `m_vbPortraitSmall` -- so the chip carries the
-		-- name instead, which is what it was there to say.
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
 		column
 		{
-			width 9
+			width 8
 			label
 			{
 				area 1 3 -1 42
@@ -1714,7 +1699,7 @@ menu
 				area 4 9 -1 17
 				text lua "BfBot.UI._PartyChipName(rowNumber, 5)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipColor(rowNumber, 5)"
 			}
 			label
@@ -1722,27 +1707,24 @@ menu
 				area 4 25 -1 15
 				text lua "BfBot.UI._PartyChipDuration(rowNumber, 5)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 5)"
 			}
 		}
 
-		-- Recipient chip 6. One chip per character receiving this buff,
-		-- or a single "Party" chip where one cast covers everybody. The
-		-- chip is its own column so the list's `cellNumber` says which one
-		-- was clicked -- a button inside a list row does not survive the
+		-- Recipient cell 6: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
 		-- widget's own hit handling, and this needs no button.
 		--
-		-- No portrait. The engine's own portrait control draws outside the
-		-- list's clip rect: the row below the last visible one still painted
-		-- its faces, over the footer, and scrolling would do the same over
-		-- the column headers (lab-verified, BG2:EE 2.7.3.0). Nothing else
-		-- reaches a party member's portrait resref -- CGameSprite keeps only
-		-- the loaded bitmap, `m_vbPortraitSmall` -- so the chip carries the
-		-- name instead, which is what it was there to say.
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
 		column
 		{
-			width 9
+			width 8
 			label
 			{
 				area 1 3 -1 42
@@ -1756,7 +1738,7 @@ menu
 				area 4 9 -1 17
 				text lua "BfBot.UI._PartyChipName(rowNumber, 6)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipColor(rowNumber, 6)"
 			}
 			label
@@ -1764,8 +1746,47 @@ menu
 				area 4 25 -1 15
 				text lua "BfBot.UI._PartyChipDuration(rowNumber, 6)"
 				text style "bb_normal_parchment"
-				text align center center
+				text align left center
 				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 6)"
+			}
+		}
+
+		-- Recipient cell 7: the Party cell, then one per party member.
+		-- Its own column, so the list's `cellNumber` says which one was
+		-- clicked -- a button inside a list row does not survive the
+		-- widget's own hit handling, and this needs no button.
+		--
+		-- No portrait. The engine's portrait control draws outside the
+		-- list's clip rect and outside declaration order, and a party
+		-- member's portrait resref is not reachable from a live sprite
+		-- (lab-verified, BG2:EE 2.7.3.0). The checkbox and the name are
+		-- what the cell was there to say.
+		column
+		{
+			width 8
+			label
+			{
+				area 1 3 -1 42
+				bam lua "BfBot.UI._PartyChipBam(rowNumber, 7)"
+				sequence lua "BfBot.UI._ChromeSeq()"
+				frame lua "BfBot.UI._PartyChipFrame(rowNumber, 7)"
+				scaleToClip
+			}
+			label
+			{
+				area 4 9 -1 17
+				text lua "BfBot.UI._PartyChipName(rowNumber, 7)"
+				text style "bb_normal_parchment"
+				text align left center
+				text color lua "BfBot.UI._PartyChipColor(rowNumber, 7)"
+			}
+			label
+			{
+				area 4 25 -1 15
+				text lua "BfBot.UI._PartyChipDuration(rowNumber, 7)"
+				text style "bb_normal_parchment"
+				text align left center
+				text color lua "BfBot.UI._PartyChipDurationColor(rowNumber, 7)"
 			}
 		}
 
@@ -1774,7 +1795,7 @@ menu
 		-- buttons.
 		column
 		{
-			width 8
+			width 7
 			label
 			{
 				enabled "BfBot.UI._PartyRowClearable(rowNumber)"

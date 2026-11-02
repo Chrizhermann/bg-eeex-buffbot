@@ -4251,9 +4251,26 @@ end
 -- one row; a player asking "what does Minsc get" reads down one column of
 -- chips. The caster view keeps the per-character editing.
 
---- How many recipient chips a row can show. The party is six, and a
---- party-wide cast collapses into one chip, so six slots always suffice.
-BfBot.UI.MAX_CHIPS = 6
+--- How many recipient cells a row can show: the Party cell plus a party of
+--- six. Every member keeps a cell whether or not the buff is chosen for them,
+--- because an unchosen cell is what there is to tick.
+BfBot.UI.MAX_CHIPS = 7
+
+--- What each cell state looks like. The glyph carries the state because the
+--- reasons behind `impossible` number twenty-three -- one glyph each would be
+--- unreadable, so the cell says "not possible" and the tooltip says why.
+---
+---   [x] chosen, and somebody will cast it
+---   [~] chosen, and only some of the repeats are covered
+---   [!] chosen, and nobody can
+---   [#] chosen and locked
+---   [+] covered by the party cast on this row
+---   [ ] not chosen, but possible
+---   [-] not chosen, and not possible
+BfBot.UI.CELL_GLYPH = {
+    planned = "[x]", partial = "[~]", problem = "[!]", locked = "[#]",
+    covered = "[+]", open = "[ ]", impossible = "[-]",
+}
 
 --- The sub-line under a buff's name: what kind of thing it is.
 -- Short and only where it says something -- a line under every name would be
@@ -4333,17 +4350,17 @@ function BfBot.UI._BuildPartyRows(lines, query)
                 if index > BfBot.UI.MAX_CHIPS then break end
                 chips[index] = {
                     party = recipient.party and 1 or nil,
-                    -- -1, not nil: `portrait lua` is handed a number and a
-                    -- slot outside 0-5 draws nothing.
-                    slot = recipient.slot or -1,
+                    slot = recipient.slot,
                     name = recipient.party
                         and BfBot.L10N.Get("ui.party.whole_party")
                         or recipient.name or recipient.key,
                     dur = recipient.duration
                         and BfBot.UI._FormatDuration(recipient.duration) or "",
-                    state = recipient.state or "missing",
+                    state = recipient.state or "impossible",
                     reason = recipient.reason,
                     key = recipient.key,
+                    planned = recipient.planned or 0,
+                    repeats = recipient.repeats or 0,
                 }
             end
             -- What a write needs: the owning character's portrait slot and
@@ -4370,9 +4387,12 @@ function BfBot.UI._BuildPartyRows(lines, query)
                 usesTooltip = BfBot.UI._PartyRowUsesTooltip(line),
                 dur = BfBot.UI._PartyRowDuration(line),
                 chips = chips,
-                -- Clear only where there is something to clear, so the column
-                -- is a list of what is set rather than a wall of buttons.
-                clearable = #chips > 0 and 1 or nil,
+                -- Clear only where there is something to clear. Every row
+                -- has cells now, so the test is whether any of them is
+                -- chosen -- otherwise the column would be a wall of buttons
+                -- that all do nothing.
+                clearable = (line.planned or 0) + (line.short or 0) > 0
+                    and 1 or nil,
                 short = line.short or 0,
                 planned = line.planned or 0,
             }
@@ -4421,10 +4441,157 @@ end
 --- hands its action the clicked `cellNumber`, which is how a chip is made
 --- clickable without a button inside a list row.
 BfBot.UI.PARTY_CHIP_CELL = 5
-BfBot.UI.PARTY_CLEAR_CELL = 11
+BfBot.UI.PARTY_CLEAR_CELL = 12
 
---- A click in the party table. Chips open the caster choice for that
---- recipient; the last column clears the buff for everybody.
+--- What to tell a player about a plan reason.
+---
+--- An if-chain of literal keys rather than a reason -> key table, because
+--- every localization key in the panel has to be a literal one the catalog
+--- test can find (tests/test_localization.py). Not all twenty-three reasons
+--- have a sentence: the ones a player meets by clicking a cell do, and
+--- anything else falls back to the reason's own name in brackets, which is
+--- poor text but honest and traceable -- an invented sentence for a reason
+--- nobody has seen would be neither.
+function BfBot.UI._ReasonText(reason)
+    if reason == nil then return "" end
+    if reason == "self_only" then
+        return BfBot.L10N.Get("ui.cell.self_only")
+    elseif reason == "no_eligible_source" or reason == "buff_unavailable" then
+        return BfBot.L10N.Get("ui.cell.no_source")
+    elseif reason == "no_unreserved_uses" then
+        return BfBot.L10N.Get("ui.cell.no_uses")
+    elseif reason == "recipient_dead" then
+        return BfBot.L10N.Get("ui.cell.recipient_dead")
+    elseif reason == "recipient_ambiguous" then
+        return BfBot.L10N.Get("ui.cell.recipient_ambiguous")
+    elseif reason == "caster_dead" or reason == "caster_not_controlled"
+        or reason == "caster_ambiguous" or reason == "project_image_locked" then
+        return BfBot.L10N.Get("ui.cell.caster_unavailable")
+    elseif reason == "item_requires_choice" then
+        return BfBot.L10N.Get("reason.item.manual_selection")
+    elseif reason == "variant_metadata_missing" then
+        return BfBot.L10N.Get("ui.cell.variant_unreadable")
+    end
+    return "(" .. tostring(reason) .. ")"
+end
+
+--- PURE: a target list as a plain list of recipient names.
+-- `tgt` is "s" for the caster, "p" for everybody, a name, or an ordered
+-- table of names (config schema v10). The two roles are returned as
+-- themselves so a caller can tell them from a name.
+function BfBot.UI._TargetNames(tgt)
+    if tgt == nil then return {} end
+    if type(tgt) == "table" then
+        local names = {}
+        for _, name in ipairs(tgt) do names[#names + 1] = name end
+        return names
+    end
+    return { tgt }
+end
+
+--- PURE: `tgt` with one recipient added, in the shape the schema wants.
+-- A single name stays a string, because that is what the picker writes and
+-- what every older save holds; two or more become the ordered table.
+function BfBot.UI._TargetWith(tgt, name)
+    if tgt == "p" then return "p" end
+    local names = BfBot.UI._TargetNames(tgt)
+    for _, existing in ipairs(names) do
+        if existing == name then return tgt end
+    end
+    names[#names + 1] = name
+    if #names == 1 then return names[1] end
+    return names
+end
+
+--- PURE: `tgt` with one recipient removed, or nil when none is left.
+-- nil means the entry has nobody to cast at any more, which the caller turns
+-- into `on = 0` rather than writing an empty target the planner would have
+-- to reject.
+function BfBot.UI._TargetWithout(tgt, name)
+    local names = BfBot.UI._TargetNames(tgt)
+    local kept = {}
+    for _, existing in ipairs(names) do
+        if existing ~= name then kept[#kept + 1] = existing end
+    end
+    if #kept == 0 then return nil end
+    if #kept == 1 then return kept[1] end
+    return kept
+end
+
+--- Tick or untick one recipient cell.
+---
+--- Writing happens in the owning character's own preset, because that is
+--- where the config lives: "Minsc gets Bless" is Bless switched on in some
+--- cleric's preset with Minsc among its targets. The cell carries which
+--- caster that is -- the one the planner would pick for a fresh tick, the one
+--- the request already names for an existing one -- so unticking undoes
+--- exactly what ticking did.
+function BfBot.UI.ToggleRecipient(rowNumber, index)
+    local row = BfBot.UI._PartyRow(rowNumber)
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    if not row or not chip then return end
+
+    -- A locked entry does not toggle, and a cell nobody could ever fill has
+    -- nothing to toggle. Both say so rather than doing nothing silently.
+    if chip.state == "locked" then
+        BfBot._Display(BfBot.L10N.Format("feedback.cell_locked",
+            { buff = row.name }))
+        return
+    end
+    if chip.state == "impossible" then
+        BfBot._Display(BfBot.L10N.Format("feedback.cell_impossible",
+            { buff = row.name, name = chip.name,
+              reason = BfBot.UI._ReasonText(chip.reason) }))
+        return
+    end
+    if chip.state == "covered" then
+        BfBot._Display(BfBot.L10N.Format("feedback.cell_covered",
+            { buff = row.name }))
+        return
+    end
+    if not chip.writeSlot or not chip.writeResref then
+        BfBot._Display(BfBot.L10N.Format("feedback.cell_no_owner",
+            { buff = row.name }))
+        return
+    end
+
+    local sprite = EEex_Sprite_GetInPortrait(chip.writeSlot)
+    if not sprite then
+        BfBot._Display(BfBot.L10N.Format("feedback.cell_caster_gone",
+            { buff = row.name }))
+        return
+    end
+
+    local preset = BfBot.UI._presetIdx
+    local chosen = BfBot.Plan.IsChosen(chip.state)
+    local existing = BfBot.Persist.GetSpellConfig(sprite, preset,
+        chip.writeResref)
+    local current = existing and existing.tgt or nil
+
+    if chosen then
+        local target = chip.party and nil
+            or BfBot.UI._TargetWithout(current, chip.name)
+        if chip.party or target == nil then
+            -- Nobody left to cast at: switch the entry off rather than write
+            -- an empty target the planner would have to reject.
+            BfBot.Persist.SetSpellEnabled(sprite, preset, chip.writeResref, 0,
+                chip.writeKind)
+        else
+            BfBot.Persist.SetSpellTarget(sprite, preset, chip.writeResref,
+                target)
+        end
+    else
+        BfBot.Persist.SetSpellEnabled(sprite, preset, chip.writeResref, 1,
+            chip.writeKind)
+        BfBot.Persist.SetSpellTarget(sprite, preset, chip.writeResref,
+            chip.party and "p"
+                or BfBot.UI._TargetWith(current, chip.name))
+    end
+    BfBot.UI._Refresh()
+end
+
+--- A click in the party table. A recipient cell ticks or unticks; the last
+--- column clears the buff for everybody.
 function BfBot.UI._OnPartyRowAction(cell)
     local rowNumber = buffbot_partySelectedRow
     local row = BfBot.UI._PartyRow(rowNumber)
@@ -4433,9 +4600,10 @@ function BfBot.UI._OnPartyRowAction(cell)
         BfBot.UI.ClearPartyRow(rowNumber)
         return
     end
-    -- A chip opens the choice of who casts this buff for that recipient.
-    -- That sub-window is the next step of #81; until it exists a chip is
-    -- inert on purpose, rather than wired to a handler that does nothing.
+    local index = cell - BfBot.UI.PARTY_CHIP_CELL + 1
+    if index >= 1 and index <= BfBot.UI.MAX_CHIPS then
+        BfBot.UI.ToggleRecipient(rowNumber, index)
+    end
 end
 
 --- Switch a buff off wherever the party has it configured.
@@ -4540,42 +4708,63 @@ function BfBot.UI._PartyRowClearable(rowNumber)
     return row ~= nil and row.clearable == 1
 end
 
+--- The checkbox and the name, as one string: the engine draws a cell's text
+--- in one label, and a separate glyph label would need its own column width
+--- at every panel size.
 function BfBot.UI._PartyChipName(rowNumber, index)
     local chip = BfBot.UI._PartyChip(rowNumber, index)
-    return chip and chip.name or ""
+    if not chip then return "" end
+    local glyph = BfBot.UI.CELL_GLYPH[chip.state] or "[-]"
+    return glyph .. " " .. (chip.name or "")
 end
 
 function BfBot.UI._PartyChipDuration(rowNumber, index)
     local chip = BfBot.UI._PartyChip(rowNumber, index)
     if not chip then return "" end
-    if chip.state == "missing" then
+    -- "2 of 3" first: a partly covered cell is the one a player acts on, and
+    -- the duration of the casts that do happen says less than the count of
+    -- the ones that do not.
+    if chip.state == "partial" then
+        return BfBot.L10N.Format("ui.recipient.repeat_count",
+            { planned = chip.planned, total = chip.repeats })
+    end
+    if chip.state == "problem" then
         return BfBot.L10N.Get("ui.recipient.no_source")
     end
+    -- An offer and a refusal both say nothing here: the glyph has said it,
+    -- and a duration for a cast nobody asked for would read as a promise.
+    if chip.state == "open" or chip.state == "impossible" then return "" end
     return chip.dur or ""
 end
 
---- The chip's plate, so an empty slot leaves bare parchment rather than an
---- empty box the eye reads as a missing portrait.
+--- The cell's plate. A slot the party does not fill, and a cell nothing
+--- could ever fill, leave bare parchment: a plate there reads as a control
+--- waiting to be used.
 function BfBot.UI._PartyChipBam(rowNumber, index)
-    if not BfBot.UI._PartyChip(rowNumber, index) then return "" end
+    local chip = BfBot.UI._PartyChip(rowNumber, index)
+    if not chip or chip.state == "impossible" then return "" end
     return BfBot.UI._PlateBam()
 end
 
 --- Three tones, as in the other reading: planned, partly planned, missing.
 function BfBot.UI._PartyChipColor(rowNumber, index)
     local chip = BfBot.UI._PartyChip(rowNumber, index)
-    if not chip then return BfBot.UI._T("btnText") end
+    if not chip then return BfBot.UI._T("btnTextDim") end
+    -- Amber for the two unfinished states, not grey: a grey cell reads as
+    -- switched off and therefore fine, and this is a character the player
+    -- asked to have covered who will not be.
+    if BfBot.Plan.IsProblem(chip.state) then return BfBot.UI._T("lockText") end
     if chip.state == "planned" then return BfBot.UI._T("btnText") end
-    -- Amber for both of the unfinished states, not grey. A grey chip reads
-    -- as switched off and therefore fine; this one is a character the player
-    -- asked to have covered and who will not be, which is the thing the
-    -- table exists to show.
-    return BfBot.UI._T("lockText")
+    -- Chosen-but-not-editable and not-chosen are both quiet; their glyphs
+    -- are what tells them apart.
+    return BfBot.UI._T("btnTextDim")
 end
 
 function BfBot.UI._PartyChipDurationColor(rowNumber, index)
     local chip = BfBot.UI._PartyChip(rowNumber, index)
-    if chip and chip.state ~= "planned" then return BfBot.UI._T("lockText") end
+    if chip and BfBot.Plan.IsProblem(chip.state) then
+        return BfBot.UI._T("lockText")
+    end
     return BfBot.UI._T("btnTextDim")
 end
 

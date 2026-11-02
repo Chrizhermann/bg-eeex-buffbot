@@ -63,6 +63,15 @@ def lua() -> LuaRuntime:
         -- Colour names, not colours: a test asserts which tone a cell gets,
         -- and the palette is another module's business.
         BfBot.UI._T = function(key) return key end
+        -- The cells ask the plan model which states count as unfinished.
+        BfBot.Plan.IsProblem = function(state)
+            return state == "partial" or state == "problem"
+        end
+        BfBot.Plan.IsChosen = function(state)
+            return state == "planned" or state == "partial"
+                or state == "problem" or state == "locked"
+                or state == "covered"
+        end
         BfBot.UI._PlateBam = function() return "BFBPLAT" end
         BfBot.Theme.HasChromeArt = function() return true end
         """
@@ -75,6 +84,10 @@ def lua() -> LuaRuntime:
         match = pattern.search(UI_SOURCE)
         assert match, f"{name} not found"
         runtime.execute(match.group(0))
+    # The glyph table, taken from the module rather than restated here.
+    glyphs = re.search(r"BfBot\.UI\.CELL_GLYPH = \{.*?\n\}", UI_SOURCE, re.S)
+    assert glyphs, "CELL_GLYPH is missing"
+    runtime.execute(glyphs.group(0))
     runtime.execute('BfBot.UI._perspective = "caster"')
     runtime.execute("BfBot.UI.MAX_CHIPS = 6")
     runtime.execute("buffbot_partyTable = {}")
@@ -95,7 +108,7 @@ LINES = """{
       recipients = {
           { key = "a", name = "Minsc", slot = 0, duration = 300,
             state = "planned" },
-          { key = "b", name = "Jaheira", slot = 1, state = "missing",
+          { key = "b", name = "Jaheira", slot = 1, state = "problem",
             reason = "no_eligible_source" } } } }"""
 
 
@@ -209,10 +222,14 @@ def test_no_tooltip_where_the_preset_reserves_nothing(lua):
 
 def test_chip_text_on_a_plate_never_takes_a_parchment_colour(lua):
     """bg1_light is the one palette with a light panel, so its muted tone
-    is dark -- and a chip plate is dark in every theme."""
+    is dark -- and a cell's plate is dark in every theme."""
     _build(lua)
     assert lua.eval("BfBot.UI._PartyChipDurationColor(1, 1)") == "btnTextDim"
     assert lua.eval("BfBot.UI._PartyChipColor(1, 1)") == "btnText"
+    source = re.search(r"^function BfBot\.UI\._PartyChip(?:Duration)?Color"
+                       r"\(.*?^end$", UI_SOURCE, re.S | re.M).group(0)
+    assert '_T("text")' not in source
+    assert '_T("textMuted")' not in source
 
 
 def test_reset_clears_the_frames_corner_piece():
@@ -249,15 +266,15 @@ def test_a_buff_with_no_planned_cast_reports_no_duration(lua):
 def test_a_party_wide_cast_is_one_chip_that_says_so(lua):
     """Six identical chips would read as six casts."""
     _build(lua)
-    assert lua.eval("BfBot.UI._PartyChipName(1, 1)") == "Party"
+    assert lua.eval("BfBot.UI._PartyChipName(1, 1)") == "[x] Party"
     assert lua.eval("BfBot.UI._PartyChipIsParty(1, 1)") is True
-    assert lua.eval("BfBot.UI._PartyChipExists(1, 2)") is False
 
 
 def test_a_personal_cast_names_each_character(lua):
+    """The glyph and the name are one string: a cell's text is one label."""
     _build(lua)
-    assert lua.eval("BfBot.UI._PartyChipName(2, 1)") == "Minsc"
-    assert lua.eval("BfBot.UI._PartyChipName(2, 2)") == "Jaheira"
+    assert lua.eval("BfBot.UI._PartyChipName(2, 1)") == "[x] Minsc"
+    assert lua.eval("BfBot.UI._PartyChipName(2, 2)") == "[!] Jaheira"
     assert lua.eval("BfBot.UI._PartyChipIsParty(2, 1)") is False
 
 
@@ -265,6 +282,36 @@ def test_a_chip_with_no_source_says_so_where_its_duration_would_be(lua):
     _build(lua)
     assert lua.eval("BfBot.UI._PartyChipDuration(2, 1)") == "5m"
     assert lua.eval("BfBot.UI._PartyChipDuration(2, 2)") == "no caster"
+
+
+@pytest.mark.parametrize("state,glyph", [
+    ("planned", "[x]"), ("partial", "[~]"), ("problem", "[!]"),
+    ("locked", "[#]"), ("covered", "[+]"), ("open", "[ ]"),
+    ("impossible", "[-]"),
+])
+def test_every_state_has_its_own_glyph(lua, state, glyph):
+    """The glyph carries the state, because the reasons behind `impossible`
+    number twenty-three and one glyph each would be unreadable."""
+    lua.execute(
+        'buffbot_partyTable = { { chips = { { name = "X", state = "%s" } } } }'
+        % state)
+    assert lua.eval("BfBot.UI._PartyChipName(1, 1)") == glyph + " X"
+
+
+def test_an_unchosen_cell_promises_no_duration(lua):
+    """A length for a cast nobody asked for would read as a promise."""
+    for state in ("open", "impossible"):
+        lua.execute(
+            'buffbot_partyTable = { { chips = { { name = "X", state = "%s",'
+            ' dur = "5m" } } } }' % state)
+        assert lua.eval("BfBot.UI._PartyChipDuration(1, 1)") == ""
+
+
+def test_a_partly_covered_cell_counts_instead_of_timing(lua):
+    lua.execute(
+        'buffbot_partyTable = { { chips = { { name = "X", state = "partial",'
+        ' dur = "5m", planned = 2, repeats = 3 } } } }')
+    assert lua.eval("BfBot.UI._PartyChipDuration(1, 1)") == "2 of 3"
 
 
 def test_an_unused_chip_slot_is_silent_in_every_cell(lua):
@@ -295,12 +342,37 @@ def test_a_character_who_will_not_get_it_is_amber_not_grey(lua):
     assert lua.eval("BfBot.UI._PartyChipDurationColor(2, 2)") == "lockText"
 
 
+@pytest.mark.parametrize("state,tone", [
+    ("planned", "btnText"),
+    ("partial", "lockText"),
+    ("problem", "lockText"),
+    ("locked", "btnTextDim"),
+    ("covered", "btnTextDim"),
+    ("open", "btnTextDim"),
+    ("impossible", "btnTextDim"),
+])
+def test_only_the_two_unfinished_states_are_amber(lua, state, tone):
+    lua.execute(
+        'buffbot_partyTable = { { chips = { { name = "X", state = "%s" } } } }'
+        % state)
+    assert lua.eval("BfBot.UI._PartyChipColor(1, 1)") == tone
+
+
+def test_a_cell_nothing_could_fill_leaves_bare_parchment(lua):
+    """A plate there would read as a control waiting to be used."""
+    lua.execute(
+        'buffbot_partyTable = { { chips = { { state = "impossible" },'
+        ' { state = "open" } } } }')
+    assert lua.eval("BfBot.UI._PartyChipBam(1, 1)") == ""
+    assert lua.eval("BfBot.UI._PartyChipBam(1, 2)") == "BFBPLAT"
+
+
 def test_chip_text_takes_the_colour_of_things_drawn_on_a_plate(lua):
     """`text` is the parchment colour and vanished on the chip in all three
     light palettes."""
     _build(lua)
     assert lua.eval("BfBot.UI._PartyChipColor(1, 1)") == "btnText"
-    assert lua.eval("BfBot.UI._PartyChipColor(9, 9)") == "btnText"
+    assert lua.eval("BfBot.UI._PartyChipColor(9, 9)") == "btnTextDim"
 
 
 def test_a_buff_nobody_can_supply_is_dimmed_whole(lua):
@@ -564,16 +636,18 @@ def test_the_column_widths_total_one_hundred():
     """They are percentages; anything else leaves a column off the panel."""
     widths = [int(w) for w in re.findall(r"\n\t\t\twidth (\d+)",
                                          _party_list())]
-    assert len(widths) == 11, widths
+    # icon, name, uses, duration, seven recipient cells, clear
+    assert len(widths) == 12, widths
     assert sum(widths) == 100, widths
 
 
 def test_there_is_a_chip_column_for_every_chip_the_rows_can_hold():
     body = _party_list()
-    for n in range(1, 7):
+    # The Party cell plus a party of six.
+    for n in range(1, 8):
         assert f"_PartyChipName(rowNumber, {n})" in body, n
-    assert "_PartyChipName(rowNumber, 7)" not in body
-    assert "BfBot.UI.MAX_CHIPS = 6" in UI_SOURCE
+    assert "_PartyChipName(rowNumber, 8)" not in body
+    assert "BfBot.UI.MAX_CHIPS = 7" in UI_SOURCE
 
 
 def test_a_chip_is_a_column_rather_than_a_button_in_a_row():

@@ -466,3 +466,42 @@
 
 // options.text_size_huge
 @752 = ~Huge~
+
+// ui.cell.self_only
+@753 = ~Only the character casting it can receive this one.~
+
+// ui.cell.no_source
+@754 = ~Nobody in the party can cast this.~
+
+// ui.cell.no_uses
+@755 = ~Every use of this is already spoken for by this preset.~
+
+// ui.cell.recipient_dead
+@756 = ~That character is dead.~
+
+// ui.cell.recipient_ambiguous
+@757 = ~Two party members share that name, so neither can be addressed.~
+
+// ui.cell.caster_unavailable
+@758 = ~The character who would cast it is not available.~
+
+// ui.cell.variant_unreadable
+@759 = ~This spell's variants could not be read, so BuffBot will not guess.~
+
+// feedback.cell_locked
+@760 = ~{buff} is locked. Unlock it in the caster view to change who receives it.~
+
+// feedback.cell_impossible
+@761 = ~{buff} cannot reach {name}. {reason}~
+
+// feedback.cell_covered
+@762 = ~{buff} already covers the whole party. Clear the Party box to choose individually.~
+
+// feedback.cell_no_owner
+@763 = ~{buff} has no party member who could cast it for that character.~
+
+// feedback.cell_caster_gone
+@764 = ~The character who would cast {buff} is no longer in the party.~
+
+// ui.recipient.repeat_count
+@765 = ~{planned} of {total}~

@@ -801,6 +801,42 @@ function P.ByRecipient(snapshot, assignment)
     return recipients
 end
 
+--- PURE: which caster's preset a tick on this cell should write to.
+---
+--- A buff can come from several characters, so a cell that is not yet chosen
+--- has to pick one: the same one the planner would, by `BetterSource` over
+--- the sources that can actually reach this target. A cell that IS chosen
+--- keeps the owner its request already names, so unticking undoes exactly
+--- what ticking did rather than writing somewhere else.
+---
+--- Summon casters have no portrait slot and their presets live elsewhere, so
+--- a cell whose only source is a summon answers nil and the view leaves it
+--- alone.
+---
+--- @return slot, resref, kind -- or nil when nothing here can be written
+function P.CellWriteTarget(entry, snapshot, sources, target)
+    if entry then
+        local request = entry.request
+        if request and request.sourceSlot and request.resource then
+            return request.sourceSlot, request.resource, request.kind
+        end
+        return nil
+    end
+    local probe = { target = target, on = 1 }
+    local best
+    for _, source in ipairs(sources or {}) do
+        if P.SourceAllowed(snapshot, source, probe)
+            and source.slot ~= nil
+            and source.row and source.row.resref then
+            if not best or P.BetterSource(source, best, probe) then
+                best = source
+            end
+        end
+    end
+    if not best then return nil end
+    return best.slot, best.row.resref, best.row.kind
+end
+
 --- PURE: what one recipient's cell says about one buff.
 ---
 --- Six states, where the plan has four. `partial` is ours because repeats are
@@ -922,9 +958,12 @@ function P.ByGroup(snapshot, assignment)
                     P.CellState(entry, snapshot, sources, actor.key)
             end
             if state == "open" then anyOpen = true end
+            local writeSlot, writeResref, writeKind =
+                P.CellWriteTarget(entry, snapshot, sources, actor.key)
             members[#members + 1] = { key = actor.key, name = actor.name,
                 slot = actor.slot, state = state, reason = reason,
-                entry = entry }
+                entry = entry, writeSlot = writeSlot,
+                writeResref = writeResref, writeKind = writeKind }
         end
 
         local partyState, partyReason =
@@ -933,8 +972,26 @@ function P.ByGroup(snapshot, assignment)
             partyState, partyReason = "open", nil
         end
 
+        local partySlot, partyResref, partyKind =
+            P.CellWriteTarget(partyEntry, snapshot, sources, "party")
+        if not partyEntry and not partySlot then
+            -- A single-target buff cannot be aimed at "party" in the plan
+            -- model, but ticking the Party cell fans it to everybody, so the
+            -- write target is whichever source the first open member would
+            -- have used.
+            for _, member in ipairs(members) do
+                if member.writeSlot then
+                    partySlot = member.writeSlot
+                    partyResref = member.writeResref
+                    partyKind = member.writeKind
+                    break
+                end
+            end
+        end
         local targets = { { key = "party", party = true,
-            state = partyState, reason = partyReason, entry = partyEntry } }
+            state = partyState, reason = partyReason, entry = partyEntry,
+            writeSlot = partySlot, writeResref = partyResref,
+            writeKind = partyKind } }
         for _, member in ipairs(members) do
             targets[#targets + 1] = member
         end
@@ -944,6 +1001,8 @@ function P.ByGroup(snapshot, assignment)
             line.recipients[#line.recipients + 1] = {
                 key = target.key, name = target.name, slot = target.slot,
                 party = target.party or nil,
+                writeSlot = target.writeSlot, writeResref = target.writeResref,
+                writeKind = target.writeKind,
                 state = state, reason = reason,
                 duration = entry and entry.duration or nil,
                 planned = entry and entry.planned or 0,
