@@ -327,7 +327,7 @@
 // options.text_size
 @708 = ~Text Size~
 // options.text_size_description
-@709 = ~Scale titles, lists, and clickable text. Classic stone-button captions remain at the engine's default size.~
+@709 = ~Scale the panel's text. The list and its headers can be made smaller than the game's own size but not larger, so Large and Huge move only the title and the button captions.~
 // options.text_size_small
 @710 = ~Small~
 // options.text_size_medium

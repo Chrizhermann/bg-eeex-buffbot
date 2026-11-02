@@ -4527,6 +4527,13 @@ function BfBot.UI._BuildPartyRows(lines, query)
                     key = recipient.key,
                     planned = recipient.planned or 0,
                     repeats = recipient.repeats or 0,
+                    -- What a click has to write, carried from the
+                    -- projection: without it every tick lands in
+                    -- ToggleRecipient's "nobody could cast this" branch,
+                    -- which is what the in-game phase caught.
+                    writeSlot = recipient.writeSlot,
+                    writeResref = recipient.writeResref,
+                    writeKind = recipient.writeKind,
                 }
             end
             -- What a write needs: the owning character's portrait slot and

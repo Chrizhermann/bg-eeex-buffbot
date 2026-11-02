@@ -1592,7 +1592,11 @@ def test_each_buff_is_one_line_whoever_receives_it(lua):
     # not the player has chosen this buff for them: an unchosen cell is what
     # there is to tick.
     assert lua.eval("#lines[1].recipients") == 4
-    chosen = [i for i in range(1, 5)
+    # Two of the three members are set to receive it, and the Party cell
+    # says so: it is a statement about the members, so with some but not all
+    # of them chosen it reads `partial`.
+    assert lua.eval("lines[1].recipients[1].state") == "partial"
+    chosen = [i for i in range(2, 5)
               if lua.eval(f"BfBot.Plan.IsChosen(lines[1].recipients[{i}].state)")]
     assert len(chosen) == 2
 
@@ -1919,3 +1923,58 @@ def test_every_castable_buff_gets_a_line_even_with_an_empty_plan(lua):
     )
     assert lua.eval("#lines") == 2
     assert [lua.eval(f"lines[{i}].name") for i in (1, 2)] == ["Armor", "Bless"]
+
+
+# ---------------------------------------------------------------------------
+# What the Party cell says
+# ---------------------------------------------------------------------------
+#
+# Found in a lab: ticking Party on a single-target buff writes tgt = "p",
+# which ImportLegacy fans into one request per member -- so there is no
+# `party` request afterwards, and probing "can one cast reach the whole
+# party" answered `impossible` one frame after the player ticked the box.
+
+
+def _party_cell(lua, member_states, any_open="false"):
+    members = ", ".join(
+        '{ key = "m%d", state = "%s" }' % (i, s)
+        for i, s in enumerate(member_states))
+    lua.execute(
+        "state, reason = BfBot.Plan.PartyCellState(nil, { %s }, {}, {}, %s)"
+        % (members, any_open))
+    return lua.eval("state")
+
+
+def test_everybody_chosen_reads_as_planned(lua):
+    assert _party_cell(lua, ["planned", "planned", "planned"]) == "planned"
+
+
+def test_everybody_chosen_but_one_in_trouble_reads_as_a_problem(lua):
+    assert _party_cell(lua, ["planned", "problem", "planned"]) == "problem"
+
+
+def test_some_but_not_all_reads_as_partial(lua):
+    assert _party_cell(lua, ["planned", "open", "open"]) == "partial"
+
+
+def test_nobody_chosen_but_somebody_could_be_reads_as_open(lua):
+    assert _party_cell(lua, ["open", "open"], any_open="true") == "open"
+
+
+def test_nobody_chosen_and_nobody_could_be_reads_as_impossible(lua):
+    lua.execute(
+        'state, reason = BfBot.Plan.PartyCellState(nil, '
+        '{ { key = "m", state = "impossible", reason = "self_only" } }, '
+        "{}, {}, false)")
+    assert lua.eval("state") == "impossible"
+    # The Party cell has no reason of its own, so it borrows the members'.
+    assert lua.eval("reason") == "self_only"
+
+
+def test_a_real_area_cast_is_read_from_its_own_request(lua):
+    """One spell covering everybody is not the same as six casts, and the
+    request is what says which it is."""
+    lua.execute(
+        "entry = { repeats = 1, planned = 1, reasons = {} }\n"
+        "state = BfBot.Plan.PartyCellState(entry, {}, {}, {}, false)")
+    assert lua.eval("state") == "planned"

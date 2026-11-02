@@ -801,6 +801,41 @@ function P.ByRecipient(snapshot, assignment)
     return recipients
 end
 
+--- PURE: what the Party cell says, which is a statement about the members.
+---
+--- A genuine party-wide cast -- one area spell covering everybody -- is read
+--- from its own request. Everything else is derived, because `tgt = "p"` on a
+--- single-target buff fans into one request per member and leaves no `party`
+--- request behind: probing "can one cast reach the whole party" would then
+--- answer `impossible` one frame after the player ticked the box, which is
+--- what the in-game phase caught.
+---
+--- @return state, reason
+function P.PartyCellState(partyEntry, members, snapshot, sources, anyOpen)
+    if partyEntry then
+        return P.CellState(partyEntry, snapshot, sources, "party")
+    end
+    local total, chosen, problem = 0, 0, false
+    for _, member in ipairs(members or {}) do
+        total = total + 1
+        if P.IsChosen(member.state) then chosen = chosen + 1 end
+        if P.IsProblem(member.state) then problem = true end
+    end
+    if total > 0 and chosen == total then
+        -- Everybody is set to receive it: that is what ticking Party means,
+        -- however the targets are stored underneath.
+        return problem and "problem" or "planned", nil
+    end
+    if chosen > 0 then return "partial", nil end
+    if anyOpen then return "open", nil end
+    -- Nobody is set and nobody could be. Say why the first member cannot,
+    -- since the Party cell has no reason of its own.
+    for _, member in ipairs(members or {}) do
+        if member.reason then return "impossible", member.reason end
+    end
+    return P.CellState(nil, snapshot, sources, "party")
+end
+
 --- PURE: which caster's preset a tick on this cell should write to.
 ---
 --- A buff can come from several characters, so a cell that is not yet chosen
@@ -967,10 +1002,7 @@ function P.ByGroup(snapshot, assignment)
         end
 
         local partyState, partyReason =
-            P.CellState(partyEntry, snapshot, sources, "party")
-        if not partyEntry and partyState ~= "open" and anyOpen then
-            partyState, partyReason = "open", nil
-        end
+            P.PartyCellState(partyEntry, members, snapshot, sources, anyOpen)
 
         local partySlot, partyResref, partyKind =
             P.CellWriteTarget(partyEntry, snapshot, sources, "party")

@@ -948,3 +948,31 @@ def test_leaving_the_reading_clears_the_narrowing(lua):
     lua.execute("BfBot.UI._partyRecipient = 3")
     lua.execute("BfBot.UI.TogglePerspective()")
     assert lua.eval("BfBot.UI._partyRecipient") is None
+
+
+def test_a_cell_carries_what_a_click_has_to_write(lua):
+    """Without this every tick lands in the "nobody could cast this" branch.
+
+    Caught by the in-game phase rather than here, because nothing offline
+    reaches Persist -- so this pins the hand-off the projection and the row
+    builder make, which is the part that was missing.
+    """
+    _build(lua, """{ { key = "g", name = "Bless", recipients = {
+        { key = "party", party = true, state = "open", writeSlot = 2,
+          writeResref = "SPPR103", writeKind = "spl" },
+        { key = "a", slot = 0, name = "Minsc", state = "open", writeSlot = 2,
+          writeResref = "SPPR103", writeKind = "spl" } } } }""")
+    for cell in (1, 2):
+        assert lua.eval(f"buffbot_partyTable[1].chips[{cell}].writeSlot") == 2
+        assert lua.eval(
+            f"buffbot_partyTable[1].chips[{cell}].writeResref") == "SPPR103"
+        assert lua.eval(
+            f"buffbot_partyTable[1].chips[{cell}].writeKind") == "spl"
+
+
+def test_the_toggle_refuses_rather_than_writing_nowhere():
+    """A cell with no owner says so; it does not silently do nothing."""
+    source = re.search(r"^function BfBot\.UI\.ToggleRecipient\(.*?^end$",
+                       UI_SOURCE, re.S | re.M).group(0)
+    assert "if not chip.writeSlot or not chip.writeResref then" in source
+    assert "feedback.cell_no_owner" in source

@@ -6803,6 +6803,110 @@ function BfBot.Test.PartyTable()
     end
     _ok("every chip slot is either filled or silent")
 
+    -- Ticking and unticking, which is the half no offline test can reach:
+    -- it writes through Persist into a party member's own preset.
+    local openRow, openCell
+    for index, row in ipairs(rows) do
+        for cell = 1, BfBot.UI.MAX_CHIPS do
+            local chip = BfBot.UI._PartyChip(index, cell)
+            if not openRow and chip and chip.state == "open"
+                and chip.writeSlot and chip.writeResref then
+                openRow, openCell = index, cell
+            end
+        end
+    end
+    if not openRow then
+        _ok("no buff in this preset has a free recipient to tick (skipped)")
+    else
+        local row = BfBot.UI._PartyRow(openRow)
+        local chip = BfBot.UI._PartyChip(openRow, openCell)
+        local sprite = EEex_Sprite_GetInPortrait(chip.writeSlot)
+        local before = BfBot.Persist.GetSpellConfig(sprite,
+            BfBot.UI._presetIdx, chip.writeResref)
+        local wasOn = before and before.on or 0
+        local wasTgt = before and before.tgt or nil
+
+        local okTick = pcall(BfBot.UI.ToggleRecipient, openRow, openCell)
+        _check(okTick, "ticking " .. tostring(row.name) .. " for "
+            .. tostring(chip.name) .. " did not raise")
+
+        local after = BfBot.Persist.GetSpellConfig(sprite,
+            BfBot.UI._presetIdx, chip.writeResref)
+        _check(after ~= nil and after.on == 1,
+            "the tick switched the entry on in its caster's own preset")
+        local names = BfBot.UI._TargetNames(after and after.tgt)
+        local named = false
+        for _, name in ipairs(names) do
+            if name == chip.name then named = true end
+        end
+        _check(named or (after and after.tgt == "p"),
+            "and named " .. tostring(chip.name) .. " among its targets")
+
+        -- The row has to be rebuilt before unticking: the cell carries the
+        -- write target, and a fresh tick picks its caster while an existing
+        -- one keeps the request's. Unticking the stale cell would prove
+        -- nothing about undoing what the tick did.
+        buffbot_partyTable = BfBot.UI._RefreshPartyRows()
+        local back, backCell
+        for index, line in ipairs(buffbot_partyTable) do
+            if line.key == row.key then
+                for cell = 1, BfBot.UI.MAX_CHIPS do
+                    local candidate = BfBot.UI._PartyChip(index, cell)
+                    if candidate and candidate.key == chip.key then
+                        back, backCell = index, cell
+                    end
+                end
+            end
+        end
+        _check(back ~= nil, "the ticked cell is still there to untick")
+        if back then
+            local now = BfBot.UI._PartyChip(back, backCell)
+            _check(BfBot.Plan.IsChosen(now.state),
+                "and reads as chosen: " .. tostring(now.state))
+            pcall(BfBot.UI.ToggleRecipient, back, backCell)
+            local undone = BfBot.Persist.GetSpellConfig(sprite,
+                BfBot.UI._presetIdx, chip.writeResref)
+            local undoneNames = BfBot.UI._TargetNames(undone and undone.tgt)
+            local stillNamed = false
+            for _, name in ipairs(undoneNames) do
+                if name == chip.name then stillNamed = true end
+            end
+            _check((undone == nil) or undone.on == 0 or not stillNamed,
+                "unticking took that recipient back out")
+        end
+
+        -- Whatever the player had is what they get back; _GuardPhase
+        -- restores the table, but saying so here is what makes a failure
+        -- above readable rather than a mystery two phases later.
+        local restored = BfBot.Persist.GetSpellConfig(sprite,
+            BfBot.UI._presetIdx, chip.writeResref)
+        if restored then
+            restored.on = wasOn
+            restored.tgt = wasTgt
+        end
+        _ok("the entry was put back as it was found")
+    end
+
+    -- A click that cannot do anything says why. Three refusals, each with
+    -- its own sentence: silence is the one answer a cell must never give.
+    for _, state in ipairs({ "locked", "impossible", "covered" }) do
+        local found = false
+        for index = 1, #rows do
+            for cell = 1, BfBot.UI.MAX_CHIPS do
+                local chip = BfBot.UI._PartyChip(index, cell)
+                if not found and chip and chip.state == state then
+                    found = true
+                    local okRefuse = pcall(BfBot.UI.ToggleRecipient, index, cell)
+                    _check(okRefuse, "a " .. state
+                        .. " cell refuses without raising")
+                end
+            end
+        end
+        if not found then
+            _ok("no " .. state .. " cell in this preset (skipped)")
+        end
+    end
+
     -- The search box filters this reading too, and a query that matches
     -- nothing empties the table rather than leaving rows with no chips.
     local firstBuff = rows[1] and rows[1].name

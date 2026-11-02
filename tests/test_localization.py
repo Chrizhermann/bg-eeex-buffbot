@@ -508,17 +508,22 @@ def test_all_shipped_catalogs_match_english_ids_semantics_and_placeholders():
             ), f"WeiDU placeholder mismatch in {catalog_path} @{tra_id}"
 
 
-def test_text_size_descriptions_disclose_fixed_engine_button_captions():
+def test_text_size_description_says_what_the_setting_cannot_do():
+    """Measured in a lab: the parchment face the list and its headers use
+    shrinks but does not grow, so Large and Huge move only the title and the
+    button captions (#112). A player choosing a size has to be told, or they
+    pick Huge and wonder why the table did not change."""
     english, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
     chinese, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
 
     assert "all panel text" not in english[709].lower()
-    assert "stone-button captions remain at the engine's default size" in english[
-        709
-    ].lower()
+    assert "smaller than the game's own size but not larger" in english[709].lower()
     assert "close and reopen" not in english[709].lower()
+
+    # The eight translations still carry the previous wording until a
+    # translator updates them; what is pinned here is that this one has not
+    # silently drifted into claiming something else in the meantime.
     assert "石质按钮上的文字" in chinese[709]
-    assert "引擎默认字号" in chinese[709]
     assert "关闭并重新打开" not in chinese[709]
 
 
