@@ -756,6 +756,524 @@ def test_the_answer_is_cached_per_row_and_caster_level(
 
 
 # ----------------------------------------------------------------------
+# Predicted casters as plan sources (step C)
+# ----------------------------------------------------------------------
+#
+# These run against the real plan model, because the two budget rules are
+# statements about its pools and a stub would let either of them pass while
+# being wrong in the game.
+
+PLAN_SOURCE = (ROOT / "buffbot/BfBotPln.lua").read_text(encoding="utf-8")
+LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
+CLASS_SOURCE = (ROOT / "buffbot/BfBotCls.lua").read_text(encoding="utf-8")
+PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
+
+
+# Raw: this is Lua source, so a backslash in it belongs to Lua. Without the
+# prefix, `"\n"` below became a real newline and left an unterminated Lua
+# string literal.
+_PLAN_WORLD = r"""
+-- A snapshot with one party owner and, optionally, one live summon of the
+-- thing the owner would conjure. Built directly: Snapshot needs an engine,
+-- and what is under test is what AddSources does to a snapshot's pools.
+function TestPlanSnapshot(spec)
+    local snap = { actors = {}, order = {}, groups = {}, pools = {},
+                   casterActors = {}, casters = {} }
+    local owner = {
+        key = "protagonist", name = spec.ownerName or "Owner", slot = 0,
+        casterRef = { kind = "party", slot = 0 }, class = spec.ownerClass or 1,
+        alive = true, controlled = true,
+        projectImageLocked = spec.locked or nil,
+        sprite = { m_id = 100 },
+        rows = {},
+    }
+    snap.actors[owner.key] = owner
+    snap.order[1] = owner
+    snap.casterActors[owner.key] = owner
+    snap.casters[1] = owner
+
+    -- The creation step itself: one group whose single source is the owner's.
+    local row = { kind = "spl", resref = spec.creation or "PI",
+                  name = "The Creation", level = 7, spellType = 1, count = 1,
+                  casterLevel = spec.ownerLevel or 12, duration = 0,
+                  isAoE = 0, isSelfOnly = 1, class = { isBuff = true } }
+    owner.rows[row.resref] = row
+    local groupKey = BfBot.Plan.GroupKey(row)
+    snap.groups[groupKey] = { key = groupKey, name = row.name, kind = "spl",
+        sources = { {
+            id = "protagonist/" .. groupKey, actor = owner.key,
+            casterName = owner.name, slot = 0, casterRef = owner.casterRef,
+            lane = owner.key, row = row,
+            pool = owner.key .. ":spell:" .. row.resref,
+            duration = 0, casterLevel = row.casterLevel,
+            selfOnly = true, aoe = false, variantDurations = {},
+        } } }
+    snap.pools[owner.key .. ":spell:" .. row.resref] = spec.creationUses or 1
+
+    if spec.liveSummon then
+        local liveActor = {
+            key = "summon:clone:protagonist:" .. tostring(spec.liveSummon),
+            name = "Live Copy",
+            poolKey = "summon:live:777", casterRef = { kind = "summon",
+                oid = 777, name = "Live Copy" },
+            sprite = { m_id = 777, m_resref = { get = function()
+                return spec.liveResref or "COPY" end } },
+            class = 1, alive = true, controlled = true, rows = {},
+        }
+        snap.casterActors[liveActor.key] = liveActor
+        snap.casters[#snap.casters + 1] = liveActor
+    end
+
+    return snap, groupKey, row
+end
+
+function TestRequests(groupKey, spec)
+    return { { group = groupKey, target = spec.target or "protagonist",
+               on = 1, rep = 1, manual = 1 } }
+end
+
+--- What AddSources did: the predicted actors, their pool keys and the
+--- capacity each pool ended up with.
+function TestPredicted(snap)
+    local parts = {}
+    for _, actor in ipairs(snap.casters) do
+        if actor.future or actor.key:find("^summon:planned:") then
+            parts[#parts + 1] = actor.key .. "|pool=" .. tostring(actor.poolKey)
+                .. "|name=" .. actor.name
+        end
+    end
+    table.sort(parts)
+    return table.concat(parts, "\n")
+end
+
+function TestPool(snap, key)
+    local value = snap.pools[key]
+    if value == nil then return -1 end
+    return value
+end
+
+function TestPoolKeys(snap)
+    local parts = {}
+    for key, value in pairs(snap.pools) do
+        parts[#parts + 1] = key .. "=" .. value
+    end
+    table.sort(parts)
+    return table.concat(parts, " ")
+end
+"""
+
+
+def plan_world() -> LuaRuntime:
+    """Core, classifier, localization, persistence, the planner, the module."""
+    runtime = LuaRuntime(unpack_returned_tuples=True)
+    runtime.execute("Infinity_DisplayString = function(_) end")
+    runtime.execute("io = nil")
+    runtime.execute(CORE_SOURCE)
+    runtime.execute(CLASS_SOURCE)
+    runtime.execute(
+        """
+        BfBot.Scan = {
+            Invalidate = function(_) end,
+            InvalidateAll = function() end,
+            InvalidateSummons = function() end,
+            DescribeSpell = function(_, _) return nil end,
+            _ReadSummonOrigin = function(_) return nil end,
+        }
+        BfBot.Innate = {}
+        BfBot.Mp = {}
+        BfBot.Theme = {}
+        BfBot.Exec = { _IsAlive = function(_) return true end }
+        BfBot._Warn = function(_) end
+        """
+    )
+    runtime.execute(LOC_SOURCE)
+    runtime.execute(PERSIST_SOURCE)
+    runtime.execute(PLAN_SOURCE)
+    runtime.execute(SUMMON_SOURCE)
+    runtime.execute(_PLAN_WORLD)
+    return runtime
+
+
+@pytest.fixture()
+def plan() -> LuaRuntime:
+    runtime = plan_world()
+    # The predicted book is what step A produces; here it is supplied directly
+    # so these tests are about the pools, not about prediction again.
+    runtime.execute("""
+        function TestPredictionStubs(spec)
+            BfBot.Summon.Creators = function(_, _) return spec.creators or {} end
+            BfBot.Summon.ReadProfile = function(_)
+                return { class = 1, name = spec.profileName or "Copy" }
+            end
+            BfBot.Summon.Forecast = function(_, _, _) return spec.rows end
+            BfBot.Summon._CreatureCache = function(_)
+                return spec.creature or nil
+            end
+        end
+        function TestRows(spells)
+            local rows = {}
+            for res, count in pairs(spells) do
+                rows[res] = { kind = "spl", resref = res, name = res,
+                              level = 3, spellType = 1, count = count,
+                              casterLevel = 12, duration = 300,
+                              isAoE = 0, isSelfOnly = 0,
+                              class = { isBuff = true } }
+            end
+            return rows
+        end
+    """)
+    return runtime
+
+
+def test_a_planned_clone_becomes_a_caster(plan: LuaRuntime) -> None:
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    predicted = plan.eval("TestPredicted(snap)")
+    assert "summon:planned:protagonist:image3:" in predicted
+    assert "Owner - Simulacrum (planned)" in predicted
+
+
+def test_a_disabled_creation_conjures_nobody(plan: LuaRuntime) -> None:
+    """Only an enabled step exposes a future book."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        local requests = TestRequests(groupKey, {})
+        requests[1].on = 0
+        BfBot.Summon.AddSources(snap, requests)
+    """)
+    assert plan.eval("TestPredicted(snap)") == ""
+
+
+def test_no_requests_is_a_no_op(plan: LuaRuntime) -> None:
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, {})
+    """)
+    assert plan.eval("TestPredicted(snap)") == ""
+
+
+def test_a_simulacrum_gets_its_own_pool(plan: LuaRuntime) -> None:
+    """Type 3 re-memorizes, so its uses are not the owner's."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    keys = plan.eval("TestPoolKeys(snap)")
+    assert "summon:planned:protagonist:image3" in keys
+    assert "protagonist:spell:HASTE" not in keys
+
+
+def test_a_planned_project_image_draws_from_the_owners_pool(
+        plan: LuaRuntime) -> None:
+    """Type 2 copies spent uses, so one pool backs both.
+
+    A use the owner spends is gone from the image. Two pools would let the
+    plan promise the same Haste twice -- once from the owner and once from
+    their image.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=2}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    keys = plan.eval("TestPoolKeys(snap)")
+    assert "protagonist:spell:HASTE=2" in keys
+    assert "summon:planned:protagonist:image2:spell:HASTE" not in keys
+
+
+def test_a_predicted_pool_starts_empty_until_the_creation_runs(
+        plan: LuaRuntime) -> None:
+    """A Simulacrum that has not been conjured has cast nothing yet.
+
+    Its sources exist so the plan can see them, but the capacity is 0 until
+    execution binds a real spawn -- otherwise the plan would hand out casts
+    from a creature that is not there.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    # Found by the actor's own pool prefix rather than a spelled-out key:
+    # the identity carries the creation step, so writing the key out would
+    # pin the naming instead of the rule.
+    assert plan.eval("""
+        (function()
+            for _, actor in ipairs(snap.casters) do
+                if actor.future then
+                    for key, value in pairs(snap.pools) do
+                        if key:sub(1, #actor.poolKey) == actor.poolKey then
+                            return value
+                        end
+                    end
+                end
+            end
+            return -1
+        end)()
+    """) == 0
+
+
+def test_a_live_copy_is_used_instead_of_a_second_actor(
+        plan: LuaRuntime) -> None:
+    """The thing is already standing there: one actor, one budget.
+
+    A planned identity and a live one for the same creature would each reserve
+    its uses, and the plan would believe it had twice as many casts.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({liveSummon = 3})
+        BfBot.Scan._ReadSummonOrigin = function(sprite)
+            if sprite.m_id == 777 then
+                return { kind = "clone", cloneType = 3, ownerId = 100 }
+            end
+            return nil
+        end
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        snap.casterActors["summon:clone:protagonist:3"].rows =
+            TestRows({HASTE = 2})
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    predicted = plan.eval("TestPredicted(snap)")
+    # The planned actor exists, but it carries the LIVE pool and no "(planned)".
+    assert "pool=summon:live:777" in predicted
+    assert "(planned)" not in predicted
+    assert plan.eval("TestPool(snap, 'summon:live:777:spell:HASTE')") == 2
+
+
+def test_a_live_copy_of_another_owner_does_not_count(
+        plan: LuaRuntime) -> None:
+    """Somebody else's Simulacrum is not this owner's planned one."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({liveSummon = 3})
+        BfBot.Scan._ReadSummonOrigin = function(_)
+            return { kind = "clone", cloneType = 3, ownerId = 999 }
+        end
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    predicted = plan.eval("TestPredicted(snap)")
+    assert "(planned)" in predicted
+
+
+def test_a_live_copy_of_the_wrong_type_does_not_count(
+        plan: LuaRuntime) -> None:
+    """A live Project Image is not the Simulacrum this plan conjures."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({liveSummon = 2})
+        BfBot.Scan._ReadSummonOrigin = function(_)
+            return { kind = "clone", cloneType = 2, ownerId = 100 }
+        end
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    assert "(planned)" in plan.eval("TestPredicted(snap)")
+
+
+def test_a_locked_owner_gets_no_second_image(plan: LuaRuntime) -> None:
+    """A live Project Image locks its owner.
+
+    Predicting another image while the first still stands would plan a cast
+    the owner-lock policy then refuses.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({locked = true})
+        TestPredictionStubs({ creators = {{kind='clone', image=2}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    assert plan.eval("TestPredicted(snap)") == ""
+
+
+def test_asking_twice_adds_one_actor(plan: LuaRuntime) -> None:
+    """The panel and the queue builder both ask."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        local requests = TestRequests(groupKey, {})
+        BfBot.Summon.AddSources(snap, requests)
+        BfBot.Summon.AddSources(snap, requests)
+    """)
+    assert len(plan.eval("TestPredicted(snap)").splitlines()) == 1
+
+
+def test_a_summoned_creature_brings_its_own_rows(plan: LuaRuntime) -> None:
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({
+            creators = {{kind='creature', resource='PLANETAR', opcode=67}},
+            creature = { profile = { class = 3, name = "Planetar" },
+                         rows = TestRows({HASTE = 1}) } })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    predicted = plan.eval("TestPredicted(snap)")
+    assert "summon:planned:protagonist:PLANETAR:" in predicted
+    assert "Owner - Planetar (planned)" in predicted
+
+
+def test_a_creature_whose_cre_is_unreadable_adds_nothing(
+        plan: LuaRuntime) -> None:
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({
+            creators = {{kind='creature', resource='MYSTERY', opcode=67}},
+            creature = nil })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    assert plan.eval("TestPredicted(snap)") == ""
+
+
+def test_an_owner_who_cannot_be_read_adds_nothing(plan: LuaRuntime) -> None:
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}} })
+        BfBot.Summon.ReadProfile = function(_) return nil end
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    assert plan.eval("TestPredicted(snap)") == ""
+
+
+def test_a_predicted_source_names_the_request_that_creates_it(
+        plan: LuaRuntime) -> None:
+    """Step D needs to know which cast has to come first."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+        Provider = nil
+        for _, group in pairs(snap.groups) do
+            for _, source in ipairs(group.sources) do
+                if source.future then Provider = source.providerRequest end
+            end
+        end
+    """)
+    assert plan.eval("Provider ~= nil")
+    assert plan.eval("Provider.group") == plan.eval("groupKey")
+
+
+def test_a_live_sources_future_is_absent(plan: LuaRuntime) -> None:
+    """Nothing has to be conjured for a caster already on the field."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({liveSummon = 3})
+        BfBot.Scan._ReadSummonOrigin = function(sprite)
+            if sprite.m_id == 777 then
+                return { kind = "clone", cloneType = 3, ownerId = 100 }
+            end
+        end
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        snap.casterActors["summon:clone:protagonist:3"].rows =
+            TestRows({HASTE = 2})
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+        Futures = 0
+        for _, group in pairs(snap.groups) do
+            for _, source in ipairs(group.sources) do
+                if source.future then Futures = Futures + 1 end
+            end
+        end
+    """)
+    assert plan.eval("Futures") == 0
+
+
+def test_the_exclude_list_carries_every_live_summon(plan: LuaRuntime) -> None:
+    """Binding must not pick a spawn that was already there."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({liveSummon = 2})
+        BfBot.Scan._ReadSummonOrigin = function(_) return nil end
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+        Excluded = ""
+        for _, actor in ipairs(snap.casters) do
+            if actor.future then
+                Excluded = table.concat(actor.future.exclude, ",")
+            end
+        end
+    """)
+    assert plan.eval("Excluded") == "777"
+
+
+# ----------------------------------------------------------------------
+# A stored future spec is validated, never trusted
+# ----------------------------------------------------------------------
+
+
+def _valid(lua: LuaRuntime, spec: str) -> bool:
+    return bool(lua.eval(f"BfBot.Summon.ValidFuture({spec})"))
+
+
+def test_a_well_formed_clone_spec_is_accepted(lua: LuaRuntime) -> None:
+    assert _valid(lua, "{key='k', owner='o', kind='clone', image=2,"
+                       " exclude={1,2}}")
+    assert _valid(lua, "{key='k', owner='o', kind='clone', image=3,"
+                       " exclude={}}")
+
+
+def test_an_image_type_this_module_cannot_predict_is_refused(
+        lua: LuaRuntime) -> None:
+    """Mislead copies no book; type 9 is not a type."""
+    assert not _valid(lua, "{key='k', owner='o', kind='clone', image=1,"
+                           " exclude={}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='clone', image=9,"
+                           " exclude={}}")
+
+
+def test_a_creature_spec_needs_a_resref_shaped_resource(
+        lua: LuaRuntime) -> None:
+    assert _valid(lua, "{key='k', owner='o', kind='creature',"
+                       " resource='PLANETAR', exclude={}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='creature',"
+                           " resource='way too long', exclude={}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='creature',"
+                           " resource='bad/name', exclude={}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='creature',"
+                           " exclude={}}")
+
+
+def test_an_unknown_kind_is_refused(lua: LuaRuntime) -> None:
+    assert not _valid(lua, "{key='k', owner='o', kind='wish', exclude={}}")
+
+
+def test_the_exclude_list_must_be_object_ids(lua: LuaRuntime) -> None:
+    assert not _valid(lua, "{key='k', owner='o', kind='clone', image=2,"
+                           " exclude={'nope'}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='clone', image=2,"
+                           " exclude={1.5}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='clone', image=2,"
+                           " exclude={-1}}")
+    assert not _valid(lua, "{key='k', owner='o', kind='clone', image=2}")
+
+
+def test_unbounded_strings_are_refused(lua: LuaRuntime) -> None:
+    long = "x" * 201
+    assert not _valid(lua, f"{{key='{long}', owner='o', kind='clone',"
+                           " image=2, exclude={}}")
+    assert not _valid(lua, f"{{key='k', owner='{long}', kind='clone',"
+                           " image=2, exclude={}}")
+
+
+def test_a_non_table_is_refused(lua: LuaRuntime) -> None:
+    assert not _valid(lua, "nil")
+    assert not _valid(lua, "'a string'")
+
+
+# ----------------------------------------------------------------------
 # Source hygiene
 # ----------------------------------------------------------------------
 

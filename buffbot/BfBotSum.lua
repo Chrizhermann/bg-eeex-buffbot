@@ -826,3 +826,256 @@ end
 function S.IsCreator(row)
     return #S.Creators(row) > 0
 end
+
+--- What `Creators` learned about a summoned creature, or nil when its CRE
+--- could not be read. Reading it rather than re-parsing is the point: the
+--- same creature appears once per preset entry that summons it.
+function S._CreatureCache(resource)
+    local entry = _creatures[tostring(resource):upper()]
+    return entry or nil
+end
+
+-- ============================================================
+-- Predicted casters as plan sources
+-- ============================================================
+
+--- Is this live caster the thing `description` would create for `owner`?
+---
+--- Matching by owner and type rather than by object id is what lets a saved
+--- planned identity resolve to the spawn that is already standing there. The
+--- id is fresh per spawn and must never be persisted.
+local function _matchesLive(actor, owner, description)
+    if not actor.sprite or not actor.casterRef
+        or actor.casterRef.kind ~= "summon" then
+        return false
+    end
+    local origin = BfBot.Scan._ReadSummonOrigin(actor.sprite)
+    if not origin or origin.ownerId ~= owner.sprite.m_id then return false end
+    if description.kind == "clone" then
+        return origin.kind == "clone"
+            and origin.cloneType == description.image
+    end
+    local ok, resref = pcall(function()
+        return actor.sprite.m_resref:get()
+    end)
+    return ok and type(resref) == "string"
+        and resref:upper() == description.resource
+end
+
+--- Is a stored future-caster spec one this build is willing to act on?
+---
+--- It crosses a save, an export and a reload before execution binds a real
+--- spawn to it, so it is validated rather than trusted: bounded strings, an
+--- image type this module can predict, a resref shaped like a resref, and a
+--- bounded exclude list of plain non-negative integers.
+function S.ValidFuture(spec)
+    if type(spec) ~= "table" or type(spec.key) ~= "string" or #spec.key > 200
+        or type(spec.owner) ~= "string" or #spec.owner > 200 then
+        return false
+    end
+    if spec.kind == "clone" then
+        if spec.image ~= 2 and spec.image ~= 3 then return false end
+    elseif spec.kind ~= "creature" or type(spec.resource) ~= "string"
+        or #spec.resource > 8 or not spec.resource:match("^[%w_#%-]+$") then
+        return false
+    end
+    if type(spec.exclude) ~= "table" or #spec.exclude > 256 then return false end
+    for _, oid in ipairs(spec.exclude) do
+        if type(oid) ~= "number" or oid % 1 ~= 0 or oid < 0 then return false end
+    end
+    return true
+end
+
+--- Add a caster for every creation this plan actually performs.
+---
+--- Called after the preset has become requests and before they are assigned,
+--- because only an ENABLED creation step exposes a future book: a Simulacrum
+--- the player has switched off conjures nobody.
+---
+--- Identity is `summon:planned:<owner>:<kind>:<group>` -- the owner, what is
+--- created and which creation step creates it. No object id, so the identity
+--- survives a save, a reload and a data-only preset export; the spawn it ends
+--- up bound to is resolved at execution time.
+---
+--- Two budget rules, and both exist because getting them wrong hands the
+--- player a plan that cannot run:
+---
+--- * If the thing is ALREADY on the field, the live caster is used and no
+---   second actor appears. Two actors would reserve the same uses twice.
+--- * A Project Image copies the owner's book INCLUDING spent uses, so a use
+---   the owner spends is gone from the image. A planned image therefore draws
+---   from the OWNER's pool, not one of its own. A Simulacrum re-memorizes, so
+---   it gets its own.
+---
+--- @param snapshot the snapshot to extend, in place
+--- @param requests the plan's requests, as ImportLegacy produced them
+function S.AddSources(snapshot, requests)
+    if type(requests) ~= "table" or #requests == 0 then return end
+    local P = BfBot.Plan
+
+    local assignment = P.Assign(snapshot, requests)
+    local live = {}
+    for _, actor in ipairs(snapshot.casters) do live[#live + 1] = actor end
+
+    local added, profiles = {}, {}
+    for index, request in ipairs(requests) do
+        local decision = assignment.decisions[index]
+        local source = decision and decision.source
+        local owner = source and snapshot.actors[source.actor]
+
+        if source and owner and owner.alive and owner.controlled
+            and not owner.ambiguous then
+            for _, description in ipairs(S.Creators(source.row, request.var)) do
+                local what = description.kind == "clone"
+                    and ("image" .. description.image)
+                    or description.resource
+                local key = "summon:planned:" .. owner.key .. ":" .. what
+                    .. ":" .. tostring(request.group)
+
+                -- Idempotent: the panel and the queue builder both ask,
+                -- and a second actor for one identity would reserve the same
+                -- uses twice.
+                if #key <= 200 and not added[key]
+                    and not snapshot.casterActors[key] then
+                    added[key] = true
+
+                    local existing
+                    for _, actor in ipairs(live) do
+                        if _matchesLive(actor, owner, description) then
+                            existing = actor
+                            break
+                        end
+                    end
+
+                    local rows, profile
+                    if existing then
+                        rows = existing.rows
+                    elseif description.kind == "clone" then
+                        if profiles[owner.key] == nil then
+                            profiles[owner.key] =
+                                S.ReadProfile(owner.sprite) or false
+                        end
+                        profile = profiles[owner.key] or nil
+                        if profile then
+                            rows = S.Forecast(profile, description.image,
+                                owner.key)
+                        end
+                    else
+                        local creature = S._CreatureCache(description.resource)
+                        if creature then
+                            profile, rows = creature.profile, creature.rows
+                        end
+                    end
+
+                    -- A locked owner's planned image is only offered when the
+                    -- image is already live: predicting a second one while the
+                    -- first still stands would plan a cast the policy refuses.
+                    if rows and (existing or not owner.projectImageLocked) then
+                        S._AddPredictedActor(snapshot, {
+                            key = key, owner = owner, live = existing,
+                            rows = rows, profile = profile,
+                            description = description, request = request,
+                            sourceRow = source.row,
+                            ownerIsCasting = decision.source ~= nil,
+                            liveCasters = live,
+                        })
+                    end
+                end
+            end
+        end
+    end
+end
+
+--- One predicted caster and its sources. Split out of AddSources so the
+--- budget rules below sit on their own rather than six levels deep.
+function S._AddPredictedActor(snapshot, spec)
+    local P = BfBot.Plan
+    local description, owner, existing = spec.description, spec.owner, spec.live
+
+    local label = description.kind == "clone"
+        and P.CloneLabel(description.image)
+        or (existing and existing.name)
+        or (spec.profile and spec.profile.name)
+        or spec.sourceRow.name or description.resource
+    local name = owner.name .. " - " .. label
+        .. (existing and "" or " (planned)")
+
+    local future
+    if not existing then
+        future = { kind = description.kind, image = description.image,
+                   resource = description.resource, owner = owner.key,
+                   key = spec.key, exclude = {} }
+        -- Every summon already on the field is excluded by object id, so
+        -- binding cannot pick one of them for this plan's new spawn.
+        for _, actor in ipairs(spec.liveCasters) do
+            if actor.casterRef and actor.casterRef.kind == "summon" then
+                future.exclude[#future.exclude + 1] = actor.casterRef.oid
+            end
+        end
+    end
+
+    local actor = {
+        key = spec.key, name = name, rows = spec.rows,
+        alive = true, controlled = true,
+        class = existing and existing.class
+            or (spec.profile and spec.profile.class),
+        poolKey = existing and existing.poolKey or spec.key,
+        casterRef = existing and existing.casterRef or nil,
+        sprite = existing and existing.sprite or nil,
+        future = future,
+    }
+    snapshot.casters[#snapshot.casters + 1] = actor
+    snapshot.casterActors[spec.key] = actor
+
+    -- A planned Project Image shares the owner's uses: the copy carries the
+    -- owner's spent slots, so one pool serves both and the owner's own casts
+    -- are what spend it. A Simulacrum re-memorizes and gets its own pool.
+    local sharesOwnerPool = not existing
+        and description.kind == "clone" and description.image == 2
+        and spec.ownerIsCasting
+
+    for _, row in pairs(spec.rows) do
+        local pool, reason = P.SpellPool(
+            sharesOwnerPool and owner or actor, row)
+        -- A caster that is not there yet has nothing available until the
+        -- creation runs, so a predicted pool starts empty unless the thing is
+        -- live or the owner's own pool is what backs it.
+        local count = (existing or sharesOwnerPool) and row.count or 0
+        if pool then
+            snapshot.pools[pool] =
+                math.min(snapshot.pools[pool] or count, count)
+        end
+
+        local groupKey = P.GroupKey(row)
+        if row.class and P.IsAutomaticBuff(row)
+            and (row.isSelfOnly ~= 1 or row.isAoE == 1) then
+            local group = snapshot.groups[groupKey]
+            if not group then
+                group = { key = groupKey, name = row.name, kind = row.kind,
+                          icon = row.icon, sources = {} }
+                snapshot.groups[groupKey] = group
+            end
+            local durations = {}
+            for _, variant in ipairs(row.variants or {}) do
+                local described = BfBot.Scan.DescribeSpell(variant.resref,
+                    row.casterLevel)
+                durations[variant.resref] = described and described.duration or 0
+            end
+            group.sources[#group.sources + 1] = {
+                id = spec.key .. "/" .. groupKey,
+                actor = spec.key, casterName = name,
+                casterRef = actor.casterRef, lane = actor.poolKey,
+                liveActor = existing and existing.key or nil,
+                row = row, pool = pool or (spec.key .. ":unavailable"),
+                reason = reason, duration = row.duration,
+                casterLevel = row.casterLevel,
+                selfOnly = row.isSelfOnly == 1, aoe = row.isAoE == 1,
+                variants = row.variants, variantDurations = durations,
+                future = future,
+                -- Which request has to run first for this source to exist.
+                providerRequest = (not existing) and spec.request or nil,
+            }
+        end
+    end
+    return actor
+end

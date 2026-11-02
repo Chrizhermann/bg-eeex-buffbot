@@ -4589,6 +4589,11 @@ function BfBot.UI._RefreshPartyRows()
         return {}
     end
     requests = BfBot.Plan.NormalizeRadialRequests(snapshot, requests)
+    -- Casters this plan will conjure (#107). Here rather than in Snapshot,
+    -- because only an enabled creation step exposes a future book.
+    if BfBot.Summon and BfBot.Summon.AddSources then
+        BfBot.Summon.AddSources(snapshot, requests)
+    end
     local assignment = BfBot.Plan.Assign(snapshot, BfBot.Plan.ExpandRequests(requests))
     local lines = BfBot.Plan.ByGroup(snapshot, assignment)
     -- The footer counts the whole plan, never the filtered view: "45 planned
