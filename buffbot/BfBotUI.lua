@@ -293,6 +293,23 @@ function BfBot.UI._CanTogglePerspective()
     return BfBot.UI._IsPartyView()
 end
 
+--- The art for a view switch: the raised plate, not the tab.
+--- The two switches sat on BFBTAB, the same art as every character and preset
+--- tab beside them, so a lit one read as "a tab somebody selected" rather
+--- than as a control of its own. The plate is visibly thicker than a tab.
+function BfBot.UI._SwitchBam()
+    return BfBot.Theme.HasChromeArt() and "BFBPLAT"
+        or BfBot.Theme.ButtonBam()
+end
+
+--- The circular-arrow glyph on a view switch, or "" without the chrome set.
+--- Cycle 15 of BFBGLYPH; the sheet is light line art for dark plates, which
+--- is what a switch sits on in every scheme.
+function BfBot.UI._SwitchGlyphBam()
+    if not BfBot.Theme.HasControlArt() then return "" end
+    return "BFBGLYPH"
+end
+
 --- The caption colour for a control that changes what the panel is about.
 -- Only the two view switches use it. Everything else in the panel acts on a
 -- row or on the preset, so giving these two a colour nothing else has is what
@@ -1335,12 +1352,22 @@ function BfBot.UI._Layout()
     -- v1.12.0 had it -- it ends up under whichever of those is live, and the
     -- panel can no longer be switched back out of the Summons view (#100).
     setArea("bbView", cx + cw - viewW, charY, viewW, charH)
+    -- The glyph sits in the switch's own left margin; its caption starts
+    -- after it, so the two never print over each other.
+    local glyphW = 20
+    Infinity_SetArea("bbView_g", cx + cw - viewW + 4, charY + 4, 16, 16)
+    Infinity_SetArea("bbView_t", cx + cw - viewW + glyphW, charY,
+        viewW - glyphW, charH)
     -- Caster/recipient, left of the view toggle. Enabled only in the party
     -- view, where there are recipients to group by; in the summons view it is
     -- parked on its own slot and disabled rather than moved, so the row never
     -- reflows under the player.
     setArea("bbPersp", cx + cw - viewW - perspW - charGap, charY,
         perspW, charH)
+    local perspX = cx + cw - viewW - perspW - charGap
+    Infinity_SetArea("bbPersp_g", perspX + 4, charY + 4, 16, 16)
+    Infinity_SetArea("bbPersp_t", perspX + glyphW, charY,
+        perspW - glyphW, charH)
 
     -- Summon tabs (summons view; same row) + paging cluster before the toggle
     local pageBtnW = 24

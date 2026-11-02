@@ -25,15 +25,17 @@ MENU = MENU_PATH.read_text(encoding="utf-8")
 THEME_SOURCE = (ROOT / "buffbot/BfBotThm.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 
+# The two view switches, which are deliberately NOT tabs. Drawing them as
+# tabs was the defect: a lit one read as "a tab somebody selected" rather
+# than as the control that changes what the whole panel is about, and
+# tinting the caption did not fix that (reported in game). They take the
+# raised plate, a glyph and a gold caption instead.
+SWITCH_BUTTONS = {"bbView", "bbPersp"}
+
 TAB_BUTTONS = (
     {f"bbC{i}" for i in range(6)}
     | {f"bbS{i}" for i in range(6)}
     | {f"bbP{i}" for i in range(1, 9)}
-    # Both view toggles are drawn as tabs on purpose: each is a two-state
-    # control saying which reading is active, which is what the tab plate's
-    # selected frame means. bbView switches the caster set (party or
-    # summons), bbPersp which end of the plan is read (#81).
-    | {"bbView", "bbPersp"}
 )
 CAST_BUTTONS = {"bbCast", "bbCastChar"}
 # The HUD toggle lives on the actionbar, not in the panel. It carries
@@ -133,7 +135,8 @@ def test_the_hud_toggle_keeps_its_own_actionbar_icon():
 def test_every_button_with_art_picks_it_through_a_helper():
     missing = [
         name for name, body in art_buttons()
-        if not re.search(r'bam lua "BfBot\.UI\._(Plate|Tab|Cast)Bam\(\)"', body)
+        if not re.search(
+            r'bam lua "BfBot\.UI\._(Plate|Tab|Cast|Switch)Bam\(\)"', body)
     ]
     assert missing == [], missing
 
@@ -150,12 +153,31 @@ def test_every_button_with_art_selects_the_skins_cycle():
 
 def test_the_tabs_use_the_tab_plate_and_the_cast_buttons_the_cast_plate():
     for name, body in art_buttons():
-        if name in TAB_BUTTONS:
+        if name in SWITCH_BUTTONS:
+            assert 'BfBot.UI._SwitchBam()' in body, name
+        elif name in TAB_BUTTONS:
             assert 'BfBot.UI._TabBam()' in body, name
         elif name in CAST_BUTTONS:
             assert 'BfBot.UI._CastBam()' in body, name
         elif name:
             assert 'BfBot.UI._PlateBam()' in body, name
+
+
+def test_a_view_switch_does_not_look_like_a_tab():
+    """Tinting the caption was not enough: the art is what made it read as a
+    selected tab, so the art is what changed."""
+    menu, source = MENU, UI_SOURCE
+    assert '"BFBPLAT"' in re.search(
+        r"^function BfBot\.UI\._SwitchBam\(\).*?^end$", source,
+        re.S | re.M).group(0)
+    for name in sorted(SWITCH_BUTTONS):
+        # Its own glyph label, drawn over the plate.
+        assert f'name    "{name}_g"' in menu, name
+        assert 'bam lua "BfBot.UI._SwitchGlyphBam()"' in menu
+        # And a caption colour nothing else in the panel uses.
+        caption = re.search(
+            r'name\s+"' + name + r'_t"(?:(?!\n\t\}).)*', menu, re.S).group(0)
+        assert "_SwitchCaptionColor" in caption, name
 
 
 def test_every_chrome_button_decides_its_own_frame(request):
@@ -204,7 +226,7 @@ def test_a_tab_still_says_which_one_is_open():
 def test_a_plate_leaves_the_open_question_to_the_tabs():
     """A footer button is never "the open one", so it passes one argument."""
     for name, body in art_buttons():
-        if name in TAB_BUTTONS:
+        if name in TAB_BUTTONS or name in SWITCH_BUTTONS:
             continue
         call = re.search(r'frame lua "BfBot\.UI\._ChromeFrame\(([^"]*)\)"', body)
         assert call, name

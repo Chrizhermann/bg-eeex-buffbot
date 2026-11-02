@@ -591,7 +591,7 @@ menu
 		name    "bbView"
 		enabled "buffbot_isOpen"
 		action  "BfBot.UI.ToggleView()"
-		bam lua "BfBot.UI._TabBam()"
+		bam lua "BfBot.UI._SwitchBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
 		frame lua "BfBot.UI._ChromeFrame('bbView', not BfBot.UI._IsPartyView())"
 		scaleToClip
@@ -609,13 +609,24 @@ menu
 		clickable lua "BfBot.UI._CanTogglePerspective()"
 		action  "BfBot.UI.TogglePerspective()"
 		tooltip lua "BfBot.UI._PerspectiveBtnTooltip()"
-		bam lua "BfBot.UI._TabBam()"
+		bam lua "BfBot.UI._SwitchBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
 		frame lua "BfBot.UI._ChromeFrame('bbPersp', BfBot.UI._IsRecipientView())"
 		scaleToClip
 		area 656 90 100 24
 	}
 
+	label
+	{
+		name    "bbPersp_g"
+		enabled "buffbot_isOpen"
+		bam lua "BfBot.UI._SwitchGlyphBam()"
+		sequence 15
+		frame 0
+		align left center
+		ignoreEvents
+		area 0 0 100 24
+	}
 	label
 	{
 		name    "bbPersp_t"
@@ -628,6 +639,17 @@ menu
 		area 656 90 100 24
 	}
 
+	label
+	{
+		name    "bbView_g"
+		enabled "buffbot_isOpen"
+		bam lua "BfBot.UI._SwitchGlyphBam()"
+		sequence 15
+		frame 0
+		align left center
+		ignoreEvents
+		area 0 0 100 24
+	}
 	label
 	{
 		name    "bbView_t"
