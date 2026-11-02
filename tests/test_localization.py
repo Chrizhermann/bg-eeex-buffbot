@@ -1079,19 +1079,35 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.12.9 (2026-11-02) — the frame meets its corners"
+        "v1.13.0 (2026-11-03) — a table you can work in"
     )
+    # What the release is for: the table became editable.
+    assert "every recipient has a checkbox" in flat
+    assert "ticking one is how a buff is added" in flat
+    # The two states that are ours, with the reason each exists, so neither
+    # is dropped later as "the reference UI manages with four".
+    assert "repeats are ours" in flat
+    assert "silently refuses a click is worse" in flat
+    # The rule that keeps the table honest about what it offers.
+    assert "never offers a tick the plan would then refuse" in flat
+    # What the Party cell means, which is where both lab defects lived.
+    assert "means everybody, not one area cast" in flat
+    # And the measurement behind the text-size disclosure.
+    assert "shrinks but does not grow" in flat
+    corners_release = " ".join(
+        source.split("\n## v1.12.9 (2026-11-02)", 1)[1]
+        .split("\n## ", 1)[0].casefold().split())
     # Why the corners were open, stated so the rail cannot go back to being
     # laid only between the corner cells.
-    assert "covers 27x25 of its cell" in flat
-    assert "the rails now run the whole edge" in flat
+    assert "covers 27x25 of its cell" in corners_release
+    assert "the rails now run the whole edge" in corners_release
     # The scale grew without renumbering, which is what keeps an upgrade from
     # resizing somebody's panel.
-    assert "keep the numbers they are stored under" in flat
+    assert "keep the numbers they are stored under" in corners_release
     # Delete Preset moved but kept the footer's rule.
-    assert "greys out rather than leaving a hole" in flat
+    assert "greys out rather than leaving a hole" in corners_release
     # The portrait finding, so the day is not spent again.
-    assert "measured, and not possible" in flat
+    assert "measured, and not possible" in corners_release
     party_release = " ".join(source.split("\n## v1.12.8 (2026-11-02)", 1)[1]
                              .split("\n## ", 1)[0].casefold().split())
     # The reading the release is named for, and the two things it is careful

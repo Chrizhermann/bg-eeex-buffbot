@@ -1,5 +1,98 @@
 # Changelog
 
+## v1.13.0 (2026-11-03) — a table you can work in
+
+### Added
+- **The party table is where buffs are chosen now, not just where they are
+  read.** Every buff anybody in the party can cast has a row -- not only the
+  ones a preset already plans -- and every recipient has a checkbox. Ticking
+  one is how a buff is added; there is nothing else to open.
+
+  A cell says two things at once, and the glyph carries both:
+
+  | | |
+  |---|---|
+  | `[x]` | chosen, and somebody will cast it |
+  | `[~]` | chosen, and only some of the repeats are covered |
+  | `[!]` | chosen, and nobody can |
+  | `[#]` | chosen and locked |
+  | `[+]` | covered by the Party cast on this row |
+  | `[ ]` | not chosen, but possible |
+  | `[-]` | not chosen, and not possible |
+
+  Two of those are ours rather than the reference UI's. `[~]` exists because
+  repeats are ours: three Blesses with two casts available is neither done nor
+  missing, and it is the case a player acts on. `[#]` exists because `lock` is
+  in the config schema, and a cell that silently refuses a click is worse than
+  one that says why. The twenty-three reasons behind `[-]` stay reasons rather
+  than becoming glyphs -- one each would be unreadable -- so the cell says it
+  is not possible and the refusal says which reason.
+
+  Whether a cell can be ticked is decided by the planner's own gate, so the
+  table never offers a tick the plan would then refuse. Ticking writes into
+  the owning character's preset, which is where the config lives: "Minsc gets
+  Bless" is Bless switched on in some cleric's preset with Minsc among its
+  targets. The cell remembers which caster that is, so unticking undoes
+  exactly what ticking did instead of writing somewhere else.
+
+  The **Party** cell means everybody, not one area cast. For an area spell
+  that is one cast; for a single-target one it fans into a cast each, which
+  is what the target "party" has always meant in a preset. It reads back as a
+  statement about the members: all of them chosen is planned, some of them is
+  partly covered, none but possible is open.
+
+- **A filter for what the table lists**, cycled by one button in the search
+  row: all, planned, not chosen, problems. "Not chosen" answers what else the
+  party could be using now that every castable buff has a row. "Problems" is
+  the one that cannot be eyeballed -- a buff that is ticked and will not
+  happen -- and it cuts across both of the chosen states.
+
+- **The character tabs narrow the table to one recipient.** Click a character
+  and the table shows what *they* receive and where it comes from; click the
+  same tab again and it widens back. The Party cell always stays, because a
+  cast that covers everybody covers them too, and a buff nobody could ever
+  give them is dropped while one that could is kept -- "what else could this
+  character get" is the other half of the question. In the caster reading the
+  tabs still choose whose spellbook is being edited; before this they were
+  live and changed nothing here, which is exactly how it was reported.
+
+### Changed
+- **The two view switches look like switches.** They were drawn with the tab
+  art, so a lit one read as "a tab somebody selected" and tinting the caption
+  changed nothing that mattered. They take the raised plate, carry the chrome
+  set's circular-arrow glyph, and their caption is a gold nothing else in the
+  panel uses.
+- **The text-size setting says what it cannot do.** Measured in a lab: the
+  face the list and its headers use shrinks but does not grow, so Large and
+  Huge move only the title and the button captions. Tiny and Small do what
+  they say. Filed as #112; the description no longer implies otherwise.
+
+### Fixed
+- **A tick wrote nothing at all.** The projection worked out which caster's
+  preset a tick belonged in and the row builder dropped it, so every click
+  landed in the "nobody could cast this" branch and the checkboxes were
+  decoration. Found by the in-game phase on its first run.
+- **The Party cell read "not possible" one frame after being ticked**, for
+  the reason above: `tgt = "p"` leaves no party-wide request to read, and the
+  cell was asking whether one cast could cover everybody. Same phase, same
+  run.
+
+### Lab
+- A **Party Table** phase in the in-game suite, 27 checks, including the
+  round trip no offline test can reach: tick a free recipient, read it back
+  out of the caster's own preset, untick it, confirm the recipient is gone --
+  and that a refused click says why rather than doing nothing. It found both
+  of the defects above, which is what it was written for. **30 phases**, green
+  headless.
+- 69 further tests offline: `ByGroup` rebuilt around a cell per recipient,
+  the seven states and how they classify, the Party cell's own rule, the
+  filter's four positions and that planned and not-chosen are opposites, the
+  character filter including what it keeps and drops, the write target a cell
+  has to carry, and the switch art. **1934 tests** in total.
+- The text-size measurement that became #112: ink height of the same words at
+  four settings, which is how "Large does nothing to the table" stopped being
+  an impression and became a number.
+
 ## v1.12.9 (2026-11-02) — the frame meets its corners
 
 ### Added
