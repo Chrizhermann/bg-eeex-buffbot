@@ -224,6 +224,31 @@ function BfBot.UI._RefreshSummonList()
         raw = nil
     end
     BfBot.UI._summonList = BfBot.UI._BuildSummonListModel(raw)
+    -- Clones this preset would conjure but that are not standing there yet
+    -- (#107). Without these there is no tab to configure before the cast, and
+    -- the player would have to conjure first and watch the clone do nothing.
+    -- A live entry wins: the same owner and clone type is the same creature.
+    if BfBot.Summon and BfBot.Summon.PredictedSummons then
+        local okPredicted, predicted = pcall(BfBot.Summon.PredictedSummons,
+            BfBot.UI._presetIdx)
+        if not okPredicted then
+            BfBot._Warn("[UI] predicted-summon sweep failed: "
+                .. tostring(predicted))
+        else
+            for _, entry in ipairs(predicted or {}) do
+                local live = false
+                for _, existing in ipairs(BfBot.UI._summonList) do
+                    if existing.identity == entry.identity
+                        and existing.cloneType == entry.cloneType then
+                        live = true
+                    end
+                end
+                if not live then
+                    BfBot.UI._summonList[#BfBot.UI._summonList + 1] = entry
+                end
+            end
+        end
+    end
     BfBot.UI._summonPage = 1
     BfBot.UI._ReselectSummon()
     if previousContext and not BfBot.UI._SameSpellSelectionContext(
@@ -2217,13 +2242,18 @@ function BfBot.UI._RefreshSummonsView()
     -- the first live entry; empty state otherwise (line-666 pattern).
     local entry = BfBot.UI._SelectedSummon()
     local sprite = BfBot.UI._GetSelectedSprite()
-    if entry and not sprite then
+    -- A predicted clone has no sprite BY DEFINITION (#107), so it must not go
+    -- through the vanished-selection recovery below: that would re-sweep the
+    -- list on every refresh and then still find no sprite.
+    local predicted = entry and entry.predicted == 1
+    if entry and not sprite and not predicted then
         BfBot.UI._RefreshSummonList()
         BfBot.UI._UpdateSummonTabNames()
         entry = BfBot.UI._SelectedSummon()
         sprite = BfBot.UI._GetSelectedSprite()
+        predicted = entry and entry.predicted == 1
     end
-    if not entry or not sprite then
+    if not entry or (not sprite and not predicted) then
         buffbot_spellTable = {}
         buffbot_title = BfBot.L10N.Get("ui.title.summons")
         BfBot.UI._UpdateSummonQc()  -- per-frame bbQC cache (review MINOR-4)
@@ -2251,8 +2281,23 @@ function BfBot.UI._RefreshSummonsView()
         return
     end
 
-    -- Castable spells (scan cache — invalidated on panel open, as party view)
-    local castable = BfBot.Scan.GetCastableSpells(sprite)
+    -- Castable spells (scan cache — invalidated on panel open, as party view).
+    -- For a clone that is not there yet, the forecast stands in for the scan:
+    -- same row shape, so everything below is unchanged (#107).
+    local castable
+    if predicted then
+        local rows, why = BfBot.Summon.PredictedRows(entry)
+        if not rows then
+            buffbot_spellTable = {}
+            buffbot_title = BfBot.L10N.Get("ui.title.summons")
+            BfBot._Warn("[UI] predicted rows unavailable for "
+                .. tostring(entry.name) .. ": " .. tostring(why))
+            return
+        end
+        castable = rows
+    else
+        castable = BfBot.Scan.GetCastableSpells(sprite)
+    end
 
     -- Merge new castable buffs into the preset (disabled, at bottom) — same
     -- behavior as the party view minus the ovr filter (no per-summon
@@ -2304,6 +2349,24 @@ function BfBot.UI._EnsureSummonPreset(entry)
         return  -- already exists — never re-seed
     end
     local seedCtx = nil
+    if entry.predicted == 1 and BfBot.Summon then
+        -- Not on the field yet (#107): the owner is in the party and the
+        -- clone's book is the forecast, so seeding works in advance.
+        local rows = BfBot.Summon.PredictedRows(entry)
+        local owner = nil
+        for slot = 0, 5 do
+            local sprite = EEex_Sprite_GetInPortrait(slot)
+            if sprite and BfBot._GetName(sprite) == entry.ownerName then
+                owner = sprite
+            end
+        end
+        if rows and owner then
+            seedCtx = { ownerSprite = owner, cloneRows = rows }
+        end
+        BfBot.Persist.GetSummonPreset(entry.identity, BfBot.UI._presetIdx,
+            seedCtx)
+        return
+    end
     if entry.kind == "clone" then
         local clone = BfBot.Exec._ResolveCaster({
             kind = "summon", oid = entry.oid, name = entry.name })
@@ -3001,6 +3064,12 @@ function BfBot.UI._CastSelectedSummon()
     local entry = BfBot.UI._SelectedSummon()
     if not entry then
         Infinity_DisplayString(BfBot.L10N.Get("feedback.no_summon_selected"))
+        return
+    end
+    -- A predicted clone cannot cast: it does not exist. Its preset runs when
+    -- the party's own cast conjures it and it late-joins the run (#107).
+    if entry.predicted == 1 then
+        Infinity_DisplayString(BfBot.L10N.Get("feedback.summon_not_conjured"))
         return
     end
     BfBot.Persist.DrainBuildSkips()  -- discard skips from earlier builds

@@ -123,6 +123,7 @@ local _registry = {
     ["feedback.character_project_image_locked"] = { id = 509, fallback = [=[BuffBot: {name} is puppet-locked by Project Image — cast again after the image expires]=] },
     ["feedback.no_spells_character"] = { id = 510, fallback = [=[BuffBot: No spells or items to use for this character]=] },
     ["feedback.no_summon_selected"] = { id = 511, fallback = [=[BuffBot: No summon selected]=] },
+    ["feedback.summon_not_conjured"] = { id = 771, fallback = [=[BuffBot: that clone has not been conjured yet -- its preset runs when the party cast creates it]=] },
     ["feedback.no_spells_summon"] = { id = 512, fallback = [=[BuffBot: No spells to cast for this summon]=] },
     ["feedback.no_spells_summon_with_reason"] = { id = 513, fallback = [=[BuffBot: No spells to cast for this summon ({reason})]=] },
     ["feedback.no_additional_spells"] = { id = 514, fallback = [=[BuffBot: No additional spells or items to add]=] },

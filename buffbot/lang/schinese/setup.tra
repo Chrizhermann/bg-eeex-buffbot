@@ -520,3 +520,6 @@
 
 // ui.party.filter.tooltip
 @770 = ~Which buffs the table lists: all of them, the ones this preset plans, the ones nobody is set to receive yet, or the ones that are set but will not happen.~
+
+// feedback.summon_not_conjured
+@771 = ~BuffBot: that clone has not been conjured yet -- its preset runs when the party cast creates it~

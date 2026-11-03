@@ -992,13 +992,14 @@ def test_a_planned_project_image_draws_from_the_owners_pool(
     assert "summon:planned:protagonist:image2:spell:HASTE" not in keys
 
 
-def test_a_predicted_pool_starts_empty_until_the_creation_runs(
+def test_a_predicted_caster_can_actually_be_allocated(
         plan: LuaRuntime) -> None:
-    """A Simulacrum that has not been conjured has cast nothing yet.
+    """Its pool carries what the prediction says it will have.
 
-    Its sources exist so the plan can see them, but the capacity is 0 until
-    execution binds a real spawn -- otherwise the plan would hand out casts
-    from a creature that is not there.
+    AddSources is only reached with an assigned source for the creation step,
+    so the caster will exist. An empty pool here was the first version of this
+    and it meant a planned Simulacrum could never be given anything to cast --
+    a plan that looks complete and silently does nothing.
     """
     plan.execute("""
         snap, groupKey = TestPlanSnapshot({})
@@ -1006,9 +1007,9 @@ def test_a_predicted_pool_starts_empty_until_the_creation_runs(
                               rows = TestRows({HASTE = 2}) })
         BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
     """)
-    # Found by the actor's own pool prefix rather than a spelled-out key:
-    # the identity carries the creation step, so writing the key out would
-    # pin the naming instead of the rule.
+    # Found by the actor's own pool prefix rather than a spelled-out key: the
+    # identity carries the creation step, so writing the key out would pin the
+    # naming instead of the rule.
     assert plan.eval("""
         (function()
             for _, actor in ipairs(snap.casters) do
@@ -1022,7 +1023,24 @@ def test_a_predicted_pool_starts_empty_until_the_creation_runs(
             end
             return -1
         end)()
-    """) == 0
+    """) == 2
+
+
+def test_a_shared_owner_pool_is_capped_by_what_the_owner_has_left(
+        plan: LuaRuntime) -> None:
+    """The one-budget rule, seen from the capacity side.
+
+    The owner has one Haste left; their Project Image copies the spent slots,
+    so the pair has one Haste between them, not two.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        snap.pools["protagonist:spell:HASTE"] = 1
+        TestPredictionStubs({ creators = {{kind='clone', image=2}},
+                              rows = TestRows({HASTE = 2}) })
+        BfBot.Summon.AddSources(snap, TestRequests(groupKey, {}))
+    """)
+    assert plan.eval("TestPool(snap, 'protagonist:spell:HASTE')") == 1
 
 
 def test_a_live_copy_is_used_instead_of_a_second_actor(
@@ -1271,6 +1289,326 @@ def test_unbounded_strings_are_refused(lua: LuaRuntime) -> None:
 def test_a_non_table_is_refused(lua: LuaRuntime) -> None:
     assert not _valid(lua, "nil")
     assert not _valid(lua, "'a string'")
+
+
+# ----------------------------------------------------------------------
+# A clone the player can configure before conjuring it (step F)
+# ----------------------------------------------------------------------
+#
+# The gap #107 actually closes. Execution already handles a clone that appears
+# mid-run -- it late-joins and runs the queue built from its own summon preset
+# -- but the Summons view is built from live sprites, so there is no tab to
+# fill in beforehand and the clone arrives with nothing configured.
+#
+# The load-bearing property is the IDENTITY: a predicted entry must carry the
+# identity the real spawn will have, or the preset the player fills in is not
+# the one that gets read.
+
+_PARTY_WORLD = r"""
+function TestParty(members)
+    local sprites = {}
+    for index, member in ipairs(members) do
+        sprites[index - 1] = { m_id = 100 + index, _name = member.name,
+                               _preset = member.preset,
+                               _rows = member.rows or {} }
+    end
+    EEex_Sprite_GetInPortrait = function(slot) return sprites[slot] end
+    BfBot._GetName = function(sprite) return sprite and sprite._name or "?" end
+    BfBot.Scan = BfBot.Scan or {}
+    BfBot.Scan.GetCastableSpells = function(sprite)
+        return sprite and sprite._rows or {}
+    end
+    BfBot.Scan._SummonIdentity = function(desc)
+        if desc.kind == "clone" and desc.ownerName and desc.ownerName ~= "" then
+            return "clone:" .. desc.ownerName
+        end
+        return "name:?"
+    end
+    BfBot.Persist = BfBot.Persist or {}
+    BfBot.Persist.GetPreset = function(sprite, _)
+        return sprite and sprite._preset or nil
+    end
+    BfBot.Plan = BfBot.Plan or {}
+    BfBot.Plan.CloneLabel = function(kind)
+        return ({ [1] = "Mislead", [2] = "Project Image",
+                  [3] = "Simulacrum" })[kind] or "Clone"
+    end
+    return sprites
+end
+
+function TestEntries(list)
+    local parts = {}
+    for _, e in ipairs(list) do
+        parts[#parts + 1] = e.identity .. "|type=" .. tostring(e.cloneType)
+            .. "|oid=" .. tostring(e.oid) .. "|predicted="
+            .. tostring(e.predicted) .. "|" .. e.name
+    end
+    table.sort(parts)
+    return table.concat(parts, "\n")
+end
+"""
+
+
+@pytest.fixture()
+def party(lua: LuaRuntime) -> LuaRuntime:
+    lua.execute(_PARTY_WORLD)
+    lua.execute("""
+        function TestCreatorsFor(map)
+            BfBot.Summon.Creators = function(row, _)
+                return map[row.resref] or {}
+            end
+        end
+    """)
+    return lua
+
+
+def test_an_enabled_simulacrum_becomes_a_tab(party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Edwin",
+            rows = { SIM = { resref = "SIM", kind = "spl" } },
+            preset = { spells = { SIM = { on = 1 } } } } })
+        TestCreatorsFor({ SIM = {{kind='clone', image=3}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    assert party.eval("TestEntries(Found)") == (
+        "clone:Edwin|type=3|oid=-1|predicted=1|Edwin - Simulacrum")
+
+
+def test_a_disabled_entry_makes_no_tab(party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Edwin",
+            rows = { SIM = { resref = "SIM", kind = "spl" } },
+            preset = { spells = { SIM = { on = 0 } } } } })
+        TestCreatorsFor({ SIM = {{kind='clone', image=3}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    assert party.eval("TestEntries(Found)") == ""
+
+
+def test_the_identity_is_the_one_the_real_spawn_will_have(
+        party: LuaRuntime) -> None:
+    """This is what makes configuring in advance work at all.
+
+    The summon config is keyed by identity, and a clone's identity is
+    "clone:<ownerName>". A predicted entry that invented its own key would let
+    the player fill in a preset the live clone never reads.
+    """
+    party.execute("""
+        TestParty({ { name = "Edwin",
+            rows = { PI = { resref = "PI", kind = "spl" } },
+            preset = { spells = { PI = { on = 1 } } } } })
+        TestCreatorsFor({ PI = {{kind='clone', image=2}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+        Live = BfBot.Scan._SummonIdentity({ kind = "clone",
+                                            ownerName = "Edwin" })
+    """)
+    assert party.eval("Found[1].identity") == party.eval("Live")
+
+
+def test_both_clone_types_of_one_owner_get_their_own_tab(
+        party: LuaRuntime) -> None:
+    """They share an identity by design, but they are different creatures.
+
+    One owner can have a Project Image and a Simulacrum, and the view already
+    prefers a type match when reselecting, so the type is what separates the
+    tabs while the config stays shared.
+    """
+    party.execute("""
+        TestParty({ { name = "Edwin",
+            rows = { PI = { resref = "PI", kind = "spl" },
+                     SIM = { resref = "SIM", kind = "spl" } },
+            preset = { spells = { PI = { on = 1 }, SIM = { on = 1 } } } } })
+        TestCreatorsFor({ PI = {{kind='clone', image=2}},
+                          SIM = {{kind='clone', image=3}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    lines = party.eval("TestEntries(Found)").splitlines()
+    assert len(lines) == 2
+    assert all(line.startswith("clone:Edwin|") for line in lines)
+    assert {line.split("|")[1] for line in lines} == {"type=2", "type=3"}
+
+
+def test_the_same_clone_from_two_entries_appears_once(
+        party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Edwin",
+            rows = { A = { resref = "A", kind = "spl" },
+                     B = { resref = "B", kind = "spl" } },
+            preset = { spells = { A = { on = 1 }, B = { on = 1 } } } } })
+        TestCreatorsFor({ A = {{kind='clone', image=3}},
+                          B = {{kind='clone', image=3}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    assert len(party.eval("TestEntries(Found)").splitlines()) == 1
+
+
+def test_each_predicted_entry_gets_its_own_negative_id(
+        party: LuaRuntime) -> None:
+    """The list model wants a number, and nothing may resolve one to a sprite.
+
+    A negative id cannot collide with an engine object id, so a predicted
+    entry can never be mistaken for a live one.
+    """
+    party.execute("""
+        TestParty({
+            { name = "Edwin", rows = { PI = { resref = "PI", kind = "spl" } },
+              preset = { spells = { PI = { on = 1 } } } },
+            { name = "Jan", rows = { PI = { resref = "PI", kind = "spl" } },
+              preset = { spells = { PI = { on = 1 } } } } })
+        TestCreatorsFor({ PI = {{kind='clone', image=2}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+        Ids = {}
+        for _, e in ipairs(Found) do Ids[#Ids + 1] = e.oid end
+        table.sort(Ids)
+    """)
+    assert party.eval("#Found") == 2
+    assert party.eval("Ids[1]") == -2
+    assert party.eval("Ids[2]") == -1
+
+
+def test_a_summoned_creature_is_not_a_predicted_tab(party: LuaRuntime) -> None:
+    """Only clones. A creature's preset keys off its CRE resref, and its book
+    does not depend on the owner, so it needs no forecast to be configured."""
+    party.execute("""
+        TestParty({ { name = "Jaheira",
+            rows = { CALL = { resref = "CALL", kind = "spl" } },
+            preset = { spells = { CALL = { on = 1 } } } } })
+        TestCreatorsFor({ CALL = {{kind='creature', resource='PLANETAR'}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    assert party.eval("TestEntries(Found)") == ""
+
+
+def test_a_member_without_a_preset_is_skipped(party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Minsc",
+            rows = { SIM = { resref = "SIM", kind = "spl" } },
+            preset = nil } })
+        TestCreatorsFor({ SIM = {{kind='clone', image=3}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    assert party.eval("TestEntries(Found)") == ""
+
+
+def test_a_configured_spell_the_scan_no_longer_sees_is_skipped(
+        party: LuaRuntime) -> None:
+    """A preset outlives a spellbook change; a row that is gone is not read."""
+    party.execute("""
+        TestParty({ { name = "Edwin", rows = {},
+            preset = { spells = { SIM = { on = 1 } } } } })
+        TestCreatorsFor({ SIM = {{kind='clone', image=3}} })
+        Found = BfBot.Summon.PredictedSummons(1)
+    """)
+    assert party.eval("TestEntries(Found)") == ""
+
+
+def test_a_bad_preset_index_answers_empty(party: LuaRuntime) -> None:
+    party.execute("TestParty({})")
+    assert party.eval("#BfBot.Summon.PredictedSummons(nil)") == 0
+    assert party.eval("#BfBot.Summon.PredictedSummons('1')") == 0
+
+
+# ----------------------------------------------------------------------
+# The rows a predicted tab shows
+# ----------------------------------------------------------------------
+
+
+def test_predicted_rows_come_from_the_owners_forecast(
+        party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Edwin", rows = {}, preset = { spells = {} } } })
+        BfBot.Summon.ReadProfile = function(_) return { class = 1 } end
+        BfBot.Summon.Forecast = function(_, image, key)
+            return { HASTE = { resref = "HASTE", image = image, key = key } }
+        end
+        Rows = BfBot.Summon.PredictedRows({ predicted = 1, kind = "clone",
+            ownerName = "Edwin", cloneType = 3, identity = "clone:Edwin" })
+    """)
+    assert party.eval("Rows.HASTE.image") == 3
+    assert party.eval("Rows.HASTE.key") == "clone:Edwin"
+
+
+def test_a_live_entry_has_no_predicted_rows(party: LuaRuntime) -> None:
+    party.execute("TestParty({})")
+    rows, why = party.eval(
+        "BfBot.Summon.PredictedRows({ kind = 'clone', ownerName = 'Edwin',"
+        " cloneType = 3 })")
+    assert rows is None
+    assert "not a predicted clone" in why
+
+
+def test_an_owner_who_left_the_party_is_reported(party: LuaRuntime) -> None:
+    party.execute("TestParty({ { name = 'Minsc', rows = {}, preset = {} } })")
+    rows, why = party.eval(
+        "BfBot.Summon.PredictedRows({ predicted = 1, kind = 'clone',"
+        " ownerName = 'Edwin', cloneType = 3, identity = 'clone:Edwin' })")
+    assert rows is None
+    assert "not in the party" in why
+
+
+def test_an_unreadable_owner_is_reported(party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Edwin", rows = {}, preset = {} } })
+        BfBot.Summon.ReadProfile = function(_) return nil, "stats unreadable" end
+    """)
+    rows, why = party.eval(
+        "BfBot.Summon.PredictedRows({ predicted = 1, kind = 'clone',"
+        " ownerName = 'Edwin', cloneType = 3, identity = 'clone:Edwin' })")
+    assert rows is None
+    assert "unreadable" in why
+
+
+def test_a_failed_forecast_is_reported(party: LuaRuntime) -> None:
+    party.execute("""
+        TestParty({ { name = "Edwin", rows = {}, preset = {} } })
+        BfBot.Summon.ReadProfile = function(_) return { class = 1 } end
+        BfBot.Summon.Forecast = function(_, _, _) return nil end
+    """)
+    rows, why = party.eval(
+        "BfBot.Summon.PredictedRows({ predicted = 1, kind = 'clone',"
+        " ownerName = 'Edwin', cloneType = 3, identity = 'clone:Edwin' })")
+    assert rows is None
+    assert "prediction unavailable" in why
+
+
+# ----------------------------------------------------------------------
+# How the panel treats a predicted entry
+# ----------------------------------------------------------------------
+
+
+UI_PATH = ROOT / "buffbot/BfBotUI.lua"
+
+
+def test_a_predicted_entry_never_goes_through_sprite_recovery() -> None:
+    """It has no sprite by definition.
+
+    The vanished-selection recovery re-sweeps the list and looks again; for a
+    predicted entry that would run on every refresh and still find nothing.
+    """
+    source = UI_PATH.read_text(encoding="utf-8", errors="surrogateescape")
+    assert "if entry and not sprite and not predicted then" in source
+
+
+def test_a_predicted_entry_cannot_be_cast() -> None:
+    """It does not exist; its preset runs when the party cast conjures it."""
+    source = UI_PATH.read_text(encoding="utf-8", errors="surrogateescape")
+    cast = source[source.index("function BfBot.UI._CastSelectedSummon"):]
+    cast = cast[:cast.index("\nfunction ")]
+    assert "entry.predicted == 1" in cast
+    assert "feedback.summon_not_conjured" in cast
+
+
+def test_the_predicted_tab_seeds_from_the_prediction() -> None:
+    """Seeding is what gives the player a list to switch on.
+
+    Without it the tab opens empty and the feature looks broken, because the
+    live path seeds from a scan of a sprite that is not there.
+    """
+    source = UI_PATH.read_text(encoding="utf-8", errors="surrogateescape")
+    seed = source[source.index("function BfBot.UI._EnsureSummonPreset"):]
+    seed = seed[:seed.index("\nfunction ")]
+    assert "entry.predicted == 1" in seed
+    assert "cloneRows = rows" in seed
 
 
 # ----------------------------------------------------------------------

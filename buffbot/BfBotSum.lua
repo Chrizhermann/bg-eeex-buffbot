@@ -1037,10 +1037,15 @@ function S._AddPredictedActor(snapshot, spec)
     for _, row in pairs(spec.rows) do
         local pool, reason = P.SpellPool(
             sharesOwnerPool and owner or actor, row)
-        -- A caster that is not there yet has nothing available until the
-        -- creation runs, so a predicted pool starts empty unless the thing is
-        -- live or the owner's own pool is what backs it.
-        local count = (existing or sharesOwnerPool) and row.count or 0
+        -- The pool carries what the prediction says the caster will have.
+        -- AddSources is only reached with an assigned source for the creation
+        -- step, so this caster WILL exist; an empty pool here would mean a
+        -- planned Simulacrum could never be allocated anything, which is a
+        -- plan that silently does nothing.
+        --
+        -- For a shared owner pool the `min` is the one-budget rule doing its
+        -- work: the owner's remaining uses cap what the image can spend.
+        local count = row.count
         if pool then
             snapshot.pools[pool] =
                 math.min(snapshot.pools[pool] or count, count)
@@ -1078,4 +1083,101 @@ function S._AddPredictedActor(snapshot, spec)
         end
     end
     return actor
+end
+
+-- ============================================================
+-- Clones the player can configure before conjuring them
+-- ============================================================
+--
+-- The gap #107 actually closes. Execution already handles a clone that
+-- appears mid-run: it late-joins and runs the queue built from its own summon
+-- preset (`BfBot.Exec._AttachCaster`, issue #19). What the player cannot do is
+-- FILL that preset in advance, because the Summons view is built from
+-- `GetAlliedSummons()` -- live sprites only -- so a Simulacrum has no tab
+-- until it is standing there, and by then the run is over.
+--
+-- A predicted entry carries the identity the live clone will have, which is
+-- what makes this work at all: `Scan._SummonIdentity` answers
+-- "clone:<ownerName>" for a clone, so a preset configured against the
+-- prediction is the very preset the real spawn reads.
+
+--- Every clone the party's current presets would conjure, in the shape the
+--- Summons view's list model uses, plus `predicted = 1`.
+---
+--- One entry per owner and clone type. A single owner's Project Image and
+--- Simulacrum deliberately SHARE the identity "clone:<owner>" -- that is the
+--- existing scheme, and the view already prefers a type match when
+--- reselecting -- so the type is carried for the label and the shared
+--- identity for the config.
+---
+--- `oid` is negative and unique: the list model requires a number, nothing
+--- may resolve a predicted entry to a sprite, and a negative id can never
+--- collide with an engine object id.
+---
+--- @param presetIdx the party preset being edited
+--- @return a list of entries; empty when nothing would be conjured
+function S.PredictedSummons(presetIdx)
+    local entries, seen, nextOid = {}, {}, -1
+    if type(presetIdx) ~= "number" then return entries end
+
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local okRows, rows = pcall(BfBot.Scan.GetCastableSpells, sprite)
+            local preset = BfBot.Persist.GetPreset(sprite, presetIdx)
+            if okRows and rows and preset and type(preset.spells) == "table" then
+                local ownerName = BfBot._GetName(sprite)
+                for resref, config in pairs(preset.spells) do
+                    local row = rows[resref]
+                    if row and config.on == 1 then
+                        for _, descriptor in
+                            ipairs(S.Creators(row, config.var)) do
+                            if descriptor.kind == "clone" then
+                                local identity = BfBot.Scan._SummonIdentity({
+                                    kind = "clone", ownerName = ownerName })
+                                local key = identity .. ":"
+                                    .. tostring(descriptor.image)
+                                if not seen[key] then
+                                    seen[key] = true
+                                    entries[#entries + 1] = {
+                                        oid = nextOid,
+                                        name = ownerName .. " - "
+                                            .. BfBot.Plan.CloneLabel(
+                                                descriptor.image),
+                                        kind = "clone",
+                                        identity = identity,
+                                        ownerName = ownerName,
+                                        cloneType = descriptor.image,
+                                        predicted = 1,
+                                    }
+                                    nextOid = nextOid - 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return entries
+end
+
+--- The rows a predicted entry's tab should show: the clone's forecast book.
+--- @return rows, or nil plus a reason
+function S.PredictedRows(entry)
+    if type(entry) ~= "table" or entry.predicted ~= 1
+        or entry.kind ~= "clone" then
+        return nil, "not a predicted clone"
+    end
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite and BfBot._GetName(sprite) == entry.ownerName then
+            local profile, why = S.ReadProfile(sprite)
+            if not profile then return nil, why or "owner unreadable" end
+            local rows = S.Forecast(profile, entry.cloneType, entry.identity)
+            if not rows then return nil, "prediction unavailable" end
+            return rows
+        end
+    end
+    return nil, "owner is not in the party"
 end
