@@ -625,3 +625,249 @@ def test_the_dispatch_names_no_ordinary_spell_action_for_a_summon() -> None:
     branch = source[start:end]
     assert "SpellRES(" not in branch.replace("ReallyForceSpellRES(", "")
     assert "SpellNoDecRES(" not in branch
+
+
+# ----------------------------------------------------------------------
+# The picker offers them
+# ----------------------------------------------------------------------
+#
+# The data model needed no new shape: a summon target is the string
+# `sum:<identity>`, and the picker was already a list of strings with a
+# checked-set keyed by them. What a summon value needs is a readable label,
+# which is a function of the value.
+
+UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
+CLASS_SOURCE = (ROOT / "buffbot/BfBotCls.lua").read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def picker(lua: LuaRuntime) -> LuaRuntime:
+    """The panel on top of the same world, with a party of two."""
+    lua.execute(CLASS_SOURCE)
+    lua.execute("""
+        BfBot.Theme = BfBot.Theme or {}
+        BfBot.Theme.HasControlArt = function() return false end
+        BfBot.Theme.ControlSkin = function() return 3 end
+        BfBot.Scan.Invalidate = function(_) end
+        BfBot.Scan.InvalidateAll = function() end
+        BfBot.Scan.InvalidateSummons = function() end
+        BfBot._SafeCallback = function(_, callback) return callback end
+        Infinity_PushMenu = function(_) end
+        Infinity_PopMenu = function(_) end
+    """)
+    lua.execute(UI_SOURCE)
+    lua.execute("""
+        buffbot_charNames = { "Cleric", "Fighter" }
+        buffbot_spellTable = { {
+            resref = "SPPR201", name = "Barkskin",
+            isSelfOnly = 0, isAoE = 0, tgtUnlock = 1, tgt = "s",
+        } }
+        BfBot.UI._GetSelectedSprite = function() return T_Caster() end
+        BfBot.UI._SetSpellTargetForView = function(_, resref, tgt)
+            T_Written = { resref = resref, tgt = tgt }
+        end
+        T_Written = nil
+    """)
+    return lua
+
+
+def _order(lua: LuaRuntime) -> list[str]:
+    return [str(v) for v in lua.eval("buffbot_pickerOrder").values()]
+
+
+def test_a_live_summon_is_offered_after_the_party(picker: LuaRuntime) -> None:
+    """After, not among: a buff is nearly always meant for a character, and
+    a summon is the deliberate extra."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+    """)
+    order = _order(picker)
+    assert order[:2] == ["Cleric", "Fighter"]
+    assert order[2] == "sum:cre:planetar"
+
+
+def test_a_summon_row_reads_as_the_creature_not_as_the_key(
+        picker: LuaRuntime) -> None:
+    """`sum:clone:Jaheira` is a key. A player should see the creature."""
+    picker.execute("""
+        T_Summon("clone:Cleric", 4242, "Cleric (image)")
+        BfBot.UI.OpenTargets(1)
+    """)
+    label = picker.eval('BfBot.UI._PickerLabel("sum:clone:Cleric")')
+    assert str(label) == "Cleric (image)"
+    assert str(picker.eval("BfBot.UI._PickerRowName(3)")) == "Cleric (image)"
+
+
+def test_a_character_row_is_its_own_label(picker: LuaRuntime) -> None:
+    picker.execute("BfBot.UI.OpenTargets(1)")
+    assert str(picker.eval('BfBot.UI._PickerLabel("Fighter")')) == "Fighter"
+
+
+def test_a_summon_whose_name_cannot_be_read_still_shows_its_row(
+        picker: LuaRuntime) -> None:
+    """The identity is the fallback: a summon that expired between opening
+    the picker and drawing it should still say which row it was."""
+    label = picker.eval('BfBot.UI._PickerLabel("sum:cre:planetar")')
+    assert str(label) == "cre:planetar"
+
+
+def test_the_picker_knows_which_of_its_rows_is_a_summon(
+        picker: LuaRuntime) -> None:
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+    """)
+    assert picker.eval("BfBot.UI._PickerRowIsSummon(1)") == 0
+    assert picker.eval("BfBot.UI._PickerRowIsSummon(3)") == 1
+
+
+def test_ticking_a_summon_writes_it_as_the_target(picker: LuaRuntime) -> None:
+    """The whole point: a player can ask for the Planetar to be buffed."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+        BfBot.UI.PickerToggle(3)
+        BfBot.UI.PickerDone()
+    """)
+    written = picker.eval("T_Written")
+    assert str(written["resref"]) == "SPPR201"
+    assert [str(v) for v in written["tgt"].values()] == ["sum:cre:planetar"]
+
+
+def test_a_summon_and_a_character_keep_their_order(
+        picker: LuaRuntime) -> None:
+    """Top-to-bottom is cast priority, and a summon is in that order like
+    anything else."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+        BfBot.UI.PickerToggle(3)
+        BfBot.UI.PickerToggle(1)
+        BfBot.UI.PickerDone()
+    """)
+    written = [str(v) for v in picker.eval("T_Written")["tgt"].values()]
+    assert written == ["Cleric", "sum:cre:planetar"]
+
+
+def test_all_party_leaves_the_summons_alone(picker: LuaRuntime) -> None:
+    """The button says Party. A player who wants the Planetar buffed too
+    says so by ticking it."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+        BfBot.UI.PickerAllParty()
+        BfBot.UI.PickerDone()
+    """)
+    written = [str(v) for v in picker.eval("T_Written")["tgt"].values()]
+    assert written == ["Cleric", "Fighter"]
+
+
+def test_a_stored_summon_target_keeps_its_row_when_the_summon_is_gone(
+        picker: LuaRuntime) -> None:
+    """Otherwise the preset would keep asking for a cast the player can
+    neither see nor untick."""
+    picker.execute("""
+        buffbot_spellTable[1].tgt = { "sum:cre:planetar" }
+        BfBot.UI.OpenTargets(1)
+    """)
+    order = _order(picker)
+    assert order[0] == "sum:cre:planetar"
+    assert picker.eval('buffbot_pickerChecked["sum:cre:planetar"]') == 1
+
+
+def test_a_gone_summon_is_not_offered_twice(picker: LuaRuntime) -> None:
+    """It is already there as a stored target; re-offering it would give the
+    same creature two rows."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        buffbot_spellTable[1].tgt = { "sum:cre:planetar" }
+        BfBot.UI.OpenTargets(1)
+    """)
+    order = _order(picker)
+    assert order.count("sum:cre:planetar") == 1
+
+
+def test_a_summon_target_reads_as_a_name_on_the_row_button(
+        picker: LuaRuntime) -> None:
+    """The spell row's own target button must not show the `sum:` key."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+    """)
+    assert str(picker.eval(
+        'BfBot.UI._TargetToText("sum:cre:planetar")')) == "Planetar"
+    assert str(picker.eval(
+        'BfBot.UI._TargetToText({ "sum:cre:planetar" })')) == "Planetar"
+
+
+def test_the_checkbox_cell_toggles_and_the_name_cell_only_selects(
+        picker: LuaRuntime) -> None:
+    """`rowNumber` is stale in a list callback, so the row comes from the
+    list's `var` -- which the engine has already set to the clicked row."""
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+        buffbot_tgtPickerSel = 3
+        BfBot.UI._OnPickerRowAction(BfBot.UI.PICKER_CHECK_CELL)
+    """)
+    assert picker.eval('buffbot_pickerChecked["sum:cre:planetar"]') == 1
+    picker.execute("BfBot.UI._OnPickerRowAction(2)")
+    assert picker.eval('buffbot_pickerChecked["sum:cre:planetar"]') == 1
+
+
+def test_a_click_while_targeting_is_locked_changes_nothing(
+        picker: LuaRuntime) -> None:
+    picker.execute("""
+        T_Summon("cre:planetar", 4242, "Planetar")
+        BfBot.UI.OpenTargets(1)
+        buffbot_targetLocked = 1
+        buffbot_tgtPickerSel = 3
+        BfBot.UI._OnPickerRowAction(BfBot.UI.PICKER_CHECK_CELL)
+    """)
+    assert picker.eval('buffbot_pickerChecked["sum:cre:planetar"]') is None
+
+
+def test_a_click_on_no_row_changes_nothing(picker: LuaRuntime) -> None:
+    """The list reports a selection of 0 before anything is clicked."""
+    picker.execute("""
+        BfBot.UI.OpenTargets(1)
+        buffbot_tgtPickerSel = 0
+        BfBot.UI._OnPickerRowAction(BfBot.UI.PICKER_CHECK_CELL)
+        buffbot_tgtPickerSel = 99
+        BfBot.UI._OnPickerRowAction(BfBot.UI.PICKER_CHECK_CELL)
+    """)
+    assert picker.eval("""
+        (function()
+            local n = 0
+            for _ in pairs(buffbot_pickerChecked) do n = n + 1 end
+            return n
+        end)()
+    """) == 0
+
+
+def test_the_picker_survives_a_discovery_that_throws(
+        picker: LuaRuntime) -> None:
+    """A summon scan that fails must not take the target picker with it: the
+    party rows are the part that always has to work."""
+    picker.execute("""
+        BfBot.Scan.GetAlliedSummons = function() error("no area") end
+        BfBot.UI.OpenTargets(1)
+    """)
+    assert _order(picker) == ["Cleric", "Fighter"]
+
+
+def test_more_summons_than_the_old_six_rows_all_arrive(
+        picker: LuaRuntime) -> None:
+    """Six rows was the party cap written into geometry. The list scrolls, so
+    a party with a handful of skeletons out is no longer a problem."""
+    picker.execute("""
+        for i = 1, 8 do
+            T_Summon("cre:skel" .. i, 500 + i, "Skeleton " .. i)
+        end
+        BfBot.UI.OpenTargets(1)
+    """)
+    order = _order(picker)
+    assert len(order) == 10
+    assert order[-1] == "sum:cre:skel8"
+    assert str(picker.eval("BfBot.UI._PickerRowCount()")) == "10"

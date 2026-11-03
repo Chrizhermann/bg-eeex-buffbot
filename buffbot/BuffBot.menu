@@ -2763,268 +2763,66 @@ menu
 		area 581 199 95 26
 	}
 
-	-- Row 1: checkbox (toggle) + name (select)
-	button
+	-- The recipients, as a scrolling list (#117).
+	--
+	-- This was six hand-placed row blocks, one per party slot -- the party cap
+	-- written into geometry. Summons do not fit into six and a party can have
+	-- several out at once, so the strip is a list: it scrolls, and the cap is
+	-- gone rather than raised.
+	--
+	-- Clicks arrive as `cellNumber` on the list's own action, and `rowNumber`
+	-- is stale in that callback -- so the row comes from `var`, which the
+	-- engine has already set to the clicked row. Same discipline as
+	-- `bbPartyList`. Column widths are percentages and must total 100.
+	list
 	{
-		name    "bbTgChk1"
-		enabled "buffbot_pickerOrder[1] ~= nil"
-		clickable lua "buffbot_targetLocked == 0"
-		action  "BfBot.UI.PickerToggle(1)"
-		area 479 231 36 26
-	}
+		-- The checkbox. Three drawn things in one column, as the old row had:
+		-- the bracket text for a game with no control art, the BAM for one
+		-- that has it, and nothing else.
+		column
+		{
+			width 19
+			label
+			{
+				area 0 0 -1 26
+				text lua "BfBot.UI._PickerCheckText(rowNumber)"
+				text style "bb_caption"
+				text align center center
+				text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
+			}
+			label
+			{
+				area 0 0 -1 26
+				bam lua "BfBot.UI._CheckBam()"
+				sequence lua "BfBot.UI._PickerCheckSeq(rowNumber)"
+				frame 0
+				align center center
+			}
+		}
 
-	label
-	{
-		name    "bbTgChk1_t"
-		enabled "buffbot_pickerOrder[1] ~= nil"
-		text lua "BfBot.UI._PickerCheckText(1)"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
-		ignoreEvents
-		area 479 231 36 26
-	}
+		-- The name. A character's row reads as the character; a summon's reads
+		-- as the creature, never as the `sum:` key behind it.
+		column
+		{
+			width 81
+			label
+			{
+				area 0 0 -1 26
+				text lua "BfBot.UI._PickerNameText(rowNumber)"
+				text style "bb_normal_parchment"
+				text align left center
+				text color lua "BfBot.UI._PickerRowColor(rowNumber)"
+			}
+		}
 
-	label
-	{
-		name    "bbTgChk1_a"
-		enabled "buffbot_pickerOrder[1] ~= nil"
-		bam lua "BfBot.UI._CheckBam()"
-		sequence lua "BfBot.UI._PickerCheckSeq(1)"
-		frame 0
-		align center center
-		ignoreEvents
-		area 479 231 36 26
-	}
-	text
-	{
-		enabled "buffbot_pickerOrder[1] ~= nil"
-		action  "BfBot.UI.PickerSelect(1)"
-		text lua "BfBot.UI._PickerNameText(1)"
-		text style "bb_normal"
-		text align left center
-		text color lua "BfBot.UI._PickerRowColor(1)"
-		area 517 231 159 26
-	}
-
-	-- Row 2
-	button
-	{
-		name    "bbTgChk2"
-		enabled "buffbot_pickerOrder[2] ~= nil"
-		clickable lua "buffbot_targetLocked == 0"
-		action  "BfBot.UI.PickerToggle(2)"
-		area 479 259 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk2_t"
-		enabled "buffbot_pickerOrder[2] ~= nil"
-		text lua "BfBot.UI._PickerCheckText(2)"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
-		ignoreEvents
-		area 479 259 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk2_a"
-		enabled "buffbot_pickerOrder[2] ~= nil"
-		bam lua "BfBot.UI._CheckBam()"
-		sequence lua "BfBot.UI._PickerCheckSeq(2)"
-		frame 0
-		align center center
-		ignoreEvents
-		area 479 259 36 26
-	}
-	text
-	{
-		enabled "buffbot_pickerOrder[2] ~= nil"
-		action  "BfBot.UI.PickerSelect(2)"
-		text lua "BfBot.UI._PickerNameText(2)"
-		text style "bb_normal"
-		text align left center
-		text color lua "BfBot.UI._PickerRowColor(2)"
-		area 517 259 159 26
-	}
-
-	-- Row 3
-	button
-	{
-		name    "bbTgChk3"
-		enabled "buffbot_pickerOrder[3] ~= nil"
-		clickable lua "buffbot_targetLocked == 0"
-		action  "BfBot.UI.PickerToggle(3)"
-		area 479 287 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk3_t"
-		enabled "buffbot_pickerOrder[3] ~= nil"
-		text lua "BfBot.UI._PickerCheckText(3)"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
-		ignoreEvents
-		area 479 287 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk3_a"
-		enabled "buffbot_pickerOrder[3] ~= nil"
-		bam lua "BfBot.UI._CheckBam()"
-		sequence lua "BfBot.UI._PickerCheckSeq(3)"
-		frame 0
-		align center center
-		ignoreEvents
-		area 479 287 36 26
-	}
-	text
-	{
-		enabled "buffbot_pickerOrder[3] ~= nil"
-		action  "BfBot.UI.PickerSelect(3)"
-		text lua "BfBot.UI._PickerNameText(3)"
-		text style "bb_normal"
-		text align left center
-		text color lua "BfBot.UI._PickerRowColor(3)"
-		area 517 287 159 26
-	}
-
-	-- Row 4
-	button
-	{
-		name    "bbTgChk4"
-		enabled "buffbot_pickerOrder[4] ~= nil"
-		clickable lua "buffbot_targetLocked == 0"
-		action  "BfBot.UI.PickerToggle(4)"
-		area 479 315 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk4_t"
-		enabled "buffbot_pickerOrder[4] ~= nil"
-		text lua "BfBot.UI._PickerCheckText(4)"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
-		ignoreEvents
-		area 479 315 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk4_a"
-		enabled "buffbot_pickerOrder[4] ~= nil"
-		bam lua "BfBot.UI._CheckBam()"
-		sequence lua "BfBot.UI._PickerCheckSeq(4)"
-		frame 0
-		align center center
-		ignoreEvents
-		area 479 315 36 26
-	}
-	text
-	{
-		enabled "buffbot_pickerOrder[4] ~= nil"
-		action  "BfBot.UI.PickerSelect(4)"
-		text lua "BfBot.UI._PickerNameText(4)"
-		text style "bb_normal"
-		text align left center
-		text color lua "BfBot.UI._PickerRowColor(4)"
-		area 517 315 159 26
-	}
-
-	-- Row 5
-	button
-	{
-		name    "bbTgChk5"
-		enabled "buffbot_pickerOrder[5] ~= nil"
-		clickable lua "buffbot_targetLocked == 0"
-		action  "BfBot.UI.PickerToggle(5)"
-		area 479 343 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk5_t"
-		enabled "buffbot_pickerOrder[5] ~= nil"
-		text lua "BfBot.UI._PickerCheckText(5)"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
-		ignoreEvents
-		area 479 343 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk5_a"
-		enabled "buffbot_pickerOrder[5] ~= nil"
-		bam lua "BfBot.UI._CheckBam()"
-		sequence lua "BfBot.UI._PickerCheckSeq(5)"
-		frame 0
-		align center center
-		ignoreEvents
-		area 479 343 36 26
-	}
-	text
-	{
-		enabled "buffbot_pickerOrder[5] ~= nil"
-		action  "BfBot.UI.PickerSelect(5)"
-		text lua "BfBot.UI._PickerNameText(5)"
-		text style "bb_normal"
-		text align left center
-		text color lua "BfBot.UI._PickerRowColor(5)"
-		area 517 343 159 26
-	}
-
-	-- Row 6
-	button
-	{
-		name    "bbTgChk6"
-		enabled "buffbot_pickerOrder[6] ~= nil"
-		clickable lua "buffbot_targetLocked == 0"
-		action  "BfBot.UI.PickerToggle(6)"
-		area 479 371 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk6_t"
-		enabled "buffbot_pickerOrder[6] ~= nil"
-		text lua "BfBot.UI._PickerCheckText(6)"
-		text style "bb_caption"
-		text align center center
-		text color lua "BfBot.UI._CaptionColor(buffbot_targetLocked == 0)"
-		ignoreEvents
-		area 479 371 36 26
-	}
-
-	label
-	{
-		name    "bbTgChk6_a"
-		enabled "buffbot_pickerOrder[6] ~= nil"
-		bam lua "BfBot.UI._CheckBam()"
-		sequence lua "BfBot.UI._PickerCheckSeq(6)"
-		frame 0
-		align center center
-		ignoreEvents
-		area 479 371 36 26
-	}
-	text
-	{
-		enabled "buffbot_pickerOrder[6] ~= nil"
-		action  "BfBot.UI.PickerSelect(6)"
-		text lua "BfBot.UI._PickerNameText(6)"
-		text style "bb_normal"
-		text align left center
-		text color lua "BfBot.UI._PickerRowColor(6)"
-		area 517 371 159 26
+		area 479 231 197 168
+		name    "bbTgList"
+		action      "BfBot.UI._OnPickerRowAction(cellNumber)"
+		enabled     "true"
+		table       "buffbot_pickerOrder"
+		var         "buffbot_tgtPickerSel"
+		rowheight   28
+		scrollbar   "BFBSCRL"
 	}
 
 	-- Move Up button

@@ -11,6 +11,7 @@ from lupa.luajit21 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
+EXEC_SOURCE = (ROOT / "buffbot/BfBotExe.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
 LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
@@ -41,6 +42,10 @@ def repeat_ui_lua() -> LuaRuntime:
     runtime.execute("io = nil")
     runtime.execute(LOC_SOURCE)
     runtime.execute(PERSIST_SOURCE)
+    # The executor too: the panel reads `BfBot.Exec` for the caster behind a
+    # clone tab, the run state, the force mode -- and, since #117, whether a
+    # target value names a summon. A stub would be a second copy of that rule.
+    runtime.execute(EXEC_SOURCE)
     runtime.execute(UI_SOURCE)
     return runtime
 

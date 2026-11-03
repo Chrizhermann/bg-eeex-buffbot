@@ -10,6 +10,7 @@ from lupa.luajit21 import LuaRuntime
 ROOT = Path(__file__).resolve().parents[1]
 LOC_SOURCE = (ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8")
 PERSIST_SOURCE = (ROOT / "buffbot/BfBotPer.lua").read_text(encoding="utf-8")
+EXEC_SOURCE = (ROOT / "buffbot/BfBotExe.lua").read_text(encoding="utf-8")
 UI_SOURCE = (ROOT / "buffbot/BfBotUI.lua").read_text(encoding="utf-8")
 MENU_SOURCE = (ROOT / "buffbot/BuffBot.menu").read_text(encoding="utf-8")
 TEST_SOURCE = (ROOT / "buffbot/BfBotTst.lua").read_text(encoding="utf-8")
@@ -73,6 +74,10 @@ def ui_lua() -> LuaRuntime:
     # the queue builders share one implementation there, and a stub would
     # let the two drift without a test noticing.
     runtime.execute(PERSIST_SOURCE)
+    # The executor too: the panel reads `BfBot.Exec` for the caster behind a
+    # clone tab, the run state, the force mode -- and, since #117, whether a
+    # target value names a summon. A stub would be a second copy of that rule.
+    runtime.execute(EXEC_SOURCE)
     runtime.execute(UI_SOURCE)
     return runtime
 
@@ -1385,9 +1390,25 @@ def _targets_menu() -> str:
 
 
 def _dialog_item(name: str) -> str:
+    """The element block that declares `name`.
+
+    A `list` cannot be sliced to the first closing brace -- its columns have
+    their own -- so for one, the slice runs to the `scrollbar` line that ends
+    every list in this file.
+    """
     menu = _targets_menu()
     at = menu.index('name    "' + name + '"')
-    return menu[menu.rindex("{", 0, at) : menu.index("}", at) + 1]
+    # Walk back to the element's OWN keyword line, not the nearest brace: in
+    # a list, `name` comes after the columns, so the nearest brace belongs to
+    # the last column.
+    start = max(menu.rfind("\n\t" + kind + "\n", 0, at)
+                for kind in ("list", "button", "label", "text"))
+    assert start > 0, name
+    scrollbar = menu.find("scrollbar", at)
+    close = menu.index("\n\t}", at)
+    if 0 <= scrollbar < close:
+        close = menu.index("\n", scrollbar)
+    return menu[start:close + 1]
 
 
 def test_the_targets_dialog_greys_its_party_while_targeting_is_locked() -> None:
@@ -1404,8 +1425,8 @@ def test_the_targets_dialog_greys_its_party_while_targeting_is_locked() -> None:
         if stripped.startswith("enabled "):
             assert "buffbot_targetLocked == 0" not in stripped, stripped
 
-    # Every control the lock governs is greyed by it instead.
-    for name in ["bbTgSelf", "bbTgParty"] + [f"bbTgChk{n}" for n in range(1, 7)]:
+    # Every button the lock governs is greyed by it instead.
+    for name in ["bbTgSelf", "bbTgParty"]:
         block = _dialog_item(name)
         assert 'clickable lua "buffbot_targetLocked == 0"' in block, name
         caption = _dialog_item(name + "_t")
@@ -1414,10 +1435,33 @@ def test_the_targets_dialog_greys_its_party_while_targeting_is_locked() -> None:
             in caption
         ), name
 
-    # The member rows are text items, which take no `clickable`: their own
-    # entry point and their colour carry the lock.
-    assert menu.count('action  "BfBot.UI.PickerSelect(') == 6
-    for helper in ("PickerSelf", "PickerAllParty", "PickerToggle", "PickerSelect"):
+    # The recipients are one scrolling list now (#117), not six hand-placed
+    # rows -- six was the party cap written into geometry, and a party can
+    # have several summons out. The greying moved into its column templates:
+    # the checkbox caption takes the lock's colour, and the name takes
+    # `_PickerRowColor`, which answers the unavailable colour while locked.
+    rows = _dialog_item("bbTgList")
+    assert 'table       "buffbot_pickerOrder"' in rows
+    assert 'var         "buffbot_tgtPickerSel"' in rows
+    assert 'scrollbar   "BFBSCRL"' in rows
+    assert 'BfBot.UI._CaptionColor(buffbot_targetLocked == 0)' in rows
+    assert "BfBot.UI._PickerRowColor(rowNumber)" in rows
+    # One action for the whole list, taking the clicked cell: `rowNumber` is
+    # stale in a list callback, so the row comes from `var`.
+    assert 'action      "BfBot.UI._OnPickerRowAction(cellNumber)"' in rows
+    assert "PickerSelect(" not in rows
+
+    # Two columns, totalling 100 percent. Counted here so inserting one
+    # breaks this test rather than the panel's click mapping.
+    declared = [line for line in rows.splitlines() if line.strip() == "column"]
+    assert len(declared) == 2, declared
+    widths = [int(line.split()[1])
+              for line in rows.splitlines() if line.strip().startswith("width ")]
+    assert widths == [19, 81], widths
+    assert sum(widths) == 100
+
+    for helper in ("PickerSelf", "PickerAllParty", "PickerToggle",
+                   "PickerSelect", "_OnPickerRowAction"):
         body = re.search(
             r"function BfBot\.UI\." + helper + r"\(.*?^end$", UI_SOURCE, re.S | re.M
         ).group(0)

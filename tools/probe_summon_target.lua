@@ -674,4 +674,48 @@ function BfBotProbe117_StoreShape()
         table.concat(keys, ", "), table.concat(stored, ", "))
 end
 
+
+--- Does the target picker actually offer the summon? (#117)
+---
+--- The screenshot cannot show this: planning a clone does not put one on the
+--- field, and the lab save has none standing. So the check is the picker's
+--- own row list, read after a real conjure.
+function BfBotProbe117_Picker()
+    local sprite = _sprite(S.caster)
+    if not sprite then return "no caster" end
+    -- The panel's own entry points, as the screenshot tool uses them:
+    -- `SetChar` then `Toggle`. There is no `Open`.
+    local okOpen, err = pcall(function()
+        BfBot.UI.SetChar(S.caster)
+        BfBot.UI.SetPreset(1)
+        BfBot.UI.Toggle()
+    end)
+    if not okOpen then return "panel would not open: " .. tostring(err) end
+
+    -- Any row whose targeting is not locked: a self-only row disables every
+    -- control, which would make an empty answer meaningless.
+    local row, name = nil, nil
+    for index, entry in ipairs(buffbot_spellTable or {}) do
+        if entry.isSelfOnly ~= 1 and entry.isAoE ~= 1 then
+            row, name = index, entry.name or entry.resref
+            break
+        end
+    end
+    if not row then return "no unlocked spell row on this caster" end
+
+    local okTargets, errTargets = pcall(BfBot.UI.OpenTargets, row)
+    if not okTargets then
+        return "OpenTargets failed: " .. tostring(errTargets)
+    end
+
+    local lines = { string.format("row %d (%s), %d picker rows:",
+        row, tostring(name), #buffbot_pickerOrder) }
+    for index, value in ipairs(buffbot_pickerOrder) do
+        lines[#lines + 1] = string.format("  %d  %-28s -> %s%s",
+            index, tostring(value), BfBot.UI._PickerLabel(value),
+            BfBot.UI._PickerRowIsSummon(index) == 1 and "   [summon]" or "")
+    end
+    return table.concat(lines, "\n")
+end
+
 return "ready"

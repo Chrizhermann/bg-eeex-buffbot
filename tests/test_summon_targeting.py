@@ -86,6 +86,12 @@ def ui_lua() -> LuaRuntime:
     )
     runtime.execute(LOC_SOURCE)
     runtime.execute(PERSIST_SOURCE)
+    # The executor comes BEFORE the fakes below, and they override single
+    # fields on it rather than replacing the table: the panel reads
+    # `BfBot.Exec` for the caster behind a clone tab, the run state, the
+    # force mode -- and, since #117, whether a target value names a summon.
+    # Replacing the table wholesale took the real ones away again.
+    runtime.execute(EXEC_SOURCE)
     runtime.execute(
         """
         local party = {
@@ -93,11 +99,9 @@ def ui_lua() -> LuaRuntime:
             [1] = { m_id = 101, name = "Imoen" },
         }
 
-        BfBot.Exec = {
-            _ResolveCaster = function(ref)
-                return { m_id = ref.oid, name = ref.name }
-            end,
-        }
+        BfBot.Exec._ResolveCaster = function(ref)
+            return { m_id = ref.oid, name = ref.name }
+        end
         BfBot._GetName = function(sprite) return sprite and sprite.name or "" end
         BfBot._SafeCallback = function(_, callback) return callback end
 

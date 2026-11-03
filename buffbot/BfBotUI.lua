@@ -494,7 +494,10 @@ buffbot_targetHeader = ""        -- header text for target picker (spell name)
 buffbot_targetLocked = 0         -- 1 if spell is self-only/AoE and not unlocked
 buffbot_targetLockText = ""      -- "(Self-only)" or "(Party-wide)" for locked spells
 buffbot_pickerOrder = {}         -- all party names in display/priority order (reorderable)
-buffbot_pickerChecked = {}       -- {[name]=1} for names included in target list
+buffbot_pickerChecked = {}       -- {[value]=1} for values included in target list
+-- {[value]=label}: how a picker row reads. Only summon rows need an entry --
+-- a character's value IS its label (#117).
+buffbot_pickerLabels = {}
 buffbot_tgtPickerSel = 0         -- selected ROW index in picker (1-6, for Up/Down/highlight)
 
 -- Rename dialog state
@@ -2591,6 +2594,7 @@ function BfBot.UI.OpenTargets(row)
     -- then unchecked party members (in portrait order).
     buffbot_pickerOrder = {}
     buffbot_pickerChecked = {}
+    buffbot_pickerLabels = {}
 
     local tgt = entry.tgt
     local checkedNames = {}
@@ -2614,6 +2618,27 @@ function BfBot.UI.OpenTargets(row)
         end
     end
 
+    -- Then the summons the party has out (#117). They come after the party
+    -- because a buff is nearly always meant for a character; a summon is the
+    -- deliberate extra. Their labels are collected here, while the live
+    -- entries are in hand -- the value itself is a key, not a name.
+    --
+    -- A checked summon target whose summon is gone keeps its row: it was
+    -- added above with the stored targets, so the player can see what the
+    -- preset still asks for and untick it. It is not re-offered here.
+    local okSummons, summons = pcall(BfBot.Scan.GetAlliedSummons)
+    if okSummons and type(summons) == "table" then
+        for _, summon in ipairs(summons) do
+            local value = BfBot.Exec.SummonTarget(summon.identity)
+            if value then
+                buffbot_pickerLabels[value] = summon.name or summon.identity
+                if not checkedNames[value] then
+                    table.insert(buffbot_pickerOrder, value)
+                end
+            end
+        end
+    end
+
     Infinity_PushMenu("BUFFBOT_TARGETS")
 end
 
@@ -2624,9 +2649,35 @@ function BfBot.UI.OpenTargetsForSelected()
     end
 end
 
---- Get the display name for row N in the picker (1-6).
+--- PURE: how a picker value reads on screen.
+---
+--- A character's value is its name, so it is its own label. A summon's value
+--- is `sum:<identity>`, which is a key, not something to show a player --
+--- `sum:clone:Jaheira` means "the clone Jaheira made". The readable name is
+--- collected when the picker opens, while the summon is in hand; the
+--- identity is the fallback, because a summon that expired between opening
+--- the picker and drawing it should still show which row it was.
+function BfBot.UI._PickerLabel(value)
+    if type(value) ~= "string" then return "" end
+    if not BfBot.Exec._IsSummonTarget(value) then return value end
+    local label = buffbot_pickerLabels[value]
+    if type(label) == "string" and label ~= "" then return label end
+    return BfBot.Exec._SummonTargetIdentity(value) or value
+end
+
+--- PURE: is this picker row a summon rather than a party member?
+function BfBot.UI._PickerRowIsSummon(row)
+    return BfBot.Exec._IsSummonTarget(buffbot_pickerOrder[row]) and 1 or 0
+end
+
+--- How many rows the picker has, for the menu's own guards.
+function BfBot.UI._PickerRowCount()
+    return #buffbot_pickerOrder
+end
+
+--- Get the display name for row N in the picker.
 function BfBot.UI._PickerRowName(row)
-    return buffbot_pickerOrder[row] or ""
+    return BfBot.UI._PickerLabel(buffbot_pickerOrder[row])
 end
 
 --- Button text for a picker row. Left-side checkbox label.
@@ -2650,12 +2701,13 @@ end
 --- Button text for a picker row. Name label (right side).
 -- Prepends "> " for the selected-for-reordering row.
 function BfBot.UI._PickerNameText(row)
-    local name = buffbot_pickerOrder[row]
-    if not name then return "" end
+    local value = buffbot_pickerOrder[row]
+    if not value then return "" end
+    local label = BfBot.UI._PickerLabel(value)
     if row == buffbot_tgtPickerSel then
-        return "> " .. name
+        return "> " .. label
     end
-    return name
+    return label
 end
 
 --- Text color for a picker row — highlight if selected.
@@ -2693,6 +2745,32 @@ function BfBot.UI.PickerSelect(row)
     if buffbot_targetLocked == 1 then return end
     if row >= 1 and row <= #buffbot_pickerOrder then
         buffbot_tgtPickerSel = row
+    end
+end
+
+--- Which column of a picker row is the checkbox.
+--- `tests/test_summon_recipients.py` recounts the list's columns, so
+--- inserting one breaks the test rather than the panel.
+BfBot.UI.PICKER_CHECK_CELL = 1
+
+--- A click anywhere in the picker list.
+---
+--- The row comes from `buffbot_tgtPickerSel`, the list's own `var`, which the
+--- engine has already set to the clicked row: `rowNumber` is stale inside a
+--- list callback. Same discipline as `_OnPartyRowAction`.
+---
+--- Clicking the checkbox toggles; clicking the name only selects, which is
+--- what Up and Down then move. Selection happens either way, because the
+--- `var` is written before this runs -- so a row can be ticked and moved in
+--- two clicks, which the six fixed rows needed three for.
+function BfBot.UI._OnPickerRowAction(cell)
+    if buffbot_targetLocked == 1 then return end
+    local row = buffbot_tgtPickerSel
+    if type(row) ~= "number" or row < 1 or row > #buffbot_pickerOrder then
+        return
+    end
+    if cell == BfBot.UI.PICKER_CHECK_CELL then
+        BfBot.UI.PickerToggle(row)
     end
 end
 
@@ -2745,10 +2823,15 @@ function BfBot.UI._SetTgtUnlockForView(sprite, resref, value)
 end
 
 --- Quick-set: All Party. Checks all party members, keeps current order.
+---
+--- Summon rows are deliberately left alone: the button says Party, and a
+--- player who wants the Planetar buffed too says so by ticking it (#117).
 function BfBot.UI.PickerAllParty()
     if buffbot_targetLocked == 1 then return end
-    for _, name in ipairs(buffbot_pickerOrder) do
-        buffbot_pickerChecked[name] = 1
+    for _, value in ipairs(buffbot_pickerOrder) do
+        if not BfBot.Exec._IsSummonTarget(value) then
+            buffbot_pickerChecked[value] = 1
+        end
     end
 end
 
@@ -4225,6 +4308,9 @@ function BfBot.UI._TargetToText(tgt)
         if #tgt == 0 then return BfBot.L10N.Get("common.none") end
         -- First entry is always the display name (highest priority target)
         local firstName = tgt[1]
+        if BfBot.Exec._IsSummonTarget(firstName) then
+            firstName = BfBot.UI._PickerLabel(firstName)
+        end
         -- Legacy slot string? Resolve to name for display
         local num = tonumber(firstName)
         if num and num >= 1 and num <= 6 then
@@ -4243,6 +4329,9 @@ function BfBot.UI._TargetToText(tgt)
         if num and num >= 1 and num <= 6 then
             return buffbot_charNames[num] or BfBot.L10N.Format(
                 "ui.target.player", { index = num })
+        end
+        if BfBot.Exec._IsSummonTarget(tgt) then
+            return BfBot.UI._PickerLabel(tgt)
         end
         -- Name string — return as-is
         return tgt

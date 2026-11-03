@@ -190,6 +190,10 @@ def main(argv=None) -> int:
             log(f"waiting {args.conjure_seconds:.0f}s for the clone")
             time.sleep(args.conjure_seconds)
         step("summons", "return BfBotProbe117_Summons()")
+        # Does the picker offer it? A screenshot cannot show this -- planning
+        # a clone does not put one on the field -- so the picker's own row
+        # list is read after a real conjure.
+        step("picker", "return BfBotProbe117_Picker()", timeout=120)
         step("conjurer", "return BfBotProbe117_Conjurer()")
         step("store-shape", "return BfBotProbe117_StoreShape()")
         step("compiled", "return BfBotProbe117_Compiled()")
