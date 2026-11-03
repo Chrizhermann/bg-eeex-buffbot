@@ -1036,7 +1036,14 @@ end
 -- @param ownerPreset    owner preset table { spells = { [resref] = entry } }
 -- @param cloneCastable  scan result for the clone { [resref] = {count=..} }
 -- @return table: fresh spells table (never aliases input tables)
-function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
+--- @param afterPriority optional: only entries the owner casts LATER than
+---        this arrive enabled. A Project Image passes the priority of the
+---        spell that creates it, because what it freezes is what it should
+---        take over, and an entry the owner casts first would be redone out
+---        of the same shared slots (#116). Absent copies `on` verbatim,
+---        which is what a Simulacrum wants.
+function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable,
+                                        afterPriority)
     local seeded = {}
     if type(ownerPreset) ~= "table" or type(ownerPreset.spells) ~= "table"
         or type(cloneCastable) ~= "table" then
@@ -1047,8 +1054,13 @@ function BfBot.Persist._SeedCloneSpells(ownerPreset, cloneCastable)
         if type(entry) == "table" and entry.kind ~= "itm"
             and type(scanData) == "table" and scanData.kind ~= "itm"
             and (tonumber(scanData.count) or 0) > 0 then
+            local on = (type(entry.on) == "number") and entry.on or 0
+            if afterPriority ~= nil then
+                local pri = (type(entry.pri) == "number") and entry.pri or 999
+                if pri <= afterPriority then on = 0 end
+            end
             local copy = {
-                on  = (type(entry.on) == "number") and entry.on or 0,
+                on  = on,
                 pri = (type(entry.pri) == "number") and entry.pri or 999,
                 rep = BfBot.Persist._NormalizeSpellRepeat(entry.rep),
             }
@@ -1190,7 +1202,8 @@ function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
                     end
                     castable = scanned
                 end
-                preset.spells = BfBot.Persist._SeedCloneSpells(ownerPreset, castable)
+                preset.spells = BfBot.Persist._SeedCloneSpells(
+                    ownerPreset, castable, seedCtx.afterPriority)
             else
                 BfBot._Warn("[Persist] GetSummonPreset: malformed seedCtx"
                     .. " ignored (need ownerSprite + cloneSprite or cloneRows)")

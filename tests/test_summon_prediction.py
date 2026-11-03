@@ -1909,3 +1909,95 @@ def test_a_better_reason_is_never_overwritten(plan: LuaRuntime) -> None:
         Reason = snap.groups[LaterKey].sources[1].reason
     """)
     assert plan.eval("Reason") == "caster_dead"
+
+
+# ----------------------------------------------------------------------
+# What an image inherits (#116)
+# ----------------------------------------------------------------------
+#
+# A Project Image freezes its owner and draws from the owner's own slots, so
+# what the freeze costs is what the image should pick up -- and an entry the
+# owner still casts first would be redone out of the same budget.
+
+
+SEED_OWNER = """
+{ spells = {
+    EARLY = { on = 1, pri = 1, rep = 1, tgt = "p" },
+    CREATE = { on = 1, pri = 5, rep = 1, tgt = "s" },
+    LATE = { on = 1, pri = 9, rep = 1, tgt = "p" },
+    OFF = { on = 0, pri = 12, rep = 1, tgt = "p" },
+} }
+"""
+
+SEED_BOOK = """
+{ EARLY = { kind = "spl", count = 2 }, CREATE = { kind = "spl", count = 1 },
+  LATE = { kind = "spl", count = 2 }, OFF = { kind = "spl", count = 2 } }
+"""
+
+
+def _seeded(lua: LuaRuntime, after: str) -> dict:
+    _persist(lua)
+    return lua.eval(
+        "BfBot.Persist._SeedCloneSpells(%s, %s, %s)"
+        % (SEED_OWNER, SEED_BOOK, after))
+
+
+def test_a_simulacrum_inherits_the_owners_switches_as_they_are(
+        lua: LuaRuntime) -> None:
+    """It has its own slots and the owner keeps casting, so nothing about
+    the owner's choices is wrong for it."""
+    seeded = _seeded(lua, "nil")
+    assert seeded["EARLY"]["on"] == 1
+    assert seeded["LATE"]["on"] == 1
+    assert seeded["OFF"]["on"] == 0
+
+
+def test_an_image_inherits_only_what_the_freeze_costs(
+        lua: LuaRuntime) -> None:
+    """Cut-off 5 is where the creation sits: LATE is lost to the freeze and
+    the image takes it; EARLY the owner still casts first."""
+    seeded = _seeded(lua, "5")
+    assert seeded["LATE"]["on"] == 1
+    assert seeded["EARLY"]["on"] == 0
+
+
+def test_the_creation_itself_is_not_handed_to_the_image(
+        lua: LuaRuntime) -> None:
+    """An image conjuring an image is not what anybody meant."""
+    seeded = _seeded(lua, "5")
+    assert seeded["CREATE"]["on"] == 0
+
+
+def test_an_entry_the_owner_switched_off_stays_off(
+        lua: LuaRuntime) -> None:
+    """The cut-off only ever takes an entry away, never adds one."""
+    seeded = _seeded(lua, "5")
+    assert seeded["OFF"]["on"] == 0
+
+
+def test_everything_still_arrives_so_it_can_be_switched_on_by_hand(
+        lua: LuaRuntime) -> None:
+    """The default is a default, not a filter: the rows are all there."""
+    seeded = _seeded(lua, "5")
+    assert set(seeded.keys()) == {"EARLY", "CREATE", "LATE", "OFF"}
+
+
+def test_the_rest_of_an_entry_survives_the_cut_off(lua: LuaRuntime) -> None:
+    """Only `on` is decided here; targets, repeats and priority are the
+    owner's and come across whatever the cut-off says."""
+    seeded = _seeded(lua, "5")
+    assert seeded["EARLY"]["tgt"] == "p"
+    assert seeded["EARLY"]["pri"] == 1
+    assert seeded["EARLY"]["rep"] == 1
+
+
+def test_an_entry_without_a_priority_counts_as_last(
+        lua: LuaRuntime) -> None:
+    """999 is the planner's own "no priority", so such an entry is after
+    the creation and the image takes it."""
+    _persist(lua)
+    seeded = lua.eval(
+        'BfBot.Persist._SeedCloneSpells('
+        '{ spells = { X = { on = 1, tgt = "p" } } },'
+        '{ X = { kind = "spl", count = 1 } }, 5)')
+    assert seeded["X"]["on"] == 1

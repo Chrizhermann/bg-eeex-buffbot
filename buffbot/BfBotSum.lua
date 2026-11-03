@@ -1156,6 +1156,30 @@ end
 -- "clone:<ownerName>" for a clone, so a preset configured against the
 -- prediction is the very preset the real spawn reads.
 
+--- The priority at which `sprite` casts the spell that creates image type
+--- `image`, or nil when nothing in this preset creates one.
+---
+--- This is the line a Project Image's seeding divides on: what the owner
+--- casts after it is what the freeze costs them, and so what the image
+--- should take over (#116).
+function S.CreationPriority(sprite, presetIdx, image)
+    if not sprite then return nil end
+    local okRows, rows = pcall(BfBot.Scan.GetCastableSpells, sprite)
+    if not okRows or not rows then return nil end
+    for resref, row in pairs(rows) do
+        for _, descriptor in ipairs(S.Creators(row)) do
+            if descriptor.kind == "clone" and descriptor.image == image then
+                local entry = BfBot.Persist.GetSpellConfig(sprite, presetIdx,
+                    resref)
+                if entry and entry.on == 1 then
+                    return tonumber(entry.pri) or 999
+                end
+            end
+        end
+    end
+    return nil
+end
+
 --- Every clone the party's current presets would conjure, in the shape the
 --- Summons view's list model uses, plus `predicted = 1`.
 ---

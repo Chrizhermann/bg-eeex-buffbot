@@ -2376,6 +2376,13 @@ function BfBot.UI._EnsureSummonPreset(entry)
         end
         if rows and owner then
             seedCtx = { ownerSprite = owner, cloneRows = rows }
+            -- An image inherits what freezing its owner costs them, and
+            -- nothing the owner will still cast first out of the same
+            -- slots (#116). A Simulacrum has its own and copies verbatim.
+            if entry.cloneType == 2 then
+                seedCtx.afterPriority = BfBot.Summon.CreationPriority(
+                    owner, BfBot.UI._presetIdx, 2)
+            end
         end
         BfBot.Persist.GetSummonPreset(entry.identity, BfBot.UI._presetIdx,
             seedCtx)
