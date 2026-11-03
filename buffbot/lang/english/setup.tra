@@ -553,3 +553,6 @@
 
 // ui.chip.via_simulacrum
 @781 = ~via simulacrum~
+
+// ui.repeat.party_split
+@782 = ~Two characters cast this buff a different number of times. The button shows the highest, because that is how many casts happen. Changing it sets the same number for every one of them. Left-click increases; right-click decreases.~

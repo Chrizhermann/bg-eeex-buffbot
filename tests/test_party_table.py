@@ -47,6 +47,8 @@ EXTRACTED = (
     # The cast reading and the move (#115).
     "CyclePartyOrder", "_PartyOrderLabel", "_IsPartyCastOrder",
     "_PartyRowPriority", "_SortPartyRowsByCast", "_CanMovePartyRow",
+    # Repeat over a row's several owners (#115).
+    "_PartyRowRepeat",
     # A chip that waits on a clone (#116).
     "_CloneShortLabel",
 )
@@ -547,14 +549,21 @@ def test_the_party_footer_keeps_only_what_applies_to_a_preset():
     layout = _layout()
     start = layout.index("if recipient then")
     branch = layout[start:layout.index("\n    else", start)]
-    # Preset-wide actions, and the order controls that joined them in #115 --
-    # the order is a property of the preset, not of a selected caster row.
-    for name in ("bbExp", "bbImp", "bbUp", "bbDn", "bbSort", "bbOrder"):
+    # Preset-wide actions, the order controls that joined them in #115 --
+    # the order is a property of the preset, not of a selected caster row --
+    # and, finishing #115, the two that edit the selected ROW. Repeat and
+    # Variant have to be POSITIONED here, not merely enabled: left out, they
+    # keep the caster view's coordinates and draw over the list, which is
+    # how Up once landed on top of Import.
+    for name in ("bbExp", "bbImp", "bbUp", "bbDn", "bbSort", "bbOrder",
+                 "bbRepeat", "bbVVar"):
         assert f'"{name}"' in branch, name
     # Delete Preset is not here: it sits in the preset row, which both
     # readings share. Enable and Target are not here because the cell is
-    # already both.
-    for name in ("bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt", "bbDel"):
+    # already both. Add is not here because choosing whose book to add from
+    # is per-character, and Remove because the row's own Clear already is
+    # that operation for every owner at once.
+    for name in ("bbAdd", "bbRmv", "bbTog", "bbTgt", "bbDel"):
         assert f'"{name}"' not in branch, name
     layout_text = layout
     assert 'setArea("bbDel", renX + renW + newW + 2 * preGap, preY, delW, preH)'         in layout_text
@@ -694,14 +703,21 @@ def test_no_cell_draws_a_party_portrait():
 
 CASTER_ONLY = (
     "bbHName", "bbHDur", "bbHUses", "bbHRep", "bbHTgt", "bbHLock",
-    "bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt",
-    "bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVOrder",
+    "bbAdd", "bbRmv", "bbTog", "bbTgt",
+    "bbVTog", "bbVTgt", "bbVUp", "bbVDn", "bbVSort", "bbVOrder",
 )
 
 # The order controls work in BOTH readings since #115 -- the table has a cast
 # ordering of its own, and reordering was the thing it most obviously could
-# not do. Enable and Target deliberately stayed behind: the cell is both.
-BOTH_READINGS = ("bbUp", "bbDn", "bbSort", "bbOrder")
+# not do. Repeat and Variant joined them when #115 was finished: each writes
+# to every owner of the row rather than to one selected character.
+#
+# Enable and Target deliberately stayed behind, because the cell is already
+# both. `bbAdd` stayed too: choosing WHOSE book to add a classifier miss from
+# is inherently per-character, and the table has no character. `bbRmv` stayed
+# because the table already has the operation under a better name -- the
+# row's own Clear, which switches the buff off for every owner at once.
+BOTH_READINGS = ("bbUp", "bbDn", "bbSort", "bbOrder", "bbRepeat", "bbVVar")
 
 
 def _menu_block(element: str) -> str | None:
@@ -712,12 +728,24 @@ def _menu_block(element: str) -> str | None:
 
 @pytest.mark.parametrize("name", BOTH_READINGS)
 def test_the_order_controls_work_in_the_party_table(name: str) -> None:
-    """Up, Down, Sort and Order are the minimum the table needed (#115)."""
+    """Up, Down, Sort and Order are the minimum the table needed (#115),
+    and Repeat and Variant followed.
+
+    Two shapes count as "works in the table". Most of these controls simply
+    dropped the caster-view condition. Variant could not: whether a row
+    offers a choice is a different question in each reading -- one selected
+    spell's `buffbot_selectedHasVariants` over there, the row's own owners
+    here -- so its gate names both and branches. A bare substring test would
+    read that compound condition as caster-only, which is why the rule is
+    written out rather than grepped for."""
     for element in (name, name + "_t", name + "_b"):
         body = _menu_block(element)
         if not body or "enabled" not in body:
             continue
-        assert "not BfBot.UI._IsRecipientView()" not in body, element
+        gate = re.search(r'\benabled\s+"([^"]*)"', body).group(1)
+        if "not BfBot.UI._IsRecipientView()" not in gate:
+            continue
+        assert "BfBot.UI._IsRecipientView() and" in gate, element
 
 
 def test_enable_and_target_stay_out_of_the_party_table() -> None:
@@ -1223,3 +1251,79 @@ def test_a_problem_still_reads_as_a_problem(lua: LuaRuntime) -> None:
     problem = lua.eval("BfBot.UI._PartyChipColor(1, 1)")
     _chip_world(lua, "nil", state="problem")
     assert problem == lua.eval("BfBot.UI._PartyChipColor(1, 1)")
+
+
+# ---------------------------------------------------------------------------
+# Repeat, over a row's several owners (#115)
+# ---------------------------------------------------------------------------
+#
+# A row aggregates every character who could supply the buff, so Repeat is
+# not the caster view's operation moved across. It reads the plan -- like
+# everything else the row shows -- and writes to all of them.
+
+REPS = """{
+    { key = "bless", name = "Bless", icon = "SPBLESS", kind = "spl",
+      selfOnly = false, uses = { free = 4, total = 7 },
+      planned = 1, short = 0,
+      recipients = {
+          { party = true, key = "party", duration = 300, state = "planned" } },
+      entries = {
+          { repeats = %s,
+            request = { resource = "SPPR201", sourceSlot = 0, kind = "spl" } },
+          { repeats = %s,
+            request = { resource = "SPPR201", sourceSlot = 1, kind = "spl" } }
+      } } }"""
+
+
+def _rep_row(lua: LuaRuntime, first, second) -> dict:
+    _build(lua, REPS % (first, second))
+    return lua.eval("buffbot_partyTable[1]")
+
+
+def test_a_row_shows_the_highest_repeat_its_owners_ask_for(
+    lua: LuaRuntime,
+) -> None:
+    """It is the one true statement about the party: if anybody casts it
+    three times, three casts happen."""
+    row = _rep_row(lua, 1, 3)
+    assert row["rep"] == 3
+
+
+def test_agreeing_owners_are_not_marked_as_split(lua: LuaRuntime) -> None:
+    row = _rep_row(lua, 2, 2)
+    assert row["rep"] == 2
+    assert row["repSplit"] is None
+
+
+def test_disagreeing_owners_are_marked(lua: LuaRuntime) -> None:
+    """Otherwise a player reads "3" as "everyone three times"."""
+    row = _rep_row(lua, 1, 3)
+    assert row["repSplit"] == 1
+
+
+def test_a_missing_repeat_counts_as_one(lua: LuaRuntime) -> None:
+    """Absent is the schema's default, not a reason to guess."""
+    row = _rep_row(lua, "nil", "nil")
+    assert row["rep"] == 1
+    assert row["repSplit"] is None
+
+
+def test_a_row_with_no_entries_still_answers(lua: LuaRuntime) -> None:
+    _build(lua)
+    assert lua.eval("buffbot_partyTable[1].rep") == 1
+
+
+def test_the_row_repeat_reads_the_plan_and_not_the_config(
+    lua: LuaRuntime,
+) -> None:
+    """`_BuildPartyRows` is the display layer: it is extracted and run here
+    without a game at all. Reaching into persistence would make it one of
+    the few functions in that layer that cannot be."""
+    source = re.search(
+        r"^function BfBot\.UI\._PartyRowRepeat\(.*?^end$", UI_SOURCE,
+        re.S | re.M
+    ).group(0)
+    assert "EEex_Sprite_GetInPortrait" not in source
+    assert "GetSpellRepeat" not in source
+    assert "BfBot.Persist" not in source
+    assert "entry.repeats" in source

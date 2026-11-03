@@ -1998,7 +1998,7 @@ menu
 	button
 	{
 		name    "bbRepeat"
-		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen"
 		clickable lua "BfBot.UI._HasSelection()"
 		action  "BfBot.UI.StepSelectedRepeat(1)"
 		actionAlt "BfBot.UI.StepSelectedRepeat(-1)"
@@ -2013,7 +2013,7 @@ menu
 	label
 	{
 		name    "bbRepeat_t"
-		enabled "buffbot_isOpen and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen"
 		text lua "BfBot.UI._RepeatButtonText()"
 		text style "bb_caption"
 		text align center center
@@ -2322,7 +2322,7 @@ menu
 	button
 	{
 		name    "bbVVar"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
+		enabled "BfBot.UI._HasSelection() and (BfBot.UI._IsRecipientView() and BfBot.UI._PartyHasVariants() or (not BfBot.UI._IsRecipientView() and buffbot_selectedHasVariants == 1))"
 		action  "BfBot.UI.OpenVariantsForSelected()"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
@@ -2334,7 +2334,7 @@ menu
 	label
 	{
 		name    "bbVVar_t"
-		enabled "BfBot.UI._HasSelection() and buffbot_selectedHasVariants == 1 and not BfBot.UI._IsRecipientView()"
+		enabled "BfBot.UI._HasSelection() and (BfBot.UI._IsRecipientView() and BfBot.UI._PartyHasVariants() or (not BfBot.UI._IsRecipientView() and buffbot_selectedHasVariants == 1))"
 		text lua "BfBot.UI._VariantBtnText()"
 		text style "bb_caption"
 		text align center center

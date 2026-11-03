@@ -1646,8 +1646,19 @@ function BfBot.UI._Layout()
         -- The order controls join it (#115) -- Export and Import left, the
         -- order right, so the row reads as "the preset" then "its order"
         -- instead of the two colliding at the same coordinates.
+        -- Repeat and Variant join it rather than taking a fourth row
+        -- (#115): a second footer row costs the list one of its own, and
+        -- the table's rows are the point of the table. They sit in their
+        -- own cluster because they edit the selected ROW, which is neither
+        -- a preset-wide action nor part of the order.
+        --
+        -- Positioning them here is not cosmetic. Left where the .menu puts
+        -- them they keep the caster view's coordinates and draw over the
+        -- list -- which is exactly how Up landed on top of Import when the
+        -- order controls were first unhidden.
         row(r5Y,
             { { "bbExp", 92 }, { "bbImp", 92 } },
+            { { "bbRepeat", 100 }, { "bbVVar", 110 } },
             { { "bbClones", 176 } },
             { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 },
               { "bbOrder", 162 } })
@@ -2496,6 +2507,9 @@ end
 --- This deliberately ignores castability / remaining slots: an exhausted
 --- row is still configuration that the player may edit for a later rest.
 function BfBot.UI.StepSelectedRepeat(delta)
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI.StepPartyRowRepeat(delta)
+    end
     local row = buffbot_selectedRow
     if row < 1 or row > #buffbot_spellTable then return end
     local entry = buffbot_spellTable[row]
@@ -3344,6 +3358,12 @@ end
 
 --- Is a spell row selected?
 function BfBot.UI._HasSelection()
+    if BfBot.UI._IsRecipientView() then
+        -- The table's own selection, and only where something can be
+        -- written: a row with no owners is a buff nobody supplies.
+        local row = BfBot.UI._PartyRow(buffbot_partySelectedRow)
+        return buffbot_isOpen and row ~= nil and #(row.owners or {}) > 0
+    end
     return buffbot_isOpen and buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable
 end
 
@@ -3845,6 +3865,26 @@ end
 
 --- Open variants for currently selected row (button handler).
 function BfBot.UI.OpenVariantsForSelected()
+    if BfBot.UI._IsRecipientView() then
+        local entry, owner = BfBot.UI._PartyRowVariantSource()
+        if not entry or not owner then return end
+        -- Remembered so `SelectVariant` knows the choice belongs to every
+        -- owner of this row rather than to one selected character.
+        BfBot.UI._partyVariantRow = buffbot_partySelectedRow
+        buffbot_variantHeader = entry.name or owner.resref
+        buffbot_variantTitle = BfBot.L10N.Format(
+            "ui.select_variant_title", { spell = buffbot_variantHeader })
+        buffbot_variantSelected = 0
+        buffbot_variantTable = {}
+        for _, v in ipairs(entry.variants) do
+            table.insert(buffbot_variantTable, {
+                resref = v.resref, name = v.name, icon = v.icon,
+                label = v.label,
+            })
+        end
+        Infinity_PushMenu("BUFFBOT_VARIANTS")
+        return
+    end
     if buffbot_selectedRow > 0 and buffbot_selectedRow <= #buffbot_spellTable then
         BfBot.UI.OpenVariants(buffbot_selectedRow)
     end
@@ -3854,6 +3894,13 @@ end
 function BfBot.UI.SelectVariant(row)
     local vEntry = buffbot_variantTable[row]
     if not vEntry then return end
+
+    -- Opened from the party table? Then the choice belongs to every owner of
+    -- that row, not to one selected character (#115).
+    if BfBot.UI._SelectPartyRowVariant(vEntry.resref) then
+        Infinity_PopMenu("BUFFBOT_VARIANTS")
+        return
+    end
 
     local entry = BfBot.UI._ResolveSpellAnchor(BfBot.UI._variantSpellAnchor)
     if not entry then
@@ -3945,18 +3992,148 @@ end
 
 --- Normalized repeat count for the selected row (safe while the button is
 --- disabled and the menu still evaluates its text / tooltip expressions).
+--- PURE: the highest repeat the owners of a row ask for, and whether they
+--- disagree (#115).
+---
+--- Highest, because it is the one true statement about the party: if
+--- anybody casts it three times, three casts happen.
+---
+--- Read from the PLAN, not from persistence. Every other thing a row shows
+--- comes from the projection, and `_BuildPartyRows` is the display layer:
+--- reaching into the config here would make it one of the few functions in
+--- it that cannot be run without a game, which `tests/test_party_table.py`
+--- would have to stop extracting.
+---
+--- @return rep number, split 1|nil
+function BfBot.UI._PartyRowRepeat(line)
+    local highest, seen, split = 1, nil, nil
+    for _, entry in ipairs((line and line.entries) or {}) do
+        -- `repeats` is how many attempts the plan expanded this request
+        -- into, which IS the normalized repeat: `P._Expand` already put
+        -- `request.rep` through `_NormalizeSpellRepeat` to produce them. So
+        -- nothing is clamped a second time here, and this layer needs no
+        -- access to the config to say what a row asks for.
+        local rep = tonumber(entry.repeats) or 1
+        if rep < 1 then rep = 1 end
+        if rep > highest then highest = rep end
+        if seen == nil then seen = rep elseif seen ~= rep then split = 1 end
+    end
+    return highest, split
+end
+
+--- Step the selected table row's repeat, for every owner of it.
+---
+--- All owners are set to the SAME number rather than each stepped from its
+--- own: the button shows one value, so pressing it must leave the party at
+--- what the button says, not with owners still an apart.
+function BfBot.UI.StepPartyRowRepeat(delta)
+    local row = BfBot.UI._PartyRow(buffbot_partySelectedRow)
+    if not row or #(row.owners or {}) == 0 then return end
+    local rep = BfBot.UI._StepSpellRepeat(row.rep or 1, delta)
+    local written, skipped = 0, 0
+    for _, owner in ipairs(row.owners) do
+        local sprite = EEex_Sprite_GetInPortrait(owner.slot)
+        if sprite then
+            BfBot.Persist.SetSpellRepeat(sprite, BfBot.UI._presetIdx,
+                owner.resref, rep, owner.kind)
+            written = written + 1
+        else
+            skipped = skipped + 1
+        end
+    end
+    -- A character who left between the plan and the click keeps their entry;
+    -- saying so beats a row that half changes without a word. Same rule as
+    -- clearing a row.
+    if skipped > 0 then
+        BfBot._Display(BfBot.L10N.Format("feedback.party_clear_partial",
+            { name = row.name, left = skipped }))
+    end
+    if written > 0 then BfBot.UI._Refresh() end
+end
+
+--- The scan entry and owner that can supply the selected row's variants, or
+--- nil when its owners cast nothing with variants.
+---
+--- Variants are a property of the SPL, so whichever owner can be read offers
+--- the same list. Items have none.
+function BfBot.UI._PartyRowVariantSource()
+    local row = BfBot.UI._PartyRow(buffbot_partySelectedRow)
+    if not row then return nil end
+    for _, owner in ipairs(row.owners or {}) do
+        if owner.kind ~= "itm" then
+            local sprite = EEex_Sprite_GetInPortrait(owner.slot)
+            if sprite then
+                local ok, scan = pcall(BfBot.Scan.GetCastableSpells, sprite)
+                local entry = ok and scan and scan[owner.resref]
+                if entry and type(entry.variants) == "table"
+                        and #entry.variants > 0 then
+                    return entry, owner
+                end
+            end
+        end
+    end
+    return nil
+end
+
+--- Does the selected row offer a variant choice? The button is drawn by this.
+function BfBot.UI._PartyHasVariants()
+    return BfBot.UI._PartyRowVariantSource() ~= nil
+end
+
+--- Write a chosen variant to every owner of the row the dialog was opened
+--- for. Returns true when it handled the choice, so the caster-view path is
+--- skipped.
+function BfBot.UI._SelectPartyRowVariant(resref)
+    local rowNumber = BfBot.UI._partyVariantRow
+    if not rowNumber then return false end
+    BfBot.UI._partyVariantRow = nil
+    local row = BfBot.UI._PartyRow(rowNumber)
+    if not row then return true end
+    local written = 0
+    for _, owner in ipairs(row.owners or {}) do
+        if owner.kind ~= "itm" then
+            local sprite = EEex_Sprite_GetInPortrait(owner.slot)
+            if sprite then
+                BfBot.Persist.SetSpellVariant(sprite, BfBot.UI._presetIdx,
+                    owner.resref, resref, owner.kind)
+                written = written + 1
+            end
+        end
+    end
+    if written > 0 then BfBot.UI._Refresh() end
+    return true
+end
+
 function BfBot.UI._SelectedSpellRepeat()
+    if BfBot.UI._IsRecipientView() then
+        local row = BfBot.UI._PartyRow(buffbot_partySelectedRow)
+        return BfBot.Persist._NormalizeSpellRepeat(row and row.rep or nil)
+    end
     local entry = buffbot_spellTable[buffbot_selectedRow]
     return BfBot.Persist._NormalizeSpellRepeat(entry and entry.rep or nil)
 end
 
 --- Repeat footer-button text for the selected spell.
 function BfBot.UI._RepeatButtonText()
-    return _RepeatDisplay(BfBot.UI._SelectedSpellRepeat()).label
+    local label = _RepeatDisplay(BfBot.UI._SelectedSpellRepeat()).label
+    if BfBot.UI._IsRecipientView() then
+        local row = BfBot.UI._PartyRow(buffbot_partySelectedRow)
+        -- A star where the owners disagree, so nobody reads "3" as
+        -- "everyone three times" (#115).
+        if row and row.repSplit == 1 then return label .. "*" end
+    end
+    return label
 end
 
 --- Repeat footer-button tooltip for the selected spell or item.
 function BfBot.UI._RepeatTooltip()
+    if BfBot.UI._IsRecipientView() then
+        local row = BfBot.UI._PartyRow(buffbot_partySelectedRow)
+        if row and row.repSplit == 1 then
+            return BfBot.L10N.Get("ui.repeat.party_split")
+        end
+        return _RepeatDisplay(BfBot.UI._SelectedSpellRepeat()).spellTooltip
+    end
     local entry = buffbot_spellTable[buffbot_selectedRow]
     local display = _RepeatDisplay(BfBot.UI._SelectedSpellRepeat())
     if entry and entry.kind == "itm" then
@@ -4980,9 +5157,14 @@ function BfBot.UI._BuildPartyRows(lines, query)
                         kind = request.kind }
                 end
             end
+            local rowRep, rowSplit = BfBot.UI._PartyRowRepeat(line)
             rows[#rows + 1] = {
                 key = line.key, name = line.name, icon = line.icon or "",
                 owners = owners,
+                -- The highest repeat any owner asks for, and whether they
+                -- disagree (#115).
+                rep = rowRep,
+                repSplit = rowSplit,
                 sub = BfBot.UI._PartyRowSub(line),
                 uses = BfBot.UI._PartyRowUses(line),
                 usesTooltip = BfBot.UI._PartyRowUsesTooltip(line),
