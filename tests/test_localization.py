@@ -1091,24 +1091,45 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.15.0 (2026-11-04) — the table sets the order, a clone joins the plan"
+        "v1.16.0 (2026-11-04) — a summon can be buffed, and the table is "
+        "finished"
     )
+    # Why the prefix on a summon target cannot be dropped as noise.
+    assert "a bare script name" in flat
+    # The one measured rule the whole feature rests on, and its cost.
+    assert "uninterruptible and does not wait for the aura" in flat
+    assert "the ordinary spell action never completes" in flat
+    # The store is written at cast time, and why.
+    assert "an action resolves its target when it runs" in flat
+    # The cap that went, rather than being raised.
+    assert "the party cap written into geometry" in flat
+    # What a row's repeat means when its owners disagree.
+    assert "repeat its owners ask for" in flat
+    # Churn is not a fault.
+    assert "ordinary churn" in flat
+    # And the refusals that were chosen over guessing.
+    assert "a stated gap beats a hopeful one" in flat
+
+    order_release = " ".join(
+        source.split("\n## v1.15.0 (2026-11-04)", 1)[1]
+        .split("\n## ", 1)[0].casefold().split())
     # What a row's place in the cast order means, which is the whole reason
     # the second reading exists: a row has several owners.
-    assert "earliest priority any of its owners gives it" in flat
+    assert "earliest priority any of its owners gives it" in order_release
     # The switch is a view over the creation rows, not a second state. A
     # later reimplementation that stores its own would drift from the rows.
-    assert (
-        "shortcut over the rows, not a second place the state lives" in flat)
+    assert ("shortcut over the rows, not a second place the state lives"
+            in order_release)
     # The cut the plan and the seeding both make, and the direction of it.
-    assert "only the ones after the creation" in flat
-    assert "an image conjuring an image is not what anybody meant" in flat
+    assert "only the ones after the creation" in order_release
+    assert ("an image conjuring an image is not what anybody meant"
+            in order_release)
     # The seeding is a default, so no row may be withheld.
-    assert "this is a default and not a filter" in flat
+    assert "this is a default and not a filter" in order_release
     # The distinction the missing-2DA fix restored.
-    assert '"no rules" and "no slots" must not look alike' in flat
+    assert '"no rules" and "no slots" must not look alike' in order_release
     # And that the engine-facing defect was not found offline.
-    assert "not by a test" in flat
+    assert "not by a test" in order_release
 
     prediction_release = " ".join(
         source.split("\n## v1.14.0 (2026-11-03)", 1)[1]

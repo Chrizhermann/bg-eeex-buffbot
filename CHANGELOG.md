@@ -1,5 +1,100 @@
 # Changelog
 
+## v1.16.0 (2026-11-04) — a summon can be buffed, and the table is finished
+
+### Added
+- **A summon can be the recipient of a cast.** A cleric can put Stoneskin on
+  the Planetar standing next to him, and a Simulacrum can be protected by
+  the party that made it. Until now summons were casters only: they could
+  buff the party and themselves, and nothing could buff them -- which with a
+  plannable clone made a caster nobody could keep alive.
+
+  BCS cannot name a specific creature, only `Myself` and `Player1`-`Player6`.
+  EEex can, through OBJECT.IDS 117 `EEex_Target("key")`, which resolves at
+  action-evaluation time from a table on the caster's own UDAux. The
+  recipient is stored there immediately before the action is queued, because
+  an action resolves its target when it RUNS; it is re-resolved by object id
+  plus name and its allegiance revalidated at every step, since object ids
+  are fresh per spawn and a queue is built frames before it runs.
+
+  A summon target is stored as `sum:<identity>`. The prefix is load-bearing:
+  a summon identity can be a bare script name, which is indistinguishable
+  from a character of the same name, and `tgt` already holds character names.
+
+- **The target picker offers them, and lost its six-row limit doing it.**
+  Six rows was the party cap written into geometry -- six hand-placed blocks
+  of four elements at fixed coordinates -- and a party can have several
+  summons out. The strip is now one scrolling list, the way the party table
+  and the import list already are: 259 lines of menu became 57, and the cap
+  is gone rather than raised. A summon's row reads as the creature, not as
+  the `sum:` key behind it.
+
+- **Repeat and Variant work in the party table**, finishing what the cast
+  order started. Each writes to **every owner** of the row, the way Up and
+  Down already renumber every owner's preset -- a row aggregates everybody
+  who could supply the buff, so neither is the caster view's operation moved
+  across. Repeat sets all owners to the same number rather than stepping
+  each from its own: the button shows one value, so pressing it must leave
+  the party at what the button says.
+
+  A row shows the **highest** repeat its owners ask for, with a `*` where
+  they disagree. Highest because it is the one true statement about the
+  party: if anybody casts it three times, three casts happen.
+
+### Changed
+- **A cast aimed at a summon is uninterruptible and does not wait for the
+  aura**, which no other cast in a run does. That is measured, not chosen:
+  the ordinary spell action never completes through `EEex_Target` and jams
+  the caster past recovery, while the forced one lands. Since a forced cast
+  debits nothing, BuffBot spends the slot itself first -- the same shape the
+  variant path has always had.
+- **An item or a 5E-converted caster refuses a summon recipient**, with the
+  reason in the log. Neither was measured through `EEex_Target` and the
+  ordinary action jams on it, so a stated gap beats a hopeful one.
+- **A summon that expires mid-run is dropped quietly.** A party member who
+  leaves is a fault worth reporting; a summon running out is ordinary churn,
+  and the engine already skips an unresolvable target and carries on.
+
+### Lab
+- Six runs to answer one question, and five of them were defeated by my own
+  instrument -- each defect looked exactly like a finding, so the probe
+  carries all five as comments. A spell the cleric knew but had **not
+  memorized**, so the ordinary cast blocked and every trial reported
+  nothing. No baseline at all, so "nothing happened" could not be told from
+  "this caster cannot cast this spell". The control aimed at the **Project
+  Image's own owner**, locked moments earlier, which jams the caster
+  unrecoverably and silently poisoned every later trial. The jamming trial
+  running before the clean ones. And the clone expiring before the last
+  trial in the safe order.
+- What the sixth run measured, every verdict read back from the recipient's
+  own effect list: the forced cast **lands** on an allied clone; the
+  ordinary one **never completes**; a key resolving to nobody lets the queue
+  **advance**, so an expired summon needs no watchdog; and two keys on one
+  caster each hit their own target, so one key per caster is enough.
+- Bycatch for #107, at the cost of two of those runs: **a Project Image's
+  owner cannot RECEIVE a cast either.** The policy knew the owner lock as a
+  caster lock; it is both.
+- The picker's summon row has no screenshot, because planning a clone does
+  not put one on the field. The probe reads the row list after a real
+  conjure instead: with an image out it reports four rows, the clone among
+  them, labelled with its name. The capture does show the new list rendering
+  correctly with its party rows greyed under a self-only lock, which is the
+  regression that mattered.
+- `Repeat: 1` floated over the table's list in its first capture, still on
+  the caster view's coordinates -- the same mistake as Up landing on top of
+  Import. Unhiding a control is not enough; it has to be positioned.
+- Three panel test harnesses loaded the panel without the executor, which
+  the panel has reached into for two dozen things all along. One of them
+  replaced `BfBot.Exec` wholesale. Both are fixed; the gap predates this
+  release and only showed when a target's displayed name started asking
+  whether a value names a summon.
+- 22 new tests offline, **2122** in total. In-game suite headless: **909
+  checks, 0 failures.**
+- New engine surface: `EEex_AIBase_SetStoredScriptingTarget` and
+  `EEex_AIBase_GetStoredScriptingTarget`, both in the pinned set, and the
+  `EEex_Target` scripting object, which exists in EEex 1.2.0 as well as
+  1.3.1.
+
 ## v1.15.0 (2026-11-04) — the table sets the order, a clone joins the plan
 
 ### Added
