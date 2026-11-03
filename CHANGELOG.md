@@ -1,5 +1,87 @@
 # Changelog
 
+## v1.14.0 (2026-11-03) — a clone you can set up before you have it
+
+### Added
+- **A Project Image or Simulacrum can be configured before it is conjured.**
+  It gets a tab in the Summons view as soon as a preset is set to create it,
+  showing the book it *will* have, with the entries pre-filled the same way a
+  live clone's are -- the owner's own preset intersected with what the copy
+  can actually cast.
+
+  The reason this works rather than being a second, parallel config: a
+  predicted tab carries the identity the real spawn will have. A clone's
+  identity is its owner, so what you switch on beforehand is literally the
+  preset the clone reads when it arrives. Nothing is copied over, nothing has
+  to be reconciled, and a clone that is already standing there keeps its own
+  tab rather than being shadowed by a predicted one.
+
+  Until now the Summons view was built from creatures on the field, so a
+  Simulacrum had no tab until it existed -- and by then the run was over. The
+  only way to use one was to conjure it, watch it do nothing, and set it up
+  for next time.
+
+- **The predicted book follows the engine's own copy rules**, because a
+  prediction that is merely plausible would promise casts that never happen.
+  A Simulacrum loses `floor(2 * average level / 5)` levels, and in a dual
+  class the engine's average-level query reads the first level field rather
+  than a mean of the halves -- so that is what is used, not a fairer-looking
+  rule. Capacity comes from the class's own spell table, plus a specialist's
+  extra slot, plus the Dragon Disciple's kit slot on top of its reduced table,
+  plus a cleric's or druid's Wisdom bonus. Equipped slot bonuses are
+  deliberately left out: they survive on the copy but do not refill its book.
+
+  Memorized spells are all kept first and only then cut to the reduced
+  capacity, in the engine's own name order. Filtering the buffs out first
+  would invent slots, because the entries that would have been cut are no
+  longer there to cut. A Simulacrum re-memorizes; a Project Image keeps the
+  owner's spent uses. A sorcerer or shaman holds no prepared list at all, so
+  the copy is rebuilt from the known choices and the class capacity.
+
+  When the spell-slot tables cannot be read, the prediction refuses and says
+  so. "No slots" and "no rules" must not look alike.
+
+- **What a spell creates is read off the installed data**, never from a name.
+  The scan follows a wrapper spell into its child and into its effect file,
+  and reports clones and summoned creatures with the opcode that delivers
+  them. A summoned creature's own book is read from its creature file, with
+  every section checked against the file's real size first -- so a Planetar
+  that cannot buff anybody is not offered as a caster, and a creature nobody
+  can read is not guessed at. Mislead copies no book and is deliberately not
+  treated as a caster.
+
+### Changed
+- **A planned clone and its owner share one budget where the engine does.** A
+  Project Image carries the owner's spent slots, so the pair has one set of
+  casts between them rather than two; a Simulacrum re-memorizes and gets its
+  own. Without that the plan would hand out the same Haste twice, once from
+  the caster and once from their image.
+
+### Fixed
+- **A planned Simulacrum would have cast nothing at all.** Its pool was left
+  empty, so the allocator never gave it anything: the panel showed a complete
+  plan that silently did nothing. Caught while working out where the cast
+  ordering belonged, not by a test.
+
+### Lab
+- The ordering step this release was supposed to need does not exist, and
+  finding out why is most of what the work learned. The shared plan model
+  drives the panel; the cast path is still the per-caster builder, and its
+  queue builder has no caller outside the tests. Following the real path
+  showed that both remaining steps were already done: a clone that appears
+  mid-run already joins the running cast and runs its own preset, and
+  "creator before dependent" is the engine's own order, because a clone
+  cannot join before the cast that creates it has resolved. A creation that
+  fails simply produces no clone while every other caster carries on.
+- 93 new tests offline, **2028** in total. The prediction core takes its
+  spell-table lookup as a parameter, which is what lets every rule above be
+  pinned without a game. Writing them caught the first fixture: a level-12
+  caster's Simulacrum reads the table row for level 8, not 12, so a table
+  supplied for the owner's level silently gave it no spells at all.
+- In-game suite headless: **887 checks, 0 failures.**
+- No new engine surface. Every EEex name the new code uses was already in the
+  pinned set.
+
 ## v1.13.0 (2026-11-03) — a table you can work in
 
 ### Added

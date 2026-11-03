@@ -1080,21 +1080,42 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.13.0 (2026-11-03) — a table you can work in"
+        "v1.14.0 (2026-11-03) — a clone you can set up before you have it"
     )
-    # What the release is for: the table became editable.
-    assert "every recipient has a checkbox" in flat
-    assert "ticking one is how a buff is added" in flat
+    # What the release is for, and the one property that makes it work: the
+    # predicted tab IS the clone's own preset, not a copy to reconcile.
+    assert "configured before it is conjured" in flat
+    assert "carries the identity the real spawn will have" in flat
+    # The engine rules a tidier reimplementation would get wrong, each with
+    # the reason it cannot be simplified.
+    assert "reads the first level field rather than a mean" in flat
+    assert "would invent slots" in flat
+    assert "survive on the copy but do not refill its book" in flat
+    # Unreadable rules refuse rather than answering "no spells".
+    assert '"no slots" and "no rules" must not look alike' in flat
+    # One budget where the engine has one.
+    assert "share one budget where the engine does" in flat
+    # The defect, and that it was not a test that found it.
+    assert "silently did nothing" in flat
+    # And why the plan shrank: the cast path never used the plan model's queue.
+    assert "no caller outside the tests" in flat
+
+    table_release = " ".join(
+        source.split("\n## v1.13.0 (2026-11-03)", 1)[1]
+        .split("\n## ", 1)[0].casefold().split())
+    # What that release is for: the table became editable.
+    assert "every recipient has a checkbox" in table_release
+    assert "ticking one is how a buff is added" in table_release
     # The two states that are ours, with the reason each exists, so neither
     # is dropped later as "the reference UI manages with four".
-    assert "repeats are ours" in flat
-    assert "silently refuses a click is worse" in flat
+    assert "repeats are ours" in table_release
+    assert "silently refuses a click is worse" in table_release
     # The rule that keeps the table honest about what it offers.
-    assert "never offers a tick the plan would then refuse" in flat
+    assert "never offers a tick the plan would then refuse" in table_release
     # What the Party cell means, which is where both lab defects lived.
-    assert "means everybody, not one area cast" in flat
+    assert "means everybody, not one area cast" in table_release
     # And the measurement behind the text-size disclosure.
-    assert "shrinks but does not grow" in flat
+    assert "shrinks but does not grow" in table_release
     corners_release = " ".join(
         source.split("\n## v1.12.9 (2026-11-02)", 1)[1]
         .split("\n## ", 1)[0].casefold().split())
