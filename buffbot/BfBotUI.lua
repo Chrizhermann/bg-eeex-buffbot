@@ -1460,14 +1460,21 @@ function BfBot.UI._Layout()
     -- something to narrow.
     local filterW = recipient and 124 or 0
     local filterGap = recipient and gapS or 0
+    -- The list switch sits beside the filter, for the same reason: both say
+    -- what the table is showing, and both exist only where there is a table
+    -- to show (#115).
+    local orderW = recipient and 124 or 0
+    local orderGap = recipient and gapS or 0
     local clearX = cx + cw - speedW - gapS - clearW
     local filterX = clearX - filterGap - filterW
+    local orderX = filterX - orderGap - orderW
     local barX = cx + labelW + gapS
     setArea("bbSearchLabel", cx, searchY, labelW, searchH)
-    local barRight = filterX - gapS
+    local barRight = (recipient and orderX or filterX) - gapS
     setArea("bbSearchBg", barX, searchY, math.max(barRight - barX, 40), searchH)
     setArea("bbSearch", barX + 8, searchY + 3,
         math.max(barRight - barX - 16, 24), searchH - 6)
+    setArea("bbPartyOrder", orderX, searchY, math.max(orderW, 1), searchH)
     setArea("bbPartyFilter", filterX, searchY, math.max(filterW, 1), searchH)
     setArea("bbSearchClear", clearX, searchY, clearW, searchH)
     setArea("bbSpeed", cx + cw - speedW, searchY, speedW, searchH)
@@ -1633,7 +1640,14 @@ function BfBot.UI._Layout()
     if recipient then
         -- One row where the caster reading has two: what is left once the
         -- per-row controls are gone is preset-wide, and it belongs together.
-        row(r5Y, { { "bbExp", 92 }, { "bbImp", 92 } })
+        -- The order controls join it (#115) -- Export and Import left, the
+        -- order right, so the row reads as "the preset" then "its order"
+        -- instead of the two colliding at the same coordinates.
+        row(r5Y,
+            { { "bbExp", 92 }, { "bbImp", 92 } },
+            nil,
+            { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 },
+              { "bbOrder", 162 } })
     else
         row(r4Y,
             { { "bbAdd", 150 }, { "bbRmv", 110 }, { "bbRepeat", 100 } },
@@ -3276,6 +3290,9 @@ end
 --- unlocked row above it.
 function BfBot.UI._CanMoveUp()
     if not buffbot_isOpen then return false end
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI._CanMovePartyRow(-1)
+    end
     local row = buffbot_selectedRow
     if row <= 1 or row > #buffbot_spellTable then return false end
     local entry = buffbot_spellTable[row]
@@ -3287,6 +3304,9 @@ end
 --- unlocked row below it.
 function BfBot.UI._CanMoveDown()
     if not buffbot_isOpen then return false end
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI._CanMovePartyRow(1)
+    end
     local row = buffbot_selectedRow
     if row < 1 or row >= #buffbot_spellTable then return false end
     local entry = buffbot_spellTable[row]
@@ -3295,7 +3315,78 @@ function BfBot.UI._CanMoveDown()
 end
 
 --- Move the selected spell up to the next unlocked row.
+--- Write the displayed order into every owner's preset (#115).
+---
+--- Each row in turn, each of its owners: the row's position becomes that
+--- owner's priority for that buff. An owner who does not have a given buff
+--- is simply not touched by that row, so the numbers stay dense enough for
+--- the next move and every owner ends up agreeing with what is on screen.
+---
+--- This flattens a per-character order into the party's. That is the point
+--- of the reading, and it is why the name reading stays the default.
+--- @return how many entries were written
+function BfBot.UI._RenumberPartyPriorities()
+    local written = 0
+    for index, row in ipairs(buffbot_partyTable or {}) do
+        for _, owner in ipairs(row.owners or {}) do
+            local sprite = EEex_Sprite_GetInPortrait(owner.slot)
+            if sprite then
+                BfBot.Persist.SetSpellPriority(sprite, BfBot.UI._presetIdx,
+                    owner.resref, index)
+                written = written + 1
+            end
+        end
+    end
+    return written
+end
+
+--- PURE: can the selected row move by `step`?
+function BfBot.UI._CanMovePartyRow(step)
+    if not BfBot.UI._IsPartyCastOrder() then return false end
+    if BfBot.UI._IsAutoOrder() then return false end
+    local rows = buffbot_partyTable or {}
+    local row = tonumber(buffbot_partySelectedRow) or 0
+    if row < 1 or row > #rows then return false end
+    local target = row + step
+    if target < 1 or target > #rows then return false end
+    -- A row nobody casts has no priority to move.
+    return #(rows[row].owners or {}) > 0
+end
+
+--- Move the selected row one place and write the new order.
+function BfBot.UI._MovePartyRow(step)
+    if not BfBot.UI._CanMovePartyRow(step) then return end
+    local rows = buffbot_partyTable
+    local row = tonumber(buffbot_partySelectedRow)
+    local target = row + step
+    rows[row], rows[target] = rows[target], rows[row]
+    BfBot.UI._RenumberPartyPriorities()
+    buffbot_partySelectedRow = target
+    BfBot.UI._Refresh()
+end
+
+--- Sort the whole table by duration and write that order to every owner.
+function BfBot.UI.SortPartyByDuration()
+    if not BfBot.UI._IsPartyCastOrder() then return end
+    if BfBot.UI._IsAutoOrder() then return end
+    local rows = buffbot_partyTable or {}
+    if #rows < 2 then return end
+    -- OrderByDuration reads `dur` and `lock`; a party row carries neither
+    -- under those names, so it is given a view of itself rather than a copy
+    -- the sort would then order and throw away.
+    for _, row in ipairs(rows) do
+        row.dur = row.durationMax or row.durationMin
+    end
+    buffbot_partyTable = BfBot.Persist.OrderByDuration(rows)
+    BfBot.UI._RenumberPartyPriorities()
+    BfBot.UI._Refresh()
+end
+
 function BfBot.UI.MoveSpellUp()
+    -- The party table has its own rows and its own order (#115).
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI._MovePartyRow(-1)
+    end
     local row = buffbot_selectedRow
     if row <= 1 or row > #buffbot_spellTable then return end
     local entry = buffbot_spellTable[row]
@@ -3312,6 +3403,10 @@ end
 
 --- Move the selected spell down to the next unlocked row.
 function BfBot.UI.MoveSpellDown()
+    -- The party table has its own rows and its own order (#115).
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI._MovePartyRow(1)
+    end
     local row = buffbot_selectedRow
     if row < 1 or row >= #buffbot_spellTable then return end
     local entry = buffbot_spellTable[row]
@@ -3337,6 +3432,9 @@ end
 --- the new order back into the preset: it is the player reordering their
 --- own list, not a view of it.
 function BfBot.UI.SortByDuration()
+    if BfBot.UI._IsRecipientView() then
+        return BfBot.UI.SortPartyByDuration()
+    end
     if #buffbot_spellTable == 0 then return end
     if BfBot.UI._IsAutoOrder() then return end
     BfBot.UI._PrepareSpellSelectionForRebuild()
@@ -3358,7 +3456,11 @@ end
 --- would make "Pre-Battle" mean two different things in one party.
 function BfBot.UI.ToggleAutoOrder()
     if BfBot.UI._view == "summons" then return end
+    -- The setting is party-wide either way; the party table just has no
+    -- selected character to read the current value from, so it reads the
+    -- protagonist's.
     local sprite = BfBot.UI._GetSelectedSprite()
+        or EEex_Sprite_GetInPortrait(0)
     if not sprite then return end
     local now = BfBot.Persist.GetAutoOrder(sprite, BfBot.UI._presetIdx)
     BfBot.Persist.SetAutoOrderAll(BfBot.UI._presetIdx, now == 1 and 0 or 1)
@@ -4555,6 +4657,79 @@ end
 --- PURE: the party table's rows, from ByGroup's output.
 -- `query` filters on the buff's name or on a recipient's, so the one search
 -- box answers both "where is Haste" and "what does Minsc get".
+--- Which reading of the party table's list is showing (#115).
+--- "name" is how a buff is found among forty; "cast" is what the plan will
+--- do, and the only one in which moving a row means anything.
+BfBot.UI._partyOrder = BfBot.UI._partyOrder or "name"
+
+--- PURE: the two modes, in cycle order.
+BfBot.UI.PARTY_ORDERS = { "name", "cast" }
+
+function BfBot.UI.CyclePartyOrder()
+    BfBot.UI._partyOrder =
+        (BfBot.UI._partyOrder == "name") and "cast" or "name"
+    BfBot.UI._Refresh()
+end
+
+function BfBot.UI._PartyOrderLabel()
+    if BfBot.UI._partyOrder == "cast" then
+        return BfBot.L10N.Get("ui.party.order.cast")
+    end
+    return BfBot.L10N.Get("ui.party.order.name")
+end
+
+function BfBot.UI._PartyOrderTooltip()
+    return BfBot.L10N.Get("ui.party.order.tooltip")
+end
+
+function BfBot.UI._IsPartyCastOrder()
+    return BfBot.UI._IsRecipientView() and BfBot.UI._partyOrder == "cast"
+end
+
+--- PURE: where a row sits in the cast order -- the earliest priority any of
+--- its owners gives it. A row nobody has chosen has no priority and belongs
+--- after everything that has one, because it is not in the order at all.
+--- @return number, or nil
+function BfBot.UI._PartyRowPriority(row, priorityOf)
+    local best
+    for _, owner in ipairs((row and row.owners) or {}) do
+        local pri = priorityOf(owner)
+        if type(pri) == "number" and (best == nil or pri < best) then
+            best = pri
+        end
+    end
+    return best
+end
+
+--- PURE: the rows in cast order, stable by name for everything that shares a
+--- priority or has none.
+function BfBot.UI._SortPartyRowsByCast(rows, priorityOf)
+    local order = {}
+    for index, row in ipairs(rows) do
+        order[row] = { index = index,
+                       pri = BfBot.UI._PartyRowPriority(row, priorityOf) }
+    end
+    table.sort(rows, function(a, b)
+        local pa, pb = order[a].pri, order[b].pri
+        if pa ~= pb then
+            if pa == nil then return false end
+            if pb == nil then return true end
+            return pa < pb
+        end
+        return order[a].index < order[b].index
+    end)
+    return rows
+end
+
+--- One owner entry's stored priority, through Persist.
+local function _ownerPriority(owner)
+    local sprite = EEex_Sprite_GetInPortrait(owner.slot)
+    if not sprite then return nil end
+    local entry = BfBot.Persist.GetSpellConfig(sprite, BfBot.UI._presetIdx,
+        owner.resref)
+    return entry and tonumber(entry.pri) or nil
+end
+
 function BfBot.UI._BuildPartyRows(lines, query)
     local rows = {}
     query = BfBot.UI._SearchName(query or "")
@@ -4639,6 +4814,12 @@ function BfBot.UI._BuildPartyRows(lines, query)
                 planned = line.planned or 0,
             }
         end
+    end
+    -- ByGroup hands these over sorted by name. The cast reading re-sorts
+    -- them, and only here: the plan model stays name-ordered so every other
+    -- caller keeps the order it was written against.
+    if BfBot.UI._IsPartyCastOrder() then
+        BfBot.UI._SortPartyRowsByCast(rows, _ownerPriority)
     end
     return rows
 end

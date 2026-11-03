@@ -1158,6 +1158,32 @@ menu
 		ignoreEvents
 		area 0 0 124 26
 	}
+	-- Which reading of the party list is showing: by name, or in the order
+	-- the plan will cast them. Up and Down only mean something in the
+	-- second, which is why it is a mode and not a sort button (#115).
+	button
+	{
+		name    "bbPartyOrder"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		action  "BfBot.UI.CyclePartyOrder()"
+		tooltip lua "BfBot.UI._PartyOrderTooltip()"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		frame lua "BfBot.UI._ChromeFrame('bbPartyOrder')"
+		scaleToClip
+		area 0 0 124 26
+	}
+	label
+	{
+		name    "bbPartyOrder_t"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		text lua "BfBot.UI._PartyOrderLabel()"
+		text style "bb_caption"
+		text align center center
+		text color lua "BfBot.UI._T('btnText')"
+		ignoreEvents
+		area 0 0 124 26
+	}
 	button
 	{
 		name "bbSearchClear"
@@ -2081,7 +2107,7 @@ menu
 	button
 	{
 		name    "bbUp"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		clickable lua "BfBot.UI._CanMoveUp() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellUp()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -2094,7 +2120,7 @@ menu
 	label
 	{
 		name    "bbUp_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		text lua "BfBot.L10N.Get('common.up')"
 		text style "bb_caption"
 		text align center center
@@ -2107,7 +2133,7 @@ menu
 	button
 	{
 		name    "bbDn"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		clickable lua "BfBot.UI._CanMoveDown() and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.MoveSpellDown()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -2120,7 +2146,7 @@ menu
 	label
 	{
 		name    "bbDn_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		text lua "BfBot.L10N.Get('common.down')"
 		text style "bb_caption"
 		text align center center
@@ -2133,7 +2159,7 @@ menu
 	button
 	{
 		name    "bbSort"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		clickable lua "#buffbot_spellTable > 1 and not BfBot.UI._IsAutoOrder()"
 		action  "BfBot.UI.SortByDuration()"
 		bam lua "BfBot.UI._PlateBam()"
@@ -2146,7 +2172,7 @@ menu
 	label
 	{
 		name    "bbSort_t"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		text lua "BfBot.L10N.Get('common.sort')"
 		text style "bb_caption"
 		text align center center
@@ -2161,7 +2187,7 @@ menu
 	label
 	{
 		name    "bbOrder_b"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		bam lua "BfBot.UI._PlateBam()"
 		sequence lua "BfBot.UI._ChromeSeq()"
 		scaleToClip
@@ -2172,7 +2198,7 @@ menu
 	text
 	{
 		name    "bbOrder"
-		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1 and not BfBot.UI._IsRecipientView()"
+		enabled "buffbot_isOpen and buffbot_selectedHasVariants ~= 1"
 		clickable lua "BfBot.UI._IsPartyView()"
 		action  "BfBot.UI.ToggleAutoOrder()"
 		text lua "BfBot.UI._AutoOrderLabel()"

@@ -44,6 +44,9 @@ EXTRACTED = (
     "_PartyChipExists", "_PartyChipName", "_PartyChipDuration",
     "_PartyChipBam", "_PartyChipFrame", "_PartyChipColor",
     "_PartyChipDurationColor", "_PartyNameColor",
+    # The cast reading and the move (#115).
+    "CyclePartyOrder", "_PartyOrderLabel", "_IsPartyCastOrder",
+    "_PartyRowPriority", "_SortPartyRowsByCast", "_CanMovePartyRow",
 )
 
 
@@ -542,12 +545,14 @@ def test_the_party_footer_keeps_only_what_applies_to_a_preset():
     layout = _layout()
     start = layout.index("if recipient then")
     branch = layout[start:layout.index("\n    else", start)]
-    for name in ("bbExp", "bbImp"):
+    # Preset-wide actions, and the order controls that joined them in #115 --
+    # the order is a property of the preset, not of a selected caster row.
+    for name in ("bbExp", "bbImp", "bbUp", "bbDn", "bbSort", "bbOrder"):
         assert f'"{name}"' in branch, name
     # Delete Preset is not here: it sits in the preset row, which both
-    # readings share.
-    for name in ("bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt",
-                 "bbUp", "bbDn", "bbSort", "bbOrder", "bbDel"):
+    # readings share. Enable and Target are not here because the cell is
+    # already both.
+    for name in ("bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt", "bbDel"):
         assert f'"{name}"' not in branch, name
     layout_text = layout
     assert 'setArea("bbDel", renX + renW + newW + 2 * preGap, preY, delW, preH)'         in layout_text
@@ -687,10 +692,38 @@ def test_no_cell_draws_a_party_portrait():
 
 CASTER_ONLY = (
     "bbHName", "bbHDur", "bbHUses", "bbHRep", "bbHTgt", "bbHLock",
-    "bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt", "bbUp", "bbDn", "bbSort",
-    "bbOrder", "bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort",
-    "bbVOrder",
+    "bbAdd", "bbRmv", "bbRepeat", "bbTog", "bbTgt",
+    "bbVTog", "bbVTgt", "bbVVar", "bbVUp", "bbVDn", "bbVSort", "bbVOrder",
 )
+
+# The order controls work in BOTH readings since #115 -- the table has a cast
+# ordering of its own, and reordering was the thing it most obviously could
+# not do. Enable and Target deliberately stayed behind: the cell is both.
+BOTH_READINGS = ("bbUp", "bbDn", "bbSort", "bbOrder")
+
+
+def _menu_block(element: str) -> str | None:
+    found = re.search(r'name\s+"' + re.escape(element) + r'"(?:(?!\n\t\}).)*',
+                      MENU, re.S)
+    return found.group(0) if found else None
+
+
+@pytest.mark.parametrize("name", BOTH_READINGS)
+def test_the_order_controls_work_in_the_party_table(name: str) -> None:
+    """Up, Down, Sort and Order are the minimum the table needed (#115)."""
+    for element in (name, name + "_t", name + "_b"):
+        body = _menu_block(element)
+        if not body or "enabled" not in body:
+            continue
+        assert "not BfBot.UI._IsRecipientView()" not in body, element
+
+
+def test_enable_and_target_stay_out_of_the_party_table() -> None:
+    """The cell already is both, so a second way to do it would be noise."""
+    for element in ("bbTog", "bbTog_t", "bbTgt", "bbTgt_t"):
+        body = _menu_block(element)
+        assert body is not None, element
+        assert "not BfBot.UI._IsRecipientView()" in body, element
 
 
 @pytest.mark.parametrize("name", CASTER_ONLY)
@@ -976,3 +1009,160 @@ def test_the_toggle_refuses_rather_than_writing_nowhere():
                        UI_SOURCE, re.S | re.M).group(0)
     assert "if not chip.writeSlot or not chip.writeResref then" in source
     assert "feedback.cell_no_owner" in source
+
+
+# ----------------------------------------------------------------------
+# The cast reading, and moving a row in it (#115)
+# ----------------------------------------------------------------------
+#
+# Up and Down could not simply be unhidden: `ByGroup` sorts the table by
+# display name, and moving a row up an alphabetical list means nothing. So
+# the table gained a second reading, and the buttons act only there.
+
+
+def test_the_list_starts_in_the_finding_reading() -> None:
+    """A-Z is how a buff is found among forty; it stays the default.
+
+    Read from the source rather than the runtime: this fixture extracts
+    functions, so a module-level initialiser never runs here.
+    """
+    assert 'BfBot.UI._partyOrder = BfBot.UI._partyOrder or "name"' in UI_SOURCE
+
+
+def test_the_switch_cycles_between_the_two_readings(lua: LuaRuntime) -> None:
+    lua.execute("BfBot.UI._Refresh = function() end")
+    lua.execute("BfBot.UI._partyOrder = 'name'")
+    lua.eval("BfBot.UI.CyclePartyOrder()")
+    assert lua.eval("BfBot.UI._partyOrder") == "cast"
+    lua.eval("BfBot.UI.CyclePartyOrder()")
+    assert lua.eval("BfBot.UI._partyOrder") == "name"
+
+
+def test_the_cast_reading_only_applies_to_the_party_table(
+        lua: LuaRuntime) -> None:
+    """The caster view has its own list and its own order."""
+    lua.execute("BfBot.UI._partyOrder = 'cast'")
+    lua.execute("BfBot.UI._perspective = 'caster'")
+    assert not lua.eval("BfBot.UI._IsPartyCastOrder()")
+    lua.execute("BfBot.UI._perspective = 'recipient'")
+    assert lua.eval("BfBot.UI._IsPartyCastOrder()")
+
+
+def test_a_rows_place_is_the_earliest_anybody_casts_it(
+        lua: LuaRuntime) -> None:
+    """A buff two characters cast has two priorities.
+
+    The earliest is when the party first sees it, so that is where the row
+    belongs -- taking the last would put a buff after casts it precedes.
+    """
+    assert lua.eval("""
+        BfBot.UI._PartyRowPriority(
+            { owners = { { slot = 0 }, { slot = 1 }, { slot = 2 } } },
+            function(owner)
+                return ({ [0] = 7, [1] = 3, [2] = 9 })[owner.slot]
+            end)
+    """) == 3
+
+
+def test_a_row_nobody_casts_has_no_place_in_the_cast_order(
+        lua: LuaRuntime) -> None:
+    assert lua.eval(
+        "BfBot.UI._PartyRowPriority({ owners = {} }, function() return 1 end)"
+    ) is None
+    assert lua.eval(
+        "BfBot.UI._PartyRowPriority(nil, function() return 1 end)") is None
+
+
+def test_unchosen_rows_sort_after_everything_with_a_priority(
+        lua: LuaRuntime) -> None:
+    """They are not in the cast order at all, so they belong at the end."""
+    order = lua.eval("""
+        (function()
+            local rows = {
+                { name = "zzz", owners = { { slot = 0 } } },
+                { name = "unchosen", owners = {} },
+                { name = "aaa", owners = { { slot = 1 } } },
+            }
+            BfBot.UI._SortPartyRowsByCast(rows, function(owner)
+                return ({ [0] = 9, [1] = 2 })[owner.slot]
+            end)
+            local names = {}
+            for _, row in ipairs(rows) do names[#names + 1] = row.name end
+            return table.concat(names, ",")
+        end)()
+    """)
+    assert order == "aaa,zzz,unchosen"
+
+
+def test_rows_that_share_a_priority_keep_their_incoming_order(
+        lua: LuaRuntime) -> None:
+    """The name order ByGroup produced breaks the tie, so the list does not
+    shuffle under the reader between refreshes."""
+    order = lua.eval("""
+        (function()
+            local rows = {
+                { name = "aaa", owners = { { slot = 0 } } },
+                { name = "bbb", owners = { { slot = 1 } } },
+                { name = "ccc", owners = { { slot = 2 } } },
+            }
+            BfBot.UI._SortPartyRowsByCast(rows, function() return 4 end)
+            local names = {}
+            for _, row in ipairs(rows) do names[#names + 1] = row.name end
+            return table.concat(names, ",")
+        end)()
+    """)
+    assert order == "aaa,bbb,ccc"
+
+
+ONE_OWNER = "{ { owners = { { slot = 0 } } }, { owners = { { slot = 0 } } } }"
+
+
+def _move_world(lua: LuaRuntime, order: str, rows: str,
+                selected: int, auto: str = "false") -> None:
+    lua.execute(
+        "BfBot.UI._partyOrder = '%s'\n"
+        "BfBot.UI._perspective = 'recipient'\n"
+        "BfBot.UI._IsAutoOrder = function() return %s end\n"
+        "buffbot_partyTable = %s\n"
+        "buffbot_partySelectedRow = %d\n" % (order, auto, rows, selected))
+
+
+def test_a_row_cannot_move_in_the_finding_reading(lua: LuaRuntime) -> None:
+    """Moving a row up an alphabetical list would mean nothing."""
+    _move_world(lua, "name", ONE_OWNER, 2)
+    assert not lua.eval("BfBot.UI._CanMovePartyRow(-1)")
+
+
+def test_a_row_moves_in_the_cast_reading(lua: LuaRuntime) -> None:
+    _move_world(lua, "cast", ONE_OWNER, 2)
+    assert lua.eval("BfBot.UI._CanMovePartyRow(-1)")
+    assert not lua.eval("BfBot.UI._CanMovePartyRow(1)")
+
+
+def test_the_first_row_cannot_move_up_nor_the_last_down(
+        lua: LuaRuntime) -> None:
+    _move_world(lua, "cast", ONE_OWNER, 1)
+    assert not lua.eval("BfBot.UI._CanMovePartyRow(-1)")
+    _move_world(lua, "cast", ONE_OWNER, 2)
+    assert not lua.eval("BfBot.UI._CanMovePartyRow(1)")
+
+
+def test_a_row_nobody_casts_cannot_be_moved(lua: LuaRuntime) -> None:
+    """It has no priority to write."""
+    _move_world(lua, "cast",
+                "{ { owners = { { slot = 0 } } }, { owners = {} } }", 2)
+    assert not lua.eval("BfBot.UI._CanMovePartyRow(-1)")
+
+
+def test_nothing_moves_while_the_order_is_automatic(lua: LuaRuntime) -> None:
+    """Automatic order is a view; writing into it would be a lie."""
+    _move_world(lua, "cast", ONE_OWNER, 2, auto="true")
+    assert not lua.eval("BfBot.UI._CanMovePartyRow(-1)")
+
+
+def test_a_selection_outside_the_table_moves_nothing(
+        lua: LuaRuntime) -> None:
+    for selected in (0, 5):
+        _move_world(lua, "cast", ONE_OWNER, selected)
+        assert not lua.eval("BfBot.UI._CanMovePartyRow(-1)")
+        assert not lua.eval("BfBot.UI._CanMovePartyRow(1)")

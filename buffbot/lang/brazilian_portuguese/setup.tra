@@ -523,3 +523,12 @@
 
 // feedback.summon_not_conjured
 @771 = ~BuffBot: that clone has not been conjured yet -- its preset runs when the party cast creates it~
+
+// ui.party.order.name
+@772 = ~List: A-Z~
+
+// ui.party.order.cast
+@773 = ~List: cast order~
+
+// ui.party.order.tooltip
+@774 = ~How the table is listed. A-Z is how a buff is found; cast order is what the plan will do, and the only reading in which Up and Down mean anything. Moving a row writes that order to everybody who casts it.~

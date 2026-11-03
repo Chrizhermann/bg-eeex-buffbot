@@ -352,8 +352,13 @@ def test_the_layout_places_the_toggle_with_the_reorder_controls(name: str) -> No
     layout = re.search(
         r"function BfBot\.UI\._Layout\(\).*?\n^end$", UI_SOURCE, re.S | re.M
     ).group(0)
-    row = next(line for line in layout.splitlines() if '"%s"' % name in line)
-    assert "Up" in row and "Sort" in row
+    # The GROUP it sits in, not the line: the party table's footer wraps the
+    # same four controls over two lines (#115) and the toggle still belongs
+    # with them.
+    at = layout.index('"%s"' % name)
+    group_start = layout.rindex("{ {", 0, at)
+    group = layout[group_start:layout.index("}", at)]
+    assert "Up" in group and "Sort" in group
 
 
 def test_sorting_by_hand_refuses_while_the_preset_orders_itself() -> None:
