@@ -83,6 +83,14 @@ local _tables = {}
 local function _tableData(name)
     if _tables[name] then return _tables[name] end
     if type(EEex_Resource_Load2DA) ~= "function" then return nil end
+    -- Ask the index first, the way BfBot5e.lua does: `Load2DA` does NOT
+    -- answer nil for a resource that is not installed, it answers a table
+    -- with no rows -- which the loader below would then cache as a valid
+    -- set of rules and every lookup would fall through to zero.
+    if type(EEex_Resource_Fetch) == "function" then
+        local okFetch, found = pcall(EEex_Resource_Fetch, name, "2DA")
+        if okFetch and found == nil then return nil end
+    end
     local ok, rows = pcall(function()
         local table2da = EEex_Resource_Load2DA(name)
         if not table2da then return nil end
@@ -102,7 +110,10 @@ local function _tableData(name)
         end
         return out
     end)
-    if ok and rows then
+    -- An empty result is no rules, not rules that say nothing: a real
+    -- MXSPL table always has rows, and the distinction is what keeps
+    -- "unreadable" from being read as "this caster gets no spells".
+    if ok and rows and next(rows) ~= nil then
         _tables[name] = rows
         return rows
     end

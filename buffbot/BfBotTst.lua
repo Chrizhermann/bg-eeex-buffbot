@@ -7247,6 +7247,211 @@ end
 
 -- ============================================================
 
+--- The predicted spellbook of a clone that does not exist yet (#107).
+---
+--- Everything here needs a game. `ReadProfile` reads a sprite's stats and its
+--- memorized lists, `Rule` reads an MXSPL 2DA, `ReadCreature` parses a CRE,
+--- and `PredictedSummons` walks the party's presets -- none of which an
+--- offline test can do, which is why v1.14.0 shipped with this uncovered.
+---
+--- The save decides how much can be exercised: a party with no caster, or a
+--- preset with no creation step, skips the parts it cannot reach and says so
+--- rather than passing silently.
+function BfBot.Test.SummonPrediction()
+    -- GetSummonPreset creates a preset on the protagonist, and the phase
+    -- reads the player's own party presets.
+    return _GuardPhase("Summon Prediction", function()
+    P("=== Phase: Summon Prediction (issue #107) ===")
+
+    if not BfBot.Summon or not BfBot.Summon.Predict then
+        _nok("BfBot.Summon is not loaded")
+        return _summary("Summon Prediction")
+    end
+
+    -- ------------------------------------------------------------------
+    -- The 2DA rules. nil and 0 mean different things here, so both are
+    -- checked: "no rules" must never be read as "no spell slots".
+    -- ------------------------------------------------------------------
+    BfBot.Summon.ClearRules()
+    local wiz = BfBot.Summon.Rule("MXSPLWIZ", 1, 1)
+    _check(wiz ~= nil, "MXSPLWIZ is readable (a level-1 mage's level-1 slots: "
+        .. tostring(wiz) .. ")")
+    if wiz ~= nil then
+        _check(type(wiz) == "number" and wiz >= 1,
+            "and a level-1 mage has at least one level-1 slot")
+    end
+    local missing = BfBot.Summon.Rule("BFBTNOPE", 1, 1)
+    _check(missing == nil, "an absent table answers nil, not 0")
+
+    -- ------------------------------------------------------------------
+    -- Reading a real party member.
+    -- ------------------------------------------------------------------
+    local caster, casterSlot
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite and not caster then
+            local profile = BfBot.Summon.ReadProfile(sprite)
+            if profile then
+                local spells = 0
+                for _, levels in pairs(profile.books or {}) do
+                    for _, entries in ipairs(levels) do
+                        spells = spells + #entries
+                    end
+                end
+                if spells > 0 then caster, casterSlot = profile, slot end
+            end
+        end
+    end
+
+    if not caster then
+        _ok("no party member has a memorized spell in this save "
+            .. "(profile and prediction skipped)")
+    else
+        P("  owner: slot " .. casterSlot .. " class=" .. tostring(caster.class)
+            .. " levels=" .. table.concat(caster.levels, "/")
+            .. " wis=" .. tostring(caster.wis)
+            .. " kit=" .. tostring(caster.kit))
+        _check(type(caster.class) == "number" and caster.class >= 1,
+            "the profile carries a class from the engine")
+        _check(type(caster.levels) == "table" and #caster.levels == 3,
+            "and three level fields")
+        _check(type(caster.copyLevel) == "number",
+            "and the engine's own average level ("
+            .. tostring(caster.copyLevel) .. "), which the drain uses")
+
+        -- Every memorized entry needs the generic name the engine sorts by:
+        -- the resref fallback would move hidden spells to the end and
+        -- predict the wrong survivors.
+        local named, total = 0, 0
+        for _, levels in pairs(caster.books or {}) do
+            for _, entries in ipairs(levels) do
+                for _, entry in ipairs(entries) do
+                    total = total + 1
+                    if entry.sortName ~= nil then named = named + 1 end
+                end
+            end
+        end
+        _check(total > 0 and named == total,
+            "every memorized entry carries a sort name (" .. named
+            .. " of " .. total .. ")")
+
+        -- The two image types, against the real spell-slot tables.
+        local image, whyImage = BfBot.Summon.Predict(caster, 2)
+        _check(image ~= nil, "a Project Image is predicted"
+            .. (image and "" or ": " .. tostring(whyImage)))
+        local sim, whySim = BfBot.Summon.Predict(caster, 3)
+        _check(sim ~= nil, "a Simulacrum is predicted"
+            .. (sim and "" or ": " .. tostring(whySim)))
+
+        if image and sim then
+            _check(sim.drain >= 0, "the Simulacrum drain is a number ("
+                .. sim.drain .. ")")
+            _check(image.drain == 0, "and a Project Image drains nothing")
+            -- A Simulacrum at a reduced level can hold no more than the
+            -- image does, which copies the book as it stands.
+            local imageTotal, simTotal = 0, 0
+            for _, count in pairs(image.counts) do imageTotal = imageTotal + count end
+            for _, count in pairs(sim.counts) do simTotal = simTotal + count end
+            P("  predicted uses: image=" .. imageTotal .. " sim=" .. simTotal)
+            _check(imageTotal >= 0 and simTotal >= 0,
+                "both predictions count their uses")
+
+            -- The rows are the shape the panel and the plan expect.
+            local rows = BfBot.Summon.BuildRows(caster, sim)
+            local shaped, sample = 0, nil
+            for resref, row in pairs(rows or {}) do
+                shaped = shaped + 1
+                sample = sample or (resref .. " '" .. tostring(row.name)
+                    .. "' lvl " .. tostring(row.casterLevel))
+                if row.predicted ~= 1 then
+                    _nok("a predicted row is not marked predicted: " .. resref)
+                end
+            end
+            if shaped > 0 then
+                _check(true, "the predicted rows are built (" .. shaped
+                    .. ", e.g. " .. tostring(sample) .. ")")
+            else
+                _ok("this owner's prediction yields no rows (nothing "
+                    .. "memorized that survives the copy)")
+            end
+        end
+    end
+
+    -- ------------------------------------------------------------------
+    -- Reading what a spell creates, off the installed data.
+    -- ------------------------------------------------------------------
+    local probed, creators = 0, 0
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local okScan, rows = pcall(BfBot.Scan.GetCastableSpells, sprite)
+            if okScan and rows then
+                for _, row in pairs(rows) do
+                    if probed < 40 then
+                        probed = probed + 1
+                        local found = BfBot.Summon.Creators(row)
+                        if #found > 0 then
+                            creators = creators + 1
+                            P("  creates: " .. tostring(row.name) .. " -> "
+                                .. tostring(found[1].kind)
+                                .. tostring(found[1].image or "")
+                                .. tostring(found[1].resource or ""))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    _check(probed > 0, "the discovery walk ran over real spells (" .. probed
+        .. " probed, " .. creators .. " create a caster)")
+
+    -- ------------------------------------------------------------------
+    -- The predicted tabs, and that a preset keyed to one is the preset the
+    -- real spawn would read.
+    -- ------------------------------------------------------------------
+    local predicted = BfBot.Summon.PredictedSummons(BfBot.UI and BfBot.UI._presetIdx or 1)
+    _check(type(predicted) == "table",
+        "the predicted-summon sweep answers a list (" .. #predicted .. ")")
+
+    if #predicted == 0 then
+        _ok("no preset in this save creates a clone (tab checks skipped)")
+    else
+        local entry = predicted[1]
+        P("  predicted tab: " .. entry.name .. " identity=" .. entry.identity)
+        _check(entry.predicted == 1, "the entry is marked predicted")
+        _check(type(entry.oid) == "number" and entry.oid < 0,
+            "and carries a negative id, which no engine object can collide with")
+
+        -- The property the whole feature rests on.
+        local live = BfBot.Scan._SummonIdentity({
+            kind = "clone", ownerName = entry.ownerName })
+        _check(entry.identity == live,
+            "the identity is the one the real spawn will have (" .. live .. ")")
+
+        local rows, why = BfBot.Summon.PredictedRows(entry)
+        _check(rows ~= nil, "the tab has rows to show"
+            .. (rows and "" or ": " .. tostring(why)))
+
+        -- Seeding: the tab must not open empty, or the feature looks broken.
+        if BfBot.UI and BfBot.UI._EnsureSummonPreset then
+            local okSeed = pcall(BfBot.UI._EnsureSummonPreset, entry)
+            _check(okSeed, "seeding the predicted tab did not raise")
+            local preset = BfBot.Persist.PeekSummonPreset(entry.identity,
+                BfBot.UI._presetIdx)
+            _check(preset ~= nil and type(preset.spells) == "table",
+                "and the preset exists afterwards")
+            if preset and type(preset.spells) == "table" then
+                local seeded = 0
+                for _ in pairs(preset.spells) do seeded = seeded + 1 end
+                _ok("the predicted tab seeded " .. seeded .. " entries")
+            end
+        end
+    end
+
+    return _summary("Summon Prediction")
+    end)
+end
+
 function BfBot.Test.RunAll()
     -- Open log file so output is captured
     BfBot._OpenLog()
@@ -7380,6 +7585,10 @@ function BfBot.Test.RunAll()
     local recipientOk = BfBot.Test.PartyTable()
     P("")
 
+    -- Phase: the predicted book of a clone that is not there yet
+    local predictionOk = BfBot.Test.SummonPrediction()
+    P("")
+
     -- Summary
     P("========================================")
     P("  Fields: " .. (fieldsOk and "PASS" or "FAIL"))
@@ -7411,10 +7620,11 @@ function BfBot.Test.RunAll()
     P("  Refresh Threshold:  " .. (refreshOk and "PASS" or "FAIL"))
     P("  Plan Model:         " .. (planOk and "PASS" or "FAIL"))
     P("  Party Table:        " .. (recipientOk and "PASS" or "FAIL"))
+    P("  Summon Prediction:  " .. (predictionOk and "PASS" or "FAIL"))
     P("========================================")
     P("Log written to: " .. BfBot._logFile)
 
-    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk and recipientOk
+    return fieldsOk and classOk and scanOk and persistOk and qcOk and ovrOk and exportOk and scanRefOk and tgtOk and combatOk and subwinOk and lockOk and summonOk and nameStripOk and lockOrderOk and pickerSortOk and selectionOk and movPanelOk and durRecOk and legacyInnateOk and themingOk and staleOk and itemsOk and watchdogOk and mpOk and eeexCompatOk and refreshOk and planOk and recipientOk and predictionOk
     end)
 
     for _, problem in ipairs(problems) do

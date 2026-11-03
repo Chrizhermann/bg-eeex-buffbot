@@ -1648,3 +1648,63 @@ def test_the_2da_reader_is_the_only_engine_dependency_of_the_core() -> None:
         ) if name.startswith("EEex_")
     }
     assert found <= allowed, found
+
+
+# ----------------------------------------------------------------------
+# The 2DA loader, which only the in-game phase could reach before
+# ----------------------------------------------------------------------
+
+
+def _loader_runtime(fetch: str, load: str) -> LuaRuntime:
+    runtime = summon_runtime()
+    runtime.execute(fetch)
+    runtime.execute(load)
+    return runtime
+
+
+def test_a_missing_2da_answers_nil_not_zero() -> None:
+    """"No rules" and "no slots" must not look alike.
+
+    `EEex_Resource_Load2DA` does not answer nil for a resource that is not
+    installed -- it answers a table with no rows. The loader cached that as a
+    valid set of rules and every lookup fell through to zero, so `Capacity`
+    would have predicted an empty book instead of refusing. Found by the
+    in-game phase on its first run; no offline test reached this path,
+    because the prediction tests inject their own lookup.
+    """
+    lua = _loader_runtime(
+        "EEex_Resource_Fetch = function(_, _) return {} end",
+        """
+        EEex_Resource_Load2DA = function(_)
+            return { getDimensions = function() return 1, 0 end,
+                     getRowLabel = function() return "" end,
+                     getColumnLabel = function() return "" end,
+                     getAtPoint = function() return 0 end }
+        end
+        """)
+    assert lua.eval("BfBot.Summon.Rule('BFBTNOPE', 1, 1)") is None
+
+
+def test_the_index_is_asked_before_the_table_is_loaded() -> None:
+    """A resource the index does not have is not loaded at all."""
+    lua = _loader_runtime(
+        "Loaded = 0\nEEex_Resource_Fetch = function(_, _) return nil end",
+        "EEex_Resource_Load2DA = function(_) Loaded = Loaded + 1 return nil end")
+    assert lua.eval("BfBot.Summon.Rule('BFBTNOPE', 1, 1)") is None
+    assert lua.eval("Loaded") == 0
+
+
+def test_a_real_table_still_answers_its_cells() -> None:
+    lua = _loader_runtime(
+        "EEex_Resource_Fetch = function(_, _) return {} end",
+        """
+        EEex_Resource_Load2DA = function(_)
+            return { getDimensions = function() return 2, 1 end,
+                     getRowLabel = function(_, _) return 12 end,
+                     getColumnLabel = function(_, _) return 3 end,
+                     getAtPoint = function(_, _, _) return 4 end }
+        end
+        """)
+    assert lua.eval("BfBot.Summon.Rule('MXSPLWIZ', 12, 3)") == 4
+    # A row the table does not have is zero slots, not missing rules.
+    assert lua.eval("BfBot.Summon.Rule('MXSPLWIZ', 99, 3)") == 0

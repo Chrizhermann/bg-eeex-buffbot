@@ -46,6 +46,9 @@ GUARDED_PHASES = {
     # Plans read-only, but reads the live config to check the migration --
     # and GetConfig stores a default for a character that has none.
     "PlanModel": "Plan Model",
+    # Seeds a predicted clone's summon preset through the UI helper, which
+    # reaches GetSummonPreset.
+    "SummonPrediction": "Summon Prediction",
     "QuickCast": "Quick Cast",
     "StaleState": "Stale State",
 }
@@ -1034,7 +1037,12 @@ WRITERS = re.compile(
     r"|EEex_GetUDAux|Infinity_SetINI\w+|Infinity_RemoveINIEntry|os\.remove|io\.open"
     r"|BfBot\.Class\.SetOverride|BfBot\._overrides"
     r"|BfBot\.Exec\.(?:Start|Stop|_Complete|_ForceComplete|_SafetyTick|_RecoverItemSwaps)\b"
-    r"|BfBot\.Theme\._SetFontSize|BfBot\.UI\._(?:ResetLayout|SaveLayout|OnDrag|OnResize)\b")
+    r"|BfBot\.Theme\._SetFontSize"
+    # Reached INDIRECTLY: these UI helpers write through Persist. Without
+    # them a phase that only calls _EnsureSummonPreset looks writer-free
+    # while it creates a summon preset on the protagonist.
+    r"|BfBot\.UI\._(?:ResetLayout|SaveLayout|OnDrag|OnResize"
+    r"|EnsureSummonPreset|SummonSpellEntry)\b")
 UNGUARDED = sorted(set(RUN_ALL_PHASES) - set(GUARDED_PHASES))
 
 
