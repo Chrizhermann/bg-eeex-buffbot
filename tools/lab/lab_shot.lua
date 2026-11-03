@@ -94,6 +94,15 @@ if args.recipient then
     BfBot.UI._Refresh()
 end
 
+-- Whether the plan may use a clone, so a shot can show a predicted chip.
+if args.clones then
+    assert(BfBot.UI.CycleIncludeClones, "SHOT_NO_CLONE_SWITCH")
+    local sprite = EEex_Sprite_GetInPortrait(0)
+    BfBot.Persist.SetClonesAll(args.preset or 1, args.clones)
+    BfBot.UI._ApplyCloneSelection(args.clones)
+    BfBot.UI._Refresh()
+end
+
 -- Which rows the party table lists, so one run can show a filter at work.
 if args.filter then
     assert(BfBot.UI.PARTY_FILTERS, "SHOT_NO_PARTY_FILTER")

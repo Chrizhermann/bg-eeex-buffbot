@@ -1978,3 +1978,46 @@ def test_a_real_area_cast_is_read_from_its_own_request(lua):
         "entry = { repeats = 1, planned = 1, reasons = {} }\n"
         "state = BfBot.Plan.PartyCellState(entry, {}, {}, {}, false)")
     assert lua.eval("state") == "planned"
+
+
+# ----------------------------------------------------------------------
+# Which casts wait on a clone (#116)
+# ----------------------------------------------------------------------
+
+
+def test_a_cast_from_a_predicted_caster_says_which_clone(
+        lua: LuaRuntime) -> None:
+    """A promise about a creature that is not on the field is not the same
+    claim as a promise about somebody standing there."""
+    assert lua.eval("""
+        BfBot.Plan.PredictedImage({
+            { actor = "a" },
+            { actor = "b", future = { kind = "clone", image = 2 } },
+        })
+    """) == 2
+    assert lua.eval("""
+        BfBot.Plan.PredictedImage({
+            { actor = "b", future = { kind = "clone", image = 3 } },
+        })
+    """) == 3
+
+
+def test_a_cast_from_somebody_standing_there_waits_on_nothing(
+        lua: LuaRuntime) -> None:
+    assert lua.eval(
+        "BfBot.Plan.PredictedImage({ { actor = 'a' }, { actor = 'b' } })"
+    ) is None
+    assert lua.eval("BfBot.Plan.PredictedImage({})") is None
+    assert lua.eval("BfBot.Plan.PredictedImage(nil)") is None
+
+
+def test_a_future_that_is_not_a_clone_is_not_a_clone(
+        lua: LuaRuntime) -> None:
+    """A summoned creature is planned too, but it is not an image, and the
+    cell would otherwise claim one."""
+    assert lua.eval("""
+        BfBot.Plan.PredictedImage({
+            { actor = "b", future = { kind = "creature",
+                                      resource = "PLANETAR" } },
+        })
+    """) is None

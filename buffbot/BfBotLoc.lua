@@ -203,6 +203,8 @@ local _registry = {
     ["ui.party.clones.simulacrum"] = { id = 777, fallback = [=[Clones: simulacrum]=] },
     ["ui.party.clones.both"] = { id = 778, fallback = [=[Clones: both]=] },
     ["ui.party.clones.tooltip"] = { id = 779, fallback = [=[Plan casts from a Project Image or a Simulacrum. Switching this on ticks the spell that creates it, so the panel can work out what the copy will be able to cast and the Summons view gets a tab for it before it exists. An image keeps the owner's spent slots and freezes them the moment it goes out, so anything they were going to cast after it will not happen; a simulacrum re-memorizes at a reduced level.]=] },
+    ["ui.chip.via_image"] = { id = 780, fallback = [=[via image]=] },
+    ["ui.chip.via_simulacrum"] = { id = 781, fallback = [=[via simulacrum]=] },
     ["feedback.cell_locked"] = { id = 760, fallback = [=[{buff} is locked. Unlock it in the caster view to change who receives it.]=] },
     ["feedback.cell_impossible"] = { id = 761, fallback = [=[{buff} cannot reach {name}. {reason}]=] },
     ["feedback.cell_covered"] = { id = 762, fallback = [=[{buff} already covers the whole party. Clear the Party box to choose individually.]=] },

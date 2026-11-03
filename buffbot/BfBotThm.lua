@@ -48,6 +48,9 @@ BfBot.Theme._palettes = {
         btnText      = "{235, 222, 196}",
         btnTextDim   = "{168, 155, 132}",
         switchText   = "{255, 214, 90}",
+        -- A cast that waits on a clone that is not on the field
+        -- yet: a promise, not a plan (#116).
+        predicted    = "{56, 112, 98}",
         btnTextOff   = "{142, 128, 104}",
         overlay      = 0,
         borderResref = "BFBOTFR",
@@ -85,6 +88,9 @@ BfBot.Theme._palettes = {
         btnText      = "{235, 222, 196}",
         btnTextDim   = "{168, 155, 132}",
         switchText   = "{255, 214, 90}",
+        -- A cast that waits on a clone that is not on the field
+        -- yet: a promise, not a plan (#116).
+        predicted    = "{150, 205, 190}",
         btnTextOff   = "{142, 128, 104}",
         overlay      = 160,
         borderResref = "BFBOTFR",
@@ -113,6 +119,9 @@ BfBot.Theme._palettes = {
         btnText      = "{226, 226, 232}",
         btnTextDim   = "{158, 158, 166}",
         switchText   = "{255, 214, 90}",
+        -- A cast that waits on a clone that is not on the field
+        -- yet: a promise, not a plan (#116).
+        predicted    = "{44, 104, 118}",
         btnTextOff   = "{132, 134, 146}",
         overlay      = 60,
         borderResref = "BFBOTFR2",
@@ -141,6 +150,9 @@ BfBot.Theme._palettes = {
         btnText      = "{226, 226, 232}",
         btnTextDim   = "{158, 158, 166}",
         switchText   = "{255, 214, 90}",
+        -- A cast that waits on a clone that is not on the field
+        -- yet: a promise, not a plan (#116).
+        predicted    = "{135, 205, 215}",
         btnTextOff   = "{132, 134, 146}",
         overlay      = 180,
         borderResref = "BFBOTFR2",
@@ -169,6 +181,9 @@ BfBot.Theme._palettes = {
         btnText      = "{236, 224, 190}",
         btnTextDim   = "{166, 157, 133}",
         switchText   = "{255, 214, 90}",
+        -- A cast that waits on a clone that is not on the field
+        -- yet: a promise, not a plan (#116).
+        predicted    = "{104, 64, 118}",
         btnTextOff   = "{176, 154, 124}",
         overlay      = 60,
         borderResref = "BFBOTFR3",
@@ -197,6 +212,9 @@ BfBot.Theme._palettes = {
         btnText      = "{236, 224, 190}",
         btnTextDim   = "{166, 157, 133}",
         switchText   = "{255, 214, 90}",
+        -- A cast that waits on a clone that is not on the field
+        -- yet: a promise, not a plan (#116).
+        predicted    = "{205, 170, 215}",
         btnTextOff   = "{176, 154, 124}",
         overlay      = 180,
         borderResref = "BFBOTFR3",

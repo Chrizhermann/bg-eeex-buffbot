@@ -547,3 +547,9 @@
 
 // ui.party.clones.tooltip
 @779 = ~Plan casts from a Project Image or a Simulacrum. Switching this on ticks the spell that creates it, so the panel can work out what the copy will be able to cast and the Summons view gets a tab for it before it exists. An image keeps the owner's spent slots and freezes them the moment it goes out, so anything they were going to cast after it will not happen; a simulacrum re-memorizes at a reduced level.~
+
+// ui.chip.via_image
+@780 = ~via image~
+
+// ui.chip.via_simulacrum
+@781 = ~via simulacrum~

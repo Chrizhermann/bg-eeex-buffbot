@@ -750,6 +750,10 @@ function P._CollapseDecisions(assignment)
                     entry.sources[#entry.sources + 1] = {
                         actor = key, slot = decision.source.slot,
                         casterRef = decision.source.casterRef,
+                        -- A caster that is not on the field yet (#116).
+                        -- Carried so a cell can say which casts wait on a
+                        -- conjuring instead of looking like any other.
+                        future = decision.source.future,
                     }
                 end
                 -- The shortest duration of the repeats is the one a player
@@ -812,6 +816,18 @@ function P.ByRecipient(snapshot, assignment)
     end
 
     return recipients
+end
+
+--- PURE: the clone a set of sources waits on, or nil when none of them do.
+--- @return 2 for a Project Image, 3 for a Simulacrum, nil otherwise
+function P.PredictedImage(sources)
+    for _, source in ipairs(sources or {}) do
+        local future = source.future
+        if type(future) == "table" and future.kind == "clone" then
+            return future.image
+        end
+    end
+    return nil
 end
 
 --- PURE: what the Party cell says, which is a statement about the members.
@@ -1010,6 +1026,8 @@ function P.ByGroup(snapshot, assignment)
                 P.CellWriteTarget(entry, snapshot, sources, actor.key)
             members[#members + 1] = { key = actor.key, name = actor.name,
                 slot = actor.slot, state = state, reason = reason,
+                -- Which clone this cast waits on, if any (#116).
+                predicted = entry and P.PredictedImage(entry.sources) or nil,
                 entry = entry, writeSlot = writeSlot,
                 writeResref = writeResref, writeKind = writeKind }
         end
@@ -1035,6 +1053,8 @@ function P.ByGroup(snapshot, assignment)
         end
         local targets = { { key = "party", party = true,
             state = partyState, reason = partyReason, entry = partyEntry,
+            predicted = partyEntry and P.PredictedImage(partyEntry.sources)
+                or nil,
             writeSlot = partySlot, writeResref = partyResref,
             writeKind = partyKind } }
         for _, member in ipairs(members) do

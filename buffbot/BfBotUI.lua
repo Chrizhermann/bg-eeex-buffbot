@@ -4864,6 +4864,8 @@ function BfBot.UI._BuildPartyRows(lines, query)
                     writeSlot = recipient.writeSlot,
                     writeResref = recipient.writeResref,
                     writeKind = recipient.writeKind,
+                    -- The clone this cast waits on, if any (#116).
+                    predicted = recipient.predicted,
                 }
             end
             -- What a write needs: the owning character's portrait slot and
@@ -5232,6 +5234,13 @@ function BfBot.UI._PartyChipName(rowNumber, index)
     return glyph .. " " .. (chip.name or "")
 end
 
+--- PURE: the short name of the clone a chip waits on (#116).
+function BfBot.UI._CloneShortLabel(image)
+    if image == 2 then return BfBot.L10N.Get("ui.chip.via_image") end
+    if image == 3 then return BfBot.L10N.Get("ui.chip.via_simulacrum") end
+    return ""
+end
+
 function BfBot.UI._PartyChipDuration(rowNumber, index)
     local chip = BfBot.UI._PartyChip(rowNumber, index)
     if not chip then return "" end
@@ -5248,6 +5257,12 @@ function BfBot.UI._PartyChipDuration(rowNumber, index)
     -- An offer and a refusal both say nothing here: the glyph has said it,
     -- and a duration for a cast nobody asked for would read as a promise.
     if chip.state == "open" or chip.state == "impossible" then return "" end
+    -- A cast that waits on a clone says so here rather than showing a
+    -- duration (#116). The duration of a creature that is not on the field
+    -- is the less useful of the two: the conjuring is what can fail.
+    if chip.predicted then
+        return BfBot.UI._CloneShortLabel(chip.predicted)
+    end
     return chip.dur or ""
 end
 
@@ -5268,6 +5283,9 @@ function BfBot.UI._PartyChipColor(rowNumber, index)
     -- switched off and therefore fine, and this is a character the player
     -- asked to have covered who will not be.
     if BfBot.Plan.IsProblem(chip.state) then return BfBot.UI._T("lockText") end
+    -- A promise about a creature that does not exist yet is not the same
+    -- claim as a promise about somebody standing there (#116).
+    if chip.predicted then return BfBot.UI._T("predicted") end
     if chip.state == "planned" then return BfBot.UI._T("btnText") end
     -- Chosen-but-not-editable and not-chosen are both quiet; their glyphs
     -- are what tells them apart.

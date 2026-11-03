@@ -47,6 +47,8 @@ EXTRACTED = (
     # The cast reading and the move (#115).
     "CyclePartyOrder", "_PartyOrderLabel", "_IsPartyCastOrder",
     "_PartyRowPriority", "_SortPartyRowsByCast", "_CanMovePartyRow",
+    # A chip that waits on a clone (#116).
+    "_CloneShortLabel",
 )
 
 
@@ -1166,3 +1168,58 @@ def test_a_selection_outside_the_table_moves_nothing(
         _move_world(lua, "cast", ONE_OWNER, selected)
         assert not lua.eval("BfBot.UI._CanMovePartyRow(-1)")
         assert not lua.eval("BfBot.UI._CanMovePartyRow(1)")
+
+
+# ----------------------------------------------------------------------
+# A chip that waits on a clone (#116)
+# ----------------------------------------------------------------------
+
+
+def _chip_world(lua: LuaRuntime, predicted: str, state: str = "planned",
+                dur: str = "'45m'") -> None:
+    lua.execute("""
+        buffbot_partyTable = { {
+            key = "spl:X", name = "X", owners = {},
+            chips = { { name = "Minsc", state = %s, dur = %s,
+                        predicted = %s, planned = 1, repeats = 1 } },
+        } }
+    """ % ("'" + state + "'", dur, predicted))
+
+
+def test_a_chip_that_waits_on_an_image_says_so_where_its_duration_would_be(
+        lua: LuaRuntime) -> None:
+    """The duration of a creature that is not on the field is the less
+    useful of the two things that line could say."""
+    _chip_world(lua, "2")
+    assert lua.eval("BfBot.UI._PartyChipDuration(1, 1)") == "via image"
+
+
+def test_a_chip_that_waits_on_a_simulacrum_names_that_instead(
+        lua: LuaRuntime) -> None:
+    _chip_world(lua, "3")
+    assert lua.eval("BfBot.UI._PartyChipDuration(1, 1)") == "via simulacrum"
+
+
+def test_a_chip_filled_by_somebody_standing_there_keeps_its_duration(
+        lua: LuaRuntime) -> None:
+    _chip_world(lua, "nil")
+    assert lua.eval("BfBot.UI._PartyChipDuration(1, 1)") == "45m"
+
+
+def test_a_waiting_chip_takes_its_own_colour(lua: LuaRuntime) -> None:
+    _chip_world(lua, "2")
+    waiting = lua.eval("BfBot.UI._PartyChipColor(1, 1)")
+    _chip_world(lua, "nil")
+    standing = lua.eval("BfBot.UI._PartyChipColor(1, 1)")
+    assert waiting != standing
+    # And it is a real palette colour, not the missing-key magenta.
+    assert waiting != 0xFF00FF
+
+
+def test_a_problem_still_reads_as_a_problem(lua: LuaRuntime) -> None:
+    """Amber wins: a cast that will not happen matters more than what it
+    would have waited on."""
+    _chip_world(lua, "2", state="problem")
+    problem = lua.eval("BfBot.UI._PartyChipColor(1, 1)")
+    _chip_world(lua, "nil", state="problem")
+    assert problem == lua.eval("BfBot.UI._PartyChipColor(1, 1)")

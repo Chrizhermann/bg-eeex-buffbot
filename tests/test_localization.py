@@ -130,6 +130,8 @@ CATALOG_SCHEMA = {
     777: "ui.party.clones.simulacrum",
     778: "ui.party.clones.both",
     779: "ui.party.clones.tooltip",
+    780: "ui.chip.via_image",
+    781: "ui.chip.via_simulacrum",
     760: "feedback.cell_locked",
     761: "feedback.cell_impossible",
     762: "feedback.cell_covered",

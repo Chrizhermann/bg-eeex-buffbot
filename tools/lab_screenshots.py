@@ -280,6 +280,9 @@ def main() -> int:
     parser.add_argument("--query", default="")
     parser.add_argument("--recipient", type=int, choices=range(6),
                         help="narrow the party table to this portrait slot")
+    parser.add_argument("--clones", type=int, choices=(0, 1, 2, 3),
+                        help="plan casts from a clone: 0 off, 1 image, "
+                             "2 simulacrum, 3 both (#116)")
     parser.add_argument("--filter", default="",
                         choices=("", "all", "planned", "open", "problems"),
                         help="which rows the party table lists")
@@ -384,6 +387,7 @@ def main() -> int:
                   if args.dialog else "")
         perspective = (f",perspective='{args.perspective}'"
                        if args.perspective else "")
+        clones = f",clones={args.clones}" if args.clones is not None else ""
         row_filter = f",filter='{args.filter}'" if args.filter else ""
         recipient = (f",recipient={args.recipient}"
                      if args.recipient is not None else "")
@@ -391,7 +395,7 @@ def main() -> int:
         targets = (",targets={" + ",".join(f"[[{p}]]" for p in pairs) + "}"
                    if pairs else "")
         prepare_args = (f"slot={args.slot},preset={args.preset},enable={enable}{lock}"
-                        f"{order},query=[[{args.query}]]{dialog}{perspective}{targets}{row_filter}{recipient}")
+                        f"{order},query=[[{args.query}]]{dialog}{perspective}{targets}{row_filter}{recipient}{clones}")
         panels: list[tuple[int, int] | None] = [None]
         if args.panels:
             panels = [tuple(int(n) for n in size.lower().split("x"))
