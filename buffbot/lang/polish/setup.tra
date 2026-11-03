@@ -532,3 +532,18 @@
 
 // ui.party.order.tooltip
 @774 = ~How the table is listed. A-Z is how a buff is found; cast order is what the plan will do, and the only reading in which Up and Down mean anything. Moving a row writes that order to everybody who casts it.~
+
+// ui.party.clones.off
+@775 = ~Clones: off~
+
+// ui.party.clones.image
+@776 = ~Clones: image~
+
+// ui.party.clones.simulacrum
+@777 = ~Clones: simulacrum~
+
+// ui.party.clones.both
+@778 = ~Clones: both~
+
+// ui.party.clones.tooltip
+@779 = ~Plan casts from a Project Image or a Simulacrum. Switching this on ticks the spell that creates it, so the panel can work out what the copy will be able to cast and the Summons view gets a tab for it before it exists. An image keeps the owner's spent slots and freezes them the moment it goes out, so anything they were going to cast after it will not happen; a simulacrum re-memorizes at a reduced level.~

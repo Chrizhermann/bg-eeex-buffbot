@@ -982,6 +982,14 @@ function S.AddSources(snapshot, requests)
                     -- image is already live: predicting a second one while the
                     -- first still stands would plan a cast the policy refuses.
                     if rows and (existing or not owner.projectImageLocked) then
+                        -- A Project Image freezes its owner the moment it is
+                        -- cast, so everything they were going to do after it
+                        -- will not happen (#116).
+                        if not existing and description.kind == "clone"
+                            and description.image == 2 then
+                            S._MarkFrozenAfter(snapshot, requests, index,
+                                owner.key)
+                        end
                         S._AddPredictedActor(snapshot, {
                             key = key, owner = owner, live = existing,
                             rows = rows, profile = profile,
@@ -995,6 +1003,42 @@ function S.AddSources(snapshot, requests)
             end
         end
     end
+end
+
+--- Mark the owner's later casts as ones the image will cost them (#116).
+---
+--- A live Project Image already gives every source of its owner the
+--- puppet-lock reason. This is the planned case: the owner is not locked
+--- yet, but the moment the image goes out they are, and the executor drops
+--- whatever came after it.
+---
+--- Only AFTER. Requests arrive in the preset's own order, so a request with
+--- a higher index is one the owner would have cast later; anything earlier
+--- still runs, which is why putting a buff before the image in the cast
+--- order (#115) is the player's way out.
+---
+--- An existing reason is never overwritten: "nobody can cast this" is a
+--- better thing to say than "the image would have frozen you".
+function S._MarkFrozenAfter(snapshot, requests, creationIndex, ownerKey)
+    local later = {}
+    for index = creationIndex + 1, #requests do
+        local request = requests[index]
+        if request and request.group then later[request.group] = true end
+    end
+    if next(later) == nil then return 0 end
+
+    local marked = 0
+    for groupKey, group in pairs(snapshot.groups or {}) do
+        if later[groupKey] then
+            for _, source in ipairs(group.sources or {}) do
+                if source.actor == ownerKey and not source.reason then
+                    source.reason = BfBot.Plan.REASON.PROJECT_IMAGE_LOCKED
+                    marked = marked + 1
+                end
+            end
+        end
+    end
+    return marked
 end
 
 --- One predicted caster and its sources. Split out of AddSources so the

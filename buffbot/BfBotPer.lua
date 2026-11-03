@@ -341,6 +341,12 @@ function BfBot.Persist._ValidateConfig(config)
             -- from before the toggle existed needs no migration, and a
             -- corrupt value heals into off rather than into a third state.
             if preset.ord ~= 1 then preset.ord = nil end
+            -- Which clone kinds this preset plans (#116). Same shape as
+            -- `ord`: absent is Off, so nothing migrates, and anything else
+            -- heals into Off rather than into a fourth state.
+            if preset.cln ~= 1 and preset.cln ~= 2 and preset.cln ~= 3 then
+                preset.cln = nil
+            end
             if type(preset.spells) ~= "table" then
                 preset.spells = {}
             else
@@ -2020,6 +2026,49 @@ end
 --- before this existed.
 function BfBot.Persist.IsAutoOrder(preset)
     return type(preset) == "table" and preset.ord == 1
+end
+
+--- PURE: which clone kinds a preset plans (#116).
+--- 0 none, 1 Project Image, 2 Simulacrum, 3 both.
+function BfBot.Persist.GetClones(preset)
+    if type(preset) ~= "table" then return 0 end
+    local value = preset.cln
+    if value == 1 or value == 2 or value == 3 then return value end
+    return 0
+end
+
+--- PURE: does `selection` include image type `image` (2 = Project Image,
+--- 3 = Simulacrum)? The stored value is a two-bit set, so a preset that
+--- plans both says so in one number.
+function BfBot.Persist.ClonesInclude(selection, image)
+    if image == 2 then return selection == 1 or selection == 3 end
+    if image == 3 then return selection == 2 or selection == 3 end
+    return false
+end
+
+--- The clone selection of one character's preset.
+function BfBot.Persist.GetClonesFor(sprite, presetIndex)
+    return BfBot.Persist.GetClones(
+        BfBot.Persist.GetPreset(sprite, presetIndex))
+end
+
+--- Store it on one character's preset. Absent is Off, so the preset keeps
+--- the shape it had and the field only appears where it is switched on.
+function BfBot.Persist.SetClones(sprite, presetIndex, value)
+    local preset = BfBot.Persist.GetPreset(sprite, presetIndex)
+    if not preset then return end
+    preset.cln = (value == 1 or value == 2 or value == 3) and value or nil
+end
+
+--- The setting belongs to the plan, not to a character, so it is written to
+--- every party member the way the order toggle is.
+function BfBot.Persist.SetClonesAll(presetIndex, value)
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            BfBot.Persist.SetClones(sprite, presetIndex, value)
+        end
+    end
 end
 
 --- The order toggle of one character's preset.

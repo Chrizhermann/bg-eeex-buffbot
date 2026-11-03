@@ -1645,7 +1645,7 @@ function BfBot.UI._Layout()
         -- instead of the two colliding at the same coordinates.
         row(r5Y,
             { { "bbExp", 92 }, { "bbImp", 92 } },
-            nil,
+            { { "bbClones", 176 } },
             { { "bbUp", 66 }, { "bbDn", 66 }, { "bbSort", 66 },
               { "bbOrder", 162 } })
     else
@@ -4657,6 +4657,92 @@ end
 --- PURE: the party table's rows, from ByGroup's output.
 -- `query` filters on the buff's name or on a recipient's, so the one search
 -- box answers both "where is Haste" and "what does Minsc get".
+--- The clone kinds this preset plans (#116), cycled by one button.
+---
+--- Off -> Project Image -> Simulacrum -> both. One four-state button rather
+--- than two checkboxes: the panel has no room for two, and the states are
+--- naturally ordered.
+function BfBot.UI.CycleIncludeClones()
+    if not BfBot.UI._IsPartyView() then return end
+    local sprite = BfBot.UI._GetSelectedSprite()
+        or EEex_Sprite_GetInPortrait(0)
+    if not sprite then return end
+    local now = BfBot.Persist.GetClonesFor(sprite, BfBot.UI._presetIdx)
+    local next_ = (now + 1) % 4
+    BfBot.Persist.SetClonesAll(BfBot.UI._presetIdx, next_)
+    BfBot.UI._ApplyCloneSelection(next_)
+    BfBot.UI._Refresh()
+end
+
+--- Tick or untick every creation entry the selection covers.
+---
+--- This is what makes the button a shortcut rather than a second truth: the
+--- state still lives in the preset entries, and a player who ticks the row
+--- by hand gets the same result.
+---
+--- @return how many entries were changed
+function BfBot.UI._ApplyCloneSelection(selection)
+    if not BfBot.Summon or not BfBot.Summon.Creators then return 0 end
+    local changed = 0
+    for slot = 0, 5 do
+        local sprite = EEex_Sprite_GetInPortrait(slot)
+        if sprite then
+            local okScan, rows = pcall(BfBot.Scan.GetCastableSpells, sprite)
+            if okScan and rows then
+                for resref, row in pairs(rows) do
+                    local wanted
+                    for _, descriptor in ipairs(
+                        BfBot.Summon.Creators(row)) do
+                        if descriptor.kind == "clone" then
+                            wanted = wanted
+                                or BfBot.Persist.ClonesInclude(selection,
+                                    descriptor.image)
+                        end
+                    end
+                    if wanted ~= nil then
+                        local entry = BfBot.Persist.GetSpellConfig(sprite,
+                            BfBot.UI._presetIdx, resref)
+                        local want = wanted and 1 or 0
+                        if entry and entry.on ~= want then
+                            BfBot.Persist.SetSpellEnabled(sprite,
+                                BfBot.UI._presetIdx, resref, want,
+                                entry.kind)
+                            changed = changed + 1
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return changed
+end
+
+function BfBot.UI._IncludeClonesValue()
+    local sprite = BfBot.UI._GetSelectedSprite()
+        or EEex_Sprite_GetInPortrait(0)
+    if not sprite then return 0 end
+    return BfBot.Persist.GetClonesFor(sprite, BfBot.UI._presetIdx)
+end
+
+function BfBot.UI._IncludeClonesLabel()
+    local value = BfBot.UI._IncludeClonesValue()
+    if value == 1 then return BfBot.L10N.Get("ui.party.clones.image") end
+    if value == 2 then return BfBot.L10N.Get("ui.party.clones.simulacrum") end
+    if value == 3 then return BfBot.L10N.Get("ui.party.clones.both") end
+    return BfBot.L10N.Get("ui.party.clones.off")
+end
+
+function BfBot.UI._IncludeClonesTooltip()
+    return BfBot.L10N.Get("ui.party.clones.tooltip")
+end
+
+function BfBot.UI._IncludeClonesColor()
+    if BfBot.UI._IncludeClonesValue() == 0 then
+        return BfBot.UI._T("btnTextOff")
+    end
+    return BfBot.UI._T("switchText")
+end
+
 --- Which reading of the party table's list is showing (#115).
 --- "name" is how a buff is found among forty; "cast" is what the plan will
 --- do, and the only one in which moving a row means anything.

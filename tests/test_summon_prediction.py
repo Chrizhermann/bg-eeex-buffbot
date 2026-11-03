@@ -1708,3 +1708,204 @@ def test_a_real_table_still_answers_its_cells() -> None:
     assert lua.eval("BfBot.Summon.Rule('MXSPLWIZ', 12, 3)") == 4
     # A row the table does not have is zero slots, not missing rules.
     assert lua.eval("BfBot.Summon.Rule('MXSPLWIZ', 99, 3)") == 0
+
+
+# ----------------------------------------------------------------------
+# Which clone kinds a preset plans (#116)
+# ----------------------------------------------------------------------
+#
+# The switch is a shortcut over the creation rows, not a second place the
+# state lives: it ticks and unticks entries that are already there. These
+# pin the stored value and the membership rule; the ticking itself needs a
+# party and is covered by the in-game phase.
+
+
+PERSIST_PATH = ROOT / "buffbot/BfBotPer.lua"
+
+
+def _persist(lua: LuaRuntime) -> LuaRuntime:
+    """Core plus the real persistence, which is where the value lives."""
+    lua.execute("BfBot.Scan = BfBot.Scan or {}")
+    lua.execute("BfBot.Innate = {}\nBfBot.Mp = {}\nBfBot.Theme = {}")
+    lua.execute("BfBot.Exec = { _IsAlive = function(_) return true end }")
+    lua.execute((ROOT / "buffbot/BfBotLoc.lua").read_text(encoding="utf-8"))
+    lua.execute(PERSIST_PATH.read_text(encoding="utf-8"))
+    return lua
+
+
+def test_a_preset_without_the_field_plans_no_clones(lua: LuaRuntime) -> None:
+    """Absent is Off, so nothing migrates."""
+    _persist(lua)
+    assert lua.eval("BfBot.Persist.GetClones({})") == 0
+    assert lua.eval("BfBot.Persist.GetClones(nil)") == 0
+
+
+def test_the_three_stored_values_read_back(lua: LuaRuntime) -> None:
+    _persist(lua)
+    for value in (1, 2, 3):
+        assert lua.eval("BfBot.Persist.GetClones({ cln = %d })" % value) == value
+
+
+def test_a_corrupt_value_heals_into_off(lua: LuaRuntime) -> None:
+    """Off is the safe reading: it plans nothing rather than something
+    the player did not ask for."""
+    _persist(lua)
+    for value in ("0", "4", "-1", "'image'", "{}"):
+        assert lua.eval("BfBot.Persist.GetClones({ cln = %s })" % value) == 0
+
+
+def test_the_selection_is_a_set_of_two_kinds(lua: LuaRuntime) -> None:
+    """One number says which of the two a preset plans, so "both" needs no
+    second field."""
+    _persist(lua)
+
+    def includes(selection: int, image: int) -> bool:
+        return bool(lua.eval(
+            "BfBot.Persist.ClonesInclude(%d, %d)" % (selection, image)))
+
+    assert not includes(0, 2) and not includes(0, 3)
+    assert includes(1, 2) and not includes(1, 3)       # image only
+    assert not includes(2, 2) and includes(2, 3)       # simulacrum only
+    assert includes(3, 2) and includes(3, 3)           # both
+
+
+def test_a_kind_this_module_cannot_predict_is_never_included(
+        lua: LuaRuntime) -> None:
+    """Mislead copies no spellbook, so no selection may cover it."""
+    _persist(lua)
+    for selection in (0, 1, 2, 3):
+        assert not lua.eval(
+            "BfBot.Persist.ClonesInclude(%d, 1)" % selection)
+
+
+# ----------------------------------------------------------------------
+# What a planned Project Image costs its owner (#116)
+# ----------------------------------------------------------------------
+
+
+def test_the_owners_later_casts_are_marked_as_frozen(
+        plan: LuaRuntime) -> None:
+    """The image freezes them the moment it goes out.
+
+    The executor already drops those casts; before this the table promised
+    them and the player watched them vanish.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        -- A second group the same owner casts later.
+        local row = { kind = "spl", resref = "LATER", name = "Later",
+                      level = 1, spellType = 1, count = 1, casterLevel = 12,
+                      duration = 300, isAoE = 0, isSelfOnly = 0,
+                      class = { isBuff = true } }
+        local later = BfBot.Plan.GroupKey(row)
+        snap.groups[later] = { key = later, name = row.name, kind = "spl",
+            sources = { { id = "protagonist/" .. later,
+                actor = "protagonist", casterName = "Owner", slot = 0,
+                casterRef = snap.actors.protagonist.casterRef,
+                lane = "protagonist", row = row,
+                pool = "protagonist:spell:LATER", duration = 300,
+                casterLevel = 12, variantDurations = {} } } }
+        LaterKey = later
+        TestPredictionStubs({ creators = {{kind='clone', image=2}},
+                              rows = TestRows({HASTE = 2}) })
+        local requests = TestRequests(groupKey, {})
+        requests[2] = { group = later, target = "protagonist", on = 1,
+                        rep = 1, manual = 2 }
+        BfBot.Summon.AddSources(snap, requests)
+        Reason = snap.groups[LaterKey].sources[1].reason
+    """)
+    assert plan.eval("Reason") == "project_image_locked"
+
+
+def test_what_the_owner_casts_before_the_image_is_untouched(
+        plan: LuaRuntime) -> None:
+    """The executor drops what follows the image cast, not everything.
+
+    Putting a buff before the image in the cast order is the player's way
+    out, so the plan must not paint it as lost.
+    """
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        local row = { kind = "spl", resref = "EARLY", name = "Early",
+                      level = 1, spellType = 1, count = 1, casterLevel = 12,
+                      duration = 300, isAoE = 0, isSelfOnly = 0,
+                      class = { isBuff = true } }
+        local early = BfBot.Plan.GroupKey(row)
+        snap.groups[early] = { key = early, name = row.name, kind = "spl",
+            sources = { { id = "protagonist/" .. early,
+                actor = "protagonist", casterName = "Owner", slot = 0,
+                casterRef = snap.actors.protagonist.casterRef,
+                lane = "protagonist", row = row,
+                pool = "protagonist:spell:EARLY", duration = 300,
+                casterLevel = 12, variantDurations = {} } } }
+        EarlyKey = early
+        TestPredictionStubs({ creators = {{kind='clone', image=2}},
+                              rows = TestRows({HASTE = 2}) })
+        -- The early buff comes FIRST, the creation second.
+        local requests = {
+            { group = early, target = "protagonist", on = 1, rep = 1,
+              manual = 1 },
+            { group = groupKey, target = "protagonist", on = 1, rep = 1,
+              manual = 2 },
+        }
+        BfBot.Summon.AddSources(snap, requests)
+        Reason = snap.groups[EarlyKey].sources[1].reason
+    """)
+    assert plan.eval("Reason") is None
+
+
+def test_a_simulacrum_freezes_nobody(plan: LuaRuntime) -> None:
+    """Only a Project Image puppet-locks its owner."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        local row = { kind = "spl", resref = "LATER", name = "Later",
+                      level = 1, spellType = 1, count = 1, casterLevel = 12,
+                      duration = 300, isAoE = 0, isSelfOnly = 0,
+                      class = { isBuff = true } }
+        local later = BfBot.Plan.GroupKey(row)
+        snap.groups[later] = { key = later, name = row.name, kind = "spl",
+            sources = { { id = "protagonist/" .. later,
+                actor = "protagonist", casterName = "Owner", slot = 0,
+                casterRef = snap.actors.protagonist.casterRef,
+                lane = "protagonist", row = row,
+                pool = "protagonist:spell:LATER", duration = 300,
+                casterLevel = 12, variantDurations = {} } } }
+        LaterKey = later
+        TestPredictionStubs({ creators = {{kind='clone', image=3}},
+                              rows = TestRows({HASTE = 2}) })
+        local requests = TestRequests(groupKey, {})
+        requests[2] = { group = later, target = "protagonist", on = 1,
+                        rep = 1, manual = 2 }
+        BfBot.Summon.AddSources(snap, requests)
+        Reason = snap.groups[LaterKey].sources[1].reason
+    """)
+    assert plan.eval("Reason") is None
+
+
+def test_a_better_reason_is_never_overwritten(plan: LuaRuntime) -> None:
+    """"Nobody can cast this" says more than "the image would freeze you"."""
+    plan.execute("""
+        snap, groupKey = TestPlanSnapshot({})
+        local row = { kind = "spl", resref = "LATER", name = "Later",
+                      level = 1, spellType = 1, count = 1, casterLevel = 12,
+                      duration = 300, isAoE = 0, isSelfOnly = 0,
+                      class = { isBuff = true } }
+        local later = BfBot.Plan.GroupKey(row)
+        snap.groups[later] = { key = later, name = row.name, kind = "spl",
+            sources = { { id = "protagonist/" .. later,
+                actor = "protagonist", casterName = "Owner", slot = 0,
+                casterRef = snap.actors.protagonist.casterRef,
+                lane = "protagonist", row = row,
+                pool = "protagonist:spell:LATER", duration = 300,
+                casterLevel = 12, variantDurations = {},
+                reason = "caster_dead" } } }
+        LaterKey = later
+        TestPredictionStubs({ creators = {{kind='clone', image=2}},
+                              rows = TestRows({HASTE = 2}) })
+        local requests = TestRequests(groupKey, {})
+        requests[2] = { group = later, target = "protagonist", on = 1,
+                        rep = 1, manual = 2 }
+        BfBot.Summon.AddSources(snap, requests)
+        Reason = snap.groups[LaterKey].sources[1].reason
+    """)
+    assert plan.eval("Reason") == "caster_dead"

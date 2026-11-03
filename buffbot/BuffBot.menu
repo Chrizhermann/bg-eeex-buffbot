@@ -1158,6 +1158,33 @@ menu
 		ignoreEvents
 		area 0 0 124 26
 	}
+	-- Whether the plan may use a Project Image or a Simulacrum (#116). A
+	-- text item, like the order toggle: only a text item takes an action
+	-- together with `text color lua`, and the caption changes colour when
+	-- the switch is on.
+	label
+	{
+		name    "bbClones_b"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		bam lua "BfBot.UI._PlateBam()"
+		sequence lua "BfBot.UI._ChromeSeq()"
+		scaleToClip
+		ignoreEvents
+		area 0 0 176 28
+	}
+	text
+	{
+		name    "bbClones"
+		enabled "buffbot_isOpen and BfBot.UI._IsRecipientView()"
+		action  "BfBot.UI.CycleIncludeClones()"
+		text lua "BfBot.UI._IncludeClonesLabel()"
+		text style "bb_caption"
+		text color lua "BfBot.UI._IncludeClonesColor()"
+		text align center center
+		tooltip lua "BfBot.UI._IncludeClonesTooltip()"
+		area 0 0 176 28
+	}
+
 	-- Which reading of the party list is showing: by name, or in the order
 	-- the plan will cast them. Up and Down only mean something in the
 	-- second, which is why it is a mode and not a sort button (#115).
