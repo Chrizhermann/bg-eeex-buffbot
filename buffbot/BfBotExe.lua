@@ -564,10 +564,81 @@ function BfBot.Exec._DetectCombat()
 end
 
 --- Resolve a user-specified target into expanded queue entries.
+--- The one key a summon-targeted cast is stored under.
+---
+--- One key is enough because a caster has exactly one cast in flight: every
+--- entry queues its action plus the advance callback, and the next entry is
+--- only built when that callback fires. Two stored keys on one caster were
+--- measured to resolve independently, so the scheme survives if that ever
+--- changes -- but a second key would buy nothing today.
+BfBot.Exec.SUMMON_TARGET_KEY = "BfBotTarget"
+
+--- The prefix that makes a summon target unmistakable in `tgt`.
+---
+--- It has to be explicit. A summon identity is `clone:<owner>`,
+--- `cre:<resref>`, `name:<name>` -- or, for a non-clone with a script name,
+--- the BARE script name, which could be spelled exactly like a party
+--- member's name. `tgt` already holds character names, so without a prefix
+--- that one identity form would be ambiguous.
+BfBot.Exec.SUMMON_TARGET_PREFIX = "sum:"
+
+--- PURE: does this `tgt` value name a summon?
+function BfBot.Exec._IsSummonTarget(target)
+    if type(target) ~= "string" then return false end
+    local prefix = BfBot.Exec.SUMMON_TARGET_PREFIX
+    return target:sub(1, #prefix) == prefix
+end
+
+--- PURE: the summon identity inside a `tgt` value, or nil when it holds
+--- none. An empty identity is nil rather than "": a target that names no
+--- summon must not resolve to the first one in the list.
+function BfBot.Exec._SummonTargetIdentity(target)
+    if not BfBot.Exec._IsSummonTarget(target) then return nil end
+    local identity = target:sub(#BfBot.Exec.SUMMON_TARGET_PREFIX + 1)
+    if identity == "" then return nil end
+    return identity
+end
+
+--- PURE: the `tgt` value for a summon identity.
+function BfBot.Exec.SummonTarget(identity)
+    if type(identity) ~= "string" or identity == "" then return nil end
+    return BfBot.Exec.SUMMON_TARGET_PREFIX .. identity
+end
+
 function BfBot.Exec._ResolveTargets(target, casterSprite, casterSlot, isAoE)
     local results = {}
 
-    if target == "self" then
+    if BfBot.Exec._IsSummonTarget(target) then
+        -- A summon recipient is found by identity in the live discovery and
+        -- carried as a REF, never as build-time userdata: the sprite is
+        -- re-resolved again immediately before the action is queued, because
+        -- a summon can expire between building the queue and casting.
+        --
+        -- `targetObj` is the literal `EEex_Target("<key>")`. The store it
+        -- reads is written at cast time, not here.
+        local identity = BfBot.Exec._SummonTargetIdentity(target)
+        local okList, list = pcall(BfBot.Scan.GetAlliedSummons)
+        if not okList or type(list) ~= "table" then
+            return results, "summons unavailable"
+        end
+        for _, summon in ipairs(list) do
+            if summon.identity == identity then
+                table.insert(results, {
+                    targetObj = string.format('EEex_Target("%s")',
+                        BfBot.Exec.SUMMON_TARGET_KEY),
+                    targetRef = { kind = "summon", oid = summon.oid,
+                                  name = summon.name },
+                    targetSprite = summon.sprite,
+                    targetName = summon.name or identity,
+                    targetIsSummon = true,
+                })
+                return results
+            end
+        end
+        -- Not there any more. Ordinary churn, not a party member leaving, so
+        -- the caller reports it as such rather than as an error.
+        return results, "summon gone"
+    elseif target == "self" then
         table.insert(results, {
             targetObj = "Myself",
             targetSlot = casterSlot,
@@ -751,13 +822,22 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
         -- Resolve targets (self-targets record the caster's party slot when
         -- there is one; summon casters have no slot — Lua 0-truthy makes the
         -- `and slot` form safe for slot 0)
-        local targets = BfBot.Exec._ResolveTargets(
+        local targets, targetReason = BfBot.Exec._ResolveTargets(
             entry.target, casterSprite,
             casterRef.kind == "party" and casterRef.slot or nil, isAoE
         )
 
         if #targets == 0 then
-            BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": no valid targets for " .. spellName)
+            -- A summon that is no longer there is churn, not a fault: it
+            -- expires on its own schedule and the player did nothing wrong.
+            -- A missing party recipient still reads as an error.
+            if targetReason == "summon gone" or targetReason == "summons unavailable" then
+                BfBot.Exec._LogEntry("INFO", "Entry " .. i .. ": "
+                    .. spellName .. " had no summon to aim at ("
+                    .. targetReason .. ")")
+            else
+                BfBot.Exec._LogEntry("ERROR", "Entry " .. i .. ": no valid targets for " .. spellName)
+            end
             goto continue
         end
 
@@ -815,6 +895,12 @@ function BfBot.Exec._BuildQueue(userQueue, qcMode)
                     targetSlot = tgt.targetSlot,
                     targetSprite = tgt.targetSprite,
                     targetName = tgt.targetName,
+                    -- A summon recipient (#117): the ref is what exec
+                    -- re-resolves every step, and the flag routes the cast
+                    -- through the forced path, because the ordinary one
+                    -- jams on `EEex_Target`.
+                    targetRef = tgt.targetRef,
+                    targetIsSummon = tgt.targetIsSummon,
                     splstates = splstates,
                     stateMarkersByResref = kind == "spl"
                         and spellData.stateMarkersByResref or nil,
@@ -1397,6 +1483,20 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     -- selected variant would need the wrapper's debit/refresh without its
     -- own cast (which opens upstream's picker) — unsupported, so skip
     -- rather than force-cast around the shared pool or a native slot.
+    -- A summon recipient through an item or the 5E wrapper is unmeasured
+    -- (#117). `UseItemSlotAbility` and upstream's wrapper were never tried
+    -- against `EEex_Target`, and the ordinary spell action jams on it, so
+    -- the honest answer is to refuse with a reason rather than to hope.
+    if entry.targetIsSummon and (entry.kind == "itm" or d5) then
+        BfBot.Exec._LogEntry("SKIP", entry.casterName .. " -> "
+            .. entry.spellName .. " -> " .. entry.targetName
+            .. (entry.kind == "itm"
+                and " (an item cannot be used on a summon)"
+                or " (5E Spellcasting cannot target a summon)"))
+        BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+        return BfBot.Exec._ProcessCasterEntry(key, index + 1)
+    end
+
     if d5 then
         local reason = nil
         if entry.var then
@@ -1441,7 +1541,50 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
     -- are therefore always safe here.
     local advanceAction = _advanceAction(key, caster)
 
-    if entry.kind == "itm" then
+    if entry.targetIsSummon then
+        -- Lab-measured (#117): `SpellRES` at `EEex_Target` holds the action
+        -- slot forever and `virtual_ClearActions(false)` does not get the
+        -- caster back, while `ReallyForceSpellRES` lands. So this path is
+        -- forced -- and therefore debits the slot itself, because the forced
+        -- action does not. Uninterruptible and aura-free, which is a real
+        -- difference from every other cast in a run.
+        local recipient, why = BfBot.Exec._AimAtSummon(sprite, entry)
+        if not recipient then
+            -- An expired summon is churn: the engine skips an unresolvable
+            -- target and the queue advances on its own, so this is reported
+            -- at INFO and the run carries on.
+            BfBot.Exec._LogEntry("INFO", entry.casterName .. " -> "
+                .. entry.spellName .. " -> " .. entry.targetName
+                .. " (" .. tostring(why) .. ")")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            return BfBot.Exec._ProcessCasterEntry(key, index + 1)
+        end
+
+        -- The action and the slot both come from the pure plan, so the rule
+        -- "a summon recipient never gets SpellRES" is a function of the
+        -- entry and can be checked without a game.
+        local plan = BfBot.Exec._PlanCast(entry)
+        local castRes = plan.resref
+        if plan.needsSlot
+                and not BfBot.Exec._ConsumeSpellSlot(sprite, plan.slotResref) then
+            BfBot.Exec._LogEntry("SKIP", entry.casterName .. " -> "
+                .. entry.spellName .. " -> " .. entry.targetName
+                .. " (no slot to spend on a forced cast)")
+            BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
+            return BfBot.Exec._ProcessCasterEntry(key, index + 1)
+        end
+
+        local spellAction = string.format('%s("%s",%s)',
+            plan.action, castRes, entry.targetObj)
+        EEex_Action_QueueResponseStringOnAIBase(spellAction, sprite)
+        EEex_Action_QueueResponseStringOnAIBase(advanceAction, sprite)
+        BfBot.Exec._LogEntry("CAST",
+            entry.casterName .. " -> " .. entry.spellName
+            .. (entry.var and (" [" .. entry.var .. "]") or "")
+            .. " -> " .. entry.targetName .. " (summon, forced)")
+        BfBot.Exec._castCount = BfBot.Exec._castCount + 1
+
+    elseif entry.kind == "itm" then
         if not BfBot.Exec._QueueItem(key, caster, entry, spellScan, sprite, advanceAction) then
             BfBot.Exec._skipCount = BfBot.Exec._skipCount + 1
             return BfBot.Exec._ProcessCasterEntry(key, index + 1)
@@ -1486,6 +1629,104 @@ function BfBot.Exec._ProcessCasterEntry(key, index)
             entry.casterName .. " -> " .. entry.spellName .. " -> " .. entry.targetName)
         BfBot.Exec._castCount = BfBot.Exec._castCount + 1
     end
+end
+
+--- PURE: how this entry has to be cast.
+---
+--- @return table {
+---   action    = "ReallyForceSpellRES" | "SpellNoDecRES" | "SpellRES"
+---               | "item" | "d5",
+---   resref    = what to name in the action,
+---   needsSlot = the caller must spend a slot first, because the action
+---               will not,
+---   needsAim  = the caller must point `EEex_Target` at the recipient
+---               first,
+---   refuse    = a reason this entry cannot be cast at all, or nil,
+--- }
+---
+--- The one invariant worth stating here rather than discovering in a game:
+--- **a summon recipient never gets `SpellRES`.** Lab-measured on BG2:EE
+--- 2.7.3.0 + EEex 1.3.1 -- `SpellRES` at `EEex_Target` holds the caster's
+--- action slot forever and `virtual_ClearActions(false)` does not get it
+--- back. The forced action lands, so it is not a preference but the only
+--- option, and it brings the hand-spent slot with it.
+function BfBot.Exec._PlanCast(entry)
+    if type(entry) ~= "table" then
+        return { refuse = "no entry" }
+    end
+    local isSummon = entry.targetIsSummon and true or false
+
+    if isSummon and entry.kind == "itm" then
+        -- `UseItemSlotAbility` was never measured against `EEex_Target`, and
+        -- the ordinary spell action jams on it. A stated refusal beats a
+        -- hope.
+        return { refuse = "an item cannot be used on a summon" }
+    end
+    if isSummon and type(entry.d5) == "table" then
+        return { refuse = "5E Spellcasting cannot target a summon" }
+    end
+
+    if isSummon then
+        return {
+            action = "ReallyForceSpellRES",
+            resref = entry.var or entry.resref,
+            -- The forced action debits nothing, so the slot is spent by
+            -- hand -- the parent's slot even for a variant, which is what
+            -- the ordinary variant path does too.
+            needsSlot = true,
+            slotResref = entry.resref,
+            needsAim = true,
+        }
+    end
+
+    if entry.kind == "itm" then return { action = "item" } end
+    if type(entry.d5) == "table" then
+        return { action = "d5", resref = entry.d5.wrapper }
+    end
+    if entry.var then
+        -- Consume the parent slot, then cast its unmemorized child through
+        -- the normal, interruptible casting/aura path without debiting the
+        -- child.
+        return {
+            action = "SpellNoDecRES", resref = entry.var,
+            needsSlot = true, slotResref = entry.resref,
+        }
+    end
+    return { action = "SpellRES", resref = entry.resref }
+end
+
+--- Point `EEex_Target(SUMMON_TARGET_KEY)` at this entry's recipient, now.
+---
+--- Re-resolves the summon by object id plus name and revalidates allegiance,
+--- the same discipline the caster side uses: object ids are fresh per spawn,
+--- and a charmed-away or expired summon must not be cast at. The store is
+--- written here rather than at build time because an action resolves its
+--- `EEex_Target` when it RUNS.
+---
+--- @return sprite, nil on success; nil, reason when the cast must be skipped
+function BfBot.Exec._AimAtSummon(casterSprite, entry)
+    if not casterSprite or not entry or not entry.targetRef then
+        return nil, "no recipient ref"
+    end
+    local sprite = BfBot.Exec._ResolveCaster(entry.targetRef)
+    if not sprite then return nil, "the summon is gone" end
+    if not BfBot.Exec._SummonStillAllied(sprite) then
+        return nil, "the summon is no longer allied"
+    end
+    local ok, err = pcall(EEex_AIBase_SetStoredScriptingTarget, casterSprite,
+        BfBot.Exec.SUMMON_TARGET_KEY, sprite)
+    if not ok then
+        return nil, "could not store the target: " .. tostring(err)
+    end
+    -- Read it back. A silent no-op here would send a cast at nobody, which
+    -- the engine skips quietly -- and the run would report a cast that never
+    -- happened.
+    local okRead, stored = pcall(EEex_AIBase_GetStoredScriptingTarget,
+        casterSprite, BfBot.Exec.SUMMON_TARGET_KEY)
+    if not okRead or stored == nil then
+        return nil, "the stored target did not read back"
+    end
+    return sprite, nil
 end
 
 --- Tell the player why a run ended: floating text over the party leader
