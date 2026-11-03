@@ -110,6 +110,13 @@ end
 
 --- Group key: one ability, whoever can cast it. Items key on the resref plus
 --- the F8 power index, because a multi-power item is several distinct buffs.
+--- The name a clone is shown under. Image type, not resref: a mod's own
+--- Simulacrum copy is still a Simulacrum, and the player reads the kind.
+function P.CloneLabel(kind)
+    return ({ [1] = "Mislead", [2] = "Project Image",
+              [3] = "Simulacrum" })[kind] or "Clone"
+end
+
 function P.GroupKey(row)
     if row.kind == "itm" then
         return "itm:" .. row.itemResref:upper() .. ":" .. row.abilityIdx
@@ -592,6 +599,12 @@ end
 --- detection). Refuses a partial plan: if a request has no caster, the player
 --- sees why instead of a run that quietly drops casts.
 function P.BuildQueue(snapshot, requests)
+    -- A caster that does not exist yet becomes available here, not in
+    -- Snapshot: only an enabled creation step exposes a future book, and the
+    -- requests are what say which steps are enabled (#107).
+    if BfBot.Summon and BfBot.Summon.AddSources then
+        BfBot.Summon.AddSources(snapshot, requests)
+    end
     local flat, overflow = P.ExpandRequests(requests)
     if overflow then return nil, nil, P.REASON.PLAN_TOO_LARGE end
 

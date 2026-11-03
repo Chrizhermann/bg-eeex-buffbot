@@ -281,6 +281,33 @@ local function _buildCountMap(sprite)
 end
 BfBot.Scan._BuildCountMap = _buildCountMap
 
+--- A catalog row for one spell at one caster level, with no sprite involved
+--- (issue #107).
+---
+--- `_buildCatalogEntry` never reads its sprite argument -- every field it
+--- produces comes from the SPL header, the ability and the caster level -- so
+--- a predicted caster, which has no sprite yet, can be described with the same
+--- code that describes a live one. That is the point: a predicted row and a
+--- scanned row have to be the same shape, or the plan model and the panel
+--- would need a second case for every field.
+---
+--- @return row, or nil when the SPL cannot be loaded
+function BfBot.Scan.DescribeSpell(resref, casterLevel)
+    if type(resref) ~= "string" or resref == "" then return nil end
+    local okHeader, header = pcall(EEex_Resource_Demand, resref, "SPL")
+    if not okHeader or not header then return nil end
+    local ability = _abilityForLevel(header, casterLevel)
+    if not ability then return nil end
+    local okRow, row = pcall(_buildCatalogEntry, nil, resref, header, ability,
+        casterLevel or 1)
+    if not okRow then
+        BfBot._Warn("[Scan] DescribeSpell failed for " .. resref .. ": "
+            .. tostring(row))
+        return nil
+    end
+    return row
+end
+
 --- Internal: catalog entry for one spell resref using the caster-level
 --- ability (falling back to the iterator's ability, then ability 0), or nil
 --- when the SPL cannot be loaded.

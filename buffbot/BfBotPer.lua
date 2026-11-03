@@ -1164,21 +1164,30 @@ function BfBot.Persist.GetSummonPreset(identity, presetIdx, seedCtx)
         -- CREATE path — the only place seeding ever happens
         preset = { qc = 0, spells = {} }
         if seedCtx ~= nil then
+            -- `cloneRows` is the predicted book of a clone that does not
+            -- exist yet (#107). It seeds exactly as a live scan does, which is
+            -- the point: the preset the player fills in before conjuring is
+            -- the one the real spawn then reads.
             if type(seedCtx) == "table" and seedCtx.ownerSprite
-                and seedCtx.cloneSprite then
+                and (seedCtx.cloneSprite or seedCtx.cloneRows) then
                 local ownerPreset = BfBot.Persist.GetPreset(
                     seedCtx.ownerSprite, presetIdx)
-                local scanOk, castable = pcall(
-                    BfBot.Scan.GetCastableSpells, seedCtx.cloneSprite)
-                if not scanOk then
-                    BfBot._Warn("[Persist] GetSummonPreset: clone scan failed,"
-                        .. " seeding empty (" .. tostring(castable) .. ")")
-                    castable = nil
+                local castable = seedCtx.cloneRows
+                if not castable then
+                    local scanOk, scanned = pcall(
+                        BfBot.Scan.GetCastableSpells, seedCtx.cloneSprite)
+                    if not scanOk then
+                        BfBot._Warn("[Persist] GetSummonPreset: clone scan"
+                            .. " failed, seeding empty ("
+                            .. tostring(scanned) .. ")")
+                        scanned = nil
+                    end
+                    castable = scanned
                 end
                 preset.spells = BfBot.Persist._SeedCloneSpells(ownerPreset, castable)
             else
                 BfBot._Warn("[Persist] GetSummonPreset: malformed seedCtx"
-                    .. " ignored (need ownerSprite + cloneSprite)")
+                    .. " ignored (need ownerSprite + cloneSprite or cloneRows)")
             end
         end
         entry.presets[presetIdx] = preset

@@ -121,6 +121,7 @@ CATALOG_SCHEMA = {
     768: "ui.party.filter.open",
     769: "ui.party.filter.problems",
     770: "ui.party.filter.tooltip",
+    771: "feedback.summon_not_conjured",
     760: "feedback.cell_locked",
     761: "feedback.cell_impossible",
     762: "feedback.cell_covered",
