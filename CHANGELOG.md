@@ -1,5 +1,118 @@
 # Changelog
 
+## v1.15.0 (2026-11-04) — the table sets the order, a clone joins the plan
+
+### Added
+- **The party table can show and change the cast order.** The table became
+  the place where buffs are chosen in v1.13.0, but every per-spell control
+  stayed behind in the caster view -- including the two that matter most once
+  a plan has forty rows. Up, Down, Sort and the automatic-order toggle could
+  not simply be unhidden: `Plan.ByGroup` sorts by display name, and moving a
+  row up an alphabetical list means nothing. So the table gained a second
+  reading, switched beside the filter:
+
+      List: A-Z          how a buff is found among forty
+      List: cast order   what the plan will do, and where Up/Down work
+
+  A row's place in the cast order is the **earliest priority any of its
+  owners gives it**: a buff two characters cast has two, and the earliest is
+  when the party first sees it. Rows nobody has chosen have none and sort
+  last, because they are not in the order at all. Ties keep the name order
+  underneath, so the list does not shuffle between refreshes.
+
+  Moving a row renumbers every owner's preset, so what is on screen is true
+  for each of them. That flattens a per-character order into the party's,
+  which is a real trade-off and the reason A-Z stays the default rather than
+  the cast reading being the table's only one.
+
+  Enable and Target deliberately stayed behind, because the cell is already
+  both. Add, Remove, Repeat and Variant are still missing: a table row has
+  several owners, so "remove" is not the operation it is in the caster view,
+  and each needs its own answer rather than a button moved across.
+
+- **One switch plans casts from a Project Image or a Simulacrum.** `Clones:
+  off / image / simulacrum / both` in the party table's footer. Ticking the
+  creation spell was always possible -- `SPWI703` classifies as a buff like
+  any other, and ticking it already added a planned caster and its Summons
+  tab -- but nobody finds it among forty rows, or guesses that ticking it
+  means "and then the image casts things".
+
+  It is a **shortcut over the rows, not a second place the state lives**: it
+  ticks and unticks the creation entries that are already there, so there is
+  one truth and a player who prefers the row gets the same result. Stored
+  like the order toggle, as a bounded value on the preset with absence
+  meaning off, so nothing migrates and a corrupt value heals into off rather
+  than into a fourth state. One number holds both kinds, so "both" needs no
+  second field.
+
+- **A cast that waits on a clone looks like one.** A chip filled by a
+  predicted caster is a promise about a creature that is not on the field
+  yet, and it looked exactly like a promise about somebody standing there.
+  The cell is about 8% of the panel's width and chips have no tooltip, so the
+  two lines they do have carry it: the name takes a colour of its own, and
+  the duration line says which kind of clone the cast waits on. A duration
+  for a creature that does not exist is the less useful of the two things
+  that line could say -- the conjuring is what can fail. A problem still wins
+  the colour: a cast that will not happen matters more than what it would
+  have waited on.
+
+### Fixed
+- **The plan no longer promises casts a Project Image takes away.** A planned
+  image freezes its owner and the executor drops whatever they were going to
+  cast after it, while the table went on promising those casts anyway. Those
+  sources now carry the puppet-lock reason, and **only the ones after the
+  creation**, because the executor drops what follows the image cast, not
+  everything the owner has. Which makes "move the buff before the image" the
+  player's way out, and that only became possible with the cast order above.
+  A Simulacrum freezes nobody, and a better reason is never overwritten:
+  "nobody can cast this" says more than "the image would have frozen you".
+
+- **An image inherits what freezing its owner costs them.** A clone's preset
+  seeds from its owner's, which is right as it stands for a Simulacrum: it
+  has its own slots and the owner keeps casting. A Project Image is different
+  in two ways that point the same direction -- it freezes its owner, and it
+  draws from the owner's **own** slots, so an entry they still cast first is
+  one the image must not redo out of the same budget. It therefore arrives
+  switched on only for the entries after the creation, and the creation
+  itself is never handed to it, because an image conjuring an image is not
+  what anybody meant. Every row still arrives, since this is a default and
+  not a filter.
+
+- **A missing spell table no longer reads as a book with no slots.** `S.Rule`
+  answered 0 for a 2DA that does not exist, breaking the one distinction the
+  prediction makes a point of: that "no rules" and "no slots" must not look
+  alike. `EEex_Resource_Load2DA` does not answer nil for a missing resource
+  -- it hands back a table with no rows, which the loader cached as a
+  perfectly good set of rules, and every lookup fell through to the `or 0`.
+  Found by the new in-game phase on its first run, not by a test.
+
+### Lab
+- An in-game phase for the clone prediction, which is what found the defect
+  above. v1.14.0 shipped 93 offline tests for the prediction and nothing in
+  the in-game suite, and the parts that touch the engine were exactly the
+  uncovered ones: reading a member's stats and memorized books, reading a
+  2DA, reading a creature file, building the predicted tabs. The phase
+  reports what it could and could not exercise rather than passing quietly --
+  on the lab save it read a level-18 mage (drain 7, 16 uses as an image
+  against 13 as a Simulacrum) and skipped the tab checks, because no preset
+  there enables a creation.
+- The guard that stops an in-game phase from writing player state knew only
+  direct `Persist` calls, so a phase reaching `GetSummonPreset` through
+  `BfBot.UI._EnsureSummonPreset` looked writer-free. Proven by unregistering
+  the new phase and watching the test fail.
+- Two rules were checked by inverting them rather than by assertion alone:
+  widening the puppet-lock reason to everything the owner has fails the one
+  test that describes the before/after line, and inverting the seeding cut
+  fails exactly the three that describe it.
+- The chip marking has no picture. The lab save's mage has only self-only
+  buffs, so his image never wins a recipient cell; `tools/lab_screenshots.py`
+  gained `--clones`, the shot was taken, and the marking correctly did not
+  appear. Nine tests cover it instead.
+- 42 new tests offline, **2070** in total. In-game suite headless: **909
+  checks, 0 failures**, 31 phases.
+- No new engine surface. Every EEex name the new code uses was already in the
+  pinned set.
+
 ## v1.14.0 (2026-11-03) — a clone you can set up before you have it
 
 ### Added

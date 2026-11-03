@@ -1090,25 +1090,47 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.14.0 (2026-11-03) — a clone you can set up before you have it"
+        "v1.15.0 (2026-11-04) — the table sets the order, a clone joins the plan"
     )
+    # What a row's place in the cast order means, which is the whole reason
+    # the second reading exists: a row has several owners.
+    assert "earliest priority any of its owners gives it" in flat
+    # The switch is a view over the creation rows, not a second state. A
+    # later reimplementation that stores its own would drift from the rows.
+    assert (
+        "shortcut over the rows, not a second place the state lives" in flat)
+    # The cut the plan and the seeding both make, and the direction of it.
+    assert "only the ones after the creation" in flat
+    assert "an image conjuring an image is not what anybody meant" in flat
+    # The seeding is a default, so no row may be withheld.
+    assert "this is a default and not a filter" in flat
+    # The distinction the missing-2DA fix restored.
+    assert '"no rules" and "no slots" must not look alike' in flat
+    # And that the engine-facing defect was not found offline.
+    assert "not by a test" in flat
+
+    prediction_release = " ".join(
+        source.split("\n## v1.14.0 (2026-11-03)", 1)[1]
+        .split("\n## ", 1)[0].casefold().split())
     # What the release is for, and the one property that makes it work: the
     # predicted tab IS the clone's own preset, not a copy to reconcile.
-    assert "configured before it is conjured" in flat
-    assert "carries the identity the real spawn will have" in flat
+    assert "configured before it is conjured" in prediction_release
+    assert "carries the identity the real spawn will have" in prediction_release
     # The engine rules a tidier reimplementation would get wrong, each with
     # the reason it cannot be simplified.
-    assert "reads the first level field rather than a mean" in flat
-    assert "would invent slots" in flat
-    assert "survive on the copy but do not refill its book" in flat
+    assert "reads the first level field rather than a mean" in prediction_release
+    assert "would invent slots" in prediction_release
+    assert (
+        "survive on the copy but do not refill its book" in prediction_release)
     # Unreadable rules refuse rather than answering "no spells".
-    assert '"no slots" and "no rules" must not look alike' in flat
+    assert (
+        '"no slots" and "no rules" must not look alike' in prediction_release)
     # One budget where the engine has one.
-    assert "share one budget where the engine does" in flat
+    assert "share one budget where the engine does" in prediction_release
     # The defect, and that it was not a test that found it.
-    assert "silently did nothing" in flat
+    assert "silently did nothing" in prediction_release
     # And why the plan shrank: the cast path never used the plan model's queue.
-    assert "no caller outside the tests" in flat
+    assert "no caller outside the tests" in prediction_release
 
     table_release = " ".join(
         source.split("\n## v1.13.0 (2026-11-03)", 1)[1]
