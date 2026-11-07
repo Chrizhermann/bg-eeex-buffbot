@@ -34,7 +34,7 @@ BfBot.FiveE._POLL_TICKS = 3            -- SmallWait step while a refresh is pend
 -- upstream's regrant needs several effect hops after that, so allow four
 -- normal rebuild periods before treating the wrappers as really gone.
 BfBot.FiveE._REFRESH_MARGIN_TICKS = 60
-BfBot.FiveE._MAX_DELAY_SECONDS = 6     -- sanity cap on a wrapper-declared delay
+BfBot.FiveE._MAX_DELAY_SECONDS = 6     -- cap a malformed wrapper's refresh wait
 BfBot.FiveE._LOG_FILE = "buffbot_5e.log"
 
 -- Lazily loaded session caches (game resources are static per session).
@@ -53,10 +53,10 @@ function BfBot.FiveE.Reset()
     BfBot.FiveE._warned = {}
 end
 
-local function _warnOnce(key, msg)
+local function _logOnce(key, msg)
     if BfBot.FiveE._warned[key] then return end
     BfBot.FiveE._warned[key] = true
-    BfBot._Warn("[5E] " .. msg)
+    BfBot._Log("[5E] " .. msg)
 end
 
 --- Normalize a 2DA/effect resource cell to an uppercase resref, or nil for
@@ -129,8 +129,9 @@ function BfBot.FiveE._BuildMap(rows)
             table.insert(map.byMem[mem], rec)
             map.rowCount = map.rowCount + 1
         elseif not isPlaceholder then
-            -- Upstream seeds the table with a "100 # # # #" placeholder row;
-            -- anything else that cannot map is a malformed/unsupported row.
+            -- Upstream seeds the table with a "100 # # # #" placeholder row.
+            -- A row without two usable resource names cannot name a cast target,
+            -- so leave only that row out and record it in the diagnostic log.
             map.dropped = map.dropped + 1
             map.droppedRows[#map.droppedRows + 1] = tostring(label)
         end
@@ -179,7 +180,7 @@ function BfBot.FiveE._ReadTableRows()
         end
     end)
     if not okLabels then
-        _warnOnce("column_labels", "column labels unreadable; using upstream column order")
+            _logOnce("column_labels", "column labels unreadable; using upstream column order")
     end
 
     local rows = {}
@@ -212,8 +213,8 @@ function BfBot.FiveE.GetMap()
         BfBot._Log(string.format("[5E] %s: %d rows, %d dropped",
             BfBot.FiveE._TABLE, map.rowCount, map.dropped))
         if map.dropped > 0 then
-            _warnOnce("dropped_rows", string.format(
-                "%s: ignored %d malformed row(s) (labels: %s)",
+            _logOnce("dropped_rows", string.format(
+                "%s: %d row(s) have no usable MEM/CAST target (labels: %s)",
                 BfBot.FiveE._TABLE, map.dropped,
                 table.concat(map.droppedRows, ",")))
         end
@@ -256,10 +257,10 @@ function BfBot.FiveE._StateIDs()
         end)
     end)
     if not ok then
-        _warnOnce("state_ids", "SPLSTATE.IDS lookup failed ("
+        _logOnce("state_ids", "SPLSTATE.IDS lookup failed ("
             .. tostring(err) .. "); relying on wrapper presence only")
     elseif not ids.arcane and not ids.divine then
-        _warnOnce("state_ids", "D5_SEMI_ARCANE/D5_SEMI_DIVINE not in SPLSTATE.IDS;"
+        _logOnce("state_ids", "D5_SEMI_ARCANE/D5_SEMI_DIVINE not in SPLSTATE.IDS;"
             .. " relying on wrapper presence only")
     end
     BfBot.FiveE._stateIDs = ids
@@ -309,39 +310,40 @@ local function _fbResref(fb)
     return _resref(v)
 end
 
---- Static metadata of one wrapper SPL: which mapped spell it really casts
---- (read from its own op146/op148 payload, validated against the table's
---- CAST candidates for that index) and the longest delayed-effect delay it
---- declares (upstream's regrant timer). false when the wrapper cannot be
---- trusted — callers then hide it and never cast it.
+--- Static metadata of one wrapper SPL: which spell it actually casts and the
+--- longest delayed-effect delay it declares (upstream's regrant timer). The
+--- wrapper is authoritative; table values name the visible spellbook row.
 function BfBot.FiveE._WrapperMeta(map, wrapper)
     local cached = BfBot.FiveE._wrapperMeta[wrapper]
     if cached ~= nil then return cached or nil end
 
-    local function reject(reason)
+    local function unavailable(reason)
         BfBot.FiveE._wrapperMeta[wrapper] = false
-        _warnOnce("wrapper:" .. wrapper, wrapper .. " ignored: " .. reason)
+        _logOnce("wrapper:" .. wrapper, wrapper .. " unavailable: " .. reason)
         return nil
     end
 
     local ind = map.byWrapper[wrapper]
     local slot = ind and map.byIndex[ind]
-    if not slot then return reject("not listed in " .. BfBot.FiveE._TABLE) end
+    if not slot then return unavailable("not listed in " .. BfBot.FiveE._TABLE) end
 
     local candidates = {}
     for _, rec in ipairs(slot.rows) do candidates[rec.cast] = true end
 
     local okHeader, header = pcall(EEex_Resource_Demand, wrapper, "SPL")
-    if not okHeader or not header then return reject("SPL not loadable") end
+    if not okHeader or not header then return unavailable("SPL not loadable") end
     local okAbility, ability = pcall(function() return header:getAbility(0) end)
-    if not okAbility or not ability then return reject("no ability") end
+    if not okAbility or not ability then return unavailable("no ability") end
 
-    local cast, delay = nil, 0
+    local candidateCast, firstReadable, delay = nil, nil, 0
     BfBot.Class._IterateFeatureBlocks(header, ability, function(fb)
         local opcode = fb[BfBot._fields.fb_opcode]
-        if (opcode == 146 or opcode == 148) and not cast then
+        if opcode == 146 or opcode == 148 then
             local res = _fbResref(fb)
-            if res and candidates[res] then cast = res end
+            if res then
+                firstReadable = firstReadable or res
+                if candidates[res] and not candidateCast then candidateCast = res end
+            end
         end
         local rawTiming = fb[BfBot._fields.fb_timing]
         local timing = type(rawTiming) == "number" and BfBot._BAnd(rawTiming, 0xFF) or -1
@@ -352,9 +354,17 @@ function BfBot.FiveE._WrapperMeta(map, wrapper)
             if type(dur) == "number" and dur > delay then delay = dur end
         end
     end)
-    if not cast then return reject("casts no spell mapped to index " .. ind) end
+    local cast = candidateCast or firstReadable
+    if not candidateCast and cast then
+        _logOnce("cast:" .. wrapper, wrapper
+            .. " has no cast effect matching its table candidates; using " .. cast)
+    elseif not cast then
+        cast = slot.rows[1] and slot.rows[1].cast
+        _logOnce("cast:" .. wrapper, wrapper
+            .. " has no readable cast effect; using its table target " .. tostring(cast))
+    end
     if delay > BfBot.FiveE._MAX_DELAY_SECONDS then
-        _warnOnce("delay:" .. wrapper, string.format(
+        _logOnce("delay:" .. wrapper, string.format(
             "%s declares a %ds refresh delay; capping the wait at %ds",
             wrapper, delay, BfBot.FiveE._MAX_DELAY_SECONDS))
         delay = BfBot.FiveE._MAX_DELAY_SECONDS
@@ -363,6 +373,18 @@ function BfBot.FiveE._WrapperMeta(map, wrapper)
     local mems, families, familyCount, kind = {}, {}, 0, nil
     for _, rec in ipairs(slot.rows) do
         if rec.cast == cast then
+            mems[#mems + 1] = rec.mem
+            if rec.type and not families[rec.type] then
+                families[rec.type] = true
+                familyCount = familyCount + 1
+                kind = rec.type
+            end
+        end
+    end
+    -- A hand-edited wrapper may cast a new resource. It still belongs to the
+    -- rows its table index owns, rather than disappearing from the catalog.
+    if #mems == 0 then
+        for _, rec in ipairs(slot.rows) do
             mems[#mems + 1] = rec.mem
             if rec.type and not families[rec.type] then
                 families[rec.type] = true
@@ -510,13 +532,14 @@ function BfBot.FiveE.ApplyToCatalog(sprite, spells, countsByType, buildEntry)
             available = p.count > 0 and 1 or 0,
         }
         if not _adoptCastIdentity(entry, p.meta.cast, buildEntry) then
-            d5.available = 0
-            d5.reason = "cast_unresolved"
-            _warnOnce("cast:" .. p.meta.cast, p.meta.wrapper
-                .. " casts unloadable " .. p.meta.cast .. "; not castable")
+            -- Keep the wrapper available. It remains the source that the
+            -- engine will cast; the visible row keeps its own metadata when
+            -- the target resource cannot be read for presentation.
+            _logOnce("cast:" .. p.meta.cast, p.meta.wrapper
+                .. " casts unreadable " .. p.meta.cast .. "; keeping wrapper metadata")
         end
         entry.d5 = d5
-        entry.count = d5.available == 1 and p.count or 0
+        entry.count = p.count
     end
 
     local attached = {}
@@ -545,8 +568,8 @@ function BfBot.FiveE.ApplyToCatalog(sprite, spells, countsByType, buildEntry)
             attached[key] = true
         end
         if #targets == 0 then
-            _warnOnce("nomem:" .. p.meta.wrapper, p.meta.wrapper
-                .. " has no loadable spellbook spell; hidden")
+            _logOnce("nomem:" .. p.meta.wrapper, p.meta.wrapper
+                .. " has no loadable spellbook target")
         end
     end
 
@@ -600,24 +623,6 @@ end
 function BfBot.FiveE.AwaitingRefresh(spellData)
     return spellData ~= nil and spellData.kind ~= "itm"
         and spellData.d5 ~= nil and spellData.d5.pending == 1
-end
-
---- Last-resort pass when ApplyToCatalog raised: hide wrapper rows and make
---- every table-listed spell unavailable, whatever the caster's state.
-function BfBot.FiveE.FailClosed(spells)
-    local map = BfBot.FiveE.GetMap()
-    if not map then return end
-    for resref, entry in pairs(spells) do
-        local key = _resref(resref)
-        if key and entry.kind ~= "itm" then
-            if map.byWrapper[key] then
-                spells[resref] = nil
-            elseif map.byMem[key] then
-                entry.count = 0
-                entry.d5 = nil
-            end
-        end
-    end
 end
 
 -- ============================================================

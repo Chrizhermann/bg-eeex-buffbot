@@ -47,6 +47,7 @@ FIELDS = """
 # Synthetic engine: resources, d5zclons.2da, SPLSTATE.IDS, sprites.
 WORLD = r"""
 BfBot_Warnings = {}
+BfBot_Logs = {}
 BfBot_TestResources = {}
 T_Table = nil
 T_Load2DACalls = 0
@@ -232,7 +233,7 @@ def scan_lua() -> LuaRuntime:
     runtime = _runtime()
     runtime.execute(
         "BfBot = { Class = {}, Scan = {}, _cache = { class = {}, scan = {} },"
-        " _overrides = {}, _Log = function() end, _Print = function() end,"
+        " _overrides = {}, _Log = function(m) table.insert(BfBot_Logs, m) end, _Print = function() end,"
         " _Warn = function(m) table.insert(BfBot_Warnings, m) end,"
         " _GetName = function(s) return s and s.name or '?' end,"
         + FIELDS
@@ -745,16 +746,19 @@ def test_free_cast_wrapper_for_unknown_spell_gets_a_logical_row(
     assert facts["wrapper"] == "D5Z103I"
 
 
-def test_untrusted_wrapper_is_hidden_and_its_spell_stays_unavailable(
+def test_hand_edited_wrapper_uses_its_actual_cast(
     scan_lua: LuaRuntime,
 ) -> None:
     facts = scan_lua.execute(
         """
-        -- The table says index 104 casts SPWI501, but the installed wrapper's
-        -- payload casts something else: never trust or cast it.
+        -- The table names the visible row, while the installed wrapper owns
+        -- the spell it actually casts.
         T_Table = { T_Row("104", "SPWI501", "SPWI501", "arcane") }
         T_Spell("SPWI501")
+        T_Spell("SPWI999")
         T_Wrapper(104, "SPWI999")
+        BfBot.FiveE.GetMap()
+        local logsBefore = #BfBot_Logs
         local sprite = T_Sprite({
             mage = { "SPWI501" },
             innate = { "D5Z104I" },
@@ -767,16 +771,42 @@ def test_untrusted_wrapper_is_hidden_and_its_spell_stays_unavailable(
             hasWrapper = spells.D5Z104I ~= nil,
             rowCount = spells.SPWI501.count,
             available = spells.SPWI501.d5.available,
-            warned = table.concat(BfBot_Warnings, "|"):find("D5Z104I ignored", 1, true) ~= nil,
+            cast = spells.SPWI501.d5.cast,
+            logCount = #BfBot_Logs - logsBefore,
         }
         """
     )
 
     assert facts["count"] == 1
     assert not facts["hasWrapper"]
-    assert facts["rowCount"] == 0
-    assert facts["available"] == 0
-    assert facts["warned"]
+    assert facts["rowCount"] == 2
+    assert facts["available"] == 1
+    assert facts["cast"] == "SPWI999"
+    assert facts["logCount"] == 1
+
+
+def test_wrapper_prefers_a_table_candidate_after_non_candidate_op146(
+    scan_lua: LuaRuntime,
+) -> None:
+    facts = scan_lua.execute(
+        """
+        T_Table = { T_Row("112", "SPWI314", "SPWI314", "arcane") }
+        T_Spell("D5Z112I", { itemType = 4, effects = {
+            -- Upstream bookkeeping can precede the payload.
+            { effectID = 146, res = "D5SRC-3", durationType = 1, targetType = 1 },
+            { effectID = 148, res = "SPWI314", durationType = 1, targetType = 2 },
+            { effectID = 146, res = "D5ZSPLD", durationType = 4, duration = 1,
+              targetType = 1 },
+        } })
+        local map = BfBot.FiveE.GetMap()
+        local logsBefore = #BfBot_Logs
+        local meta = BfBot.FiveE._WrapperMeta(map, "D5Z112I")
+        return { cast = meta.cast, logCount = #BfBot_Logs - logsBefore }
+        """
+    )
+
+    assert facts["cast"] == "SPWI314"
+    assert facts["logCount"] == 0
 
 
 def test_unconverted_caster_keeps_native_counts(scan_lua: LuaRuntime) -> None:
@@ -855,8 +885,7 @@ def test_wrapper_presence_manages_only_its_family_without_state_ids(
             arcaneGated = spells.SPWI306.count,
             divineNative = spells.SPPR201.count,
             divineD5 = spells.SPPR201.d5 ~= nil,
-            warned = table.concat(BfBot_Warnings, "|"):find(
-                "relying on wrapper presence", 1, true) ~= nil,
+            warned = #BfBot_Warnings > 0,
         }
         """
     )
@@ -865,7 +894,7 @@ def test_wrapper_presence_manages_only_its_family_without_state_ids(
     assert facts["arcaneGated"] == 0
     assert facts["divineNative"] == 1
     assert not facts["divineD5"]
-    assert facts["warned"]
+    assert not facts["warned"]
 
 
 def test_area_wrapper_payload_and_declared_delay_are_read_from_the_wrapper(
@@ -883,15 +912,20 @@ def test_area_wrapper_payload_and_declared_delay_are_read_from_the_wrapper(
             states = { [190] = true },
         })
         local spells = BfBot.Scan.GetCastableSpells(sprite)
+        local logsBefore = #BfBot_Logs
         local huge = BfBot.FiveE._BuildMap({ T_Row("111", "SPWI313", "SPWI313", "arcane") })
         T_Spell("SPWI313")
         T_Wrapper(111, "SPWI313", { delay = 3600 })
         local capped = BfBot.FiveE._WrapperMeta(huge, "D5Z111I")
+        BfBot.FiveE._wrapperMeta["D5Z111I"] = nil
+        local cappedAgain = BfBot.FiveE._WrapperMeta(huge, "D5Z111I")
         return {
             count = spells.SPWI312.count,
             cast = spells.SPWI312.d5.cast,
             delay = spells.SPWI312.d5.delay,
             cappedDelay = capped.delay,
+            cappedAgain = cappedAgain.delay,
+            capLogCount = #BfBot_Logs - logsBefore,
         }
         """
     )
@@ -900,9 +934,11 @@ def test_area_wrapper_payload_and_declared_delay_are_read_from_the_wrapper(
     assert facts["cast"] == "SPWI312"
     assert facts["delay"] == 2
     assert facts["cappedDelay"] == 6
+    assert facts["cappedAgain"] == 6
+    assert facts["capLogCount"] == 1
 
 
-def test_overlay_failure_fails_closed(scan_lua: LuaRuntime) -> None:
+def test_overlay_failure_keeps_the_scanned_catalog(scan_lua: LuaRuntime) -> None:
     facts = scan_lua.execute(
         """
         T_Table = { T_Row("101", "SPWI305", "SPWI305", "arcane") }
@@ -920,16 +956,15 @@ def test_overlay_failure_fails_closed(scan_lua: LuaRuntime) -> None:
             count = count,
             hasWrapper = spells.D5Z101I ~= nil,
             rowCount = spells.SPWI305.count,
-            warned = table.concat(BfBot_Warnings, "|"):find(
-                "overlay failed", 1, true) ~= nil,
+            warned = #BfBot_Warnings > 0,
         }
         """
     )
 
     assert facts["count"] == 1
     assert not facts["hasWrapper"]
-    assert facts["rowCount"] == 0
-    assert facts["warned"]
+    assert facts["rowCount"] == 1
+    assert not facts["warned"]
 
 
 def test_mixed_family_index_does_not_manage_the_other_side_of_a_multiclass(
