@@ -809,13 +809,8 @@ function BfBot.Scan.GetCastableSpells(sprite)
                 return _catalogEntryForResref(sprite, resref, nil)
             end)
         if not fiveOk then
-            BfBot._Warn("5E Spellcasting overlay failed: " .. tostring(fiveErr))
-            -- Never let a broken overlay turn 5E spells into native casts.
-            local closedOk, closedErr = pcall(BfBot.FiveE.FailClosed, spells)
-            if not closedOk then
-                BfBot._Warn("5E Spellcasting fail-closed pass failed: "
-                    .. tostring(closedErr))
-            end
+            BfBot._Log("[5E] catalog overlay failed: " .. tostring(fiveErr)
+                .. "; keeping the scanned catalog")
         end
         -- The overlay may have hidden or added rows, possibly before it
         -- raised: recount instead of trusting incremental bookkeeping.

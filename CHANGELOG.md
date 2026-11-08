@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.16.1 (2026-11-08) — what the game files hold no longer hides a spell
+
+Part of the collection-wide rule of 2026-11-07: game data never stops, warns
+or hides anything. No save schema change, and nothing about casting moves for
+an unchanged 5E Spellcasting install.
+
+### Changed
+- **5E Spellcasting messages go to the log, not the console.** Unreadable
+  column labels, table rows without a usable MEM/CAST target, a missing
+  SPLSTATE.IDS entry and an unavailable wrapper are recorded once in the
+  diagnostic log instead of being printed in the game.
+- **A hand-edited 5E wrapper stays in the catalog.** A wrapper whose cast
+  effect names no CAST candidate of its table row used to be hidden. Now the
+  table's CAST candidates still win when the wrapper names one, the first
+  readable cast target is the fallback, and one log line says so.
+- **A failed 5E overlay keeps the scanned catalog.** It used to close every
+  5E row; the scanned spells now stay, with a log line.
+- The 6-second cap on a wrapper's declared refresh delay stays: it refuses
+  nothing, it only bounds the wait.
+
+### Tested
+- Automated: 2,123 offline tests.
+- Live: the headless in-game suite (`BfBot.Test.RunAll()`) in a BG2:EE
+  2.7.3.0 lab with EEex 1.3.1, 909 checks passed and none failed. A
+  hand-edited 5E wrapper was not tried in a live game.
+
 ## v1.16.0 (2026-11-04) — a summon can be buffed, and the table is finished
 
 ### Added
