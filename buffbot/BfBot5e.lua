@@ -180,7 +180,7 @@ function BfBot.FiveE._ReadTableRows()
         end
     end)
     if not okLabels then
-            _logOnce("column_labels", "column labels unreadable; using upstream column order")
+        _logOnce("column_labels", "column labels unreadable; using upstream column order")
     end
 
     local rows = {}

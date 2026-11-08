@@ -1091,24 +1091,38 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.16.0 (2026-11-04) — a summon can be buffed, and the table is "
-        "finished"
+        "v1.16.1 (2026-11-08) — what the game files hold no longer hides a "
+        "spell"
     )
+    # The rule the release applies, and the one cap it keeps on purpose.
+    assert "game data never stops, warns or hides anything" in flat
+    assert "the table's cast candidates still win" in flat
+    assert "it refuses nothing, it only bounds the wait" in flat
+    # Its automated and live boundaries.
+    assert "automated: 2,123 offline tests" in flat
+    assert "909 checks passed and none failed" in flat
+    assert "a hand-edited 5e wrapper was not tried in a live game" in flat
+
+    summon_release = " ".join(
+        source.split("\n## v1.16.0 (2026-11-04)", 1)[1]
+        .split("\n## ", 1)[0].casefold().split())
+    assert summon_release.startswith(
+        "— a summon can be buffed, and the table is finished")
     # Why the prefix on a summon target cannot be dropped as noise.
-    assert "a bare script name" in flat
+    assert "a bare script name" in summon_release
     # The one measured rule the whole feature rests on, and its cost.
-    assert "uninterruptible and does not wait for the aura" in flat
-    assert "the ordinary spell action never completes" in flat
+    assert "uninterruptible and does not wait for the aura" in summon_release
+    assert "the ordinary spell action never completes" in summon_release
     # The store is written at cast time, and why.
-    assert "an action resolves its target when it runs" in flat
+    assert "an action resolves its target when it runs" in summon_release
     # The cap that went, rather than being raised.
-    assert "the party cap written into geometry" in flat
+    assert "the party cap written into geometry" in summon_release
     # What a row's repeat means when its owners disagree.
-    assert "repeat its owners ask for" in flat
+    assert "repeat its owners ask for" in summon_release
     # Churn is not a fault.
-    assert "ordinary churn" in flat
+    assert "ordinary churn" in summon_release
     # And the refusals that were chosen over guessing.
-    assert "a stated gap beats a hopeful one" in flat
+    assert "a stated gap beats a hopeful one" in summon_release
 
     order_release = " ".join(
         source.split("\n## v1.15.0 (2026-11-04)", 1)[1]
