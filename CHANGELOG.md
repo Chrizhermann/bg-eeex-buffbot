@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.16.2 (2026-11-16) — complete Italian translation
+
+Updates the Italian catalog (`buffbot/lang/italian/setup.tra`) to cover all
+current BuffBot features, contributed by
+[Sauler89](https://github.com/Sauler89) ([#119](https://github.com/Chrizhermann/bg-eeex-buffbot/pull/119)).
+No runtime Lua, menu, installer or save schema changes.
+
+### Changed
+- **Complete Italian localization.** Translates the 59 strings added since the
+  first Italian release — active-buff refresh settings, the caster/recipient
+  views, party-table filters, order and feedback, clone planning and the
+  optional-LuaJIT installer notice — and brings 13 existing descriptions up to
+  date, including the measured text-size limit, Force All and inventory item
+  swapping (72 updated entries across the 252-entry catalog).
+- **Consistent Italian game and UI terms.** Keeps official Italian spell names
+  (*Ingannare*, *Ologramma*, *Simulacro*, *Pelle di Pietra*), matches every
+  quoted option or button label to the catalog entry it names, and uses
+  gender-independent wording (*Su di sé*, *La voce "{buff}" è bloccata*) across
+  shared UI messages.
+
+### Tested
+- Automated: 2,124 offline tests, including WeiDU 249 Italian archive install
+  and LuaJIT runtime catalog coverage.
+- Live: the headless in-game suite (`BfBot.Test.RunAll()`) in a BG2:EE
+  2.7.3.0 lab with EEex 1.3.1, 909 checks passed and none failed, plus a live
+  Italian catalog smoke check opening both caster and recipient views in the
+  same lab. Visual caption fit across alternate resolutions and engines was not
+  checked in game.
+
 ## v1.16.1 (2026-11-08) — what the game files hold no longer hides a spell
 
 Part of the collection-wide rule of 2026-11-07: game data never stops, warns

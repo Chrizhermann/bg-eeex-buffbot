@@ -526,15 +526,19 @@ def test_text_size_description_says_what_the_setting_cannot_do():
     button captions (#112). A player choosing a size has to be told, or they
     pick Huge and wonder why the table did not change."""
     english, _ = parse_tra(ROOT / "buffbot/lang/english/setup.tra")
+    italian, _ = parse_tra(ROOT / "buffbot/lang/italian/setup.tra")
     chinese, _ = parse_tra(ROOT / "buffbot/lang/schinese/setup.tra")
 
     assert "all panel text" not in english[709].lower()
     assert "smaller than the game's own size but not larger" in english[709].lower()
     assert "close and reopen" not in english[709].lower()
 
-    # The eight translations still carry the previous wording until a
-    # translator updates them; what is pinned here is that this one has not
-    # silently drifted into claiming something else in the meantime.
+    assert "più piccoli del testo del gioco, ma non più grandi" in italian[709].lower()
+    assert "classici pulsanti in pietra" not in italian[709].lower()
+
+    # Seven translations still carry the previous wording until a translator
+    # updates them; what is pinned here is that this one has not silently
+    # drifted into claiming something else in the meantime.
     assert "石质按钮上的文字" in chinese[709]
     assert "关闭并重新打开" not in chinese[709]
 
@@ -589,6 +593,30 @@ def test_reviewed_english_and_chinese_ui_wording_is_exact():
     for tra_id in (507, 510, 514, 543, 551):
         assert "法术" in chinese[tra_id]
         assert "物品" in chinese[tra_id]
+
+
+def test_italian_catalog_has_no_untranslated_english_prose_and_keeps_gab_terms():
+    english, _ = parse_tra(LANG_ROOT / "english" / "setup.tra")
+    italian, _ = parse_tra(LANG_ROOT / "italian" / "setup.tra")
+
+    invariant_ids = {300, 323, 402, 404, 427, 452, 602, 700, 705, 706, 707}
+    same_as_english = {
+        tra_id for tra_id in english if italian[tra_id] == english[tra_id]
+    }
+    assert same_as_english == invariant_ids
+
+    assert italian[303] == "Su di sé"
+    assert italian[413] == "(Solo su di sé)"
+    assert italian[742] == "Solo su di sé"
+    assert "Ingannare" in italian[405]
+    assert "Ologramma" in italian[406]
+    assert "Simulacro" in italian[407]
+    assert "Pelle di Pietra" in italian[718]
+    assert f'"{italian[716]}"' in italian[714]
+    assert f'"{italian[717]}"' in italian[475]
+    assert f'"{italian[474]}"' in italian[718]
+    assert f'"{italian[727]}"' in italian[760]
+    assert f'"{italian[743]}"' in italian[762]
 
 
 def test_no_shipped_catalog_offers_the_retired_f12_presets():
@@ -1091,17 +1119,30 @@ def test_release_changelog_records_final_automated_and_live_boundaries():
     flat = " ".join(current_normalized.split())
 
     assert current_release.startswith(
-        "v1.16.1 (2026-11-08) — what the game files hold no longer hides a "
-        "spell"
+        "v1.16.2 (2026-11-16) — complete Italian translation"
     )
-    # The rule the release applies, and the one cap it keeps on purpose.
-    assert "game data never stops, warns or hides anything" in flat
-    assert "the table's cast candidates still win" in flat
-    assert "it refuses nothing, it only bounds the wait" in flat
-    # Its automated and live boundaries.
-    assert "automated: 2,123 offline tests" in flat
+    assert "72 updated entries across the 252-entry catalog" in flat
+    assert "no runtime lua, menu, installer or save schema changes" in flat
+    assert "automated: 2,124 offline tests" in flat
     assert "909 checks passed and none failed" in flat
-    assert "a hand-edited 5e wrapper was not tried in a live game" in flat
+    assert (
+        "visual caption fit across alternate resolutions and engines was not "
+        "checked in game"
+    ) in flat
+
+    overwrite_release = " ".join(
+        source.split("\n## v1.16.1 (2026-11-08)", 1)[1]
+        .split("\n## ", 1)[0].casefold().split())
+    assert overwrite_release.startswith(
+        "— what the game files hold no longer hides a spell")
+    # The rule the release applies, and the one cap it keeps on purpose.
+    assert "game data never stops, warns or hides anything" in overwrite_release
+    assert "the table's cast candidates still win" in overwrite_release
+    assert "it refuses nothing, it only bounds the wait" in overwrite_release
+    # Its automated and live boundaries.
+    assert "automated: 2,123 offline tests" in overwrite_release
+    assert "909 checks passed and none failed" in overwrite_release
+    assert "a hand-edited 5e wrapper was not tried in a live game" in overwrite_release
 
     summon_release = " ".join(
         source.split("\n## v1.16.0 (2026-11-04)", 1)[1]
