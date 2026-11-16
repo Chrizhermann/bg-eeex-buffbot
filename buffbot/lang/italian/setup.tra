@@ -26,7 +26,7 @@
 @113 = ~italian~
 
 // installer.main.luajit_optional
-@114 = ~BuffBot is installed without EEex LuaJIT. Everything that casts works. Without the loader there is no file access, so preset export and import, the log files and the file-based parts of the in-game test suite are unavailable, and the panel shows English text whichever language you chose. Install "BuffBot: EEex LuaJIT Support" (recommended) to enable them.~
+@114 = ~BuffBot è installato senza EEex LuaJIT. Tutte le funzionalità di lancio sono operative. Senza il loader non è possibile accedere ai file: l’esportazione e l’importazione dei preset, i file di log e le parti dei test in gioco che utilizzano file non sono disponibili. Il pannello mostra inoltre i testi in inglese, indipendentemente dalla lingua scelta. Installa "BuffBot: supporto EEex LuaJIT" (consigliato) per rendere disponibili queste funzionalità.~
 
 // common.buffbot
 @300 = ~BuffBot~
@@ -35,7 +35,7 @@
 // common.summons
 @302 = ~Evocazioni~
 // common.self
-@303 = ~Se stesso~
+@303 = ~Su di sé~
 // common.none
 @304 = ~Nessuno~
 // common.reset
@@ -122,7 +122,7 @@
 // ui.cast.summon
 @412 = ~Lancia: evocazione~
 // ui.qualifier.self_only
-@413 = ~(Solo su se stesso)~
+@413 = ~(Solo su di sé)~
 // ui.qualifier.party_wide
 @414 = ~(Su tutto il gruppo)~
 // ui.rename_preset_title
@@ -327,7 +327,7 @@
 // options.text_size
 @708 = ~Dimensione testo~
 // options.text_size_description
-@709 = ~Ridimensiona titoli, elenchi e testi cliccabili. Le etichette dei classici pulsanti in pietra restano alla dimensione predefinita del motore.~
+@709 = ~Ridimensiona il testo del pannello. L’elenco e le intestazioni possono essere più piccoli del testo del gioco, ma non più grandi; "Grande" ed "Enorme" modificano quindi solo il titolo e le etichette dei pulsanti.~
 // options.text_size_small
 @710 = ~Piccolo~
 // options.text_size_medium
@@ -337,7 +337,7 @@
 // options.item_use_mode
 @713 = ~Uso degli oggetti nell’inventario~
 // options.item_use_mode_description
-@714 = ~Scegli come BuffBot usa gli oggetti trasportati da questo personaggio. La modalità equipaggiamento indossa temporaneamente un oggetto utilizzabile, lo usa e poi ripristina l’equipaggiamento precedente. Le armature del torso e gli oggetti non utilizzabili non vengono scambiati automaticamente.~
+@714 = ~Scegli come BuffBot usa gli oggetti trasportati da questo personaggio. La modalità "Equipaggia, usa e ripristina" equipaggia temporaneamente gli oggetti che il personaggio può indossare o impugnare, li usa e poi ripristina l’equipaggiamento precedente. Le armature per il torso e gli oggetti non utilizzabili non vengono scambiati automaticamente.~
 // options.item_use_inventory
 @715 = ~Usa dall’inventario~
 // options.item_use_swap
@@ -347,9 +347,9 @@
 // ui.search.no_matches
 @455 = ~Nessun incantesimo o oggetto corrispondente~
 // ui.quick_presets
-@456 = ~Esegui configurazione del gruppo~
+@456 = ~Lancia preset del gruppo~
 // ui.tooltip.hud_shortcuts
-@457 = ~BuffBot: clic sinistro per configurare; clic destro per eseguire una configurazione del gruppo~
+@457 = ~BuffBot: clic sinistro per configurare; clic destro per lanciare un preset del gruppo~
 // ui.manual_only
 @458 = ~Manuale~
 // ui.speed.normal
@@ -359,11 +359,11 @@
 // ui.speed.4x
 @462 = ~Velocità: 4x~
 // ui.speed.tooltip
-@463 = ~Si applica a tutte le configurazioni. 2x e 4x accelerano temporaneamente tutto il gioco con le normali regole di lancio. Normale usa l'impostazione Lancio rapido salvata. Fai clic per cambiare.~
+@463 = ~Si applica all’avvio di qualsiasi preset. Le velocità 2x e 4x accelerano temporaneamente l’intero gioco, rispettando le normali regole di lancio. La velocità normale usa l’impostazione salvata di lancio rapido. Clicca per cambiare modalità.~
 // ui.quick_cast.suspended
 @464 = ~Lancio rapido: sospeso~
 // ui.quick_cast.tooltip_suspended
-@465 = ~L'accelerazione usa le normali regole di lancio. L'impostazione Lancio rapido resta salvata e si applica di nuovo a velocità normale.~
+@465 = ~L’accelerazione usa le normali regole di lancio. L’impostazione di lancio rapido resta salvata e si applica nuovamente a velocità normale.~
 // ui.header.spell
 @466 = ~Incantesimo / Oggetto~
 // ui.header.duration
@@ -377,182 +377,182 @@
 // ui.header.lock
 @471 = ~Blocco~
 // ui.force_recast.off
-@472 = ~Active: Skip~
+@472 = ~Attivi: salta~
 // ui.force_recast.low
-@473 = ~Active: Refresh Low~
+@473 = ~Attivi: in scadenza~
 // ui.force_recast.all
-@474 = ~Active: Force All~
+@474 = ~Attivi: forza tutti~
 // ui.force_recast.tooltip_off
-@475 = ~Skip buffs that are still running. The "Refresh buffs that are nearly over" option still applies. Click to cycle.~
+@475 = ~Salta i Buffs ancora attivi. L’opzione "Rinnova i Buffs in scadenza" resta valida. Clicca per cambiare modalità.~
 // ui.force_recast.tooltip_low
-@476 = ~Cast a running buff again when less than {seconds}s of it are left. Click to cycle.~
+@476 = ~Rilancia un Buff ancora attivo quando la sua durata residua è inferiore a {seconds} s. Clicca per cambiare modalità.~
 // ui.force_recast.tooltip_all
-@477 = ~Cast every configured buff again, however much of it is left. Repeat counts then apply to buffs as well, and every attempt uses a spell slot or a charge. Click to cycle.~
+@477 = ~Rilancia tutti i Buffs configurati, a prescindere dalla durata residua, inclusi quelli permanenti. Ignora completamente la soglia di rinnovo. Anche i Buffs rispettano quindi il numero di ripetizioni e ogni tentativo consuma uno slot di incantesimo o una carica. Clicca per cambiare modalità.~
 // reason.item.manual_selection
 @552 = ~Questo oggetto apre un menu di selezione. Usalo manualmente; BuffBot lo salta.~
 // reason.exec.fast_unavailable
-@553 = ~L'accelerazione non è disponibile qui. Seleziona la velocità normale e riprova.~
+@553 = ~L’accelerazione non è disponibile qui. Seleziona la velocità normale e riprova.~
 // options.refresh_below
-@717 = ~Refresh buffs that are nearly over~
+@717 = ~Rinnova i Buffs in scadenza~
 // options.refresh_below_description
-@718 = ~Cast a buff again when less than this is left of it, instead of skipping it for being active. This is what re-applies a long buff that survived a rest with a tiny remainder. baldur.ini takes any value in seconds under [BuffBot] RefreshBelow; this list offers the common ones.~
+@718 = ~Rilancia un Buff quando la sua durata residua è inferiore alla soglia scelta, anziché saltarlo perché è ancora attivo. Questo permette di riapplicare un Buff a lunga durata rimasto attivo dopo un riposo ma ormai prossimo alla scadenza. La soglia "Meno di 1 ora" è molto ampia: un Buff di 1 ora appena lanciato, come Pelle di Pietra nel gioco base, scende subito sotto la soglia e verrà rilanciato a ogni esecuzione. La modalità "Attivi: forza tutti" del pannello prevale su questa impostazione e rilancia tutto in ogni caso. Nel file baldur.ini puoi impostare qualsiasi durata in secondi alla voce RefreshBelow della sezione [BuffBot]; questo elenco propone i valori più comuni.~
 // options.refresh_below_off
-@719 = ~Off~
+@719 = ~Disattivato~
 // options.refresh_below_1m
-@720 = ~Under 1 minute left~
+@720 = ~Meno di 1 minuto~
 // options.refresh_below_5m
-@721 = ~Under 5 minutes left~
+@721 = ~Meno di 5 minuti~
 // options.refresh_below_1h
-@722 = ~Under 1 hour left~
+@722 = ~Meno di 1 ora~
 // ui.order.manual
 @723 = ~Ordine: manuale~
 // ui.order.duration
 @724 = ~Ordine: durata~
 // ui.order.tooltip_manual
-@725 = ~Lancia nell'ordine che hai impostato. Clicca per lanciare prima i potenziamenti più duraturi; il tuo ordine resta salvato e torna quando disattivi.~
+@725 = ~Lancia nell’ordine che hai impostato. Clicca per dare la precedenza ai Buffs di maggior durata; il tuo ordine resta salvato e viene ripristinato quando disattivi questa modalità.~
 // ui.order.tooltip_duration
-@726 = ~Lancia prima i potenziamenti più duraturi. Le righe bloccate mantengono il loro posto. Clicca per tornare al tuo ordine.~
+@726 = ~Lancia prima i Buffs di maggior durata. Le righe bloccate restano al loro posto. Clicca per tornare all’ordine che hai impostato.~
 
 // ui.view.caster
-@727 = ~By caster~
+@727 = ~Lanciatore~
 
 // ui.view.recipient
-@728 = ~By recipient~
+@728 = ~Destinatario~
 
 // ui.view.tooltip_caster
-@729 = ~Shows what each character will cast. Click to see who receives what instead; it is the same plan, read the other way round.~
+@729 = ~Mostra cosa lancerà ogni personaggio. Clicca per vedere chi riceve i Buffs: il piano è lo stesso, visto dal lato dei destinatari.~
 
 // ui.view.tooltip_recipient
-@730 = ~Shows what each character receives and what is missing. Click to go back to casting order per character.~
+@730 = ~Mostra i Buffs che ogni personaggio riceve e quelli mancanti. Clicca per tornare all’ordine di lancio di ciascun personaggio.~
 
 // ui.recipient.from_party
-@734 = ~whole party~
+@734 = ~tutto il gruppo~
 
 // ui.recipient.no_source
-@736 = ~no caster~
+@736 = ~nessun lanciatore~
 
 // ui.party.kind_item
-@741 = ~Item~
+@741 = ~Oggetto~
 
 // ui.party.self_only
-@742 = ~Self only~
+@742 = ~Solo su di sé~
 
 // ui.party.whole_party
-@743 = ~Party~
+@743 = ~Gruppo~
 
 // ui.party.clear
-@744 = ~Clear~
+@744 = ~Cancella~
 
 // ui.party.header.name
-@745 = ~Name~
+@745 = ~Nome~
 
 // ui.party.header.uses
-@746 = ~Uses~
+@746 = ~Usi~
 
 // ui.party.header.duration
-@747 = ~Duration~
+@747 = ~Durata~
 
 // ui.party.header.recipients
-@748 = ~Recipients~
+@748 = ~Destinatari~
 
 // feedback.party_clear_partial
-@749 = ~{name}: {left} character(s) are no longer in the party, so their setting was left alone.~
+@749 = ~{name}: le impostazioni dei personaggi non più nel gruppo restano invariate (totale: {left}).~
 
 // ui.party.uses_tooltip
-@750 = ~{free} of {total} still unspent by this preset.~
+@750 = ~Usi ancora disponibili per questo preset: {free} su {total}.~
 
 // options.text_size_tiny
-@751 = ~Tiny~
+@751 = ~Minuscolo~
 
 // options.text_size_huge
-@752 = ~Huge~
+@752 = ~Enorme~
 
 // ui.cell.self_only
-@753 = ~Only the character casting it can receive this one.~
+@753 = ~Gli effetti si applicano solo al personaggio che li attiva.~
 
 // ui.cell.no_source
-@754 = ~Nobody in the party can cast this.~
+@754 = ~Nessun membro del gruppo può applicare questi effetti.~
 
 // ui.cell.no_uses
-@755 = ~Every use of this is already spoken for by this preset.~
+@755 = ~Tutti gli usi disponibili sono già assegnati a questo preset.~
 
 // ui.cell.recipient_dead
-@756 = ~That character is dead.~
+@756 = ~Il personaggio non è in vita.~
 
 // ui.cell.recipient_ambiguous
-@757 = ~Two party members share that name, so neither can be addressed.~
+@757 = ~Due membri del gruppo hanno lo stesso nome; non è quindi possibile scegliere l’uno o l’altro come bersaglio.~
 
 // ui.cell.caster_unavailable
-@758 = ~The character who would cast it is not available.~
+@758 = ~Il personaggio che dovrebbe usarlo non è disponibile.~
 
 // ui.cell.variant_unreadable
-@759 = ~This spell's variants could not be read, so BuffBot will not guess.~
+@759 = ~Impossibile leggere le varianti di questo incantesimo; BuffBot non effettuerà una scelta arbitraria.~
 
 // feedback.cell_locked
-@760 = ~{buff} is locked. Unlock it in the caster view to change who receives it.~
+@760 = ~La voce "{buff}" è bloccata. Sbloccala nella vista "Lanciatore" per cambiare chi ne riceve gli effetti.~
 
 // feedback.cell_impossible
-@761 = ~{buff} cannot reach {name}. {reason}~
+@761 = ~Impossibile applicare {buff} a {name}. {reason}~
 
 // feedback.cell_covered
-@762 = ~{buff} already covers the whole party. Clear the Party box to choose individually.~
+@762 = ~Per {buff} è già selezionato tutto il gruppo. Deseleziona la casella "Gruppo" per scegliere i destinatari singolarmente.~
 
 // feedback.cell_no_owner
-@763 = ~{buff} has no party member who could cast it for that character.~
+@763 = ~Nessun membro del gruppo può usare {buff} su quel personaggio.~
 
 // feedback.cell_caster_gone
-@764 = ~The character who would cast {buff} is no longer in the party.~
+@764 = ~Il personaggio che dovrebbe usare {buff} non fa più parte del gruppo.~
 
 // ui.recipient.repeat_count
-@765 = ~{planned} of {total}~
+@765 = ~{planned} su {total}~
 
 // ui.party.filter.all
-@766 = ~Show: all~
+@766 = ~Mostra: tutti~
 
 // ui.party.filter.planned
-@767 = ~Show: planned~
+@767 = ~Mostra: previsti~
 
 // ui.party.filter.open
-@768 = ~Show: not chosen~
+@768 = ~Mostra: non scelti~
 
 // ui.party.filter.problems
-@769 = ~Show: problems~
+@769 = ~Mostra: problemi~
 
 // ui.party.filter.tooltip
-@770 = ~Which buffs the table lists: all of them, the ones this preset plans, the ones nobody is set to receive yet, or the ones that are set but will not happen.~
+@770 = ~Scegli quali Buffs elencare nella tabella: tutti, quelli previsti dal preset, quelli per cui non sono ancora stati scelti destinatari oppure quelli configurati che non potranno essere applicati.~
 
 // feedback.summon_not_conjured
-@771 = ~BuffBot: that clone has not been conjured yet -- its preset runs when the party cast creates it~
+@771 = ~BuffBot: il clone non è ancora stato evocato — il suo preset verrà eseguito quando il clone verrà creato durante il lancio dei Buffs del gruppo~
 
 // ui.party.order.name
-@772 = ~List: A-Z~
+@772 = ~Elenco: A-Z~
 
 // ui.party.order.cast
-@773 = ~List: cast order~
+@773 = ~Elenco: lancio~
 
 // ui.party.order.tooltip
-@774 = ~How the table is listed. A-Z is how a buff is found; cast order is what the plan will do, and the only reading in which Up and Down mean anything. Moving a row writes that order to everybody who casts it.~
+@774 = ~Scegli l’ordine delle righe della tabella. L’ordine alfabetico aiuta a trovare un Buff; l’ordine di lancio mostra la sequenza prevista ed è l’unico in cui i pulsanti "Su" e "Giù" hanno effetto. Spostando una riga, imposti quell’ordine per tutti i personaggi che usano il Buff.~
 
 // ui.party.clones.off
-@775 = ~Clones: off~
+@775 = ~Cloni: disattivati~
 
 // ui.party.clones.image
-@776 = ~Clones: image~
+@776 = ~Cloni: Ologramma~
 
 // ui.party.clones.simulacrum
-@777 = ~Clones: simulacrum~
+@777 = ~Cloni: Simulacro~
 
 // ui.party.clones.both
-@778 = ~Clones: both~
+@778 = ~Cloni: entrambi~
 
 // ui.party.clones.tooltip
-@779 = ~Plan casts from a Project Image or a Simulacrum. Switching this on ticks the spell that creates it, so the panel can work out what the copy will be able to cast and the Summons view gets a tab for it before it exists. An image keeps the owner's spent slots and freezes them the moment it goes out, so anything they were going to cast after it will not happen; a simulacrum re-memorizes at a reduced level.~
+@779 = ~Pianifica gli incantesimi lanciati da un Ologramma o da un Simulacro. Attivando questa opzione, selezioni anche l’incantesimo che crea il clone: il pannello può così calcolare quali incantesimi potrà lanciare la copia e aggiunge una scheda nella vista Evocazioni prima ancora che il clone esista. Ologramma eredita anche gli slot già consumati dal personaggio originale e gli impedisce subito di agire: i lanci successivi del personaggio originale non verranno quindi eseguiti. Simulacro memorizza nuovamente gli incantesimi a un livello ridotto.~
 
 // ui.chip.via_image
-@780 = ~via image~
+@780 = ~tramite Ologramma~
 
 // ui.chip.via_simulacrum
-@781 = ~via simulacrum~
+@781 = ~tramite Simulacro~
 
 // ui.repeat.party_split
-@782 = ~Two characters cast this buff a different number of times. The button shows the highest, because that is how many casts happen. Changing it sets the same number for every one of them. Left-click increases; right-click decreases.~
+@782 = ~Due personaggi lanciano questo Buff un numero diverso di volte. Il pulsante mostra il valore più alto, che corrisponde al numero di lanci previsti. Modificandolo, imposti lo stesso numero per entrambi. Clic sinistro per aumentare; clic destro per diminuire.~
