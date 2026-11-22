@@ -1071,13 +1071,19 @@ def test_historical_localization_documentation_uses_banners_not_rewrites():
 
 def test_current_facing_localization_sections_state_file_and_tlk_ownership():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    languages = readme.split("## Languages", 1)[1].split("## Installation", 1)[0]
-    assert "`override/bfbot_l10n.tra`" in languages
+    localization_doc = (ROOT / "docs/localization.md").read_text(encoding="utf-8")
+    readme_lang = readme.split("### Languages & Localization", 1)[1].split(
+        "### Console Tests", 1
+    )[0]
+    assert "`override/bfbot_l10n.tra`" in readme_lang
+    assert "writes nothing to `dialog.tlk`" in readme_lang
+    assert "docs/localization.md" in readme_lang
+    assert "`override/bfbot_l10n.tra`" in localization_doc
     assert (
         "It fetches none of its own strings from the game TLK and adds none to it."
-        in languages
+        in localization_doc
     )
-    assert "Earlier versions wrote the eight F12 preset innate names" in languages
+    assert "Earlier versions wrote the eight F12 preset innate names" in localization_doc
 
     changelog = CHANGELOG_PATH.read_text(encoding="utf-8")
     localization_release = changelog.split("\n## v1.8.0-alpha", 1)[1].split(

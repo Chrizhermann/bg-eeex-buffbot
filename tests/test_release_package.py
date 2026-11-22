@@ -434,9 +434,11 @@ def test_catalog_folders_exactly_match_tp2_language_declarations() -> None:
 
 def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
     source = README.read_text(encoding="utf-8")
-    normalized = source.casefold()
+    loc_doc = (ROOT / "docs/localization.md").read_text(encoding="utf-8")
+    combined = (source + "\n" + loc_doc).casefold()
 
-    assert "## Languages" in source
+    assert "### Languages & Localization" in source
+    assert "docs/localization.md" in source
     assert "English" in source
     assert "Simplified Chinese" in source
     for language_name in (
@@ -449,67 +451,64 @@ def test_readme_documents_language_selection_and_complete_catalog_prs() -> None:
         "Brazilian Portuguese",
     ):
         assert language_name in source
-    assert "six new catalogs began as AI-authored translations".casefold() in normalized
-    assert "German catalog has since been reviewed".casefold() in normalized
-    assert "none has yet been validated in-game".casefold() in normalized
-    assert "native-speaker corrections remain welcome".casefold() in normalized
-    assert "German reviewed by the maintainer".casefold() in normalized
-    assert "AI-authored drafts".casefold() not in normalized
-    assert "German awaits maintainer curation".casefold() not in normalized
-    assert "weiDU".casefold() in normalized
-    assert "selected UTF-8 catalog".casefold() in normalized
+    assert "six new catalogs began as AI-authored translations".casefold() in combined
+    assert "German catalog has since been reviewed".casefold() in combined
+    assert "none has yet been validated in-game".casefold() in combined
+    assert "native-speaker corrections remain welcome".casefold() in combined
+    assert "weiDU".casefold() in combined
+    assert "selected UTF-8 catalog".casefold() in combined
     assert "`override/bfbot_l10n.tra`" in source
-    assert "reads directly" in normalized
+    assert "`override/bfbot_l10n.tra`" in loc_doc
+    assert "reads directly" in combined
     assert (
         "fetches none of its own strings from the game TLK and adds none to it"
-        in source
+        in loc_doc
     )
-    assert "raw development deploy" in normalized
-    assert "English fallback".casefold() in normalized
+    assert "raw development deploy" in combined
+    assert "English fallback".casefold() in combined
     assert (
         "keeps an existing WeiDU-selected `override/bfbot_l10n.tra` byte-for-byte"
-        in source
+        in loc_doc
     )
-    assert "The deploy never touches a TLK" in source
+    assert "The deploy never touches a TLK" in loc_doc
     assert (
         "stops before copying anything when `override/bfbot_l10n.tra` exists but"
         " is not a regular file"
-    ) in source
-    assert "source checkout" in normalized
-    assert "development-only" in normalized
+    ) in loc_doc
+    assert "source checkout" in combined
     # The F12 preset innates and their TLK names are gone; only what an
     # earlier version left behind is still mentioned.
-    assert "TLK patching".casefold() not in normalized
+    assert "TLK patching".casefold() not in combined
     assert "`@200` through `@207`" not in source
+    assert "`@200` through `@207`" not in loc_doc
     assert (
         "Leftover `bfbot_strrefs.txt` and obsolete `bfbot_l10n.txt` files are left"
         " alone and unused."
-    ) in source
-    assert "Copy Copy" in source
-    assert "readable CJK labels" in source
-    assert "tested resolution/font" in source
-    assert "alternate resolutions/fonts remain pending" in normalized
-    assert "live in-game Chinese glyph and layout acceptance is still pending".casefold() not in normalized
-    assert "language pull requests are welcome" in normalized
-    assert "buffbot/lang/english/setup.tra" in source
-    assert "safe lowercase folder name" in normalized
-    assert "`a-z`, `0-9`, and underscores" in source
-    assert "complete catalog" in normalized
-    assert "exact `@` IDs" in source
-    assert "all comments" in normalized
-    assert "named placeholder" in normalized
-    assert "WeiDU token".casefold() in normalized
-    assert "`@113`" in source
-    assert "exact folder name" in normalized
-    assert "non-translatable" in normalized
-    assert "UTF-8" in source
-    assert "one-line" in normalized and "tilde" in normalized
-    assert "python -m pytest tests/test_localization.py" in source
-    assert "tests/test_release_package.py" in source
-    assert "`LANGUAGE` stanza" in source
-    assert "package manifest is derived from the `language` declarations" in normalized
-    assert "translator credit" in normalized
-    assert "robovoid" in normalized
+    ) in loc_doc
+    assert "readable CJK labels" in loc_doc
+    assert "tested resolution/font" in loc_doc
+    assert "alternate resolutions/fonts remain pending" in combined
+    assert "live in-game Chinese glyph and layout acceptance is still pending".casefold() not in combined
+    assert "language pull requests are welcome" in combined
+    assert "buffbot/lang/english/setup.tra" in loc_doc
+    assert "safe lowercase folder name" in combined
+    assert "`a-z`, `0-9`, and underscores" in loc_doc
+    assert "complete catalog" in combined
+    assert "exact `@` IDs" in loc_doc
+    assert "all comments" in combined
+    assert "named placeholder" in combined
+    assert "WeiDU token".casefold() in combined
+    assert "`@113`" in loc_doc
+    assert "exact folder name" in combined
+    assert "non-translatable" in combined
+    assert "UTF-8" in loc_doc
+    assert "one-line" in combined and "tilde" in combined
+    assert "python -m pytest tests/test_localization.py" in loc_doc
+    assert "tests/test_release_package.py" in loc_doc
+    assert "`LANGUAGE` stanza" in loc_doc
+    assert "package manifest is derived from the `language` declarations" in combined
+    assert "translator credit" in combined
+    assert "robovoid" in source.casefold()
     assert "[robovoid](https://github.com/robvoid)" in source
     assert "#50" in source
 
